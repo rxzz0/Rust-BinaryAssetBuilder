@@ -3,3 +3,6 @@ name = "binary-asset-builder"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
+
+[dependencies]
+roxmltree = "0.21.2"
