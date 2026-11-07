@@ -65,8 +65,37 @@ foreach ($original in $replacements.Keys) {
 }
 
 $source = $source.Remove($step.Index, $step.Length).Insert($step.Index, $updatedStep)
+$staticCheckSource = $source
+$aptUiStep = @'
+case 4:
+    object useRust;
+    if (currentGUIData.TryGetValue("rustAptUi", out useRust) && (bool)useRust)
+    {
+        BuildHelper.DisplayLine("Step 4: Compiling AptUI XML with Rust");
+        RunExecutableArguments argsRust = new RunExecutableArguments(Cmd);
+        argsRust.Arguments = String.Format(
+            "/C (@echo off) & (\"{0}\" compile-aptui \"{1}\" --data-root \"{2}\" --output \"{3}\" 2>&1)",
+            RUST_EXE, Path.Combine(ModDataPath, "aptui"), SDKDirectory, Path.Combine(BuiltModDataPath, "aptui"));
+        BuildHelper.RunStep(StepType.RunExecutable, argsRust);
+        break;
+    }
+'@
+$aptUiStep = ($aptUiStep.Replace('RUST_EXE', $rustExpression) -split '\r?\n') -join ($lineEnding + "`t`t`t`t")
+$aptUiOption = 'modGUIData.Add(new GUIElementData("step4", "Build AptUI", GUIElementData.CheckBoxType, ScriptIndex.ModScript));'
+foreach ($anchor in @('case 4:', $aptUiOption)) {
+    $index = $source.IndexOf($anchor, [StringComparison]::Ordinal)
+    if ($index -lt 0 -or $index -ne $source.LastIndexOf($anchor, [StringComparison]::Ordinal)) {
+        throw "The AptUI step in $sourcePath has an unexpected layout."
+    }
+}
+$source = $source.Replace('case 4:', $aptUiStep).Replace(
+    $aptUiOption,
+    $aptUiOption + $lineEnding + "`t`t`t" +
+    'modGUIData.Add(new GUIElementData("rustAptUi", "Use Rust for AptUI", GUIElementData.CheckBoxType, ScriptIndex.ModScript));'
+)
+
 if ($InstallDefault) {
-    if ($hasRustCheck -and $currentSource -cne $source) {
+    if ($hasRustCheck -and $currentSource -cne $source -and $currentSource -cne $staticCheckSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."
     }
     if (-not $hasRustCheck -and (Test-Path -LiteralPath $backupPath)) {
@@ -76,17 +105,27 @@ if ($InstallDefault) {
     $installedRustPath = Join-Path $SdkRoot 'tools\binary-asset-builder.exe'
     if (Test-Path -LiteralPath $installedRustPath) {
         if ((Get-FileHash -LiteralPath $installedRustPath).Hash -ne (Get-FileHash -LiteralPath $rustPath).Hash) {
-            throw "A different Rust executable exists at $installedRustPath. Move it aside before installing this build."
+            if (-not $hasRustCheck) {
+                throw "A different Rust executable exists at $installedRustPath. Move it aside before installing this build."
+            }
+            $pendingExe = "$installedRustPath.$([Guid]::NewGuid().ToString('N')).tmp"
+            try {
+                [IO.File]::Copy($rustPath, $pendingExe)
+                [IO.File]::Replace($pendingExe, $installedRustPath, "$installedRustPath.previous")
+            } finally {
+                [IO.File]::Delete($pendingExe)
+            }
         }
     } else {
         [IO.File]::Copy($rustPath, $installedRustPath)
     }
 
-    if (-not $hasRustCheck) {
+    if ($currentSource -cne $source) {
+        $replacementBackup = if ($hasRustCheck) { "$sourcePath.before-rust-aptui" } else { $backupPath }
         $pendingPath = Join-Path $SdkRoot ("defaultscript.cs." + [Guid]::NewGuid().ToString('N') + '.tmp')
         try {
             [IO.File]::WriteAllText($pendingPath, $source)
-            [IO.File]::Replace($pendingPath, $sourcePath, $backupPath)
+            [IO.File]::Replace($pendingPath, $sourcePath, $replacementBackup)
         } finally {
             [IO.File]::Delete($pendingPath)
         }
