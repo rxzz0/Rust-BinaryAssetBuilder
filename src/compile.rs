@@ -1,4 +1,4 @@
-//! Compiles the Red Alert 3 PC subset of AptUI XML backed by binary blobs.
+//! Compiles Red Alert 3 PC AptUI XML streams.
 
 use crate::hash::{fast_hash, fast_hash_with_seed};
 use crate::linked_stream::LinkedFiles;
@@ -8,6 +8,8 @@ use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+
+mod texture;
 
 const SAGE_NS: &str = "uri:ea.com:eala:asset";
 const FILE_HASH_BLOCK: usize = 0x100000;
@@ -19,31 +21,39 @@ pub struct CompiledStream {
     pub files: LinkedFiles,
 }
 
-/// Compiles a linked RA3 PC stream from AptUI declarations and relative includes.
+/// Compiles a linked RA3 PC stream from AptUI declarations and their includes.
 pub fn compile_apt_ui(input: &Path, data_root: &Path) -> io::Result<CompiledStream> {
+    let root = fs::canonicalize(data_root)?;
+    let input = fs::canonicalize(input)?;
+    let mut data_paths = vec![root.clone()];
+    if let Ok(relative) = input.strip_prefix(&root) {
+        let mut components = relative.iter();
+        if let (Some(mods), Some(name)) = (components.next(), components.next())
+            && mods.eq_ignore_ascii_case("mods")
+        {
+            data_paths.push(root.join(mods).join(name).join("Data"));
+        }
+    }
+    data_paths.extend([root.join("Mods"), root.join("SageXml")]);
     let mut compiler = AptCompiler {
-        root: fs::canonicalize(data_root)?,
+        root,
+        data_paths,
         visited: HashSet::new(),
         active: HashSet::new(),
         ids: HashSet::new(),
         assets: Vec::new(),
-        files: LinkedFiles {
-            bin: vec![0; 4],
-            relo: vec![0; 4],
-            imp: vec![0; 4],
-        },
     };
-    compiler.read_document(&fs::canonicalize(input)?)?;
+    compiler.read_document(&input)?;
     compiler.finish()
 }
 
 struct AptCompiler {
     root: PathBuf,
+    data_paths: Vec<PathBuf>,
     visited: HashSet<PathBuf>,
     active: HashSet<PathBuf>,
     ids: HashSet<AssetId>,
     assets: Vec<AptAsset>,
-    files: LinkedFiles,
 }
 
 struct AptAsset {
@@ -53,6 +63,7 @@ struct AptAsset {
     name: String,
     source: String,
     instance_size: u32,
+    payload: Vec<u8>,
 }
 
 impl AptCompiler {
@@ -93,10 +104,7 @@ impl AptCompiler {
                         || include.attributes().len() != 2
                         || has_content(include)
                     {
-                        return Err(invalid(
-                            path,
-                            "only relative type=all includes are supported",
-                        ));
+                        return Err(invalid(path, "only type=all includes are supported"));
                     }
                     let target = self.resolve(
                         path,
@@ -114,14 +122,35 @@ impl AptCompiler {
 
     fn resolve(&self, document: &Path, value: &str) -> io::Result<PathBuf> {
         let value = value.trim().replace('\\', "/");
-        let path = Path::new(&value);
-        if value.is_empty() || value.contains(':') || path.has_root() {
+        let data = value
+            .split_once(':')
+            .filter(|(prefix, _)| prefix.eq_ignore_ascii_case("data"))
+            .map(|(_, path)| path);
+        let relative = data.unwrap_or(&value);
+        let path = Path::new(relative);
+        if relative.is_empty() || relative.contains(':') || path.has_root() {
             return Err(invalid(
                 document,
                 format!("expected relative path {value:?}"),
             ));
         }
-        let path = document.with_file_name(path);
+        let path = if data.is_some() {
+            self.data_paths
+                .iter()
+                .map(|root| root.join(path))
+                .find(|candidate| candidate.is_file())
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!(
+                            "{} ({value:?} not found on the SDK data path)",
+                            document.display()
+                        ),
+                    )
+                })?
+        } else {
+            document.with_file_name(path)
+        };
         let resolved = read_with_context(&path, fs::canonicalize)?;
         if !resolved.starts_with(&self.root) {
             return Err(invalid(&resolved, "path lies outside the data root"));
@@ -136,10 +165,24 @@ impl AptCompiler {
             (Some(SAGE_NS), "AptConstData") => 0xe70a_e718,
             (Some(SAGE_NS), "AptDatData") => 0x0db6_1c30,
             (Some(SAGE_NS), "AptGeometryData") => 0x52dd_4bea,
+            (Some(SAGE_NS), "Texture") => 0x9f5f_f8da,
             _ => return Err(invalid(path, format!("unsupported asset type {type_name}"))),
         };
         let geometry = type_name == "AptGeometryData";
-        if node.attributes().len() != if geometry { 3 } else { 2 } || has_content(node) {
+        let texture = type_name == "Texture";
+        let attribute_count = if texture {
+            if node.attribute("OutputFormat") != Some("A8R8G8B8")
+                || node.attribute("GenerateMipMaps") != Some("false")
+                || node.attribute("AllowAutomaticResize") != Some("false")
+                || !matches!(node.attribute("Type"), None | Some("StandardTexture"))
+            {
+                return Err(invalid(path, "unsupported AptUI texture settings"));
+            }
+            5 + usize::from(node.attribute("Type").is_some())
+        } else {
+            2 + usize::from(geometry)
+        };
+        if node.attributes().len() != attribute_count || has_content(node) {
             return Err(invalid(path, format!("unexpected content in {type_name}")));
         }
         let id = required(node, "id", path)?;
@@ -166,7 +209,15 @@ impl AptCompiler {
             return Err(invalid(path, format!("duplicate asset ID {name}")));
         }
 
-        let bytes = read_with_context(&self.resolve(path, file)?, fs::read)?;
+        let input = self.resolve(path, file)?;
+        let bytes = read_with_context(&input, fs::read)?;
+        let processing_hash = if texture { 0x9f5f_e8b0 } else { type_hash ^ 4 };
+        let instance_hash = hash_asset(node, processing_hash, &bytes, path)?;
+        let bytes = if texture {
+            texture::tga_to_dds(&bytes).map_err(|error| invalid(&input, error))?
+        } else {
+            bytes
+        };
         let length = u32::try_from(bytes.len()).map_err(|_| invalid(path, "blob is too large"))?;
         let header_size = if geometry { 16u32 } else { 12u32 };
         let instance_size = length
@@ -174,19 +225,15 @@ impl AptCompiler {
             .and_then(|size| size.checked_add(header_size))
             .filter(|&size| size <= i32::MAX as u32)
             .ok_or_else(|| invalid(path, "blob is too large"))?;
-        let instance_hash = hash_asset(node, type_hash, &bytes, length, path)?;
-        self.files.bin.extend(0u32.to_le_bytes());
-        self.files.bin.extend(header_size.to_le_bytes());
-        self.files.bin.extend(length.to_le_bytes());
+        let mut payload = Vec::with_capacity(instance_size as usize);
+        payload.extend(0u32.to_le_bytes());
+        payload.extend(header_size.to_le_bytes());
+        payload.extend(length.to_le_bytes());
         if let Some(id) = geometry_id {
-            self.files.bin.extend(id.to_le_bytes());
+            payload.extend(id.to_le_bytes());
         }
-        self.files.bin.extend(bytes);
-        self.files.bin.resize(
-            self.files.bin.len() + (length.next_multiple_of(4) - length) as usize,
-            0,
-        );
-        self.files.relo.extend(RELOCATIONS);
+        payload.extend(bytes);
+        payload.resize(instance_size as usize, 0);
         self.assets.push(AptAsset {
             id: asset_id,
             type_hash,
@@ -194,6 +241,7 @@ impl AptCompiler {
             name,
             source: source.to_owned(),
             instance_size,
+            payload,
         });
         Ok(())
     }
@@ -205,12 +253,23 @@ impl AptCompiler {
                 "input contains no supported AptUI assets",
             ));
         }
+        // These types have no asset dependencies, so the SDK's stable sort
+        // orders them by type name and then by case-insensitive instance name.
+        self.assets
+            .sort_by_cached_key(|asset| asset.name.to_ascii_lowercase());
+        let mut files = LinkedFiles {
+            bin: vec![0; 4],
+            relo: vec![0; 4],
+            imp: vec![0; 4],
+        };
         let mut checksums = Vec::new();
         let mut max_instance = 0;
         let assets = self
             .assets
             .iter()
             .map(|asset| {
+                files.bin.extend_from_slice(&asset.payload);
+                files.relo.extend(RELOCATIONS);
                 for word in [
                     asset.id.type_id,
                     asset.type_hash,
@@ -238,11 +297,7 @@ impl AptCompiler {
             })
             .collect();
         let stream_checksum = memory_stream_hash(checksums);
-        for output in [
-            &mut self.files.bin,
-            &mut self.files.relo,
-            &mut self.files.imp,
-        ] {
+        for output in [&mut files.bin, &mut files.relo, &mut files.imp] {
             output[..4].copy_from_slice(&stream_checksum.to_le_bytes());
         }
         let manifest = Manifest {
@@ -251,7 +306,7 @@ impl AptCompiler {
             is_linked: true,
             stream_checksum,
             all_types_hash: RA3_ALL_TYPES_HASH,
-            total_instance_data_size: u32::try_from(self.files.bin.len() - 4)
+            total_instance_data_size: u32::try_from(files.bin.len() - 4)
                 .map_err(|_| invalid(&self.root, "stream is too large"))?,
             max_chunk_sizes: ChunkSizes {
                 instance: max_instance,
@@ -263,10 +318,7 @@ impl AptCompiler {
         }
         .encode()
         .map_err(io::Error::other)?;
-        Ok(CompiledStream {
-            manifest,
-            files: self.files,
-        })
+        Ok(CompiledStream { manifest, files })
     }
 }
 
@@ -290,9 +342,8 @@ fn required<'a>(node: Node<'a, '_>, name: &str, path: &Path) -> io::Result<&'a s
 
 fn hash_asset(
     node: Node<'_, '_>,
-    type_hash: u32,
+    processing_hash: u32,
     bytes: &[u8],
-    length: u32,
     path: &Path,
 ) -> io::Result<u32> {
     // Match XmlNode.WriteTo on a standalone, empty element in the RA3 builder.
@@ -322,8 +373,10 @@ fn hash_asset(
             "AptUI declaration exceeds the supported hash length",
         ));
     }
-    let seed = fast_hash_with_seed(type_hash ^ 4, b"11");
+    let seed = fast_hash_with_seed(processing_hash, b"11");
     let xml_hash = fast_hash_with_seed(seed, xml.as_bytes());
+    let length =
+        u32::try_from(bytes.len()).map_err(|_| invalid(path, "source file is too large"))?;
     let file_hash = bytes
         .chunks(FILE_HASH_BLOCK)
         .fold(length, fast_hash_with_seed);
