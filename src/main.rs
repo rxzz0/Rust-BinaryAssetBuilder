@@ -17,7 +17,7 @@ Usage
 fn main() -> ExitCode {
     let args: Vec<_> = env::args_os().skip(1).collect();
     match args.as_slice() {
-        [flag] if flag == "--help" || flag == "-h" => {
+        [flag] if flag == "--help" || flag == "-h" || flag == "/?" => {
             println!("{USAGE}");
             ExitCode::SUCCESS
         }
@@ -30,6 +30,17 @@ fn main() -> ExitCode {
                     ExitCode::FAILURE
                 }
             }
+        }
+        [input, ..]
+            if Path::new(input).extension().is_some_and(|extension| {
+                extension.eq_ignore_ascii_case("xml") || extension.eq_ignore_ascii_case("babproj")
+            }) =>
+        {
+            eprintln!(
+                "XML asset compilation is pending in the Rust port. Use the EA SDK compiler for {}.",
+                Path::new(input).display()
+            );
+            ExitCode::from(2)
         }
         _ => {
             eprintln!("{USAGE}");
