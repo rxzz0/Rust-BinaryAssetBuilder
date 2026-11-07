@@ -1,6 +1,9 @@
 # Remove files I cannot share
 # schemas/xsd/
 
+# Rust build output
+/target/
+
 *.winmerge
 
 # Remove test files
