@@ -1,6 +1,8 @@
-//! Reader for the version 5 SAGE stream manifest used by the upstream build.
+//! Codec for the version 5 SAGE stream manifest used by the upstream build.
 
 use std::fmt;
+
+mod writer;
 
 const VERSION: u16 = 5;
 const HEADER_SIZE: usize = 48;
@@ -67,17 +69,36 @@ pub struct AssetEntry<'a> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct AssetReferences<'a> {
-    bytes: &'a [u8],
-    byte_order: ByteOrder,
+pub struct AssetReferences<'a>(ReferenceStorage<'a>);
+
+#[derive(Clone, Copy, Debug)]
+enum ReferenceStorage<'a> {
+    Encoded {
+        ids: &'a [[u8; ASSET_ID_SIZE]],
+        byte_order: ByteOrder,
+    },
+    Decoded(&'a [AssetId]),
 }
 
-impl AssetReferences<'_> {
+impl<'a> AssetReferences<'a> {
+    pub fn from_ids(ids: &'a [AssetId]) -> Self {
+        Self(ReferenceStorage::Decoded(ids))
+    }
+
     pub fn iter(&self) -> impl ExactSizeIterator<Item = AssetId> + '_ {
-        let (ids, _) = self.bytes.as_chunks::<ASSET_ID_SIZE>();
-        ids.iter().map(|id| AssetId {
-            type_id: self.byte_order.u32([id[0], id[1], id[2], id[3]]),
-            instance_id: self.byte_order.u32([id[4], id[5], id[6], id[7]]),
+        let count = match self.0 {
+            ReferenceStorage::Encoded { ids, .. } => ids.len(),
+            ReferenceStorage::Decoded(ids) => ids.len(),
+        };
+        (0..count).map(|index| match self.0 {
+            ReferenceStorage::Encoded { ids, byte_order } => {
+                let [a, b, c, d, e, f, g, h] = ids[index];
+                AssetId {
+                    type_id: byte_order.u32([a, b, c, d]),
+                    instance_id: byte_order.u32([e, f, g, h]),
+                }
+            }
+            ReferenceStorage::Decoded(ids) => ids[index],
         })
     }
 }
@@ -200,10 +221,10 @@ fn parse_entry<'a>(
             field(7, "source file name offset")?,
             "source file name",
         )?,
-        references: AssetReferences {
-            bytes: references,
+        references: AssetReferences(ReferenceStorage::Encoded {
+            ids: references.as_chunks::<ASSET_ID_SIZE>().0,
             byte_order,
-        },
+        }),
     })
 }
 

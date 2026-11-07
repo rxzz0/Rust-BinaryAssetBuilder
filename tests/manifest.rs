@@ -1,5 +1,5 @@
 use binary_asset_builder::manifest::{
-    AssetId, ByteOrder, ChunkSizes, Manifest, ManifestError, ReferencedManifest,
+    AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest, ManifestError, ReferencedManifest,
 };
 
 // Generated with the upstream C# v5 ManifestHeader, AssetEntry and buffer writers.
@@ -103,5 +103,34 @@ fn rejects_unsupported_versions_and_invalid_reference_ranges() {
     assert_eq!(
         Manifest::parse(&bytes).unwrap_err(),
         ManifestError::Invalid("asset reference range"),
+    );
+}
+
+#[test]
+fn writes_byte_identical_upstream_manifests() {
+    for bytes in [LITTLE_ENDIAN, BIG_ENDIAN] {
+        let mut manifest = Manifest::parse(bytes).unwrap();
+        assert_eq!(manifest.encode().unwrap(), bytes);
+
+        let decoded_references = manifest.assets[0].references.iter().collect::<Vec<_>>();
+        manifest.assets[0].references = AssetReferences::from_ids(&decoded_references);
+        assert_eq!(manifest.encode().unwrap(), bytes);
+    }
+}
+
+#[test]
+fn rejects_names_and_sizes_that_cannot_be_encoded() {
+    let mut manifest = Manifest::parse(LITTLE_ENDIAN).unwrap();
+    manifest.assets[0].name = b"Asset\0Other";
+    assert_eq!(
+        manifest.encode().unwrap_err(),
+        ManifestError::Invalid("asset name"),
+    );
+
+    manifest.assets[0].name = b"Asset";
+    manifest.assets[0].chunk_sizes.instance = u32::MAX;
+    assert_eq!(
+        manifest.encode().unwrap_err(),
+        ManifestError::Invalid("instance data size"),
     );
 }
