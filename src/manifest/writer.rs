@@ -83,15 +83,6 @@ impl Manifest<'_> {
     }
 }
 
-impl ByteOrder {
-    pub(crate) fn u32_bytes(self, value: u32) -> [u8; 4] {
-        match self {
-            Self::Little => value.to_le_bytes(),
-            Self::Big => value.to_be_bytes(),
-        }
-    }
-}
-
 #[derive(Default)]
 struct NameBuffer<'a> {
     bytes: Vec<u8>,

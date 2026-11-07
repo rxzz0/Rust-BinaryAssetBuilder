@@ -29,6 +29,13 @@ impl ByteOrder {
             Self::Big => u32::from_be_bytes(bytes),
         }
     }
+
+    pub(crate) fn u32_bytes(self, value: u32) -> [u8; 4] {
+        match self {
+            Self::Little => value.to_le_bytes(),
+            Self::Big => value.to_be_bytes(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -42,6 +49,12 @@ pub struct ChunkSizes {
     pub instance: u32,
     pub relocations: u32,
     pub imports: u32,
+}
+
+impl ChunkSizes {
+    pub(crate) fn as_array(self) -> [u32; 3] {
+        [self.instance, self.relocations, self.imports]
+    }
 }
 
 #[derive(Debug)]
