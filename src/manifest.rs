@@ -1,13 +1,19 @@
-//! Codec for the version 5 SAGE stream manifest used by the upstream build.
+//! Codec for SAGE version 5 and version 6 stream manifests.
 
 use std::fmt;
 
 mod writer;
 
-const VERSION: u16 = 5;
 const HEADER_SIZE: usize = 48;
-const ENTRY_SIZE: usize = 44;
 const ASSET_ID_SIZE: usize = 8;
+
+fn entry_size(version: u16) -> Result<usize, ManifestError> {
+    match version {
+        5 => Ok(44),
+        6 => Ok(48),
+        _ => Err(ManifestError::UnsupportedVersion(version)),
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ByteOrder {
@@ -59,6 +65,7 @@ impl ChunkSizes {
 
 #[derive(Debug)]
 pub struct Manifest<'a> {
+    pub version: u16,
     pub byte_order: ByteOrder,
     pub is_linked: bool,
     pub stream_checksum: u32,
@@ -79,6 +86,8 @@ pub struct AssetEntry<'a> {
     pub name: &'a [u8],
     pub source_file_name: &'a [u8],
     pub references: AssetReferences<'a>,
+    /// The raw tokenization flag, present only in version 6 entries.
+    pub tokenized: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -151,13 +160,11 @@ impl<'a> Manifest<'a> {
             _ => ByteOrder::Big,
         };
         let version = byte_order.u16([header[2], header[3]]);
-        if version != VERSION {
-            return Err(ManifestError::UnsupportedVersion(version));
-        }
+        let entry_size = entry_size(version)?;
         let (words, _) = header[4..].as_chunks::<4>();
         let word = |index: usize| byte_order.u32(words[index]);
         let entries_size = (word(2) as usize)
-            .checked_mul(ENTRY_SIZE)
+            .checked_mul(entry_size)
             .ok_or(ManifestError::Invalid("asset count"))?;
         let entries = take(&mut bytes, entries_size, "asset entries")?;
         let references = take(&mut bytes, word(7) as usize, "asset references")?;
@@ -171,13 +178,13 @@ impl<'a> Manifest<'a> {
             return Err(ManifestError::Invalid("trailing bytes"));
         }
 
-        let (entries, _) = entries.as_chunks::<ENTRY_SIZE>();
         let assets = entries
-            .iter()
+            .chunks_exact(entry_size)
             .map(|entry| parse_entry(entry, byte_order, references, asset_names, source_names))
             .collect::<Result<_, _>>()?;
 
         Ok(Self {
+            version,
             byte_order,
             is_linked: header[1] != 0,
             stream_checksum: word(0),
@@ -195,7 +202,7 @@ impl<'a> Manifest<'a> {
 }
 
 fn parse_entry<'a>(
-    entry: &[u8; ENTRY_SIZE],
+    entry: &[u8],
     byte_order: ByteOrder,
     references: &'a [u8],
     asset_names: &'a [u8],
@@ -238,6 +245,7 @@ fn parse_entry<'a>(
             ids: references.as_chunks::<ASSET_ID_SIZE>().0,
             byte_order,
         }),
+        tokenized: words.get(11).map(|&bytes| byte_order.u32(bytes)),
     })
 }
 

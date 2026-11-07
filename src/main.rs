@@ -57,7 +57,11 @@ fn run(path: &Path, check_linked: bool) -> Result<(), Box<dyn Error>> {
     } else {
         "unlinked"
     };
-    writeln!(stdout, "Version 5 {order} {stream} manifest")?;
+    writeln!(
+        stdout,
+        "Version {} {order} {stream} manifest",
+        manifest.version
+    )?;
     writeln!(stdout, "Stream checksum {:08x}", manifest.stream_checksum)?;
     writeln!(stdout, "Assets {}", manifest.assets.len())?;
     for asset in &manifest.assets {

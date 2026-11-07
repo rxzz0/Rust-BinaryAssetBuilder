@@ -1,9 +1,10 @@
-use super::{ByteOrder, HEADER_SIZE, Manifest, ManifestError, VERSION};
+use super::{ByteOrder, HEADER_SIZE, Manifest, ManifestError, entry_size};
 use std::collections::HashMap;
 
 impl Manifest<'_> {
-    /// Encodes a version 5 manifest, preserving asset and referenced stream order.
+    /// Encodes the manifest, preserving asset and referenced stream order.
     pub fn encode(&self) -> Result<Vec<u8>, ManifestError> {
+        entry_size(self.version)?;
         let mut output = vec![0; HEADER_SIZE];
         let mut references = Vec::new();
         let mut asset_names = NameBuffer::default();
@@ -39,6 +40,15 @@ impl Manifest<'_> {
             ] {
                 output.extend_from_slice(&self.byte_order.u32_bytes(value));
             }
+            if self.version == 6 {
+                output.extend_from_slice(
+                    &self
+                        .byte_order
+                        .u32_bytes(asset.tokenized.unwrap_or_default()),
+                );
+            } else if asset.tokenized.is_some() {
+                return Err(ManifestError::Invalid("version 5 tokenization flag"));
+            }
         }
 
         let mut manifest_names = Vec::new();
@@ -54,8 +64,8 @@ impl Manifest<'_> {
         output[0] = u8::from(self.byte_order == ByteOrder::Big);
         output[1] = u8::from(self.is_linked);
         output[2..4].copy_from_slice(&match self.byte_order {
-            ByteOrder::Little => VERSION.to_le_bytes(),
-            ByteOrder::Big => VERSION.to_be_bytes(),
+            ByteOrder::Little => self.version.to_le_bytes(),
+            ByteOrder::Big => self.version.to_be_bytes(),
         });
         let header_words = [
             self.stream_checksum,

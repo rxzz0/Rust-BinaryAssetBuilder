@@ -13,6 +13,7 @@ fn reads_upstream_manifests_in_both_byte_orders() {
         (BIG_ENDIAN, ByteOrder::Big, false),
     ] {
         let manifest = Manifest::parse(bytes).unwrap();
+        assert_eq!(manifest.version, 5);
         assert_eq!(manifest.byte_order, byte_order);
         assert_eq!(manifest.is_linked, is_linked);
         assert_eq!(manifest.stream_checksum, 0x1234_5678);
@@ -51,6 +52,7 @@ fn reads_upstream_manifests_in_both_byte_orders() {
             }
         );
         assert_eq!(first.type_hash, 0x1324_08db);
+        assert_eq!(first.tokenized, None);
         assert_eq!(first.instance_hash, 0x1357_9bdf);
         assert_eq!(first.chunk_sizes, manifest.max_chunk_sizes);
         assert_eq!(first.name, b"GameObject:AlliedBarracks");
@@ -91,10 +93,10 @@ fn rejects_truncated_sections_and_unterminated_names() {
 #[test]
 fn rejects_unsupported_versions_and_invalid_reference_ranges() {
     let mut bytes = BIG_ENDIAN.to_vec();
-    bytes[3] = 6;
+    bytes[3] = 7;
     assert_eq!(
         Manifest::parse(&bytes).unwrap_err(),
-        ManifestError::UnsupportedVersion(6),
+        ManifestError::UnsupportedVersion(7),
     );
 
     let mut bytes = LITTLE_ENDIAN.to_vec();
@@ -104,6 +106,32 @@ fn rejects_unsupported_versions_and_invalid_reference_ranges() {
         Manifest::parse(&bytes).unwrap_err(),
         ManifestError::Invalid("asset reference range"),
     );
+}
+
+#[test]
+fn round_trips_version_six_tokenization_words() {
+    for v5 in [LITTLE_ENDIAN, BIG_ENDIAN] {
+        let little_endian = v5[0] == 0;
+        let mut v6 = v5[..48].to_vec();
+        v6[if little_endian { 2 } else { 3 }] = 6;
+        v6.extend_from_slice(&v5[48..92]);
+        v6.extend(if little_endian {
+            [1, 0, 0, 0]
+        } else {
+            [0, 0, 0, 1]
+        });
+        v6.extend_from_slice(&v5[92..136]);
+        v6.extend([0; 4]);
+        v6.extend_from_slice(&v5[136..]);
+
+        let manifest = Manifest::parse(&v6).unwrap();
+        assert_eq!(manifest.version, 6);
+        assert_eq!(manifest.assets[0].tokenized, Some(1));
+        assert_eq!(manifest.assets[0].references.iter().len(), 2);
+        assert_eq!(manifest.assets[1].tokenized, Some(0));
+        assert_eq!(manifest.assets[1].name, b"LogicCommand:Build");
+        assert_eq!(manifest.encode().unwrap(), v6);
+    }
 }
 
 #[test]
