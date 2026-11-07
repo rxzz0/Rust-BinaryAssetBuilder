@@ -10,9 +10,12 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
+mod compile_batch;
+
 const USAGE: &str = "\
 Usage
   binary-asset-builder compile <file.xml> --data-root <directory> --output <new-directory>
+  binary-asset-builder compile-aptui <input-directory> --data-root <directory> --output <directory>
   binary-asset-builder inspect <file.manifest>
   binary-asset-builder check-linked <file.manifest>";
 
@@ -24,10 +27,19 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         [command, input, root_flag, root, output_flag, output]
-            if command == "compile" && root_flag == "--data-root" && output_flag == "--output" =>
+            if (command == "compile" || command == "compile-aptui")
+                && root_flag == "--data-root"
+                && output_flag == "--output" =>
         {
             let input = Path::new(input);
-            match compile(input, Path::new(root), Path::new(output)) {
+            let root = Path::new(root);
+            let output = Path::new(output);
+            let result = if command == "compile-aptui" {
+                compile_batch::compile_directory(input, root, output)
+            } else {
+                compile(input, root, output)
+            };
+            match result {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(error) => {
                     eprintln!("{} ({error})", input.display());
