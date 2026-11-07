@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use binary_asset_builder::compile::compile_apt_ui;
 use binary_asset_builder::linked_stream::check_linked_files;
 use binary_asset_builder::manifest::{ByteOrder, Manifest};
 use std::env;
@@ -11,6 +12,7 @@ use std::process::ExitCode;
 
 const USAGE: &str = "\
 Usage
+  binary-asset-builder compile <file.xml> --data-root <directory> --output <new-directory>
   binary-asset-builder inspect <file.manifest>
   binary-asset-builder check-linked <file.manifest>";
 
@@ -20,6 +22,18 @@ fn main() -> ExitCode {
         [flag] if flag == "--help" || flag == "-h" || flag == "/?" => {
             println!("{USAGE}");
             ExitCode::SUCCESS
+        }
+        [command, input, root_flag, root, output_flag, output]
+            if command == "compile" && root_flag == "--data-root" && output_flag == "--output" =>
+        {
+            let input = Path::new(input);
+            match compile(input, Path::new(root), Path::new(output)) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("{} ({error})", input.display());
+                    ExitCode::FAILURE
+                }
+            }
         }
         [command, path] if command == "inspect" || command == "check-linked" => {
             let path = Path::new(path);
@@ -37,7 +51,7 @@ fn main() -> ExitCode {
             }) =>
         {
             eprintln!(
-                "XML asset compilation is pending in the Rust port. Use the EA SDK compiler for {}.",
+                "Use the compile command for supported AptUI XML streams. See --help for {}.",
                 Path::new(input).display()
             );
             ExitCode::from(2)
@@ -47,6 +61,37 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+fn compile(input: &Path, root: &Path, output: &Path) -> io::Result<()> {
+    let stem = input.file_stem().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "input must have a file name")
+    })?;
+    let stream = compile_apt_ui(input, root)?;
+    let files = [
+        (".bin", stream.files.bin),
+        (".relo", stream.files.relo),
+        (".imp", stream.files.imp),
+        (".manifest", stream.manifest),
+    ];
+    fs::create_dir(output)?;
+    let mut paths = Vec::new();
+    for (extension, bytes) in files {
+        let mut name = stem.to_ascii_lowercase();
+        name.push(extension);
+        paths.push(output.join(name));
+        let path = paths.last().unwrap();
+        if let Err(error) = fs::write(path, bytes) {
+            let error = io::Error::new(error.kind(), format!("{} ({error})", path.display()));
+            for path in paths {
+                let _ = fs::remove_file(path);
+            }
+            let _ = fs::remove_dir(output);
+            return Err(error);
+        }
+    }
+    println!("Compiled {}", paths.last().unwrap().display());
+    Ok(())
 }
 
 fn run(path: &Path, check_linked: bool) -> Result<(), Box<dyn Error>> {
