@@ -56,13 +56,15 @@ pub fn link_assets(
             instance,
             relocations,
             imports,
-            0,
         ];
         let (words, _) = header.as_chunks::<4>();
-        if !words
-            .iter()
-            .zip(expected)
-            .all(|(&word, value)| byte_order.u32(word) == value)
+        // The SDK's version 6 loose assets use the final word for metadata
+        // that is outside the linked payload. Version 5 reserves it as zero.
+        if (manifest.version == 5 && words[7] != [0; 4])
+            || !words
+                .iter()
+                .zip(expected)
+                .all(|(&word, value)| byte_order.u32(word) == value)
         {
             return Err(invalid("asset header differs from the manifest"));
         }

@@ -4,7 +4,7 @@ use binary_asset_builder::big::pack_big;
 use binary_asset_builder::compile::{
     CompiledStream, compile_apt_ui, compile_sdk_static, compile_static,
 };
-use binary_asset_builder::linked_stream::check_linked_files;
+use binary_asset_builder::linked_stream::{check_linked_files, link_assets};
 use binary_asset_builder::manifest::{ByteOrder, Manifest};
 use std::env;
 use std::error::Error;
@@ -22,6 +22,7 @@ Usage
   binary-asset-builder compile-static <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory>
   binary-asset-builder pack-big <directory> --output <file.big>
+  binary-asset-builder relink <file.manifest> --assets <directory> --output <new-directory>
   binary-asset-builder inspect <file.manifest>
   binary-asset-builder check-linked <file.manifest>";
 
@@ -51,6 +52,18 @@ fn main() -> ExitCode {
                 }
                 Err(error) => {
                     eprintln!("{} ({error})", Path::new(output).display());
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        [command, input, assets_flag, assets, output_flag, output]
+            if command == "relink" && assets_flag == "--assets" && output_flag == "--output" =>
+        {
+            let input = Path::new(input);
+            match relink(input, Path::new(assets), Path::new(output)) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("{} ({error})", input.display());
                     ExitCode::FAILURE
                 }
             }
@@ -142,6 +155,21 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+fn relink(input: &Path, assets: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
+    let bytes = fs::read(input)?;
+    let manifest = Manifest::parse(&bytes)?;
+    let files = link_assets(&manifest, |name| fs::read(assets.join(name)))?;
+    write_compiled_stream(
+        input,
+        output,
+        CompiledStream {
+            manifest: bytes,
+            files,
+        },
+    )?;
+    Ok(())
 }
 
 fn write_compiled_stream(input: &Path, output: &Path, stream: CompiledStream) -> io::Result<()> {

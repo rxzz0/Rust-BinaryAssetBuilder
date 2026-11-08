@@ -98,6 +98,22 @@ fn rejects_incomplete_and_mismatched_asset_files() {
     assert!(error.to_string().contains("asset header differs"));
 }
 
+#[test]
+fn skips_the_v6_loose_asset_metadata_word_when_linking() {
+    let mut manifest = Manifest::parse(FIXTURES[0]).unwrap();
+    manifest.assets.truncate(1);
+    let mut header = FIRST_HEADER;
+    header[7] = 0x05d8_dcd0;
+    let bytes = asset_file(manifest.byte_order, header, FIRST_PAYLOAD);
+    assert!(link_assets(&manifest, |_| Ok(bytes.clone())).is_err());
+
+    manifest.version = 6;
+    let streams = link_assets(&manifest, |_| Ok(bytes.clone())).unwrap();
+    assert_eq!(&streams.bin[4..], b"0123456789abcdef");
+    assert_eq!(&streams.relo[4..], b"ABCDEFGH");
+    assert_eq!(&streams.imp[4..], b"qrst");
+}
+
 fn asset_file(byte_order: ByteOrder, header: [u32; 8], payload: &[u8]) -> Vec<u8> {
     let mut bytes = Vec::new();
     for word in header {
