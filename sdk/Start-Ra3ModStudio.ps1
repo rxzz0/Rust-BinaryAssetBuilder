@@ -117,9 +117,32 @@ $staticIndent = "`t`t`t`t"
 $staticBuild = $staticIndent + (($staticBuild.Replace('RUST_EXE', $rustExpression) -split '\r?\n') -join ($lineEnding + $staticIndent)) + $lineEnding
 $currentStep = [regex]::Match($source, '(?ms)^[\t ]*case 6:.*?(?=^[\t ]*case 7:)')
 $source = $source.Remove($currentStep.Index, $currentStep.Length).Insert($currentStep.Index, $staticBuild)
+$hybridSource = $source
+
+$packBuild = @'
+case 10:
+    BuildHelper.DisplayLine(String.Format("Step {0}: Creating BIG files with Rust", stepId));
+    RunExecutableArguments argsBig = new RunExecutableArguments(Cmd);
+    argsBig.Arguments = String.Format(
+        "/C (@echo off) & (cd /D \"{0}\")"
+        + " && (if exist \"{2}\" (\"{1}\" pack-big \"{2}\" --output \"{3}\\{4}\" 2>&1))"
+        + " && (if exist \"{5}\" (\"{1}\" pack-big \"{5}\" --output \"{3}\\{6}\" 2>&1))"
+        + " || (echo ERROR Creating BIG files failed. & exit /b 1)",
+        SDKDirectory, RUST_EXE, BuiltModPath, ModInstallPath, ModBigStreams, ModAdditionalFilesPath, ModBigMisc);
+    BuildHelper.RunStep(StepType.RunExecutable, argsBig);
+    break;
+'@
+$packBuild = $staticIndent + (($packBuild.Replace('RUST_EXE', $rustExpression) -split '\r?\n') -join ($lineEnding + $staticIndent)) + $lineEnding
+$packSteps = [regex]::Matches($source, '(?ms)^[\t ]*case 10:.*?(?=^[\t ]*case 11:)')
+if ($packSteps.Count -ne 1) {
+    throw "Could not locate the BIG packaging step in $sourcePath."
+}
+$packStep = $packSteps[0]
+$source = $source.Remove($packStep.Index, $packStep.Length).Insert($packStep.Index, $packBuild)
 
 if ($InstallDefault) {
-    if ($hasRustCheck -and $currentSource -cne $source -and $currentSource -cne $aptUiSource -and $currentSource -cne $staticCheckSource) {
+    $knownSources = @($source, $hybridSource, $aptUiSource, $staticCheckSource)
+    if ($hasRustCheck -and $knownSources -cnotcontains $currentSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."
     }
     if (-not $hasRustCheck -and (Test-Path -LiteralPath $backupPath)) {
@@ -145,7 +168,7 @@ if ($InstallDefault) {
     }
 
     if ($currentSource -cne $source) {
-        $replacementBackup = if ($hasRustCheck) { "$sourcePath.before-rust-static" } else { $backupPath }
+        $replacementBackup = if ($hasRustCheck) { "$sourcePath.before-rust-pack" } else { $backupPath }
         $pendingPath = Join-Path $SdkRoot ("defaultscript.cs." + [Guid]::NewGuid().ToString('N') + '.tmp')
         try {
             [IO.File]::WriteAllText($pendingPath, $source)
