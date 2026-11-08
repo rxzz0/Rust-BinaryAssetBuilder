@@ -22,7 +22,7 @@ if (-not (Test-Path -LiteralPath $rustPath -PathType Leaf)) {
 $sourcePath = Join-Path $SdkRoot 'defaultscript.cs'
 $backupPath = "$sourcePath.before-rust-check"
 $currentSource = [IO.File]::ReadAllText($sourcePath)
-$hasRustCheck = $currentSource.Contains('echo Checking linked files with Rust')
+$hasRustCheck = $currentSource.Contains('echo Checking linked files with Rust') -or $currentSource.Contains('compile-static-sdk')
 $source = if ($hasRustCheck) { [IO.File]::ReadAllText($backupPath) } else { $currentSource }
 $steps = [regex]::Matches($source, '(?ms)^[\t ]*case 6:.*?(?=^[\t ]*case 7:)')
 if ($steps.Count -ne 1) {
@@ -93,9 +93,33 @@ $source = $source.Replace('case 4:', $aptUiStep).Replace(
     $aptUiOption + $lineEnding + "`t`t`t" +
     'modGUIData.Add(new GUIElementData("rustAptUi", "Use Rust for AptUI", GUIElementData.CheckBoxType, ScriptIndex.ModScript));'
 )
+$aptUiSource = $source
+
+$staticBuild = @'
+case 6:
+    BuildHelper.DisplayLine(String.Format("Step {0}: Building static data with Rust and EA fallback", stepId));
+    RunExecutableArguments args = new RunExecutableArguments(Cmd);
+    args.Arguments = String.Format(
+        "/C (@echo off) & (cd /D \"{2}\")"
+        + " && (\"{0}\" compile-static-sdk \"{1}\" --sdk-root \"{2}\" --output \"{3}\" 2>&1)"
+        + " && (for %I in (\"{4}\\mod_*\") do (del \"%I\" /F /Q))"
+        + " && (echo.>\"{4}\\mod.version\")",
+        RUST_EXE, ModXml, SDKDirectory, BuiltModsPath, BuiltModDataPath);
+    if (((bool)currentGUIData["step7"] == false) && ((bool)currentGUIData["step8"] == false))
+    {
+        args.Arguments += String.Format(" && (\"{0}\" \"{1}\\mod.manifest\" /f)", LoDStreamBuilder, BuiltModDataPath);
+    }
+    args.Arguments += " || (echo ERROR Build Static Data failed. & exit /b 1)";
+    BuildHelper.RunStep(StepType.RunExecutable, args);
+    break;
+'@
+$staticIndent = "`t`t`t`t"
+$staticBuild = $staticIndent + (($staticBuild.Replace('RUST_EXE', $rustExpression) -split '\r?\n') -join ($lineEnding + $staticIndent)) + $lineEnding
+$currentStep = [regex]::Match($source, '(?ms)^[\t ]*case 6:.*?(?=^[\t ]*case 7:)')
+$source = $source.Remove($currentStep.Index, $currentStep.Length).Insert($currentStep.Index, $staticBuild)
 
 if ($InstallDefault) {
-    if ($hasRustCheck -and $currentSource -cne $source -and $currentSource -cne $staticCheckSource) {
+    if ($hasRustCheck -and $currentSource -cne $source -and $currentSource -cne $aptUiSource -and $currentSource -cne $staticCheckSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."
     }
     if (-not $hasRustCheck -and (Test-Path -LiteralPath $backupPath)) {
@@ -121,7 +145,7 @@ if ($InstallDefault) {
     }
 
     if ($currentSource -cne $source) {
-        $replacementBackup = if ($hasRustCheck) { "$sourcePath.before-rust-aptui" } else { $backupPath }
+        $replacementBackup = if ($hasRustCheck) { "$sourcePath.before-rust-static" } else { $backupPath }
         $pendingPath = Join-Path $SdkRoot ("defaultscript.cs." + [Guid]::NewGuid().ToString('N') + '.tmp')
         try {
             [IO.File]::WriteAllText($pendingPath, $source)
