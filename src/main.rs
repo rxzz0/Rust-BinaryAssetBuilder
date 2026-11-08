@@ -90,7 +90,7 @@ fn main() -> ExitCode {
             }) =>
         {
             eprintln!(
-                "Use the compile command for supported AptUI XML streams. See --help for {}.",
+                "Use compile for AptUI XML or compile-static for supported static XML. See --help for {}.",
                 Path::new(input).display()
             );
             ExitCode::from(2)

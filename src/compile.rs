@@ -157,12 +157,13 @@ impl Compiler<'_> {
                         Some("reference") if self.reference_directory.is_some() => {
                             self.read_reference(path, source)?;
                         }
-                        kind => {
+                        Some(kind) => {
                             return Err(invalid(
                                 path,
                                 format!("unsupported include type {kind:?}"),
                             ));
                         }
+                        None => return Err(invalid(path, "missing include type")),
                     }
                 }
             } else if self.reference_directory.is_some()

@@ -25,12 +25,13 @@ pub(super) fn compile_asset(
         return Err(invalid(path, "invalid asset ID"));
     }
     let (type_hash, sort_order, data) = match type_name {
-        "PlayerTechRank" => (0x1227_1bce, 0, player_tech_rank(node, path)?),
-        "Video" => (0x8433_efa6, 1, video(node, path)?),
-        "UnitIntro" => (0x5708_06d2, 2, unit_intro(node, path)?),
-        "VideoEventList" => (0x96da_1c03, 3, video_events(node, path)?),
-        "CampaignEnumerator" => (0x0714_c282, 4, campaign_enumerator(node, path)?),
-        "LogicCommandSet" => (0x8ae8_b68c, 5, logic_commands(node, path)?),
+        "AIBudgetStateDefinition" => (0x99ff_1736, 0, ai_budget(node, path)?),
+        "PlayerTechRank" => (0x1227_1bce, 1, player_tech_rank(node, path)?),
+        "Video" => (0x8433_efa6, 2, video(node, path)?),
+        "UnitIntro" => (0x5708_06d2, 3, unit_intro(node, path)?),
+        "VideoEventList" => (0x96da_1c03, 4, video_events(node, path)?),
+        "CampaignEnumerator" => (0x0714_c282, 5, campaign_enumerator(node, path)?),
+        "LogicCommandSet" => (0x8ae8_b68c, 6, logic_commands(node, path)?),
         _ => {
             return Err(invalid(
                 path,
@@ -101,16 +102,11 @@ fn video(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     {
         return Err(invalid(path, "Video comment must be ASCII"));
     }
-    let volume = node.attribute("Volume").unwrap_or("80").trim();
-    let volume = volume
-        .strip_suffix('%')
-        .unwrap_or(volume)
-        .trim()
-        .parse::<f32>()
-        .ok()
-        .filter(|volume| volume.is_finite())
-        .ok_or_else(|| invalid(path, "invalid Video volume"))?
-        * 0.01;
+    let volume = percentage(
+        node.attribute("Volume").unwrap_or("80"),
+        "Video volume",
+        path,
+    )?;
     let sound = match node.attribute("SoundOverride").unwrap_or("DUCK") {
         "DUCK" => 0,
         "NO_DUCK" => 1,
@@ -135,6 +131,108 @@ fn video(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
         relocations: vec![8, 16, u32::MAX],
         ..Marshaled::default()
     })
+}
+
+fn ai_budget(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id"], path)?;
+    let mut children = node.children().filter(Node::is_element);
+    let heuristic = children
+        .next()
+        .filter(|node| node.has_tag_name((SAGE_NS, "Heuristic")))
+        .ok_or_else(|| invalid(path, "expected AIBudgetStateDefinition/Heuristic"))?;
+    let budget = children
+        .next()
+        .filter(|node| node.has_tag_name((SAGE_NS, "Budget")))
+        .ok_or_else(|| invalid(path, "expected AIBudgetStateDefinition/Budget"))?;
+    if children.next().is_some()
+        || heuristic.attributes().len() != 0
+        || budget.attributes().len() != 0
+    {
+        return Err(invalid(path, "invalid AIBudgetStateDefinition"));
+    }
+
+    let mut shares = Vec::new();
+    for share in budget.children().filter(Node::is_element) {
+        if !share.has_tag_name((SAGE_NS, "AccountShare")) || has_content(share) {
+            return Err(invalid(path, "expected Budget/AccountShare"));
+        }
+        validate_attributes(share, &["Account", "Percent"], path)?;
+        let account = match share.attribute("Account").unwrap_or("INVESTMENT") {
+            "INVESTMENT" => 0,
+            "SPECIAL_OPERATIONS" => 1,
+            "PRODUCTION" => 2,
+            "DEFENSE" => 3,
+            "TECHNOLOGY" => 4,
+            "SLUSH_FUND" => 5,
+            _ => return Err(invalid(path, "invalid AI bank account")),
+        };
+        let percent = percentage(
+            share.attribute("Percent").unwrap_or("0"),
+            "AI bank account share",
+            path,
+        )?;
+        shares.extend([account, percent.to_bits()]);
+    }
+
+    let mut weights = Vec::new();
+    for choice in heuristic.children().filter(Node::is_element) {
+        if !choice.has_tag_name((SAGE_NS, "ConstantHeuristic")) || has_content(choice) {
+            return Err(invalid(
+                path,
+                "only ConstantHeuristic is supported for AI budgets",
+            ));
+        }
+        validate_attributes(choice, &["Weight"], path)?;
+        let weight = choice.attribute("Weight").unwrap_or("1.0");
+        weights.push(finite_number(weight, "AI heuristic weight", path)?.to_bits());
+    }
+    if weights.is_empty() {
+        return Err(invalid(path, "expected at least one AI budget heuristic"));
+    }
+    let count = weights.len() as u32;
+    let heuristic_offset = 20 + 4 * shares.len() as u32;
+    let mut words = vec![
+        0,
+        count,
+        heuristic_offset,
+        (shares.len() / 2) as u32,
+        if shares.is_empty() { 0 } else { 20 },
+    ];
+    let mut relocations = Vec::new();
+    if !shares.is_empty() {
+        relocations.push(16);
+    }
+    words.extend(shares);
+    relocations.push(8);
+    let values_offset = heuristic_offset + 4 * count;
+    for index in 0..count {
+        words.push(values_offset + 8 * index);
+        relocations.push(heuristic_offset + 4 * index);
+    }
+    let constant_type = fast_hash(b"AIStateConstantHeuristic");
+    for weight in weights {
+        words.extend([constant_type, weight]);
+    }
+    relocations.push(u32::MAX);
+    Ok(Marshaled {
+        payload: encode_words(words),
+        relocations,
+        ..Marshaled::default()
+    })
+}
+
+fn percentage(value: &str, field: &str, path: &Path) -> io::Result<f32> {
+    let value = value.trim();
+    Ok(finite_number(value.strip_suffix('%').unwrap_or(value), field, path)? * 0.01)
+}
+
+fn finite_number(value: &str, field: &str, path: &Path) -> io::Result<f32> {
+    value
+        .trim()
+        .parse::<f32>()
+        .ok()
+        .filter(|number| number.is_finite())
+        .ok_or_else(|| invalid(path, format!("invalid {field}")))
 }
 
 fn unit_intro(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {

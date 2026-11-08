@@ -132,3 +132,36 @@ fn emits_the_sdk_external_audio_type_and_local_movie_import() {
         ]
     );
 }
+#[test]
+fn compiles_ai_budget_with_the_sdk_relocation_order() {
+    let root = scratch_root();
+    let xml = root.join("budget.xml");
+    fs::write(
+        &xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <AIBudgetStateDefinition id="NewProductionDefenseBudget">
+                <Heuristic><ConstantHeuristic/></Heuristic>
+                <Budget>
+                    <AccountShare Account="PRODUCTION" Percent="90%"/>
+                    <AccountShare Account="DEFENSE" Percent="10%"/>
+                </Budget>
+            </AIBudgetStateDefinition>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let result = compile_static(&xml, &root, &root);
+    fs::remove_file(xml).unwrap();
+    fs::remove_dir(root).unwrap();
+
+    let stream = result.unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let asset = &manifest.assets[0];
+    assert_eq!(asset.type_hash, 0x99ff_1736);
+    assert_eq!(asset.instance_hash, 0x2c94_a214);
+    assert_eq!(asset.chunk_sizes.instance, 48);
+    let expected: Vec<_> = [16, 8, 36, u32::MAX]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect();
+    assert_eq!(&stream.files.relo[4..], expected);
+}
