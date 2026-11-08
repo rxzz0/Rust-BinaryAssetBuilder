@@ -8,6 +8,26 @@ use roxmltree::Node;
 use std::io;
 use std::path::Path;
 
+type Marshal = fn(Node<'_, '_>, &Path) -> io::Result<Marshaled>;
+
+fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
+    let encoder: (u32, u8, Marshal) = match type_name {
+        "AIBudgetStateDefinition" => (0x99ff_1736, 0, ai_budget),
+        "PlayerTechRank" => (0x1227_1bce, 1, player_tech_rank),
+        "Video" => (0x8433_efa6, 2, video),
+        "UnitIntro" => (0x5708_06d2, 3, unit_intro),
+        "VideoEventList" => (0x96da_1c03, 4, video_events),
+        "CampaignEnumerator" => (0x0714_c282, 5, campaign_enumerator),
+        "LogicCommandSet" => (0x8ae8_b68c, 6, logic_commands),
+        _ => return None,
+    };
+    Some(encoder)
+}
+
+pub(super) fn supports(type_name: &str) -> bool {
+    encoder(type_name).is_some()
+}
+
 pub(super) fn compile_asset(
     node: Node<'_, '_>,
     path: &Path,
@@ -24,21 +44,9 @@ pub(super) fn compile_asset(
     if id.contains(':') {
         return Err(invalid(path, "invalid asset ID"));
     }
-    let (type_hash, sort_order, data) = match type_name {
-        "AIBudgetStateDefinition" => (0x99ff_1736, 0, ai_budget(node, path)?),
-        "PlayerTechRank" => (0x1227_1bce, 1, player_tech_rank(node, path)?),
-        "Video" => (0x8433_efa6, 2, video(node, path)?),
-        "UnitIntro" => (0x5708_06d2, 3, unit_intro(node, path)?),
-        "VideoEventList" => (0x96da_1c03, 4, video_events(node, path)?),
-        "CampaignEnumerator" => (0x0714_c282, 5, campaign_enumerator(node, path)?),
-        "LogicCommandSet" => (0x8ae8_b68c, 6, logic_commands(node, path)?),
-        _ => {
-            return Err(invalid(
-                path,
-                format!("unsupported static asset type {type_name}"),
-            ));
-        }
-    };
+    let (type_hash, sort_order, marshal) = encoder(type_name)
+        .ok_or_else(|| invalid(path, format!("unsupported static asset type {type_name}")))?;
+    let data = marshal(node, path)?;
     let mut instance_hash = hash_xml(node, type_hash ^ 4, path)?;
     if !data.reference_types.is_empty() {
         instance_hash ^= memory_stream_hash(encode_words(data.reference_types));

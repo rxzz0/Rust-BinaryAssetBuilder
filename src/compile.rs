@@ -11,8 +11,11 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+mod sdk_static;
 mod static_assets;
 mod texture;
+
+pub use sdk_static::compile_sdk_static;
 
 const SAGE_NS: &str = "uri:ea.com:eala:asset";
 const FILE_HASH_BLOCK: usize = 0x100000;
@@ -105,6 +108,18 @@ impl From<AssetId> for AssetReference {
         Self {
             id,
             external_type: None,
+        }
+    }
+}
+
+impl AssetReference {
+    fn output_id(&self, local_ids: &HashSet<AssetId>) -> AssetId {
+        if local_ids.contains(&self.id) {
+            return self.id;
+        }
+        AssetId {
+            type_id: self.external_type.unwrap_or(self.id.type_id),
+            instance_id: self.id.instance_id,
         }
     }
 }
@@ -374,10 +389,7 @@ impl Compiler<'_> {
                     resolved.push(id);
                     continue;
                 }
-                let external = AssetId {
-                    type_id: reference.external_type.unwrap_or(id.type_id),
-                    instance_id: id.instance_id,
-                };
+                let external = reference.output_id(&self.ids);
                 if !self.external_ids.contains(&id) && !self.external_ids.contains(&external) {
                     return Err(invalid(
                         &self.root,
