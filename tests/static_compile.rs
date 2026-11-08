@@ -207,3 +207,46 @@ fn compiles_w3d_collision_box_with_the_sdk_layout() {
     assert_eq!(stream.files.relo.len(), 4);
     assert_eq!(stream.files.imp.len(), 4);
 }
+
+#[test]
+fn compiles_w3d_hierarchy_with_hashed_pivot_names() {
+    let root = scratch_root();
+    let xml = root.join("hierarchy.w3x");
+    fs::write(
+        &xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <W3DHierarchy id="Example">
+                <Pivot Name="ROOTTRANSFORM" Parent="-1">
+                    <Translation X="2" Y="3" Z="4"/>
+                    <Rotation X="0" Y="0" Z="0" W="1"/>
+                    <FixupMatrix M00="1" M11="1" M22="1" M30="5"/>
+                </Pivot>
+            </W3DHierarchy>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let result = compile_static(&xml, &root, &root);
+    fs::remove_file(xml).unwrap();
+    fs::remove_dir(root).unwrap();
+
+    let stream = result.unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    assert_eq!(manifest.assets[0].type_hash, 0xed94_de61);
+    assert_eq!(manifest.assets[0].chunk_sizes.instance, 112);
+    let words: Vec<_> = stream.files.bin[4..]
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .copied()
+        .map(u32::from_le_bytes)
+        .collect();
+    assert_eq!(&words[..5], &[0, 1, 12, 0xcef3_087b, u32::MAX]);
+    assert_eq!(
+        &words[5..8],
+        &[2_f32.to_bits(), 3_f32.to_bits(), 4_f32.to_bits()]
+    );
+    assert_eq!(words[11], 1_f32.to_bits());
+    assert_eq!(words[15], 5_f32.to_bits());
+    assert_eq!(&stream.files.relo[4..], &[8, 0, 0, 0, 255, 255, 255, 255]);
+    assert_eq!(stream.files.imp.len(), 4);
+}

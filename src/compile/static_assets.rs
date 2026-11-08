@@ -20,6 +20,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "CampaignEnumerator" => (0x0714_c282, 5, campaign_enumerator),
         "LogicCommandSet" => (0x8ae8_b68c, 6, logic_commands),
         "W3DCollisionBox" => (0x6e26_f699, 7, w3d_collision_box),
+        "W3DHierarchy" => (0xed94_de61, 8, w3d_hierarchy),
         _ => return None,
     };
     Some(encoder)
@@ -246,7 +247,7 @@ fn finite_number(value: &str, field: &str, path: &Path) -> io::Result<f32> {
 
 fn w3d_collision_box(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     validate_attributes(node, &["id", "JoypadPickingOnly"], path)?;
-    let mut children = node.children().filter(Node::is_element);
+    let mut children = w3d_content(node);
     let mut words = [0; 8];
     for (name, offset) in [("Center", 1), ("Extent", 4)] {
         let vector = children
@@ -261,12 +262,7 @@ fn w3d_collision_box(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
             *component = finite_number(required(vector, axis, path)?, axis, path)?.to_bits();
         }
     }
-    if children.next().is_some()
-        || node
-            .children()
-            .filter(Node::is_text)
-            .any(|child| child.text().is_some_and(|value| !value.trim().is_empty()))
-    {
+    if children.next().is_some() {
         return Err(invalid(path, "unexpected content in W3DCollisionBox"));
     }
     words[7] = match node
@@ -280,6 +276,70 @@ fn w3d_collision_box(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     };
     Ok(Marshaled {
         payload: encode_words(words),
+        ..Marshaled::default()
+    })
+}
+
+fn w3d_content<'a, 'input>(node: Node<'a, 'input>) -> impl Iterator<Item = Node<'a, 'input>> {
+    node.children().filter(|child| {
+        child.is_element()
+            || child.is_text() && child.text().is_some_and(|text| !text.trim().is_empty())
+    })
+}
+
+fn w3d_hierarchy(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    const MATRIX: &[&str] = &[
+        "M00", "M10", "M20", "M30", "M01", "M11", "M21", "M31", "M02", "M12", "M22", "M32", "M03",
+        "M13", "M23", "M33",
+    ];
+    validate_attributes(node, &["id"], path)?;
+    let count = u32::try_from(w3d_content(node).count())
+        .map_err(|_| invalid(path, "too many W3DHierarchy pivots"))?;
+    if count == 0 {
+        return Err(invalid(path, "W3DHierarchy requires a Pivot"));
+    }
+    let mut words = vec![0, count, 12];
+    for pivot in w3d_content(node) {
+        if !pivot.has_tag_name((SAGE_NS, "Pivot")) {
+            return Err(invalid(path, "unexpected element in W3DHierarchy"));
+        }
+        validate_attributes(pivot, &["Name", "Parent"], path)?;
+        let name = required(pivot, "Name", path)?;
+        let parent = required(pivot, "Parent", path)?
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| invalid(path, "invalid W3DHierarchy Pivot Parent"))?;
+        words.extend([hash_name(name), parent as u32]);
+        let mut fields = w3d_content(pivot);
+        for (tag, attributes) in [
+            ("Translation", &["X", "Y", "Z"][..]),
+            ("Rotation", &["X", "Y", "Z", "W"][..]),
+            ("FixupMatrix", MATRIX),
+        ] {
+            let field = fields
+                .next()
+                .filter(|child| child.has_tag_name((SAGE_NS, tag)))
+                .ok_or_else(|| invalid(path, format!("W3DHierarchy Pivot requires {tag}")))?;
+            validate_attributes(field, attributes, path)?;
+            if has_content(field) {
+                return Err(invalid(path, format!("unexpected content in {tag}")));
+            }
+            for &attribute in attributes {
+                let value = if tag == "FixupMatrix" {
+                    field.attribute(attribute).unwrap_or("0")
+                } else {
+                    required(field, attribute, path)?
+                };
+                words.push(finite_number(value, attribute, path)?.to_bits());
+            }
+        }
+        if fields.next().is_some() {
+            return Err(invalid(path, "unexpected element in W3DHierarchy Pivot"));
+        }
+    }
+    Ok(Marshaled {
+        payload: encode_words(words),
+        relocations: vec![8, u32::MAX],
         ..Marshaled::default()
     })
 }
