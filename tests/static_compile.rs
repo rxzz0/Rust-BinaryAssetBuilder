@@ -1,5 +1,5 @@
 use binary_asset_builder::{
-    compile::{compile_sdk_static, compile_static},
+    compile::{compile_sdk_global, compile_sdk_static, compile_static},
     manifest::{AssetEntry, AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest},
 };
 use std::fs;
@@ -59,6 +59,40 @@ fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
         files.map(|name| fs::read(output.join(name)).unwrap()),
         expected
     );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn sdk_global_compiles_multiplayer_colors_with_the_sdk_layout() {
+    let root = scratch_root();
+    let data = root.join("Mods/Example/Data/AdditionalMaps");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    fs::write(
+        data.join("MapMetaData_Colors.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <MultiplayerColor id="ColorPurple">
+                <RGBColor R="125" G="25" B="200" A="255"/>
+                <RGBNightColor R="125" G="25" B="200" A="255"/>
+                <TooltipName>Color:Purple</TooltipName>
+                <AvailableInMetaGame>true</AvailableInMetaGame>
+            </MultiplayerColor>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(data.join("Unrelated.xml"), "not an asset stream").unwrap();
+    compile_sdk_global(&data, &root, &built).unwrap();
+    let output = built.join("mods/example/data/additionalmaps");
+    let manifest = fs::read(output.join("mapmetadata_colors.manifest")).unwrap();
+    let manifest = Manifest::parse(&manifest).unwrap();
+    assert_eq!(manifest.assets[0].instance_hash, 0xa678_aae6);
+    let binary = fs::read(output.join("mapmetadata_colors.bin")).unwrap();
+    assert_eq!(
+        &binary[4..],
+        b"\0\0\0\0\xc8\x19\x7d\xff\0\0\0\0\xc8\x19\x7d\xff\x0c\0\0\0\x1c\0\0\0\x01\0\0\0Color:Purple\0\0\0\0"
+    );
+    let relocations = fs::read(output.join("mapmetadata_colors.relo")).unwrap();
+    assert_eq!(&relocations[4..], &[20, 0, 0, 0, 255, 255, 255, 255]);
     fs::remove_dir_all(root).unwrap();
 }
 

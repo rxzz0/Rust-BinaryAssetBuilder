@@ -21,6 +21,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "LogicCommandSet" => (0x8ae8_b68c, 6, logic_commands),
         "W3DCollisionBox" => (0x6e26_f699, 7, w3d_collision_box),
         "W3DHierarchy" => (0xed94_de61, 8, w3d_hierarchy),
+        "MultiplayerColor" => (0x131c_20a0, 9, multiplayer_color),
         _ => return None,
     };
     Some(encoder)
@@ -243,13 +244,10 @@ fn finite_number(value: &str, field: &str, path: &Path) -> io::Result<f32> {
 
 fn w3d_collision_box(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     validate_attributes(node, &["id", "JoypadPickingOnly"], path)?;
-    let mut children = w3d_content(node);
+    let mut children = significant_children(node);
     let mut words = [0; 8];
     for (name, offset) in [("Center", 1), ("Extent", 4)] {
-        let vector = children
-            .next()
-            .filter(|child| child.has_tag_name((SAGE_NS, name)))
-            .ok_or_else(|| invalid(path, format!("W3DCollisionBox requires {name}")))?;
+        let vector = required_element(&mut children, name, path)?;
         validate_attributes(vector, &["X", "Y", "Z"], path)?;
         if has_content(vector) {
             return Err(invalid(path, format!("unexpected content in {name}")));
@@ -276,11 +274,24 @@ fn w3d_collision_box(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     })
 }
 
-fn w3d_content<'a, 'input>(node: Node<'a, 'input>) -> impl Iterator<Item = Node<'a, 'input>> {
+fn significant_children<'a, 'input>(
+    node: Node<'a, 'input>,
+) -> impl Iterator<Item = Node<'a, 'input>> {
     node.children().filter(|child| {
         child.is_element()
             || child.is_text() && child.text().is_some_and(|text| !text.trim().is_empty())
     })
+}
+
+fn required_element<'a, 'input>(
+    children: &mut impl Iterator<Item = Node<'a, 'input>>,
+    name: &str,
+    path: &Path,
+) -> io::Result<Node<'a, 'input>> {
+    children
+        .next()
+        .filter(|child| child.has_tag_name((SAGE_NS, name)))
+        .ok_or_else(|| invalid(path, format!("expected {name} element")))
 }
 
 fn w3d_hierarchy(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
@@ -289,13 +300,13 @@ fn w3d_hierarchy(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
         "M13", "M23", "M33",
     ];
     validate_attributes(node, &["id"], path)?;
-    let count = u32::try_from(w3d_content(node).count())
+    let count = u32::try_from(significant_children(node).count())
         .map_err(|_| invalid(path, "too many W3DHierarchy pivots"))?;
     if count == 0 {
         return Err(invalid(path, "W3DHierarchy requires a Pivot"));
     }
     let mut words = vec![0, count, 12];
-    for pivot in w3d_content(node) {
+    for pivot in significant_children(node) {
         if !pivot.has_tag_name((SAGE_NS, "Pivot")) {
             return Err(invalid(path, "unexpected element in W3DHierarchy"));
         }
@@ -306,16 +317,13 @@ fn w3d_hierarchy(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
             .parse::<i32>()
             .map_err(|_| invalid(path, "invalid W3DHierarchy Pivot Parent"))?;
         words.extend([hash_name(name), parent as u32]);
-        let mut fields = w3d_content(pivot);
+        let mut fields = significant_children(pivot);
         for (tag, attributes) in [
             ("Translation", &["X", "Y", "Z"][..]),
             ("Rotation", &["X", "Y", "Z", "W"][..]),
             ("FixupMatrix", MATRIX),
         ] {
-            let field = fields
-                .next()
-                .filter(|child| child.has_tag_name((SAGE_NS, tag)))
-                .ok_or_else(|| invalid(path, format!("W3DHierarchy Pivot requires {tag}")))?;
+            let field = required_element(&mut fields, tag, path)?;
             validate_attributes(field, attributes, path)?;
             if has_content(field) {
                 return Err(invalid(path, format!("unexpected content in {tag}")));
@@ -338,6 +346,82 @@ fn w3d_hierarchy(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
         relocations: vec![8, u32::MAX],
         ..Marshaled::default()
     })
+}
+
+fn multiplayer_color(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id"], path)?;
+    let mut children = significant_children(node).peekable();
+    let rgb = color4(required_element(&mut children, "RGBColor", path)?, path)?;
+    let tint = children
+        .next_if(|child| child.has_tag_name((SAGE_NS, "RGBColorT")))
+        .map(|child| color4(child, path))
+        .transpose()?
+        .unwrap_or(0);
+    let night = color4(
+        required_element(&mut children, "RGBNightColor", path)?,
+        path,
+    )?;
+    let tooltip = required_element(&mut children, "TooltipName", path)?;
+    let available = required_element(&mut children, "AvailableInMetaGame", path)?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected content in MultiplayerColor"));
+    }
+    let tooltip = text_value(tooltip, path)?;
+    let length = u32::try_from(tooltip.len())
+        .map_err(|_| invalid(path, "MultiplayerColor TooltipName is too long"))?;
+    let available = match text_value(available, path)?.trim() {
+        "false" | "0" => 0,
+        "true" | "1" => 1,
+        _ => {
+            return Err(invalid(
+                path,
+                "invalid MultiplayerColor AvailableInMetaGame",
+            ));
+        }
+    };
+    let mut payload = encode_words([0, rgb, tint, night, length, 28, available]);
+    payload.extend_from_slice(tooltip.as_bytes());
+    payload.resize((payload.len() + 1).next_multiple_of(4), 0);
+    Ok(Marshaled {
+        payload,
+        relocations: vec![20, u32::MAX],
+        ..Marshaled::default()
+    })
+}
+
+fn color4(node: Node<'_, '_>, path: &Path) -> io::Result<u32> {
+    let channels = ["B", "G", "R", "A"];
+    validate_attributes(node, &channels, path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected content in color"));
+    }
+    let mut bytes = [0; 4];
+    for (byte, channel) in bytes.iter_mut().zip(channels) {
+        *byte = node
+            .attribute(channel)
+            .unwrap_or("0")
+            .trim()
+            .parse()
+            .map_err(|_| invalid(path, format!("invalid color channel {channel}")))?;
+    }
+    Ok(u32::from_le_bytes(bytes))
+}
+
+fn text_value<'a>(node: Node<'a, '_>, path: &Path) -> io::Result<&'a str> {
+    validate_attributes(node, &[], path)?;
+    let mut children = significant_children(node);
+    let value = children
+        .next()
+        .filter(Node::is_text)
+        .and_then(|text| text.text())
+        .filter(|value| value.is_ascii());
+    match value {
+        Some(value) if children.next().is_none() => Ok(value),
+        _ => Err(invalid(
+            path,
+            format!("expected ASCII text in {}", node.tag_name().name()),
+        )),
+    }
 }
 
 fn unit_intro(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
