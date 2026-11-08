@@ -1,9 +1,9 @@
 use binary_asset_builder::{
-    compile::compile_static,
+    compile::{compile_sdk_static, compile_static},
     manifest::{AssetEntry, AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest},
 };
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn scratch_root() -> PathBuf {
@@ -11,9 +11,55 @@ fn scratch_root() -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("bab-static-{}-{nonce}", std::process::id()));
-    fs::create_dir(&root).unwrap();
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("bab-static-{}-{nonce}", std::process::id()));
+    fs::create_dir_all(&root).unwrap();
     root
+}
+
+#[test]
+fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
+    let root = scratch_root();
+    let data = root.join("Mods/Example/Data");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    let input = data.join("Mod.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Video id="example" Filename="example" />
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let output = built.join("mods/example/data");
+    let files = [
+        "mod.manifest",
+        "mod.bin",
+        "mod.relo",
+        "mod.imp",
+        "mod.version",
+    ];
+    let expected = files.map(|name| fs::read(output.join(name)).unwrap());
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Unsupported id="example" />
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let error = compile_sdk_static(&input, &root, &built).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("unsupported static asset type Unsupported")
+    );
+    assert_eq!(
+        files.map(|name| fs::read(output.join(name)).unwrap()),
+        expected
+    );
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

@@ -1,47 +1,65 @@
-use binary_asset_builder::compile::compile_apt_ui;
+use crate::compile::{CompiledStream, compile_apt_ui};
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const GENERATED: [&str; 5] = ["manifest", "bin", "relo", "imp", "version"];
 
-pub fn compile_directory(input: &Path, root: &Path, output: &Path) -> io::Result<()> {
-    let mut sources = Vec::new();
-    for entry in fs::read_dir(input)? {
-        let entry = entry?;
-        let path = entry.path();
-        if entry.file_type()?.is_file() && has_extension(&path, "xml") {
-            sources.push(path);
-        }
-    }
-    sources.sort();
+pub fn compile_apt_ui_directory(input: &Path, root: &Path, output: &Path) -> io::Result<()> {
+    let sources = xml_sources(input, |_| true)?;
     if sources.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "no AptUI XML streams found",
         ));
     }
+    let outputs = compile_streams(&sources, b" \r\n", |source| compile_apt_ui(source, root))?;
+    publish(output, outputs, is_generated)?;
+    println!("Compiled {} AptUI streams with Rust", sources.len());
+    Ok(())
+}
 
+pub(crate) fn xml_sources(
+    input: &Path,
+    selected: impl Fn(&Path) -> bool,
+) -> io::Result<Vec<PathBuf>> {
+    let mut sources = Vec::new();
+    for entry in fs::read_dir(input)? {
+        let entry = entry?;
+        let path = entry.path();
+        if entry.file_type()?.is_file() && has_extension(&path, "xml") && selected(&path) {
+            sources.push(path);
+        }
+    }
+    sources.sort();
+    Ok(sources)
+}
+
+pub(crate) fn compile_streams(
+    sources: &[PathBuf],
+    version: &[u8],
+    compile: impl Fn(&Path) -> io::Result<CompiledStream>,
+) -> io::Result<Vec<(OsString, Vec<u8>)>> {
     let mut names = HashSet::new();
     let mut outputs = Vec::new();
-    for source in &sources {
+    for source in sources {
         let stem = source.file_stem().unwrap().to_ascii_lowercase();
         if !names.insert(stem.clone()) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "duplicate AptUI output name",
+                "duplicate stream output name",
             ));
         }
-        println!("Compiling AptUI XML with Rust {}", source.display());
-        let stream = compile_apt_ui(source, root)?;
+        println!("Compiling XML with Rust {}", source.display());
+        let stream = compile(source)?;
         for (extension, bytes) in [
             ("bin", stream.files.bin),
             ("relo", stream.files.relo),
             ("imp", stream.files.imp),
             ("manifest", stream.manifest),
-            ("version", b" \r\n".to_vec()),
+            ("version", version.to_vec()),
         ] {
             let mut name = stem.clone();
             name.push(".");
@@ -49,9 +67,16 @@ pub fn compile_directory(input: &Path, root: &Path, output: &Path) -> io::Result
             outputs.push((name, bytes));
         }
     }
+    Ok(outputs)
+}
 
+pub(crate) fn publish(
+    output: &Path,
+    outputs: Vec<(OsString, Vec<u8>)>,
+    replace: impl Fn(&Path) -> bool,
+) -> io::Result<()> {
     fs::create_dir_all(output)?;
-    let stage = output.join(".rust-aptui");
+    let stage = output.join(".rust-streams");
     fs::create_dir(&stage)?;
     let fresh = stage.join("new");
     let old = stage.join("previous");
@@ -66,11 +91,7 @@ pub fn compile_directory(input: &Path, root: &Path, output: &Path) -> io::Result
         let mut previous = Vec::new();
         for entry in fs::read_dir(output)? {
             let entry = entry?;
-            if entry.file_type()?.is_file()
-                && GENERATED
-                    .iter()
-                    .any(|ext| has_extension(&entry.path(), ext))
-            {
+            if entry.file_type()?.is_file() && replace(&entry.path()) {
                 previous.push(entry.file_name());
             }
         }
@@ -96,13 +117,16 @@ pub fn compile_directory(input: &Path, root: &Path, output: &Path) -> io::Result
         return Err(error);
     }
     remove_stage(&stage, &fresh, &old);
-    println!("Compiled {} AptUI streams with Rust", sources.len());
     Ok(())
 }
 
 fn has_extension(path: &Path, expected: &str) -> bool {
     path.extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case(expected))
+}
+
+pub(crate) fn is_generated(path: &Path) -> bool {
+    GENERATED.iter().any(|ext| has_extension(path, ext))
 }
 
 fn rollback(

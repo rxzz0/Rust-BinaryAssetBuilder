@@ -15,7 +15,8 @@ mod sdk_static;
 mod static_assets;
 mod texture;
 
-pub use sdk_static::compile_sdk_static;
+pub use crate::compile_batch::compile_apt_ui_directory;
+pub use sdk_static::{compile_sdk_global, compile_sdk_static};
 
 const SAGE_NS: &str = "uri:ea.com:eala:asset";
 const FILE_HASH_BLOCK: usize = 0x100000;

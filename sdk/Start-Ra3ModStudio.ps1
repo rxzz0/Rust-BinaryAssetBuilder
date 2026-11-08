@@ -139,9 +139,65 @@ if ($packSteps.Count -ne 1) {
 }
 $packStep = $packSteps[0]
 $source = $source.Remove($packStep.Index, $packStep.Length).Insert($packStep.Index, $packBuild)
+$packSource = $source
+
+function Set-ModBuildStep([string] $script, [int] $id, [int] $next, [string] $body) {
+    $steps = [regex]::Matches($script, "(?ms)^[\t ]*case ${id}:.*?(?=^[\t ]*case ${next}:)")
+    if ($steps.Count -ne 1) {
+        throw "Could not locate ModStudio build step $id in $sourcePath."
+    }
+    $step = $steps[0]
+    $text = $staticIndent + (($body.Replace('RUST_EXE', $rustExpression) -split '\r?\n') -join ($lineEnding + $staticIndent)) + $lineEnding
+    $script.Remove($step.Index, $step.Length).Insert($step.Index, $text)
+}
+
+$source = [regex]::Replace($source, '(?m)^[\t ]*modGUIData\.Add\(new GUIElementData\("rustAptUi".*\r?\n', '')
+$source = [regex]::Replace($source, '(?m)^[\t ]*(?:string (?:BinaryAssetBuilder|MakeBig);|(?:BinaryAssetBuilder|MakeBig) = .*;)\r?\n', '')
+$source = Set-ModBuildStep $source 4 5 @'
+case 4:
+    BuildHelper.DisplayLine("Step 4: Compiling AptUI XML with Rust");
+    RunExecutableArguments argsRustApt = new RunExecutableArguments(Cmd);
+    argsRustApt.Arguments = String.Format(
+        "/C (@echo off) & (if exist \"{1}\" (\"{0}\" compile-aptui \"{1}\" --data-root \"{2}\" --output \"{3}\" 2>&1))",
+        RUST_EXE, Path.Combine(ModDataPath, "aptui"), SDKDirectory, Path.Combine(BuiltModDataPath, "aptui"));
+    BuildHelper.RunStep(StepType.RunExecutable, argsRustApt);
+    break;
+'@
+$source = Set-ModBuildStep $source 5 6 @'
+case 5:
+    BuildHelper.DisplayLine("Step 5: Compiling global XML with Rust");
+    RunExecutableArguments argsRustGlobal = new RunExecutableArguments(Cmd);
+    argsRustGlobal.Arguments = String.Format(
+        "/C (@echo off) & (if exist \"{1}\" (\"{0}\" compile-global-sdk \"{1}\" --sdk-root \"{2}\" --output \"{3}\" 2>&1))",
+        RUST_EXE, Path.Combine(ModDataPath, "additionalmaps"), SDKDirectory, BuiltModsPath);
+    BuildHelper.RunStep(StepType.RunExecutable, argsRustGlobal);
+    break;
+'@
+$source = Set-ModBuildStep $source 6 7 @'
+case 6:
+    BuildHelper.DisplayLine("Step 6: Compiling static XML with Rust");
+    RunExecutableArguments argsRustStatic = new RunExecutableArguments(Cmd);
+    argsRustStatic.Arguments = String.Format(
+        "/C (@echo off) & (\"{0}\" compile-static-sdk \"{1}\" --sdk-root \"{2}\" --output \"{3}\" 2>&1)",
+        RUST_EXE, ModXml, SDKDirectory, BuiltModsPath);
+    if (!(bool)currentGUIData["step7"] && !(bool)currentGUIData["step8"])
+    {
+        argsRustStatic.Arguments += String.Format(" && (\"{0}\" \"{1}\\mod.manifest\" /f)", LoDStreamBuilder, BuiltModDataPath);
+    }
+    BuildHelper.RunStep(StepType.RunExecutable, argsRustStatic);
+    break;
+'@
+$source = Set-ModBuildStep $source 9 10 @'
+case 9:
+    BuildHelper.DisplayLine("Step 9: Compiling official maps with Rust");
+    RunExecutableArguments argsRustMaps = new RunExecutableArguments(Cmd);
+    argsRustMaps.Arguments = "/C echo ERROR The Rust official map compiler is still missing. & exit /b 1";
+    BuildHelper.RunStep(StepType.RunExecutable, argsRustMaps);
+    break;
+'@
 
 if ($InstallDefault) {
-    $knownSources = @($source, $hybridSource, $aptUiSource, $staticCheckSource)
+    $knownSources = @($source, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
     if ($hasRustCheck -and $knownSources -cnotcontains $currentSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."
     }
@@ -168,7 +224,7 @@ if ($InstallDefault) {
     }
 
     if ($currentSource -cne $source) {
-        $replacementBackup = if ($hasRustCheck) { "$sourcePath.before-rust-pack" } else { $backupPath }
+        $replacementBackup = if ($hasRustCheck) { "$sourcePath.before-rust-native" } else { $backupPath }
         $pendingPath = Join-Path $SdkRoot ("defaultscript.cs." + [Guid]::NewGuid().ToString('N') + '.tmp')
         try {
             [IO.File]::WriteAllText($pendingPath, $source)

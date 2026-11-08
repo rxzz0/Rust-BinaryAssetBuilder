@@ -2,7 +2,8 @@
 
 use binary_asset_builder::big::pack_big;
 use binary_asset_builder::compile::{
-    CompiledStream, compile_apt_ui, compile_sdk_static, compile_static,
+    CompiledStream, compile_apt_ui, compile_apt_ui_directory, compile_sdk_global,
+    compile_sdk_static, compile_static,
 };
 use binary_asset_builder::linked_stream::{check_linked_files, link_assets};
 use binary_asset_builder::manifest::{ByteOrder, Manifest};
@@ -13,14 +14,13 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
-mod compile_batch;
-
 const USAGE: &str = "\
 Usage
   binary-asset-builder compile <file.xml> --data-root <directory> --output <new-directory>
   binary-asset-builder compile-aptui <input-directory> --data-root <directory> --output <directory>
   binary-asset-builder compile-static <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory>
+  binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory>
   binary-asset-builder pack-big <directory> --output <file.big>
   binary-asset-builder relink <file.manifest> --assets <directory> --output <new-directory>
   binary-asset-builder inspect <file.manifest>
@@ -69,12 +69,19 @@ fn main() -> ExitCode {
             }
         }
         [command, input, sdk_flag, sdk, output_flag, output]
-            if command == "compile-static-sdk"
+            if (command == "compile-static-sdk" || command == "compile-global-sdk")
                 && sdk_flag == "--sdk-root"
                 && output_flag == "--output" =>
         {
             let input = Path::new(input);
-            match compile_sdk_static(input, Path::new(sdk), Path::new(output)) {
+            let sdk = Path::new(sdk);
+            let output = Path::new(output);
+            let result = if command == "compile-global-sdk" {
+                compile_sdk_global(input, sdk, output)
+            } else {
+                compile_sdk_static(input, sdk, output)
+            };
+            match result {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(error) => {
                     eprintln!("{} ({error})", input.display());
@@ -116,7 +123,7 @@ fn main() -> ExitCode {
             let root = Path::new(root);
             let output = Path::new(output);
             let result = if command == "compile-aptui" {
-                compile_batch::compile_directory(input, root, output)
+                compile_apt_ui_directory(input, root, output)
             } else {
                 compile_apt_ui(input, root)
                     .and_then(|stream| write_compiled_stream(input, output, stream))

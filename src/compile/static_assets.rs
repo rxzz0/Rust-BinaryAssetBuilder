@@ -26,10 +26,6 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
     Some(encoder)
 }
 
-pub(super) fn supports(type_name: &str) -> bool {
-    encoder(type_name).is_some()
-}
-
 pub(super) fn compile_asset(
     node: Node<'_, '_>,
     path: &Path,
