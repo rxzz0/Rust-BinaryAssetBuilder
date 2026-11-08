@@ -189,6 +189,43 @@ fn emits_only_referenced_assets_from_instance_includes() {
 }
 
 #[test]
+fn compiles_hotkeys_with_sdk_slot_order_and_import_indices() {
+    let root = scratch_root();
+    let input = root.join("hotkeys.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <HotKeySlot id="Slot10" Name="Slot10"/>
+            <HotKeySlot id="Slot1_Mod" Name="Slot1"/>
+            <MappableKey id="KEY_F1" KeyDef="KEY_F1"/>
+            <DefaultHotKeys id="Default">
+                <Map><HotKey Slot="Slot1_Mod" Key="KEY_F1" Modifiers="ALT"/></Map>
+            </DefaultHotKeys>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let [first, second, key, defaults] = manifest.assets.as_slice() else {
+        panic!("expected two slots, a key and a default hotkey map");
+    };
+    assert_eq!(first.name, b"HotKeySlot:Slot1_Mod");
+    assert_eq!(second.name, b"HotKeySlot:Slot10");
+    assert_eq!(
+        defaults.references.iter().collect::<Vec<_>>(),
+        [first.id, key.id]
+    );
+    let start = stream.files.bin.len() - defaults.chunk_sizes.instance as usize;
+    let words = stream.files.bin[start..].as_chunks::<4>().0;
+    assert_eq!(words, [0_u32, 1, 12, 1, 2, 2].map(u32::to_le_bytes));
+    assert_eq!(
+        &stream.files.imp[4..],
+        [12_u32, 16, u32::MAX].map(u32::to_le_bytes).as_flattened()
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn compiles_video_with_the_ra3_sdk_hash_and_binary_layout() {
     let root = scratch_root();
     let xml = root.join("video.xml");

@@ -6,6 +6,7 @@ use crate::manifest::{
     AssetEntry, AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest, ReferencedManifest,
 };
 use roxmltree::{Document, Node, NodeId};
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
@@ -474,7 +475,7 @@ impl Compiler<'_> {
             return Err(invalid(&self.root, "input contains no supported assets"));
         }
         self.assets
-            .sort_by_cached_key(|asset| (asset.sort_order, asset.name.to_ascii_lowercase()));
+            .sort_by_cached_key(|asset| (asset.sort_order, asset_name_order(&asset.name)));
         let mut files = LinkedFiles {
             bin: vec![0; 4],
             relo: vec![0; 4],
@@ -574,6 +575,20 @@ impl Compiler<'_> {
         .map_err(io::Error::other)?;
         Ok(CompiledStream { manifest, files })
     }
+}
+
+fn asset_name_order(name: &str) -> (Vec<u8>, Vec<Reverse<usize>>) {
+    // SDK collation places '.' and '_' before digits and compares hyphens after the base ID.
+    let mut primary = Vec::with_capacity(name.len());
+    let mut hyphens = Vec::new();
+    for byte in name.bytes() {
+        match byte {
+            b'-' => hyphens.push(Reverse(primary.len())),
+            b'_' => primary.push(b'.' + 1),
+            _ => primary.push(byte.to_ascii_lowercase()),
+        }
+    }
+    (primary, hyphens)
 }
 
 fn has_content(node: Node<'_, '_>) -> bool {

@@ -8,6 +8,8 @@ use roxmltree::Node;
 use std::io;
 use std::path::Path;
 
+mod hotkeys;
+
 type Marshal = fn(Node<'_, '_>, &Path) -> io::Result<Marshaled>;
 
 fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
@@ -22,6 +24,10 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "W3DCollisionBox" => (0x6e26_f699, 7, w3d_collision_box),
         "W3DHierarchy" => (0xed94_de61, 8, w3d_hierarchy),
         "MultiplayerColor" => (0x131c_20a0, 9, multiplayer_color),
+        "HotKeySlot" => (0x93e2_3672, 10, hotkeys::slot),
+        "MappableKey" => (0x84b6_aec1, 11, hotkeys::mappable_key),
+        "UIMouseTacticalMainCommandBarHotKeys" => (0x73e3_11a9, 12, hotkeys::tactical),
+        "DefaultHotKeys" => (0x4949_5abd, 13, hotkeys::defaults),
         _ => return None,
     };
     Some(encoder)
