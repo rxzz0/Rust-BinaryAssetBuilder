@@ -91,7 +91,22 @@ struct CompiledAsset {
     payload: Vec<u8>,
     relocations: Vec<u8>,
     imports: Vec<u8>,
-    references: Vec<AssetId>,
+    references: Vec<AssetReference>,
+    sort_order: u8,
+}
+
+struct AssetReference {
+    id: AssetId,
+    external_type: Option<u32>,
+}
+
+impl From<AssetId> for AssetReference {
+    fn from(id: AssetId) -> Self {
+        Self {
+            id,
+            external_type: None,
+        }
+    }
 }
 
 impl Compiler<'_> {
@@ -328,6 +343,7 @@ impl Compiler<'_> {
             relocations: RELOCATIONS.to_vec(),
             imports: Vec::new(),
             references: Vec::new(),
+            sort_order: 0,
         })
     }
 
@@ -335,10 +351,8 @@ impl Compiler<'_> {
         if self.assets.is_empty() {
             return Err(invalid(&self.root, "input contains no supported assets"));
         }
-        // These types have no asset dependencies, so the SDK's stable sort
-        // orders them by type name and then by case-insensitive instance name.
         self.assets
-            .sort_by_cached_key(|asset| asset.name.to_ascii_lowercase());
+            .sort_by_cached_key(|asset| (asset.sort_order, asset.name.to_ascii_lowercase()));
         let mut files = LinkedFiles {
             bin: vec![0; 4],
             relo: vec![0; 4],
@@ -350,21 +364,37 @@ impl Compiler<'_> {
             relocations: 0,
             imports: 0,
         };
+        let mut resolved_references = Vec::with_capacity(self.assets.len());
+        for asset in &self.assets {
+            let mut resolved = Vec::with_capacity(asset.references.len());
+            for reference in &asset.references {
+                let id = reference.id;
+                if self.ids.contains(&id) {
+                    resolved.push(id);
+                    continue;
+                }
+                let external = AssetId {
+                    type_id: reference.external_type.unwrap_or(id.type_id),
+                    instance_id: id.instance_id,
+                };
+                if !self.external_ids.contains(&id) && !self.external_ids.contains(&external) {
+                    return Err(invalid(
+                        &self.root,
+                        format!(
+                            "unresolved reference {:08x}:{:08x} in {}",
+                            id.type_id, id.instance_id, asset.name
+                        ),
+                    ));
+                }
+                resolved.push(external);
+            }
+            resolved_references.push(resolved);
+        }
         let assets = self
             .assets
             .iter()
-            .map(|asset| {
-                for reference in &asset.references {
-                    if !self.ids.contains(reference) && !self.external_ids.contains(reference) {
-                        return Err(invalid(
-                            &self.root,
-                            format!(
-                                "unresolved reference {:08x}:{:08x} in {}",
-                                reference.type_id, reference.instance_id, asset.name
-                            ),
-                        ));
-                    }
-                }
+            .zip(&resolved_references)
+            .map(|(asset, references)| {
                 files.bin.extend_from_slice(&asset.payload);
                 files.relo.extend_from_slice(&asset.relocations);
                 files.imp.extend_from_slice(&asset.imports);
@@ -386,18 +416,18 @@ impl Compiler<'_> {
                 max_chunk_sizes.relocations =
                     max_chunk_sizes.relocations.max(chunk_sizes.relocations);
                 max_chunk_sizes.imports = max_chunk_sizes.imports.max(chunk_sizes.imports);
-                Ok(AssetEntry {
+                AssetEntry {
                     id: asset.id,
                     type_hash: asset.type_hash,
                     instance_hash: asset.instance_hash,
                     chunk_sizes,
                     name: asset.name.as_bytes(),
                     source_file_name: asset.source.as_bytes(),
-                    references: AssetReferences::from_ids(&asset.references),
+                    references: AssetReferences::from_ids(references),
                     tokenized: Some(0),
-                })
+                }
             })
-            .collect::<io::Result<Vec<_>>>()?;
+            .collect();
         let stream_checksum = memory_stream_hash(checksums);
         for output in [&mut files.bin, &mut files.relo, &mut files.imp] {
             output[..4].copy_from_slice(&stream_checksum.to_le_bytes());
@@ -461,35 +491,78 @@ fn hash_asset(
 }
 
 fn hash_xml(node: Node<'_, '_>, processing_hash: u32, path: &Path) -> io::Result<u32> {
-    // Match XmlNode.WriteTo on a standalone, empty element in the RA3 builder.
-    let mut xml = format!(
-        "<?xml version=\"1.0\" encoding=\"Windows-1252\"?><{}",
-        node.tag_name().name()
-    );
+    let mut xml = String::from("<?xml version=\"1.0\" encoding=\"Windows-1252\"?>");
+    write_xml(node, true, &mut xml);
+    if !xml.is_ascii() {
+        return Err(invalid(path, "asset XML must be ASCII"));
+    }
+    let seed = fast_hash_with_seed(processing_hash, b"11");
+    // The legacy HashingWriter omits its last block when the length is an exact multiple.
+    let hashed_len = if xml.len().is_multiple_of(512) {
+        xml.len() - 512
+    } else {
+        xml.len()
+    };
+    Ok(xml.as_bytes()[..hashed_len]
+        .chunks(512)
+        .fold(seed, fast_hash_with_seed))
+}
+
+fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
+    let name = node.tag_name().name();
+    xml.push('<');
+    xml.push_str(name);
     for attr in node.attributes() {
         xml.push(' ');
         xml.push_str(attr.name());
         xml.push_str("=\"");
-        for character in attr.value().chars() {
-            match character {
-                '&' => xml.push_str("&amp;"),
-                '<' => xml.push_str("&lt;"),
-                '>' => xml.push_str("&gt;"),
-                '"' => xml.push_str("&quot;"),
-                _ => xml.push(character),
-            }
-        }
+        escape_xml(attr.value(), true, xml);
         xml.push('"');
     }
-    xml.push_str(" xmlns=\"uri:ea.com:eala:asset\" />");
-    if xml.len() >= 512 {
-        return Err(invalid(
-            path,
-            "asset declaration exceeds the supported hash length",
-        ));
+    if root {
+        xml.push_str(" xmlns=\"uri:ea.com:eala:asset\"");
     }
-    let seed = fast_hash_with_seed(processing_hash, b"11");
-    Ok(fast_hash_with_seed(seed, xml.as_bytes()))
+    let original = &node.document().input_text()[node.range()];
+    if original.ends_with("/>") {
+        xml.push_str(" />");
+        return;
+    }
+    xml.push('>');
+    for child in node.children() {
+        match child.node_type() {
+            roxmltree::NodeType::Element => write_xml(child, false, xml),
+            roxmltree::NodeType::Text => {
+                let text = child.text().unwrap();
+                if !text.trim().is_empty() {
+                    escape_xml(text, false, xml);
+                }
+            }
+            roxmltree::NodeType::Comment => {
+                xml.push_str("<!--");
+                xml.push_str(child.text().unwrap());
+                xml.push_str("-->");
+            }
+            _ => {}
+        }
+    }
+    xml.push_str("</");
+    xml.push_str(name);
+    xml.push('>');
+}
+
+fn escape_xml(text: &str, attribute: bool, xml: &mut String) {
+    for character in text.chars() {
+        match character {
+            '&' => xml.push_str("&amp;"),
+            '<' => xml.push_str("&lt;"),
+            '>' => xml.push_str("&gt;"),
+            '"' if attribute => xml.push_str("&quot;"),
+            '\r' if attribute => xml.push_str("&#xD;"),
+            '\n' if attribute => xml.push_str("&#xA;"),
+            '\t' if attribute => xml.push_str("&#x9;"),
+            _ => xml.push(character),
+        }
+    }
 }
 
 fn memory_stream_hash(mut bytes: Vec<u8>) -> u32 {
