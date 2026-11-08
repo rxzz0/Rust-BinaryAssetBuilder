@@ -97,6 +97,57 @@ fn sdk_global_compiles_multiplayer_colors_with_the_sdk_layout() {
 }
 
 #[test]
+fn resolves_sdk_art_buckets_and_mod_audio_paths() {
+    let root = scratch_root();
+    let data = root.join("Mods/Example/Data");
+    let art = root.join("Mods/Example/Art/bo");
+    let audio = root.join("Mods/Example/Audio/vo");
+    for directory in [&data, &art, &audio] {
+        fs::create_dir_all(directory).unwrap();
+    }
+    let input = data.join("Mod.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes>
+                <Include type="all" source="ART:box.w3x"/>
+                <Include type="all" source="Audio:vo/dialog.xml"/>
+            </Includes>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        art.join("box.w3x"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <W3DCollisionBox id="box">
+                <Center X="0" Y="0" Z="0"/>
+                <Extent X="1" Y="1" Z="1"/>
+            </W3DCollisionBox>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        audio.join("dialog.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Video id="dialog" Filename="dialog" />
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    assert_eq!(manifest.assets.len(), 2);
+    assert_eq!(
+        manifest.assets[0].source_file_name,
+        b"DATA:mods/example/audio/vo/dialog.xml"
+    );
+    assert_eq!(
+        manifest.assets[1].source_file_name,
+        b"DATA:mods/example/art/bo/box.w3x"
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn compiles_video_with_the_ra3_sdk_hash_and_binary_layout() {
     let root = scratch_root();
     let xml = root.join("video.xml");

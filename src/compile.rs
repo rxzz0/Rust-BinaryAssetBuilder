@@ -49,19 +49,18 @@ fn compile(
 ) -> io::Result<CompiledStream> {
     let root = fs::canonicalize(data_root)?;
     let input = fs::canonicalize(input)?;
-    let mut data_paths = vec![root.clone()];
-    if let Ok(relative) = input.strip_prefix(&root) {
+    let mod_root = input.strip_prefix(&root).ok().and_then(|relative| {
         let mut components = relative.iter();
-        if let (Some(mods), Some(name)) = (components.next(), components.next())
-            && mods.eq_ignore_ascii_case("mods")
-        {
-            data_paths.push(root.join(mods).join(name).join("Data"));
-        }
-    }
-    data_paths.extend([root.join("Mods"), root.join("SageXml")]);
+        let mods = components.next()?;
+        let name = components.next()?;
+        mods.eq_ignore_ascii_case("mods")
+            .then(|| root.join(mods).join(name))
+    });
     let mut compiler = Compiler {
+        data_paths: search_paths(&root, mod_root.as_deref(), "Data", "SageXml"),
+        art_paths: search_paths(&root, mod_root.as_deref(), "Art", "Art"),
+        audio_paths: search_paths(&root, mod_root.as_deref(), "Audio", "Audio"),
         root,
-        data_paths,
         visited: HashSet::new(),
         active: HashSet::new(),
         ids: HashSet::new(),
@@ -74,9 +73,25 @@ fn compile(
     compiler.finish()
 }
 
+fn search_paths(
+    root: &Path,
+    mod_root: Option<&Path>,
+    directory: &str,
+    sdk_directory: &str,
+) -> Vec<PathBuf> {
+    let mut paths = vec![root.to_path_buf()];
+    if let Some(mod_root) = mod_root {
+        paths.push(mod_root.join(directory));
+    }
+    paths.extend([root.join("Mods"), root.join(sdk_directory)]);
+    paths
+}
+
 struct Compiler<'a> {
     root: PathBuf,
     data_paths: Vec<PathBuf>,
+    art_paths: Vec<PathBuf>,
+    audio_paths: Vec<PathBuf>,
     visited: HashSet<PathBuf>,
     active: HashSet<PathBuf>,
     ids: HashSet<AssetId>,
@@ -206,11 +221,8 @@ impl Compiler<'_> {
 
     fn resolve(&self, document: &Path, value: &str) -> io::Result<PathBuf> {
         let value = value.trim().replace('\\', "/");
-        let data = value
-            .split_once(':')
-            .filter(|(prefix, _)| prefix.eq_ignore_ascii_case("data"))
-            .map(|(_, path)| path);
-        let relative = data.unwrap_or(&value);
+        let alias = value.split_once(':');
+        let relative = alias.map_or(value.as_str(), |(_, relative)| relative);
         let path = Path::new(relative);
         if relative.is_empty() || relative.contains(':') || path.has_root() {
             return Err(invalid(
@@ -218,16 +230,36 @@ impl Compiler<'_> {
                 format!("expected relative path {value:?}"),
             ));
         }
-        let path = if data.is_some() {
-            self.data_paths
+        let path = if let Some((alias, _)) = alias {
+            let alias = alias.to_ascii_lowercase();
+            let roots = match alias.as_str() {
+                "data" => &self.data_paths[..],
+                "art" => &self.art_paths,
+                "audio" => &self.audio_paths,
+                "root" => std::slice::from_ref(&self.root),
+                _ => {
+                    return Err(invalid(
+                        document,
+                        format!("unknown path alias in {value:?}"),
+                    ));
+                }
+            };
+            let bucket = if alias == "art" && !relative.contains('/') {
+                relative
+                    .get(..2)
+                    .ok_or_else(|| invalid(document, "ART file name has no bucket"))?
+            } else {
+                ""
+            };
+            roots
                 .iter()
-                .map(|root| root.join(path))
+                .map(|root| root.join(bucket).join(path))
                 .find(|candidate| candidate.is_file())
                 .ok_or_else(|| {
                     io::Error::new(
                         io::ErrorKind::NotFound,
                         format!(
-                            "{} ({value:?} not found on the SDK data path)",
+                            "{} ({value:?} not found on the SDK {alias} path)",
                             document.display()
                         ),
                     )
