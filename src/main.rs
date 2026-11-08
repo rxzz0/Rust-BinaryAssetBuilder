@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use binary_asset_builder::big::pack_big;
 use binary_asset_builder::compile::{
     CompiledStream, compile_apt_ui, compile_sdk_static, compile_static,
 };
@@ -20,6 +21,7 @@ Usage
   binary-asset-builder compile-aptui <input-directory> --data-root <directory> --output <directory>
   binary-asset-builder compile-static <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory>
+  binary-asset-builder pack-big <directory> --output <file.big>
   binary-asset-builder inspect <file.manifest>
   binary-asset-builder check-linked <file.manifest>";
 
@@ -29,6 +31,29 @@ fn main() -> ExitCode {
         [flag] if flag == "--help" || flag == "-h" || flag == "/?" => {
             println!("{USAGE}");
             ExitCode::SUCCESS
+        }
+        [command, input, flag, output] if command == "pack-big" && flag == "--output" => {
+            let start = std::time::Instant::now();
+            match pack_big(Path::new(input), Path::new(output)) {
+                Ok(result) => {
+                    let action = if result.reused {
+                        "Verified existing BIG with"
+                    } else {
+                        "Packed"
+                    };
+                    println!(
+                        "{action} {} files at {} in {:.2}s",
+                        result.entries,
+                        Path::new(output).display(),
+                        start.elapsed().as_secs_f64()
+                    );
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("{} ({error})", Path::new(output).display());
+                    ExitCode::FAILURE
+                }
+            }
         }
         [command, input, sdk_flag, sdk, output_flag, output]
             if command == "compile-static-sdk"
