@@ -148,6 +148,47 @@ fn resolves_sdk_art_buckets_and_mod_audio_paths() {
 }
 
 #[test]
+fn emits_only_referenced_assets_from_instance_includes() {
+    let root = scratch_root();
+    let input = root.join("mod.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes><Include type="instance" source="library.xml"/></Includes>
+            <VideoEventList id="intro">
+                <EventList><Movie MovieAsset="selected"/></EventList>
+            </VideoEventList>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("library.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes><Include type="all" source="videos.xml"/></Includes>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("videos.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Video id="selected" Filename="test"/>
+            <Video id="unused" Filename="test"/>
+            <Unsupported id="unused"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let [video, events] = manifest.assets.as_slice() else {
+        panic!("expected the video event and its referenced video");
+    };
+    assert_eq!(video.name, b"Video:selected");
+    assert_eq!(video.source_file_name, b"DATA:videos.xml");
+    assert_eq!(events.references.iter().next(), Some(video.id));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn compiles_video_with_the_ra3_sdk_hash_and_binary_layout() {
     let root = scratch_root();
     let xml = root.join("video.xml");

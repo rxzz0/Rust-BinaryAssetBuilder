@@ -33,15 +33,12 @@ pub(super) fn compile_asset(
     source: &str,
 ) -> io::Result<CompiledAsset> {
     let type_name = node.tag_name().name();
-    if node.tag_name().namespace() != Some(SAGE_NS) {
+    let (id, asset_id) = declaration_id(node, path)?;
+    if let Some(base) = node.attribute("inheritFrom") {
         return Err(invalid(
             path,
-            format!("unsupported static asset type {type_name}"),
+            format!("unsupported inheritance {type_name}:{id} from {base}"),
         ));
-    }
-    let id = required(node, "id", path)?;
-    if id.contains(':') {
-        return Err(invalid(path, "invalid asset ID"));
     }
     let (type_hash, sort_order, marshal) = encoder(type_name)
         .ok_or_else(|| invalid(path, format!("unsupported static asset type {type_name}")))?;
@@ -51,10 +48,7 @@ pub(super) fn compile_asset(
         instance_hash ^= memory_stream_hash(encode_words(data.reference_types));
     }
     Ok(CompiledAsset {
-        id: AssetId {
-            type_id: fast_hash(type_name.as_bytes()),
-            instance_id: hash_name(id),
-        },
+        id: asset_id,
         type_hash,
         instance_hash,
         name: format!("{type_name}:{id}"),
@@ -65,6 +59,30 @@ pub(super) fn compile_asset(
         references: data.references,
         sort_order,
     })
+}
+
+pub(super) fn declaration_id<'a>(
+    node: Node<'a, '_>,
+    path: &Path,
+) -> io::Result<(&'a str, AssetId)> {
+    let type_name = node.tag_name().name();
+    if node.tag_name().namespace() != Some(SAGE_NS) {
+        return Err(invalid(
+            path,
+            format!("unsupported static asset type {type_name}"),
+        ));
+    }
+    let id = required(node, "id", path)?;
+    if id.contains(':') {
+        return Err(invalid(path, "invalid asset ID"));
+    }
+    Ok((
+        id,
+        AssetId {
+            type_id: fast_hash(type_name.as_bytes()),
+            instance_id: hash_name(id),
+        },
+    ))
 }
 
 #[derive(Default)]

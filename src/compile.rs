@@ -5,11 +5,12 @@ use crate::linked_stream::LinkedFiles;
 use crate::manifest::{
     AssetEntry, AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest, ReferencedManifest,
 };
-use roxmltree::{Document, Node};
-use std::collections::HashSet;
+use roxmltree::{Document, Node, NodeId};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 mod sdk_static;
 mod static_assets;
@@ -65,11 +66,13 @@ fn compile(
         active: HashSet::new(),
         ids: HashSet::new(),
         assets: Vec::new(),
+        tentative: HashMap::new(),
         reference_directory,
         referenced_manifests: Vec::new(),
         external_ids: HashSet::new(),
     };
-    compiler.read_document(&input)?;
+    compiler.read_document(&input, false)?;
+    compiler.add_referenced_instances()?;
     compiler.finish()
 }
 
@@ -92,13 +95,21 @@ struct Compiler<'a> {
     data_paths: Vec<PathBuf>,
     art_paths: Vec<PathBuf>,
     audio_paths: Vec<PathBuf>,
-    visited: HashSet<PathBuf>,
+    visited: HashSet<(PathBuf, bool)>,
     active: HashSet<PathBuf>,
     ids: HashSet<AssetId>,
     assets: Vec<CompiledAsset>,
+    tentative: HashMap<AssetId, Vec<TentativeAsset>>,
     reference_directory: Option<&'a Path>,
     referenced_manifests: Vec<String>,
     external_ids: HashSet<AssetId>,
+}
+
+struct TentativeAsset {
+    path: PathBuf,
+    source: Rc<str>,
+    xml: Rc<str>,
+    node: NodeId,
 }
 
 struct CompiledAsset {
@@ -141,14 +152,14 @@ impl AssetReference {
 }
 
 impl Compiler<'_> {
-    fn read_document(&mut self, path: &Path) -> io::Result<()> {
+    fn read_document(&mut self, path: &Path, tentative: bool) -> io::Result<()> {
         if self.active.contains(path) {
             return Err(invalid(path, "include cycle"));
         }
         if self.active.len() >= 128 {
             return Err(invalid(path, "includes are nested more than 128 levels"));
         }
-        if !self.visited.insert(path.to_path_buf()) {
+        if !self.visited.insert((path.to_path_buf(), tentative)) {
             return Ok(());
         }
         self.active.insert(path.to_path_buf());
@@ -159,8 +170,9 @@ impl Compiler<'_> {
             .to_str()
             .filter(|name| name.is_ascii())
             .ok_or_else(|| invalid(path, "source path must be ASCII"))?;
-        let source = format!("DATA:{}", relative.replace('\\', "/").to_ascii_lowercase());
-        let xml = read_with_context(path, fs::read_to_string)?;
+        let source: Rc<str> =
+            format!("DATA:{}", relative.replace('\\', "/").to_ascii_lowercase()).into();
+        let xml: Rc<str> = read_with_context(path, fs::read_to_string)?.into();
         let document = Document::parse(&xml).map_err(|error| invalid(path, error))?;
         let root = document.root_element();
         if !root.has_tag_name((SAGE_NS, "AssetDeclaration")) || root.attributes().len() != 0 {
@@ -183,9 +195,13 @@ impl Compiler<'_> {
                     match include.attribute("type") {
                         Some("all") => {
                             let target = self.resolve(path, source)?;
-                            self.read_document(&target)?;
+                            self.read_document(&target, tentative)?;
                         }
-                        Some("reference") if self.reference_directory.is_some() => {
+                        Some("instance") if self.reference_directory.is_some() => {
+                            let target = self.resolve(path, source)?;
+                            self.read_document(&target, true)?;
+                        }
+                        Some("reference") if self.reference_directory.is_some() && !tentative => {
                             self.read_reference(path, source)?;
                         }
                         Some(kind) => {
@@ -203,6 +219,14 @@ impl Compiler<'_> {
                 && !has_content(node)
             {
                 continue;
+            } else if tentative {
+                let (_, id) = static_assets::declaration_id(node, path)?;
+                self.tentative.entry(id).or_default().push(TentativeAsset {
+                    path: path.to_path_buf(),
+                    source: Rc::clone(&source),
+                    xml: Rc::clone(&xml),
+                    node: node.id(),
+                });
             } else {
                 let asset = if self.reference_directory.is_some() {
                     static_assets::compile_asset(node, path, &source)?
@@ -216,6 +240,55 @@ impl Compiler<'_> {
             }
         }
         self.active.remove(path);
+        Ok(())
+    }
+
+    fn add_referenced_instances(&mut self) -> io::Result<()> {
+        if self.tentative.is_empty() {
+            return Ok(());
+        }
+        let mut index = 0;
+        let mut pending = Vec::new();
+        while index < self.assets.len() {
+            pending.extend(
+                self.assets[index]
+                    .references
+                    .iter()
+                    .map(|reference| reference.id),
+            );
+            for id in pending.drain(..) {
+                if self.ids.contains(&id) {
+                    continue;
+                }
+                let Some(candidates) = self.tentative.remove(&id) else {
+                    continue;
+                };
+                let [candidate] = candidates.as_slice() else {
+                    return Err(invalid(
+                        &self.root,
+                        format!(
+                            "ambiguous instance include for {:08x}:{:08x}",
+                            id.type_id, id.instance_id
+                        ),
+                    ));
+                };
+                if self.external_ids.contains(&id) {
+                    return Err(invalid(
+                        &candidate.path,
+                        "instance and external reference resolve to the same asset ID",
+                    ));
+                }
+                let document = Document::parse(&candidate.xml)
+                    .map_err(|error| invalid(&candidate.path, error))?;
+                let node = document
+                    .get_node(candidate.node)
+                    .ok_or_else(|| invalid(&candidate.path, "missing instance declaration"))?;
+                let asset = static_assets::compile_asset(node, &candidate.path, &candidate.source)?;
+                self.ids.insert(asset.id);
+                self.assets.push(asset);
+            }
+            index += 1;
+        }
         Ok(())
     }
 
