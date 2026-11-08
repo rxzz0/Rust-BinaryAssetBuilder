@@ -165,3 +165,45 @@ fn compiles_ai_budget_with_the_sdk_relocation_order() {
         .collect();
     assert_eq!(&stream.files.relo[4..], expected);
 }
+
+#[test]
+fn compiles_w3d_collision_box_with_the_sdk_layout() {
+    let root = scratch_root();
+    let xml = root.join("box.w3x");
+    fs::write(
+        &xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <W3DCollisionBox id="AUGUNSHIP_COL.OBBOX01">
+                <Center X="7.289608" Y="-0.024450" Z="5.834013"/>
+                <Extent X="22.339098" Y="6.380490" Z="5.834013"/>
+            </W3DCollisionBox>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let result = compile_static(&xml, &root, &root);
+    fs::remove_file(xml).unwrap();
+    fs::remove_dir(root).unwrap();
+
+    let stream = result.unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let asset = &manifest.assets[0];
+    assert_eq!(asset.id.type_id, 0xe318_1c04);
+    assert_eq!(asset.type_hash, 0x6e26_f699);
+    assert_eq!(asset.chunk_sizes.instance, 32);
+    let vectors = [
+        7.289_608_f32,
+        -0.024_450,
+        5.834_013,
+        22.339_098,
+        6.380_49,
+        5.834_013,
+    ];
+    let expected: Vec<_> = [0; 4]
+        .into_iter()
+        .chain(vectors.into_iter().flat_map(f32::to_le_bytes))
+        .chain([0; 4])
+        .collect();
+    assert_eq!(&stream.files.bin[4..], expected);
+    assert_eq!(stream.files.relo.len(), 4);
+    assert_eq!(stream.files.imp.len(), 4);
+}

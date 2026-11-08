@@ -19,6 +19,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "VideoEventList" => (0x96da_1c03, 4, video_events),
         "CampaignEnumerator" => (0x0714_c282, 5, campaign_enumerator),
         "LogicCommandSet" => (0x8ae8_b68c, 6, logic_commands),
+        "W3DCollisionBox" => (0x6e26_f699, 7, w3d_collision_box),
         _ => return None,
     };
     Some(encoder)
@@ -241,6 +242,46 @@ fn finite_number(value: &str, field: &str, path: &Path) -> io::Result<f32> {
         .ok()
         .filter(|number| number.is_finite())
         .ok_or_else(|| invalid(path, format!("invalid {field}")))
+}
+
+fn w3d_collision_box(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "JoypadPickingOnly"], path)?;
+    let mut children = node.children().filter(Node::is_element);
+    let mut words = [0; 8];
+    for (name, offset) in [("Center", 1), ("Extent", 4)] {
+        let vector = children
+            .next()
+            .filter(|child| child.has_tag_name((SAGE_NS, name)))
+            .ok_or_else(|| invalid(path, format!("W3DCollisionBox requires {name}")))?;
+        validate_attributes(vector, &["X", "Y", "Z"], path)?;
+        if has_content(vector) {
+            return Err(invalid(path, format!("unexpected content in {name}")));
+        }
+        for (component, axis) in words[offset..offset + 3].iter_mut().zip(["X", "Y", "Z"]) {
+            *component = finite_number(required(vector, axis, path)?, axis, path)?.to_bits();
+        }
+    }
+    if children.next().is_some()
+        || node
+            .children()
+            .filter(Node::is_text)
+            .any(|child| child.text().is_some_and(|value| !value.trim().is_empty()))
+    {
+        return Err(invalid(path, "unexpected content in W3DCollisionBox"));
+    }
+    words[7] = match node
+        .attribute("JoypadPickingOnly")
+        .unwrap_or("false")
+        .trim()
+    {
+        "false" | "0" => 0,
+        "true" | "1" => 1,
+        _ => return Err(invalid(path, "invalid W3DCollisionBox JoypadPickingOnly")),
+    };
+    Ok(Marshaled {
+        payload: encode_words(words),
+        ..Marshaled::default()
+    })
 }
 
 fn unit_intro(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
