@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use binary_asset_builder::compile::compile_apt_ui;
+use binary_asset_builder::compile::{CompiledStream, compile_apt_ui, compile_static};
 use binary_asset_builder::linked_stream::check_linked_files;
 use binary_asset_builder::manifest::{ByteOrder, Manifest};
 use std::env;
@@ -16,6 +16,7 @@ const USAGE: &str = "\
 Usage
   binary-asset-builder compile <file.xml> --data-root <directory> --output <new-directory>
   binary-asset-builder compile-aptui <input-directory> --data-root <directory> --output <directory>
+  binary-asset-builder compile-static <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder inspect <file.manifest>
   binary-asset-builder check-linked <file.manifest>";
 
@@ -25,6 +26,31 @@ fn main() -> ExitCode {
         [flag] if flag == "--help" || flag == "-h" || flag == "/?" => {
             println!("{USAGE}");
             ExitCode::SUCCESS
+        }
+        [
+            command,
+            input,
+            root_flag,
+            root,
+            references_flag,
+            references,
+            output_flag,
+            output,
+        ] if command == "compile-static"
+            && root_flag == "--data-root"
+            && references_flag == "--references"
+            && output_flag == "--output" =>
+        {
+            let input = Path::new(input);
+            let result = compile_static(input, Path::new(root), Path::new(references))
+                .and_then(|stream| write_compiled_stream(input, Path::new(output), stream));
+            match result {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("{} ({error})", input.display());
+                    ExitCode::FAILURE
+                }
+            }
         }
         [command, input, root_flag, root, output_flag, output]
             if (command == "compile" || command == "compile-aptui")
@@ -37,7 +63,8 @@ fn main() -> ExitCode {
             let result = if command == "compile-aptui" {
                 compile_batch::compile_directory(input, root, output)
             } else {
-                compile(input, root, output)
+                compile_apt_ui(input, root)
+                    .and_then(|stream| write_compiled_stream(input, output, stream))
             };
             match result {
                 Ok(()) => ExitCode::SUCCESS,
@@ -75,11 +102,10 @@ fn main() -> ExitCode {
     }
 }
 
-fn compile(input: &Path, root: &Path, output: &Path) -> io::Result<()> {
+fn write_compiled_stream(input: &Path, output: &Path, stream: CompiledStream) -> io::Result<()> {
     let stem = input.file_stem().ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidInput, "input must have a file name")
     })?;
-    let stream = compile_apt_ui(input, root)?;
     let files = [
         (".bin", stream.files.bin),
         (".relo", stream.files.relo),

@@ -1,14 +1,17 @@
-//! Compiles Red Alert 3 PC AptUI XML streams.
+//! Compiles supported Red Alert 3 PC XML streams.
 
 use crate::hash::{fast_hash, fast_hash_with_seed};
 use crate::linked_stream::LinkedFiles;
-use crate::manifest::{AssetEntry, AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest};
+use crate::manifest::{
+    AssetEntry, AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest, ReferencedManifest,
+};
 use roxmltree::{Document, Node};
 use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+mod static_assets;
 mod texture;
 
 const SAGE_NS: &str = "uri:ea.com:eala:asset";
@@ -23,6 +26,23 @@ pub struct CompiledStream {
 
 /// Compiles a linked RA3 PC stream from AptUI declarations and their includes.
 pub fn compile_apt_ui(input: &Path, data_root: &Path) -> io::Result<CompiledStream> {
+    compile(input, data_root, None)
+}
+
+/// Compiles supported static XML assets against the SDK's precompiled streams.
+pub fn compile_static(
+    input: &Path,
+    data_root: &Path,
+    reference_directory: &Path,
+) -> io::Result<CompiledStream> {
+    compile(input, data_root, Some(reference_directory))
+}
+
+fn compile(
+    input: &Path,
+    data_root: &Path,
+    reference_directory: Option<&Path>,
+) -> io::Result<CompiledStream> {
     let root = fs::canonicalize(data_root)?;
     let input = fs::canonicalize(input)?;
     let mut data_paths = vec![root.clone()];
@@ -35,38 +55,46 @@ pub fn compile_apt_ui(input: &Path, data_root: &Path) -> io::Result<CompiledStre
         }
     }
     data_paths.extend([root.join("Mods"), root.join("SageXml")]);
-    let mut compiler = AptCompiler {
+    let mut compiler = Compiler {
         root,
         data_paths,
         visited: HashSet::new(),
         active: HashSet::new(),
         ids: HashSet::new(),
         assets: Vec::new(),
+        reference_directory,
+        referenced_manifests: Vec::new(),
+        external_ids: HashSet::new(),
     };
     compiler.read_document(&input)?;
     compiler.finish()
 }
 
-struct AptCompiler {
+struct Compiler<'a> {
     root: PathBuf,
     data_paths: Vec<PathBuf>,
     visited: HashSet<PathBuf>,
     active: HashSet<PathBuf>,
     ids: HashSet<AssetId>,
-    assets: Vec<AptAsset>,
+    assets: Vec<CompiledAsset>,
+    reference_directory: Option<&'a Path>,
+    referenced_manifests: Vec<String>,
+    external_ids: HashSet<AssetId>,
 }
 
-struct AptAsset {
+struct CompiledAsset {
     id: AssetId,
     type_hash: u32,
     instance_hash: u32,
     name: String,
     source: String,
-    instance_size: u32,
     payload: Vec<u8>,
+    relocations: Vec<u8>,
+    imports: Vec<u8>,
+    references: Vec<AssetId>,
 }
 
-impl AptCompiler {
+impl Compiler<'_> {
     fn read_document(&mut self, path: &Path) -> io::Result<()> {
         if self.active.contains(path) {
             return Err(invalid(path, "include cycle"));
@@ -100,20 +128,44 @@ impl AptCompiler {
                 for include in node.children().filter(Node::is_element) {
                     let source = include.attribute("source");
                     if !include.has_tag_name((SAGE_NS, "Include"))
-                        || include.attribute("type") != Some("all")
                         || include.attributes().len() != 2
                         || has_content(include)
                     {
-                        return Err(invalid(path, "only type=all includes are supported"));
+                        return Err(invalid(path, "invalid Include element"));
                     }
-                    let target = self.resolve(
-                        path,
-                        source.ok_or_else(|| invalid(path, "missing include source"))?,
-                    )?;
-                    self.read_document(&target)?;
+                    let source = source.ok_or_else(|| invalid(path, "missing include source"))?;
+                    match include.attribute("type") {
+                        Some("all") => {
+                            let target = self.resolve(path, source)?;
+                            self.read_document(&target)?;
+                        }
+                        Some("reference") if self.reference_directory.is_some() => {
+                            self.read_reference(path, source)?;
+                        }
+                        kind => {
+                            return Err(invalid(
+                                path,
+                                format!("unsupported include type {kind:?}"),
+                            ));
+                        }
+                    }
                 }
+            } else if self.reference_directory.is_some()
+                && node.has_tag_name((SAGE_NS, "Tags"))
+                && node.attributes().len() == 0
+                && !has_content(node)
+            {
+                continue;
             } else {
-                self.compile_asset(node, path, &source)?;
+                let asset = if self.reference_directory.is_some() {
+                    static_assets::compile_asset(node, path, &source)?
+                } else {
+                    self.compile_apt_asset(node, path, &source)?
+                };
+                if !self.ids.insert(asset.id) {
+                    return Err(invalid(path, format!("duplicate asset ID {}", asset.name)));
+                }
+                self.assets.push(asset);
             }
         }
         self.active.remove(path);
@@ -158,7 +210,42 @@ impl AptCompiler {
         Ok(resolved)
     }
 
-    fn compile_asset(&mut self, node: Node<'_, '_>, path: &Path, source: &str) -> io::Result<()> {
+    fn read_reference(&mut self, document: &Path, source: &str) -> io::Result<()> {
+        let target = self.resolve(document, source)?;
+        let relative = target
+            .strip_prefix(&self.root)
+            .map_err(|_| invalid(document, "reference lies outside the data root"))?
+            .with_extension("manifest");
+        let name = relative
+            .to_str()
+            .filter(|name| name.is_ascii())
+            .ok_or_else(|| invalid(document, "manifest reference path must be ASCII"))?
+            .replace('/', "\\")
+            .to_ascii_lowercase();
+        if self.referenced_manifests.contains(&name) {
+            return Ok(());
+        }
+        let path = self.reference_directory.unwrap().join(relative);
+        let bytes = read_with_context(&path, fs::read)?;
+        let manifest = Manifest::parse(&bytes).map_err(|error| invalid(&path, error))?;
+        if manifest.version != 6
+            || manifest.byte_order != ByteOrder::Little
+            || manifest.all_types_hash != RA3_ALL_TYPES_HASH
+        {
+            return Err(invalid(&path, "reference must be an RA3 PC manifest"));
+        }
+        self.external_ids
+            .extend(manifest.assets.iter().map(|asset| asset.id));
+        self.referenced_manifests.push(name);
+        Ok(())
+    }
+
+    fn compile_apt_asset(
+        &self,
+        node: Node<'_, '_>,
+        path: &Path,
+        source: &str,
+    ) -> io::Result<CompiledAsset> {
         let type_name = node.tag_name().name();
         let type_hash = match (node.tag_name().namespace(), type_name) {
             (Some(SAGE_NS), "AptAptData") => 0xe238_fac3,
@@ -205,9 +292,6 @@ impl AptCompiler {
             instance_id: fast_hash(id.to_ascii_lowercase().as_bytes()),
         };
         let name = format!("{type_name}:{id}");
-        if !self.ids.insert(asset_id) {
-            return Err(invalid(path, format!("duplicate asset ID {name}")));
-        }
 
         let input = self.resolve(path, file)?;
         let bytes = read_with_context(&input, fs::read)?;
@@ -234,24 +318,22 @@ impl AptCompiler {
         }
         payload.extend(bytes);
         payload.resize(instance_size as usize, 0);
-        self.assets.push(AptAsset {
+        Ok(CompiledAsset {
             id: asset_id,
             type_hash,
             instance_hash,
             name,
             source: source.to_owned(),
-            instance_size,
             payload,
-        });
-        Ok(())
+            relocations: RELOCATIONS.to_vec(),
+            imports: Vec::new(),
+            references: Vec::new(),
+        })
     }
 
     fn finish(mut self) -> io::Result<CompiledStream> {
         if self.assets.is_empty() {
-            return Err(invalid(
-                &self.root,
-                "input contains no supported AptUI assets",
-            ));
+            return Err(invalid(&self.root, "input contains no supported assets"));
         }
         // These types have no asset dependencies, so the SDK's stable sort
         // orders them by type name and then by case-insensitive instance name.
@@ -263,39 +345,59 @@ impl AptCompiler {
             imp: vec![0; 4],
         };
         let mut checksums = Vec::new();
-        let mut max_instance = 0;
+        let mut max_chunk_sizes = ChunkSizes {
+            instance: 0,
+            relocations: 0,
+            imports: 0,
+        };
         let assets = self
             .assets
             .iter()
             .map(|asset| {
+                for reference in &asset.references {
+                    if !self.ids.contains(reference) && !self.external_ids.contains(reference) {
+                        return Err(invalid(
+                            &self.root,
+                            format!(
+                                "unresolved reference {:08x}:{:08x} in {}",
+                                reference.type_id, reference.instance_id, asset.name
+                            ),
+                        ));
+                    }
+                }
                 files.bin.extend_from_slice(&asset.payload);
-                files.relo.extend(RELOCATIONS);
+                files.relo.extend_from_slice(&asset.relocations);
+                files.imp.extend_from_slice(&asset.imports);
                 for word in [
                     asset.id.type_id,
                     asset.type_hash,
                     asset.id.instance_id,
                     asset.instance_hash,
-                    0,
+                    asset.references.len() as u32,
                 ] {
                     checksums.extend(word.to_le_bytes());
                 }
-                max_instance = max_instance.max(asset.instance_size);
-                AssetEntry {
+                let chunk_sizes = ChunkSizes {
+                    instance: asset.payload.len() as u32,
+                    relocations: asset.relocations.len() as u32,
+                    imports: asset.imports.len() as u32,
+                };
+                max_chunk_sizes.instance = max_chunk_sizes.instance.max(chunk_sizes.instance);
+                max_chunk_sizes.relocations =
+                    max_chunk_sizes.relocations.max(chunk_sizes.relocations);
+                max_chunk_sizes.imports = max_chunk_sizes.imports.max(chunk_sizes.imports);
+                Ok(AssetEntry {
                     id: asset.id,
                     type_hash: asset.type_hash,
                     instance_hash: asset.instance_hash,
-                    chunk_sizes: ChunkSizes {
-                        instance: asset.instance_size,
-                        relocations: 8,
-                        imports: 0,
-                    },
+                    chunk_sizes,
                     name: asset.name.as_bytes(),
                     source_file_name: asset.source.as_bytes(),
-                    references: AssetReferences::from_ids(&[]),
+                    references: AssetReferences::from_ids(&asset.references),
                     tokenized: Some(0),
-                }
+                })
             })
-            .collect();
+            .collect::<io::Result<Vec<_>>>()?;
         let stream_checksum = memory_stream_hash(checksums);
         for output in [&mut files.bin, &mut files.relo, &mut files.imp] {
             output[..4].copy_from_slice(&stream_checksum.to_le_bytes());
@@ -308,13 +410,16 @@ impl AptCompiler {
             all_types_hash: RA3_ALL_TYPES_HASH,
             total_instance_data_size: u32::try_from(files.bin.len() - 4)
                 .map_err(|_| invalid(&self.root, "stream is too large"))?,
-            max_chunk_sizes: ChunkSizes {
-                instance: max_instance,
-                relocations: 8,
-                imports: 0,
-            },
+            max_chunk_sizes,
             assets,
-            referenced_manifests: Vec::new(),
+            referenced_manifests: self
+                .referenced_manifests
+                .iter()
+                .map(|path| ReferencedManifest {
+                    path: path.as_bytes(),
+                    is_patch: false,
+                })
+                .collect(),
         }
         .encode()
         .map_err(io::Error::other)?;
@@ -346,6 +451,16 @@ fn hash_asset(
     bytes: &[u8],
     path: &Path,
 ) -> io::Result<u32> {
+    let xml_hash = hash_xml(node, processing_hash, path)?;
+    let length =
+        u32::try_from(bytes.len()).map_err(|_| invalid(path, "source file is too large"))?;
+    let file_hash = bytes
+        .chunks(FILE_HASH_BLOCK)
+        .fold(length, fast_hash_with_seed);
+    Ok(xml_hash ^ memory_stream_hash(file_hash.to_le_bytes().to_vec()))
+}
+
+fn hash_xml(node: Node<'_, '_>, processing_hash: u32, path: &Path) -> io::Result<u32> {
     // Match XmlNode.WriteTo on a standalone, empty element in the RA3 builder.
     let mut xml = format!(
         "<?xml version=\"1.0\" encoding=\"Windows-1252\"?><{}",
@@ -370,17 +485,11 @@ fn hash_asset(
     if xml.len() >= 512 {
         return Err(invalid(
             path,
-            "AptUI declaration exceeds the supported hash length",
+            "asset declaration exceeds the supported hash length",
         ));
     }
     let seed = fast_hash_with_seed(processing_hash, b"11");
-    let xml_hash = fast_hash_with_seed(seed, xml.as_bytes());
-    let length =
-        u32::try_from(bytes.len()).map_err(|_| invalid(path, "source file is too large"))?;
-    let file_hash = bytes
-        .chunks(FILE_HASH_BLOCK)
-        .fold(length, fast_hash_with_seed);
-    Ok(xml_hash ^ memory_stream_hash(file_hash.to_le_bytes().to_vec()))
+    Ok(fast_hash_with_seed(seed, xml.as_bytes()))
 }
 
 fn memory_stream_hash(mut bytes: Vec<u8>) -> u32 {
