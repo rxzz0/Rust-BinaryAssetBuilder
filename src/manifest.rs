@@ -76,7 +76,7 @@ pub struct Manifest<'a> {
     pub referenced_manifests: Vec<ReferencedManifest<'a>>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AssetEntry<'a> {
     pub id: AssetId,
     pub type_hash: u32,

@@ -91,6 +91,31 @@ impl Manifest<'_> {
         output.extend(source_names.bytes);
         Ok(output)
     }
+
+    /// Builds an empty patch while preserving the base's name and reference tables.
+    pub(crate) fn inherited_patch(base: &[u8], name: &[u8]) -> Result<Vec<u8>, ManifestError> {
+        let manifest = Manifest::parse(base)?;
+        let entry_size = entry_size(manifest.version)?;
+        let entries_end = HEADER_SIZE + manifest.assets.len() * entry_size;
+        let word = |offset| {
+            manifest
+                .byte_order
+                .u32(base[offset..offset + 4].try_into().unwrap()) as usize
+        };
+        let references_end = entries_end + word(32);
+        let stream_names_end = references_end + word(36);
+        let mut stream_names = vec![2];
+        push_name(&mut stream_names, name, "patch base name")?;
+        let size = header_field(stream_names.len(), "referenced manifest names size")?;
+        let mut patch = base[..references_end].to_vec();
+        patch[36..40].copy_from_slice(&manifest.byte_order.u32_bytes(size));
+        for entry in patch[HEADER_SIZE..entries_end].chunks_exact_mut(entry_size) {
+            entry[32..44].fill(0);
+        }
+        patch.extend(stream_names);
+        patch.extend_from_slice(&base[stream_names_end..]);
+        Ok(patch)
+    }
 }
 
 #[derive(Default)]

@@ -75,6 +75,14 @@ pub(crate) fn publish(
     outputs: Vec<(OsString, Vec<u8>)>,
     replace: impl Fn(&Path) -> bool,
 ) -> io::Result<()> {
+    publish_prepared(output, || Ok(outputs), replace)
+}
+
+pub(crate) fn publish_prepared(
+    output: &Path,
+    prepare: impl FnOnce() -> io::Result<Vec<(OsString, Vec<u8>)>>,
+    replace: impl Fn(&Path) -> bool,
+) -> io::Result<()> {
     fs::create_dir_all(output)?;
     let stage = output.join(".rust-streams");
     fs::create_dir(&stage)?;
@@ -82,16 +90,30 @@ pub(crate) fn publish(
     let old = stage.join("previous");
     let mut backed_up = Vec::new();
     let mut published = Vec::new();
+    let outputs = match prepare() {
+        Ok(outputs) => outputs,
+        Err(error) => {
+            fs::remove_dir(&stage)?;
+            return Err(error);
+        }
+    };
     let result = (|| {
         fs::create_dir(&fresh)?;
         fs::create_dir(&old)?;
         for (name, bytes) in &outputs {
             fs::write(fresh.join(name), bytes)?;
         }
+        let output_names: HashSet<_> = outputs
+            .iter()
+            .map(|(name, _)| name.to_ascii_lowercase())
+            .collect();
         let mut previous = Vec::new();
         for entry in fs::read_dir(output)? {
             let entry = entry?;
-            if entry.file_type()?.is_file() && replace(&entry.path()) {
+            if entry.file_type()?.is_file()
+                && (output_names.contains(&entry.file_name().to_ascii_lowercase())
+                    || replace(&entry.path()))
+            {
                 previous.push(entry.file_name());
             }
         }

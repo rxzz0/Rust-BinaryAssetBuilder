@@ -5,6 +5,7 @@ use binary_asset_builder::compile::{
     CompiledStream, compile_apt_ui, compile_apt_ui_directory, compile_sdk_global,
     compile_sdk_static, compile_static,
 };
+use binary_asset_builder::fix_assets::fix_assets;
 use binary_asset_builder::linked_stream::{check_linked_files, link_assets};
 use binary_asset_builder::manifest::{ByteOrder, Manifest};
 use std::env;
@@ -21,6 +22,7 @@ Usage
   binary-asset-builder compile-static <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory>
   binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory>
+  binary-asset-builder fix-assets <mod.manifest> --references <builtmods-directory>
   binary-asset-builder pack-big <directory> --output <file.big>
   binary-asset-builder relink <file.manifest> --assets <directory> --output <new-directory>
   binary-asset-builder inspect <file.manifest>
@@ -32,6 +34,22 @@ fn main() -> ExitCode {
         [flag] if flag == "--help" || flag == "-h" || flag == "/?" => {
             println!("{USAGE}");
             ExitCode::SUCCESS
+        }
+        [command, input, flag, references] if command == "fix-assets" && flag == "--references" => {
+            let input = Path::new(input);
+            match fix_assets(input, Path::new(references)) {
+                Ok(result) => {
+                    println!(
+                        "Verified {} assets, reconciled {} hashes, and built 2 LoD streams",
+                        result.assets, result.hashes_fixed
+                    );
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("{} ({error})", input.display());
+                    ExitCode::FAILURE
+                }
+            }
         }
         [command, input, flag, output] if command == "pack-big" && flag == "--output" => {
             let start = std::time::Instant::now();
