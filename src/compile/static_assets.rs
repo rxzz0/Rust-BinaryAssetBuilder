@@ -8,6 +8,7 @@ use roxmltree::Node;
 use std::io;
 use std::path::Path;
 
+mod credits;
 mod hotkeys;
 
 type Marshal = fn(Node<'_, '_>, &Path) -> io::Result<Marshaled>;
@@ -28,7 +29,8 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "MappableKey" => (0x84b6_aec1, 11, hotkeys::mappable_key),
         "UIMouseTacticalMainCommandBarHotKeys" => (0x73e3_11a9, 12, hotkeys::tactical),
         "DefaultHotKeys" => (0x4949_5abd, 13, hotkeys::defaults),
-        "MpGameRules" => (0x34d9_1648, 14, mp_game_rules),
+        "Credits" => (0x10d6_57ee, 14, credits::credits),
+        "MpGameRules" => (0x34d9_1648, 15, mp_game_rules),
         _ => return None,
     };
     Some(encoder)
@@ -449,13 +451,16 @@ fn multiplayer_color(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
 }
 
 fn color4(node: Node<'_, '_>, path: &Path) -> io::Result<u32> {
-    let channels = ["B", "G", "R", "A"];
-    validate_attributes(node, &channels, path)?;
+    color(node, &["B", "G", "R", "A"], 0, path)
+}
+
+fn color(node: Node<'_, '_>, channels: &[&str], alpha: u8, path: &Path) -> io::Result<u32> {
+    validate_attributes(node, channels, path)?;
     if has_content(node) {
         return Err(invalid(path, "unexpected content in color"));
     }
-    let mut bytes = [0; 4];
-    for (byte, channel) in bytes.iter_mut().zip(channels) {
+    let mut bytes = [0, 0, 0, alpha];
+    for (byte, &channel) in bytes.iter_mut().zip(channels) {
         *byte = node
             .attribute(channel)
             .unwrap_or("0")

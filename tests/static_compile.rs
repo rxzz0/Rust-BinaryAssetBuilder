@@ -295,6 +295,56 @@ fn compiles_multiplayer_game_rules_with_the_sdk_layout() {
 }
 
 #[test]
+fn compiles_credits_with_ansi_strings_and_empty_lines() {
+    let root = scratch_root();
+    let xml = root.join("credits.xml");
+    fs::write(
+        &xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Credits id="Example">
+                <Scroll Rate="1" RateEveryFrame="2" ScrollDown="true"/>
+                <Style Name="TitleFont">
+                    <Color R="1" G="2" B="3"/>
+                    <Font Name="É" Size="12"/>
+                </Style>
+                <CreditItem Style="TitleFont">
+                    <Text>É—</Text>
+                    <Text>        </Text>
+                </CreditItem>
+            </Credits>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stream = compile_static(&xml, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let [asset] = manifest.assets.as_slice() else {
+        panic!("expected one Credits asset");
+    };
+    assert_eq!(asset.type_hash, 0x10d6_57ee);
+    assert_eq!(asset.chunk_sizes.instance, 96);
+    let payload = &stream.files.bin[4..];
+    assert_eq!(
+        &payload[..32],
+        [0_u32, 1, 2, 1, 1, 32, 1, 60]
+            .map(u32::to_le_bytes)
+            .as_flattened()
+    );
+    assert_eq!(&payload[56..60], b"\xc9\0\0\0");
+    assert_eq!(
+        &payload[72..88],
+        [2_u32, 88, 0, 92].map(u32::to_le_bytes).as_flattened()
+    );
+    assert_eq!(&payload[88..], b"\xc9\x97\0\0\0\0\0\0");
+    assert_eq!(
+        &stream.files.relo[4..],
+        [20_u32, 28, 44, 68, 76, 84, u32::MAX]
+            .map(u32::to_le_bytes)
+            .as_flattened()
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn emits_the_sdk_external_audio_type_and_local_movie_import() {
     let root = scratch_root();
     let xml = root.join("sample.xml");

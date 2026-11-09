@@ -6,6 +6,7 @@ use crate::manifest::{
     AssetEntry, AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest, ReferencedManifest,
 };
 use roxmltree::{Document, Node, NodeId};
+use std::borrow::Cow;
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -627,9 +628,8 @@ fn hash_asset(
 fn hash_xml(node: Node<'_, '_>, processing_hash: u32, path: &Path) -> io::Result<u32> {
     let mut xml = String::from("<?xml version=\"1.0\" encoding=\"Windows-1252\"?>");
     write_xml(node, true, &mut xml);
-    if !xml.is_ascii() {
-        return Err(invalid(path, "asset XML must be ASCII"));
-    }
+    let xml = windows_1252(&xml)
+        .ok_or_else(|| invalid(path, "asset XML contains characters outside Windows-1252"))?;
     let seed = fast_hash_with_seed(processing_hash, b"11");
     // The legacy HashingWriter omits its last block when the length is an exact multiple.
     let hashed_len = if xml.len().is_multiple_of(512) {
@@ -637,9 +637,26 @@ fn hash_xml(node: Node<'_, '_>, processing_hash: u32, path: &Path) -> io::Result
     } else {
         xml.len()
     };
-    Ok(xml.as_bytes()[..hashed_len]
+    Ok(xml[..hashed_len]
         .chunks(512)
         .fold(seed, fast_hash_with_seed))
+}
+
+fn windows_1252(text: &str) -> Option<Cow<'_, [u8]>> {
+    const EXTENDED: &str = "€\u{81}‚ƒ„…†‡ˆ‰Š‹Œ\u{8d}Ž\u{8f}\u{90}‘’“”•–—˜™š›œ\u{9d}žŸ";
+    if text.is_ascii() {
+        return Some(Cow::Borrowed(text.as_bytes()));
+    }
+    text.chars()
+        .map(|character| match character as u32 {
+            0..=0x7f | 0xa0..=0xff => Some(character as u8),
+            _ => EXTENDED
+                .chars()
+                .position(|extended| extended == character)
+                .map(|index| 0x80 + index as u8),
+        })
+        .collect::<Option<Vec<_>>>()
+        .map(Cow::Owned)
 }
 
 fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
@@ -667,7 +684,7 @@ fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
             roxmltree::NodeType::Element => write_xml(child, false, xml),
             roxmltree::NodeType::Text => {
                 let text = child.text().unwrap();
-                if !text.trim().is_empty() {
+                if !is_xml_whitespace(text) {
                     escape_xml(text, false, xml);
                 }
             }
@@ -682,6 +699,11 @@ fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
     xml.push_str("</");
     xml.push_str(name);
     xml.push('>');
+}
+
+fn is_xml_whitespace(text: &str) -> bool {
+    text.bytes()
+        .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
 }
 
 fn escape_xml(text: &str, attribute: bool, xml: &mut String) {
