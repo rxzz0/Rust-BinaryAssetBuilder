@@ -113,6 +113,7 @@ struct Compiler<'a> {
     external_ids: HashSet<AssetId>,
 }
 
+#[derive(Clone)]
 struct TentativeAsset {
     path: PathBuf,
     source: Rc<str>,
@@ -134,6 +135,7 @@ struct CompiledAsset {
     sort_order: u8,
 }
 
+#[derive(PartialEq, Eq)]
 struct AssetReference {
     id: AssetId,
     external_type: Option<u32>,
@@ -256,6 +258,20 @@ impl Compiler<'_> {
                     self.compile_apt_asset(node, path, &source)?
                 };
                 if !self.ids.insert(asset.id) {
+                    // Multiple faction files declare the same shared AI base.
+                    if node.has_tag_name((SAGE_NS, "AIPersonalityDefinition"))
+                        && self.assets.iter().any(|previous| {
+                            previous.id == asset.id
+                                && previous.name == asset.name
+                                && previous.instance_hash == asset.instance_hash
+                                && previous.payload == asset.payload
+                                && previous.relocations == asset.relocations
+                                && previous.imports == asset.imports
+                                && previous.references == asset.references
+                        })
+                    {
+                        continue;
+                    }
                     return Err(invalid(path, format!("duplicate asset ID {}", asset.name)));
                 }
                 self.assets.push(asset);
@@ -282,7 +298,7 @@ impl Compiler<'_> {
                 if self.ids.contains(&id) {
                     continue;
                 }
-                let Some(candidates) = self.tentative.remove(&id) else {
+                let Some(candidates) = self.tentative.get(&id) else {
                     continue;
                 };
                 let [candidate] = candidates.as_slice() else {
@@ -294,6 +310,7 @@ impl Compiler<'_> {
                         ),
                     ));
                 };
+                let candidate = candidate.clone();
                 if self.external_ids.contains(&id) {
                     return Err(invalid(
                         &candidate.path,
@@ -330,6 +347,9 @@ impl Compiler<'_> {
         match node.tag_name().name() {
             "PathMusicEvent" | "PathMusicMap" | "PathMusicTrack" => {
                 self.compile_music(node, path, source)
+            }
+            "AIPersonalityDefinition" if node.attribute("inheritFrom").is_some() => {
+                self.compile_ai_personality(node, path, source)
             }
             _ => static_assets::compile_asset(node, path, source),
         }

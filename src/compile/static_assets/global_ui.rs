@@ -1,3 +1,4 @@
+use super::binary::BinaryData;
 use super::{
     Marshaled, asset_reference, encode_words, fast_hash, finite_number, required_element,
     significant_children, text_value, validate_attributes,
@@ -67,50 +68,47 @@ pub(super) fn health_bar_settings(node: Node<'_, '_>, path: &Path) -> io::Result
     validate_attributes(node, &["id", "DefaultHealthBar"], path)?;
     let mappings: Vec<_> = significant_children(node).collect();
     let mut data = Marshaled::default();
-    let mut words = vec![0; 4 + MAPPING_WORDS * mappings.len()];
+    let mut binary = BinaryData {
+        payload: vec![0; 16],
+        relocations: Vec::new(),
+        path,
+    };
     if let Some(default) = node.attribute("DefaultHealthBar") {
-        words[1] = import_health_bar(&mut data, default, 1, path)?;
+        binary.word(4, import_health_bar(&mut data, default, 1, path)?);
     }
-    if !mappings.is_empty() {
-        words[2] = mappings.len() as u32;
-        words[3] = 16;
-        data.relocations.push(12);
-    }
+    let first = binary.list(8, mappings.len(), 4 * MAPPING_WORDS)?;
 
-    let schema = Document::parse(include_str!("../../../schemas/ra3/xsd/Includes/KindOf.xsd"))
-        .expect("bundled KindOf schema must be valid");
-    let kind_of: Vec<_> = schema
-        .root_element()
-        .descendants()
-        .filter(|node| node.has_tag_name(("http://www.w3.org/2001/XMLSchema", "enumeration")))
-        .filter_map(|node| node.attribute("value"))
-        .collect();
     for (index, mapping) in mappings.into_iter().enumerate() {
         if !mapping.has_tag_name((SAGE_NS, "ObjectMapping")) {
             return Err(invalid(path, "expected a HealthBarSettings ObjectMapping"));
         }
         validate_attributes(mapping, &["HealthBar"], path)?;
-        let start = 4 + index * MAPPING_WORDS;
-        words[start] = import_health_bar(
-            &mut data,
-            required(mapping, "HealthBar", path)?,
+        let start = first + index * 4 * MAPPING_WORDS;
+        binary.word(
             start,
-            path,
-        )?;
+            import_health_bar(
+                &mut data,
+                required(mapping, "HealthBar", path)?,
+                start / 4,
+                path,
+            )?,
+        );
         let mut children = significant_children(mapping);
         let filter = required_element(&mut children, "ObjectFilter", path)?;
         if children.next().is_some() {
             return Err(invalid(path, "unexpected content in ObjectMapping"));
         }
-        object_filter(filter, start + 1, &kind_of, &mut words, &mut data, path)?;
+        object_filter(filter, start + 4, &mut binary)?;
+        data.reference_types.extend(filter_reference_types(filter));
     }
-    if !data.relocations.is_empty() {
-        data.relocations.push(u32::MAX);
+    if !binary.relocations.is_empty() {
+        binary.relocations.push(u32::MAX);
     }
+    data.relocations = binary.relocations;
     if !data.imports.is_empty() {
         data.imports.push(u32::MAX);
     }
-    data.payload = encode_words(words);
+    data.payload = binary.payload;
     Ok(data)
 }
 
@@ -127,25 +125,24 @@ fn import_health_bar(
     Ok(data.references.len() as u32)
 }
 
-fn object_filter(
+pub(super) fn object_filter(
     node: Node<'_, '_>,
     start: usize,
-    kind_of: &[&str],
-    words: &mut Vec<u32>,
-    data: &mut Marshaled,
-    path: &Path,
+    binary: &mut BinaryData<'_>,
 ) -> io::Result<()> {
+    let path = binary.path;
     validate_attributes(
         node,
         &["Rule", "Relationship", "Alignment", "Include", "Exclude"],
         path,
     )?;
-    words[start + 1] = enum_value(
+    let mut words = [0; 22];
+    words[1] = enum_value(
         node.attribute("Rule").unwrap_or("NONE"),
         &["UNPARSED", "ALL", "ANY", "NONE"],
         path,
     )?;
-    words[start + 3] = enum_value(
+    words[3] = enum_value(
         node.attribute("Alignment").unwrap_or("NONE"),
         &["NONE", "EVIL", "GOOD"],
         path,
@@ -155,37 +152,50 @@ fn object_filter(
         .unwrap_or("")
         .split_ascii_whitespace()
     {
-        words[start + 2] |= 1
+        words[2] |= 1
             << enum_value(
                 value,
                 &["ALLIES", "ENEMIES", "NEUTRAL", "SAME_PLAYER"],
                 path,
             )?;
     }
+    let schema = Document::parse(include_str!("../../../schemas/ra3/xsd/Includes/KindOf.xsd"))
+        .expect("bundled KindOf schema must be valid");
+    let kind_of: Vec<_> = schema
+        .descendants()
+        .filter(|node| node.has_tag_name(("http://www.w3.org/2001/XMLSchema", "enumeration")))
+        .filter_map(|node| node.attribute("value"))
+        .collect();
     for (field, base) in [("Include", 4), ("Exclude", 13)] {
         for value in node.attribute(field).unwrap_or("").split_ascii_whitespace() {
-            let bit = enum_value(value, kind_of, path)? as usize;
-            words[start + base + bit / 32] |= 1 << (bit % 32);
+            let bit = enum_value(value, &kind_of, path)? as usize;
+            words[base + bit / 32] |= 1 << (bit % 32);
         }
     }
+    for (index, word) in words.into_iter().enumerate() {
+        binary.word(start + 4 * index, word);
+    }
+
     let mut children = significant_children(node).peekable();
-    for (tag, offset) in [("IncludeThing", 24), ("ExcludeThing", 26)] {
-        let first = words.len();
+    for (tag, offset) in [("IncludeThing", 96), ("ExcludeThing", 104)] {
+        let mut ids = Vec::new();
         while let Some(item) = children.next_if(|item| item.has_tag_name((SAGE_NS, tag))) {
             let asset = asset_reference(text_value(item, path)?, "GameObject", path)?;
-            words.push(asset.instance_id);
-            data.reference_types.push(fast_hash(b"GameObject"));
+            ids.push(asset.instance_id);
         }
-        if words.len() != first {
-            words[start + offset] = (words.len() - first) as u32;
-            words[start + offset + 1] = (4 * first) as u32;
-            data.relocations.push((4 * (start + offset + 1)) as u32);
+        let first = binary.list(start + offset, ids.len(), 4)?;
+        for (index, id) in ids.into_iter().enumerate() {
+            binary.word(first + 4 * index, id);
         }
     }
     if children.next().is_some() {
         return Err(invalid(path, "unexpected content in ObjectFilter"));
     }
     Ok(())
+}
+
+pub(super) fn filter_reference_types(node: Node<'_, '_>) -> impl Iterator<Item = u32> {
+    std::iter::repeat_n(fast_hash(b"GameObject"), significant_children(node).count())
 }
 
 fn enum_value(value: &str, options: &[&str], path: &Path) -> io::Result<u32> {

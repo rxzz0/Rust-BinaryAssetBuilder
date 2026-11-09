@@ -646,6 +646,70 @@ fn compiles_ai_budget_with_the_sdk_relocation_order() {
 }
 
 #[test]
+fn compiles_inherited_ai_personality_from_an_instance_include() {
+    let root = scratch_root();
+    let bases = root.join("bases.xml");
+    let xml = root.join("ai.xml");
+    fs::write(
+        &bases,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <AIPersonalityDefinition id="Base" PersonalityType="Base" DesiredExcessPowerBuffer="100">
+                <SpecificUnitCap Unit="ExampleUnit" Cap="3"/>
+                <CountAsStructureForBuildPurposesFilter Rule="ANY" Include="STRUCTURE">
+                    <ExcludeThing>ExampleUnit</ExcludeThing>
+                </CountAsStructureForBuildPurposesFilter>
+            </AIPersonalityDefinition>
+            <AIPersonalityDefinition id="Intermediate" PersonalityType="Intermediate" inheritFrom="Base">
+                <UnitCap Cap="20" Difficulty="MEDIUM"/>
+            </AIPersonalityDefinition>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        &xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes><Include type="instance" source="bases.xml"/></Includes>
+            <AIPersonalityDefinition id="Child" PersonalityType="Child" inheritFrom="Intermediate"
+                SkirmishPersonality="true" DesiredExcessPowerBuffer="50">
+                <UnitCap Cap="40" Difficulty="HARD"/>
+            </AIPersonalityDefinition>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let result = compile_static(&xml, &root, &root);
+    fs::remove_file(xml).unwrap();
+    fs::remove_file(bases).unwrap();
+    fs::remove_dir(root).unwrap();
+
+    let stream = result.unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let [asset] = manifest.assets.as_slice() else {
+        panic!("expected only the child AI personality");
+    };
+    assert_eq!(asset.name, b"AIPersonalityDefinition:Child");
+    assert_eq!(asset.references.iter().len(), 0);
+    let payload = &stream.files.bin[4..];
+    let word = |offset| u32::from_le_bytes(payload[offset..offset + 4].try_into().unwrap());
+    assert_eq!(word(24), 50);
+    assert_eq!(payload[508], 1);
+    assert_eq!(word(252), 2);
+    let caps = word(256) as usize;
+    assert_eq!([word(caps), word(caps + 4)], [20, 2]);
+    assert_eq!([word(caps + 8), word(caps + 12)], [40, 4]);
+    assert_eq!(word(364), 1);
+    let specific_cap = word(368) as usize;
+    assert_eq!(word(specific_cap + 4), 3);
+    assert_eq!(word(388), 2);
+    assert_eq!(word(488), 1);
+    assert_eq!(word(word(492) as usize), word(specific_cap));
+    let expected: Vec<_> = [8, 256, 368, 492, u32::MAX]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect();
+    assert_eq!(&stream.files.relo[4..], expected);
+}
+
+#[test]
 fn compiles_w3d_collision_box_with_the_sdk_layout() {
     let root = scratch_root();
     let xml = root.join("box.w3x");

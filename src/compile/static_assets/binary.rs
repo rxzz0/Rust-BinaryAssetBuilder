@@ -48,7 +48,7 @@ impl BinaryData<'_> {
         Ok(())
     }
 
-    fn allocate(&mut self, pointer: usize, bytes: usize) -> io::Result<usize> {
+    pub(super) fn allocate(&mut self, pointer: usize, bytes: usize) -> io::Result<usize> {
         let start = self.payload.len();
         let end = start
             .checked_add(bytes)
