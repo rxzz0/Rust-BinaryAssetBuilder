@@ -10,8 +10,11 @@ use std::path::Path;
 
 mod ai_build;
 mod ai_heuristics;
+mod ai_inheritance;
 mod ai_personality;
+mod ai_settings;
 mod ai_strategic;
+mod ai_targeting;
 mod binary;
 mod campaign;
 mod credits;
@@ -44,6 +47,9 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "AIPersonalityDefinition" => (0xcb3c_9d2b, 19, ai_personality::compile),
         "AIBuildStateDefinition" => (0xcaac_2e6e, 28, ai_build::compile),
         "AIStrategicStateDefinition" => (0xd63d_e874, 29, ai_strategic::compile),
+        "AIData" => (0x4123_a1aa, 30, ai_settings::data),
+        "AIMicroManagerData" => (0x52ff_0fd3, 31, ai_settings::micro),
+        "AITargetingHeuristic" => (0x92a7_8f51, 32, ai_targeting::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),
         "MissionTemplate" => (0xd299_ec3a, 25, campaign::mission),

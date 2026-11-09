@@ -1,5 +1,3 @@
-mod inheritance;
-
 use super::binary::BinaryData;
 use super::global_ui::{filter_reference_types, object_filter};
 use super::{
@@ -202,7 +200,7 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
         match name {
             CRITERIA => match items.as_slice() {
                 [] => (),
-                [(item, _)] => base_criteria(*item, &mut binary)?,
+                [(item, _)] => write_base_criteria(*item, field, &mut binary)?,
                 _ => return Err(invalid(path, "multiple AI base selection criteria")),
             },
             FILTER => {
@@ -231,12 +229,12 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
     Ok(data)
 }
 
-const CRITERIA: &str = "DefaultTacticHomeBaseCriteria";
-const FILTER: &str = "CountAsStructureForBuildPurposesFilter";
+pub(super) const CRITERIA: &str = "DefaultTacticHomeBaseCriteria";
+pub(super) const FILTER: &str = "CountAsStructureForBuildPurposesFilter";
 const ALL_DIFFICULTIES: &str = "EASY MEDIUM HARD BRUTAL";
 
 // Schema order also determines the allocation order of the trailing data.
-const CHILDREN: [(&str, usize, usize); 10] = [
+pub(super) const CHILDREN: [(&str, usize, usize); 10] = [
     ("Side", 236, 4),
     ("UnitCap", 252, 8),
     ("ResourceMultiplierCheat", 300, 8),
@@ -249,7 +247,7 @@ const CHILDREN: [(&str, usize, usize); 10] = [
     (FILTER, 384, 112),
 ];
 
-fn child_index(node: Node<'_, '_>, path: &Path) -> io::Result<usize> {
+pub(super) fn child_index(node: Node<'_, '_>, path: &Path) -> io::Result<usize> {
     CHILDREN
         .iter()
         .position(|(tag, _, _)| node.has_tag_name((SAGE_NS, *tag)))
@@ -264,7 +262,7 @@ fn child_index(node: Node<'_, '_>, path: &Path) -> io::Result<usize> {
         })
 }
 
-fn reference_name(value: &str) -> &str {
+pub(super) fn reference_name(value: &str) -> &str {
     value.split_once('\\').map_or(value, |(name, _)| name)
 }
 
@@ -333,7 +331,11 @@ fn write_item(
     Ok(())
 }
 
-fn base_criteria(node: Node<'_, '_>, binary: &mut BinaryData<'_>) -> io::Result<()> {
+pub(super) fn write_base_criteria(
+    node: Node<'_, '_>,
+    pointer: usize,
+    binary: &mut BinaryData<'_>,
+) -> io::Result<()> {
     const FIELDS: [&str; 4] = [
         "RequiredBaseTypes",
         "ExcludedBaseTypes",
@@ -370,7 +372,7 @@ fn base_criteria(node: Node<'_, '_>, binary: &mut BinaryData<'_>) -> io::Result<
             "unexpected content in AI base selection criteria",
         ));
     }
-    let offset = binary.allocate(380, 20)?;
+    let offset = binary.allocate(pointer, 20)?;
     for (index, field) in FIELDS.into_iter().enumerate() {
         let mut flags = 0;
         for flag in node.attribute(field).unwrap_or("").split_ascii_whitespace() {

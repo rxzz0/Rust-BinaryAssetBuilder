@@ -61,7 +61,7 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
     );
     for (field, offset) in [("MaxRunningCopies", 16), ("MaxInactiveCopies", 20)] {
         if let Some(value) = node.attribute(field) {
-            optional_word(&mut binary, offset, uint(value, field, path)?)?;
+            binary.optional_word(offset, uint(value, field, path)?)?;
         }
     }
     for (field, offset, values) in [
@@ -82,7 +82,7 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
         ),
     ] {
         if let Some(value) = node.attribute(field) {
-            optional_word(&mut binary, offset, enum_index(value, values, field, path)?)?;
+            binary.optional_word(offset, enum_index(value, values, field, path)?)?;
         }
     }
     let mut children = significant_children(node);
@@ -292,13 +292,12 @@ fn write_team(
     binary.word(offset, int(value("MinUnits", "1"), "MinUnits", path)?);
     for (field, relative) in [("MaxUnits", 4), ("MaxTypesOfUnits", 12)] {
         if let Some(value) = node.attribute(field) {
-            optional_word(binary, offset + relative, int(value, field, path)?)?;
+            binary.optional_word(offset + relative, int(value, field, path)?)?;
         }
         if relative == 4
             && let Some(value) = node.attribute("MinPowerAdvantage")
         {
-            optional_word(
-                binary,
+            binary.optional_word(
                 offset + 8,
                 finite_number(value, "MinPowerAdvantage", path)?.to_bits(),
             )?;
@@ -373,8 +372,7 @@ fn write_team(
         registered_object_set(value("RegisteredObjectSet", "UNITS"), path)?,
     );
     if let Some(distance) = node.attribute("BaseDefenseMaxDistance") {
-        optional_word(
-            binary,
+        binary.optional_word(
             offset + 112,
             finite_number(distance, "BaseDefenseMaxDistance", path)?.to_bits(),
         )?;
@@ -455,12 +453,6 @@ fn write_import(
     Ok(())
 }
 
-fn optional_word(binary: &mut BinaryData<'_>, pointer: usize, value: u32) -> io::Result<()> {
-    let offset = binary.allocate(pointer, 4)?;
-    binary.word(offset, value);
-    Ok(())
-}
-
 fn uint(value: &str, name: &str, path: &Path) -> io::Result<u32> {
     value
         .trim()
@@ -476,7 +468,7 @@ fn int(value: &str, name: &str, path: &Path) -> io::Result<u32> {
         .map_err(|_| invalid(path, format!("invalid {name}")))
 }
 
-fn enum_index(value: &str, values: &[&str], name: &str, path: &Path) -> io::Result<u32> {
+pub(super) fn enum_index(value: &str, values: &[&str], name: &str, path: &Path) -> io::Result<u32> {
     values
         .iter()
         .position(|&candidate| candidate == value.trim())
@@ -484,13 +476,17 @@ fn enum_index(value: &str, values: &[&str], name: &str, path: &Path) -> io::Resu
         .ok_or_else(|| invalid(path, format!("invalid {name} value {value:?}")))
 }
 
-fn flags(value: &str, values: &[&str], name: &str, path: &Path) -> io::Result<u32> {
+pub(super) fn flags(value: &str, values: &[&str], name: &str, path: &Path) -> io::Result<u32> {
     value.split_ascii_whitespace().try_fold(0, |bits, flag| {
         Ok(bits | 1 << enum_index(flag, values, name, path)?)
     })
 }
 
-fn boolean_bytes(node: Node<'_, '_>, fields: &[(&str, bool)], path: &Path) -> io::Result<u32> {
+pub(super) fn boolean_bytes(
+    node: Node<'_, '_>,
+    fields: &[(&str, bool)],
+    path: &Path,
+) -> io::Result<u32> {
     let mut bits = 0;
     for (index, (name, default)) in fields.iter().enumerate() {
         let value = match node.attribute(*name).map(str::trim) {

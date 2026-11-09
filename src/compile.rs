@@ -348,8 +348,10 @@ impl Compiler<'_> {
             "PathMusicEvent" | "PathMusicMap" | "PathMusicTrack" => {
                 self.compile_music(node, path, source)
             }
-            "AIPersonalityDefinition" if node.attribute("inheritFrom").is_some() => {
-                self.compile_ai_personality(node, path, source)
+            "AIPersonalityDefinition" | "AIMicroManagerData"
+                if node.attribute("inheritFrom").is_some() =>
+            {
+                self.compile_inherited_ai(node, path, source)
             }
             _ => static_assets::compile_asset(node, path, source),
         }

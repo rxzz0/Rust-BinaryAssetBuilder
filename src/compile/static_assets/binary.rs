@@ -13,6 +13,12 @@ impl BinaryData<'_> {
         self.payload[offset..offset + 4].copy_from_slice(&word.to_le_bytes());
     }
 
+    pub(super) fn optional_word(&mut self, pointer: usize, value: u32) -> io::Result<()> {
+        let offset = self.allocate(pointer, 4)?;
+        self.word(offset, value);
+        Ok(())
+    }
+
     pub(super) fn list(
         &mut self,
         offset: usize,

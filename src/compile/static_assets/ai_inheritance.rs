@@ -1,5 +1,6 @@
-use super::super::{asset_reference, compile_asset, declaration_id, significant_children};
-use super::{CHILDREN, CRITERIA, FILTER, child_index, reference_name};
+use super::ai_personality::{CHILDREN, CRITERIA, FILTER, child_index, reference_name};
+use super::ai_settings::MICRO_SCHEMA;
+use super::{asset_reference, compile_asset, declaration_id, significant_children};
 use crate::compile::{CompiledAsset, Compiler, SAGE_NS, escape_xml, invalid, is_xml_whitespace};
 use crate::manifest::AssetId;
 use roxmltree::{Document, Node};
@@ -7,24 +8,27 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-const TYPE: &str = "AIPersonalityDefinition";
+const PERSONALITY: &str = "AIPersonalityDefinition";
+const MICRO: &str = "AIMicroManagerData";
+const RETREAT: &str = "RetreatBaseCriteria";
+const IGNORE: &str = "IgnoreTargets";
 const XSD: &str = "http://www.w3.org/2001/XMLSchema";
 
 impl Compiler<'_> {
-    pub(in crate::compile) fn compile_ai_personality(
+    pub(in crate::compile) fn compile_inherited_ai(
         &self,
         node: Node<'_, '_>,
         path: &Path,
         source: &str,
     ) -> io::Result<CompiledAsset> {
-        let element = self.ai_personality_xml(node, path, &mut Vec::new())?;
+        let element = self.inherited_ai_xml(node, path, &mut Vec::new())?;
         let mut xml = String::new();
         element.write_xml(&mut xml, true);
         let document = Document::parse(&xml).map_err(|error| invalid(path, error))?;
         compile_asset(document.root_element(), path, source)
     }
 
-    fn ai_personality_xml(
+    fn inherited_ai_xml(
         &self,
         node: Node<'_, '_>,
         path: &Path,
@@ -45,15 +49,16 @@ impl Compiler<'_> {
             ));
         }
         chain.push((path.to_path_buf(), id));
-        let parent_id = asset_reference(inherit_from, TYPE, path)?;
+        let kind = node.tag_name().name();
+        let parent_id = asset_reference(inherit_from, kind, path)?;
         let declaration = node.document().root_element();
         let local = declaration.children().find(|candidate| {
             *candidate != node
-                && candidate.has_tag_name((SAGE_NS, TYPE))
+                && candidate.has_tag_name((SAGE_NS, kind))
                 && declaration_id(*candidate, path).is_ok_and(|(_, id)| id == parent_id)
         });
         let base = if let Some(parent) = local {
-            self.ai_personality_xml(parent, path, chain)?
+            self.inherited_ai_xml(parent, path, chain)?
         } else {
             let mut instance_paths = Vec::new();
             for include in declaration
@@ -81,15 +86,15 @@ impl Compiler<'_> {
                 .ok_or_else(|| {
                     invalid(
                         path,
-                        format!("expected one instance include for AI personality {inherit_from}"),
+                        format!("expected one instance include for {kind} {inherit_from}"),
                     )
                 })?;
             let document =
                 Document::parse(&candidate.xml).map_err(|error| invalid(&candidate.path, error))?;
             let parent = document
                 .get_node(candidate.node)
-                .ok_or_else(|| invalid(&candidate.path, "missing AI personality base"))?;
-            let mut base = self.ai_personality_xml(parent, &candidate.path, chain)?;
+                .ok_or_else(|| invalid(&candidate.path, "missing inherited AI base"))?;
+            let mut base = self.inherited_ai_xml(parent, &candidate.path, chain)?;
             base.validate_for_inheritance(&candidate.path)?;
             base
         };
@@ -97,7 +102,7 @@ impl Compiler<'_> {
 
         // The SDK merges declarations in schema order and strips comments and
         // pipeline inheritance attributes when constructing the effective XML.
-        let mut result = Element::new(TYPE);
+        let mut result = Element::new(kind);
         for mut input in [base, Element::read(node, path)?] {
             input.attributes.retain(|(name, _)| name != "inheritFrom");
             result.merge_attributes(input.attributes);
@@ -147,7 +152,7 @@ impl Element {
         }
         for child in significant_children(node) {
             if child.is_element() {
-                if element.name == TYPE {
+                if element.name == PERSONALITY {
                     child_index(child, path)?;
                 }
                 element.children.push(Self::read(child, path)?);
@@ -155,7 +160,10 @@ impl Element {
                 element.text.push_str(child.text().unwrap_or_default());
             }
         }
-        if !element.text.is_empty() && (!element.children.is_empty() || element.name == TYPE) {
+        if !element.text.is_empty()
+            && (!element.children.is_empty()
+                || matches!(element.name.as_str(), PERSONALITY | MICRO))
+        {
             return Err(invalid(
                 path,
                 format!("unexpected text in {}", element.name),
@@ -183,15 +191,16 @@ impl Element {
 
     fn merge_child(&mut self, child: Self, path: &Path) -> io::Result<()> {
         let rank = |name: &str| match self.name.as_str() {
-            TYPE => CHILDREN.iter().position(|(tag, _, _)| *tag == name),
-            FILTER => ["IncludeThing", "ExcludeThing"]
+            PERSONALITY => CHILDREN.iter().position(|(tag, _, _)| *tag == name),
+            MICRO => [RETREAT, IGNORE].iter().position(|tag| *tag == name),
+            FILTER | IGNORE => ["IncludeThing", "ExcludeThing"]
                 .iter()
                 .position(|tag| *tag == name),
             _ => None,
         };
         let position = rank(&child.name)
             .ok_or_else(|| invalid(path, format!("unexpected {} in {}", child.name, self.name)))?;
-        let singleton = matches!(child.name.as_str(), CRITERIA | FILTER);
+        let singleton = matches!(child.name.as_str(), CRITERIA | FILTER | RETREAT | IGNORE);
         let id = child.attribute("id");
         if let Some(existing) = self.children.iter_mut().find(|item| {
             item.name == child.name && (singleton || id.is_some() && item.attribute("id") == id)
@@ -286,27 +295,29 @@ impl Element {
 type Defaults = Vec<(&'static str, Vec<(String, String)>)>;
 
 fn schema_defaults() -> Defaults {
-    const PERSONALITY: &str =
-        include_str!("../../../../schemas/ra3/xsd/SkirmishAI/AssetTypeAIPersonalityDefinition.xsd");
+    const PERSONALITY_SCHEMA: &str =
+        include_str!("../../../schemas/ra3/xsd/SkirmishAI/AssetTypeAIPersonalityDefinition.xsd");
     const BASE_CRITERIA: &str =
-        include_str!("../../../../schemas/ra3/xsd/SkirmishAI/AIBaseSelectionCriteria.xsd");
-    const OBJECT_FILTER: &str =
-        include_str!("../../../../schemas/ra3/xsd/Includes/ObjectFilter.xsd");
+        include_str!("../../../schemas/ra3/xsd/SkirmishAI/AIBaseSelectionCriteria.xsd");
+    const OBJECT_FILTER: &str = include_str!("../../../schemas/ra3/xsd/Includes/ObjectFilter.xsd");
     [
-        (TYPE, TYPE, PERSONALITY),
-        ("UnitCap", "AIUnitCap", PERSONALITY),
+        (PERSONALITY, PERSONALITY, PERSONALITY_SCHEMA),
+        ("UnitCap", "AIUnitCap", PERSONALITY_SCHEMA),
         (
             "ResourceMultiplierCheat",
             "AIResourceMultiplierCheat",
-            PERSONALITY,
+            PERSONALITY_SCHEMA,
         ),
-        ("PowerChoice", "AIPlayerPowerChoice", PERSONALITY),
-        ("StrategicState", "AIStrategicState", PERSONALITY),
-        ("BudgetState", "AIBudgetState", PERSONALITY),
-        ("BuildState", "AIBuildState", PERSONALITY),
-        ("SpecificUnitCap", "AISpecificUnitCap", PERSONALITY),
+        ("PowerChoice", "AIPlayerPowerChoice", PERSONALITY_SCHEMA),
+        ("StrategicState", "AIStrategicState", PERSONALITY_SCHEMA),
+        ("BudgetState", "AIBudgetState", PERSONALITY_SCHEMA),
+        ("BuildState", "AIBuildState", PERSONALITY_SCHEMA),
+        ("SpecificUnitCap", "AISpecificUnitCap", PERSONALITY_SCHEMA),
         (CRITERIA, "AIBaseSelectionCriteria", BASE_CRITERIA),
         (FILTER, "ObjectFilter", OBJECT_FILTER),
+        (MICRO, MICRO, MICRO_SCHEMA),
+        (RETREAT, "AIBaseSelectionCriteria", BASE_CRITERIA),
+        (IGNORE, "ObjectFilter", OBJECT_FILTER),
     ]
     .into_iter()
     .map(|(element, kind, schema)| {
