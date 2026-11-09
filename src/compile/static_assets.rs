@@ -15,6 +15,7 @@ mod ai_personality;
 mod ai_settings;
 mod ai_strategic;
 mod ai_targeting;
+mod armor;
 mod binary;
 mod campaign;
 mod credits;
@@ -22,6 +23,7 @@ pub(super) mod game_object;
 mod global_ui;
 mod hotkeys;
 pub(super) mod music;
+mod tokenized;
 
 type Marshal = fn(Node<'_, '_>, &Path) -> io::Result<Marshaled>;
 
@@ -51,6 +53,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "AIData" => (0x4123_a1aa, 30, ai_settings::data),
         "AIMicroManagerData" => (0x52ff_0fd3, 31, ai_settings::micro),
         "AITargetingHeuristic" => (0x92a7_8f51, 32, ai_targeting::compile),
+        "ArmorTemplate" => (0x641a_d32e, 33, armor::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),
         "MissionTemplate" => (0xd299_ec3a, 25, campaign::mission),
@@ -77,7 +80,12 @@ pub(super) fn compile_asset(
     let (type_hash, sort_order, marshal) = encoder(type_name)
         .ok_or_else(|| invalid(path, format!("unsupported static asset type {type_name}")))?;
     let data = marshal(node, path)?;
-    let mut instance_hash = hash_xml(node, type_hash ^ 4, path)?;
+    let processing_hash = if data.tokenized {
+        type_hash + 0x1004
+    } else {
+        type_hash ^ 4
+    };
+    let mut instance_hash = hash_xml(node, processing_hash, path)?;
     if !data.reference_types.is_empty() {
         instance_hash ^= memory_stream_hash(encode_words(data.reference_types));
     }
@@ -92,6 +100,7 @@ pub(super) fn compile_asset(
         imports: encode_words(data.imports),
         references: data.references,
         custom_data: None,
+        tokenized: data.tokenized,
         sort_order,
     })
 }
@@ -127,6 +136,7 @@ struct Marshaled {
     imports: Vec<u32>,
     references: Vec<AssetReference>,
     reference_types: Vec<u32>,
+    tokenized: bool,
 }
 
 fn validate_attributes(node: Node<'_, '_>, allowed: &[&str], path: &Path) -> io::Result<()> {
@@ -616,6 +626,7 @@ fn video_events(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
         imports,
         reference_types: vec![fast_hash(b"Video"); count as usize],
         references,
+        ..Marshaled::default()
     })
 }
 
@@ -704,6 +715,7 @@ fn reference_list(
         imports,
         references,
         reference_types: vec![fast_hash(target_type.as_bytes()); count as usize],
+        ..Marshaled::default()
     })
 }
 

@@ -142,6 +142,7 @@ struct CompiledAsset {
     imports: Vec<u8>,
     references: Vec<AssetReference>,
     custom_data: Option<(PathBuf, u32)>,
+    tokenized: bool,
     sort_order: u8,
 }
 
@@ -581,6 +582,7 @@ impl Compiler<'_> {
             imports: Vec::new(),
             references: Vec::new(),
             custom_data: None,
+            tokenized: false,
             sort_order: 0,
         })
     }
@@ -687,7 +689,7 @@ impl Compiler<'_> {
                     name: asset.name.as_bytes(),
                     source_file_name: asset.source.as_bytes(),
                     references: AssetReferences::from_ids(references),
-                    tokenized: Some(0),
+                    tokenized: Some(u32::from(asset.tokenized)),
                 }
             })
             .collect();

@@ -148,6 +148,7 @@ impl Compiler<'_> {
             references: Vec::new(),
             sort_order,
             custom_data,
+            tokenized: false,
         })
     }
 

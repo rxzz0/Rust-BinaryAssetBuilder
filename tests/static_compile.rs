@@ -63,6 +63,48 @@ fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
 }
 
 #[test]
+fn compiles_armor_with_sdk_token_tables_and_absolute_relocations() {
+    let root = scratch_root();
+    let input = root.join("armor.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <ArmorTemplate id="ProbeArmor" Default="50%"><Armor Damage="GUN" Percent="20%"/></ArmorTemplate>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let entry = &manifest.assets[0];
+    assert_eq!(entry.tokenized, Some(1));
+    assert_eq!(entry.type_hash, 0x641a_d32e);
+    assert_eq!(entry.instance_hash, 0x1970_3ecc);
+    let words: Vec<_> = stream.files.bin[4..]
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|bytes| u32::from_le_bytes(*bytes))
+        .collect();
+    assert_eq!(&words[..3], &[0xffe8_8740, 0x6458_64f3, 148]);
+    assert_eq!(
+        &words[37..],
+        &[
+            0x3f00_0000,
+            0x3f80_0000,
+            0x3f80_0000,
+            0x3f80_0000,
+            0x3f80_0000,
+            1,
+            176,
+            21,
+            0x3e4c_cccc
+        ]
+    );
+    assert_eq!(&stream.files.relo[4..], &[172, 0, 0, 0, 255, 255, 255, 255]);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn static_xinclude_expands_nested_fragments_before_defines_and_hashing() {
     let root = scratch_root();
     let input = root.join("probe.xml");
