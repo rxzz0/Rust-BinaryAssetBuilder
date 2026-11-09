@@ -3,8 +3,8 @@ mod inheritance;
 use super::binary::BinaryData;
 use super::global_ui::{filter_reference_types, object_filter};
 use super::{
-    Marshaled, asset_reference, fast_hash, finite_number, percentage, significant_children,
-    text_value, validate_attributes,
+    Marshaled, asset_reference, fast_hash, finite_number, percentage, sage_time,
+    significant_children, text_value, validate_attributes,
 };
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
@@ -410,14 +410,7 @@ impl FieldKind {
                 .map_err(|_| error()),
             Unsigned => value.parse::<u32>().map_err(|_| error()),
             Percent => Ok(percentage(value, field, path)?.to_bits()),
-            Time => {
-                let (number, factor) = if let Some(number) = value.strip_suffix("ms") {
-                    (number, 0.001)
-                } else {
-                    (value.strip_suffix('s').ok_or_else(error)?, 1.0)
-                };
-                Ok((finite_number(number, field, path)? * factor).to_bits())
-            }
+            Time => Ok(sage_time(value, field, path)?.to_bits()),
             Difficulty => value.split_ascii_whitespace().try_fold(0, |flags, name| {
                 let index = ["EASY", "MEDIUM", "HARD", "BRUTAL"]
                     .iter()

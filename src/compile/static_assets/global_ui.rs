@@ -159,18 +159,9 @@ pub(super) fn object_filter(
                 path,
             )?;
     }
-    let schema = Document::parse(include_str!("../../../schemas/ra3/xsd/Includes/KindOf.xsd"))
-        .expect("bundled KindOf schema must be valid");
-    let kind_of: Vec<_> = schema
-        .descendants()
-        .filter(|node| node.has_tag_name(("http://www.w3.org/2001/XMLSchema", "enumeration")))
-        .filter_map(|node| node.attribute("value"))
-        .collect();
     for (field, base) in [("Include", 4), ("Exclude", 13)] {
-        for value in node.attribute(field).unwrap_or("").split_ascii_whitespace() {
-            let bit = enum_value(value, &kind_of, path)? as usize;
-            words[base + bit / 32] |= 1 << (bit % 32);
-        }
+        words[base..base + 9]
+            .copy_from_slice(&kind_of_flags(node.attribute(field).unwrap_or(""), path)?);
     }
     for (index, word) in words.into_iter().enumerate() {
         binary.word(start + 4 * index, word);
@@ -192,6 +183,33 @@ pub(super) fn object_filter(
         return Err(invalid(path, "unexpected content in ObjectFilter"));
     }
     Ok(())
+}
+
+pub(super) fn kind_of_flags(value: &str, path: &Path) -> io::Result<[u32; 9]> {
+    use std::sync::OnceLock;
+    static KINDS: OnceLock<Vec<String>> = OnceLock::new();
+    let mut words = [0; 9];
+    if value.trim().is_empty() {
+        return Ok(words);
+    }
+    let kinds = KINDS.get_or_init(|| {
+        let schema = Document::parse(include_str!("../../../schemas/ra3/xsd/Includes/KindOf.xsd"))
+            .expect("bundled KindOf schema must be valid");
+        schema
+            .descendants()
+            .filter(|node| node.has_tag_name(("http://www.w3.org/2001/XMLSchema", "enumeration")))
+            .filter_map(|node| node.attribute("value").map(str::to_owned))
+            .collect()
+    });
+    for flag in value.split_ascii_whitespace() {
+        let bit = kinds
+            .iter()
+            .position(|kind| kind == flag)
+            .filter(|&bit| bit < 32 * words.len())
+            .ok_or_else(|| invalid(path, format!("unknown KindOf flag {flag:?}")))?;
+        words[bit / 32] |= 1 << (bit % 32);
+    }
+    Ok(words)
 }
 
 pub(super) fn filter_reference_types(node: Node<'_, '_>) -> impl Iterator<Item = u32> {

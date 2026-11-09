@@ -8,6 +8,8 @@ use roxmltree::Node;
 use std::io;
 use std::path::Path;
 
+mod ai_build;
+mod ai_heuristics;
 mod ai_personality;
 mod binary;
 mod campaign;
@@ -39,6 +41,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "UIMouseTacticalMainCommandBarHotKeys" => (0x73e3_11a9, 17, hotkeys::tactical),
         "DefaultHotKeys" => (0x4949_5abd, 18, hotkeys::defaults),
         "AIPersonalityDefinition" => (0xcb3c_9d2b, 19, ai_personality::compile),
+        "AIBuildStateDefinition" => (0xcaac_2e6e, 28, ai_build::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),
         "MissionTemplate" => (0xd299_ec3a, 25, campaign::mission),
@@ -288,6 +291,17 @@ fn finite_number(value: &str, field: &str, path: &Path) -> io::Result<f32> {
         .ok()
         .filter(|number| number.is_finite())
         .ok_or_else(|| invalid(path, format!("invalid {field}")))
+}
+
+fn sage_time(value: &str, field: &str, path: &Path) -> io::Result<f32> {
+    if let Some(number) = value.trim().strip_suffix("ms") {
+        return Ok(finite_number(number, field, path)? * 0.001);
+    }
+    let number = value
+        .trim()
+        .strip_suffix('s')
+        .ok_or_else(|| invalid(path, format!("invalid {field}")))?;
+    finite_number(number, field, path)
 }
 
 fn mp_game_rules(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
