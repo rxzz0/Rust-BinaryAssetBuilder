@@ -19,11 +19,13 @@ mod expressions;
 mod sdk_static;
 mod static_assets;
 mod texture;
+mod xinclude;
 
 pub use crate::compile_batch::{compile_apt_ui_directory, write_compiled_stream};
 pub use sdk_static::{compile_sdk_global, compile_sdk_static};
 
 const SAGE_NS: &str = "uri:ea.com:eala:asset";
+const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
 const FILE_HASH_BLOCK: usize = 0x100000;
 const RA3_ALL_TYPES_HASH: u32 = 0x54ee_e764;
 const RELOCATIONS: [u8; 8] = [4, 0, 0, 0, 255, 255, 255, 255];
@@ -74,6 +76,7 @@ fn compile(
         assets: Vec::new(),
         tentative: HashMap::new(),
         definitions: HashMap::new(),
+        xml_fragments: HashMap::new(),
         music_headers: HashMap::new(),
         reference_directory,
         implicit_sdk_references,
@@ -110,6 +113,7 @@ struct Compiler<'a> {
     assets: Vec<CompiledAsset>,
     tentative: HashMap<AssetId, Vec<TentativeAsset>>,
     definitions: HashMap<PathBuf, Rc<Definitions>>,
+    xml_fragments: HashMap<PathBuf, Rc<str>>,
     music_headers: HashMap<PathBuf, static_assets::music::Header>,
     reference_directory: Option<&'a Path>,
     implicit_sdk_references: bool,
@@ -187,7 +191,11 @@ impl Compiler<'_> {
             .ok_or_else(|| invalid(path, "source path must be ASCII"))?;
         let source: Rc<str> =
             format!("DATA:{}", relative.replace('\\', "/").to_ascii_lowercase()).into();
-        let xml: Rc<str> = read_with_context(path, fs::read_to_string)?.into();
+        let xml: Rc<str> = if self.reference_directory.is_some() {
+            self.read_static_xml(path)?
+        } else {
+            read_with_context(path, fs::read_to_string)?.into()
+        };
         let document = Document::parse(&xml).map_err(|error| invalid(path, error))?;
         let root = document.root_element();
         if self.reference_directory.is_some()
@@ -832,20 +840,51 @@ fn windows_1252(text: &str) -> Option<Cow<'_, [u8]>> {
 }
 
 fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
-    let name = node.tag_name().name();
+    let input = node.document().input_text();
+    let range = node.range();
+    let original = &input[range.clone()];
+    let name = original[1..]
+        .split(|character: char| character.is_whitespace() || matches!(character, '/' | '>'))
+        .next()
+        .expect("parsed XML element name");
+    let prefix = name.split_once(':').map(|(prefix, _)| prefix);
+    let preserve_namespaces = node.attribute((XML_NS, "base")).is_some();
+    let mut attribute_end = range.start + 1 + name.len();
+    let mut has_namespace = false;
     xml.push('<');
     xml.push_str(name);
     for attr in node.attributes() {
+        if preserve_namespaces {
+            has_namespace |= write_namespace_attributes(
+                node,
+                prefix,
+                &input[attribute_end..attr.range().start],
+                xml,
+            );
+            attribute_end = attr.range().end;
+        }
         xml.push(' ');
-        xml.push_str(attr.name());
+        xml.push_str(&input[attr.range_qname()]);
         xml.push_str("=\"");
         escape_xml(attr.value(), true, xml);
         xml.push('"');
     }
-    if root {
-        xml.push_str(" xmlns=\"uri:ea.com:eala:asset\"");
+    if preserve_namespaces {
+        has_namespace |= write_namespace_attributes(
+            node,
+            prefix,
+            &input[attribute_end..range.start + opening_tag_end(original)],
+            xml,
+        );
     }
-    let original = &node.document().input_text()[node.range()];
+    if root && !has_namespace {
+        xml.push_str(" xmlns");
+        if let Some(prefix) = prefix {
+            xml.push(':');
+            xml.push_str(prefix);
+        }
+        xml.push_str("=\"uri:ea.com:eala:asset\"");
+    }
     if original.ends_with("/>") {
         xml.push_str(" />");
         return;
@@ -871,6 +910,48 @@ fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
     xml.push_str("</");
     xml.push_str(name);
     xml.push('>');
+}
+
+fn opening_tag_end(source: &str) -> usize {
+    let mut quote = None;
+    for (index, byte) in source.bytes().enumerate() {
+        match quote {
+            Some(end) if end == byte => quote = None,
+            Some(_) => {}
+            None if matches!(byte, b'\'' | b'"') => quote = Some(byte),
+            None if byte == b'>' => return index,
+            None => {}
+        }
+    }
+    unreachable!("parsed XML element has an opening tag")
+}
+
+fn write_namespace_attributes(
+    node: Node<'_, '_>,
+    element_prefix: Option<&str>,
+    mut raw: &str,
+    xml: &mut String,
+) -> bool {
+    let mut has_namespace = false;
+    while let Some((name, value)) = raw.trim_start().split_once('=') {
+        let name = name.trim_end();
+        let prefix = name.strip_prefix("xmlns:");
+        let value = value.trim_start();
+        let delimiter = value.as_bytes()[0] as char;
+        let (_, rest) = value[1..]
+            .split_once(delimiter)
+            .expect("parsed XML attribute");
+        has_namespace |= prefix == element_prefix;
+        if let Some(uri) = node.lookup_namespace_uri(prefix) {
+            xml.push(' ');
+            xml.push_str(name);
+            xml.push_str("=\"");
+            escape_xml(uri, true, xml);
+            xml.push('"');
+        }
+        raw = rest;
+    }
+    has_namespace
 }
 
 fn is_xml_whitespace(text: &str) -> bool {

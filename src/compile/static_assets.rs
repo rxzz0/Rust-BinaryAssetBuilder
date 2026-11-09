@@ -130,6 +130,9 @@ struct Marshaled {
 
 fn validate_attributes(node: Node<'_, '_>, allowed: &[&str], path: &Path) -> io::Result<()> {
     for attribute in node.attributes() {
+        if attribute.namespace() == Some(super::XML_NS) && attribute.name() == "base" {
+            continue;
+        }
         if attribute.namespace().is_some() || !allowed.contains(&attribute.name()) {
             return Err(invalid(
                 path,

@@ -63,6 +63,53 @@ fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
 }
 
 #[test]
+fn static_xinclude_expands_nested_fragments_before_defines_and_hashing() {
+    let root = scratch_root();
+    let input = root.join("probe.xml");
+    let fragment = root.join("fragments/fragment.xml");
+    let video = root.join("fragments/nested/video.xml");
+    fs::create_dir_all(video.parent().unwrap()).unwrap();
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset" xmlns:xi="http://www.w3.org/2001/XInclude">
+            <Defines><Define name="BASE_NAME" value="example"/></Defines>
+            <xi:include href="fragments/fragment.xml"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        &fragment,
+        r#"<xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="nested/video.xml" parse="xml"/>"#,
+    )
+    .unwrap();
+    fs::write(
+        &video,
+        r#"<Video xmlns="uri:ea.com:eala:asset" id="included" Filename="=$BASE_NAME + '_included'"/>"#,
+    )
+    .unwrap();
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    assert_eq!(manifest.assets[0].name, b"Video:included");
+    assert_eq!(manifest.assets[0].instance_hash, 0x2d59_0b55);
+    assert!(
+        stream
+            .files
+            .bin
+            .windows(17)
+            .any(|bytes| bytes == b"example_included\0")
+    );
+
+    fs::write(
+        &video,
+        r#"<xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="../fragment.xml"/>"#,
+    )
+    .unwrap();
+    let error = compile_static(&input, &root, &root).err().unwrap();
+    assert!(error.to_string().contains("XInclude cycle"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn static_expressions_use_transitive_defines_and_explicit_overrides() {
     let root = scratch_root();
     let defs = root.join("defs.xml");
