@@ -208,9 +208,29 @@ case 8:
     BuildHelper.RunStep(StepType.RunExecutable, argsRustFix);
     break;
 '@
+$fixSource = $source
+
+# ModStudio's process-exit callback only fails a step after reading "Critical:".
+function Set-CriticalOnFailure([string] $script, [string] $arguments, [string] $message) {
+    $call = 'BuildHelper.RunStep(StepType.RunExecutable, ' + $arguments + ');'
+    $index = $script.IndexOf($call, [StringComparison]::Ordinal)
+    if ($index -lt 0 -or $index -ne $script.LastIndexOf($call, [StringComparison]::Ordinal)) {
+        throw "Could not locate the Rust build command for $message."
+    }
+    $failure = $arguments + '.Arguments += " || (echo Critical: ' + $message + ' failed. & exit /b 1)";'
+    $script.Insert($index, $failure + $lineEnding + $staticIndent + '    ')
+}
+
+$source = Set-CriticalOnFailure $source 'argsRustApt' 'Build AptUI'
+$source = Set-CriticalOnFailure $source 'argsRustGlobal' 'Build Global Data'
+$source = Set-CriticalOnFailure $source 'argsRustStatic' 'Build Static Data'
+$source = $source.Replace('echo ERROR Fix Assets failed.', 'echo Critical: Fix Assets failed.')
+$source = $source.Replace('echo ERROR The Rust official map compiler is still missing.', 'echo Critical: The Rust official map compiler is still missing.')
+$source = $source.Replace('echo ERROR Creating BIG files failed.', 'echo Critical: Creating BIG files failed.')
+$source = $source.Replace('String.Format("Build failed on step {0}", BuildHelper.CurrentStep-1)', 'String.Format("Build failed on step {0}", stepId)')
 
 if ($InstallDefault) {
-    $knownSources = @($source, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
+    $knownSources = @($source, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
     if ($hasRustCheck -and $knownSources -cnotcontains $currentSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."
     }
@@ -237,7 +257,7 @@ if ($InstallDefault) {
     }
 
     if ($currentSource -cne $source) {
-        $replacementBackup = if ($hasRustCheck) { "$sourcePath.before-rust-fix-assets" } else { $backupPath }
+        $replacementBackup = if ($hasRustCheck) { "$sourcePath.before-rust-critical" } else { $backupPath }
         $pendingPath = Join-Path $SdkRoot ("defaultscript.cs." + [Guid]::NewGuid().ToString('N') + '.tmp')
         try {
             [IO.File]::WriteAllText($pendingPath, $source)
