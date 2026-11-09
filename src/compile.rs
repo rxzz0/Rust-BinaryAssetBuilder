@@ -10,7 +10,7 @@ use std::borrow::Cow;
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io;
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -18,7 +18,7 @@ mod sdk_static;
 mod static_assets;
 mod texture;
 
-pub use crate::compile_batch::compile_apt_ui_directory;
+pub use crate::compile_batch::{compile_apt_ui_directory, write_compiled_stream};
 pub use sdk_static::{compile_sdk_global, compile_sdk_static};
 
 const SAGE_NS: &str = "uri:ea.com:eala:asset";
@@ -29,6 +29,7 @@ const RELOCATIONS: [u8; 8] = [4, 0, 0, 0, 255, 255, 255, 255];
 pub struct CompiledStream {
     pub manifest: Vec<u8>,
     pub files: LinkedFiles,
+    pub custom_data: Vec<(String, PathBuf, u32)>,
 }
 
 /// Compiles a linked RA3 PC stream from AptUI declarations and their includes.
@@ -69,6 +70,7 @@ fn compile(
         ids: HashSet::new(),
         assets: Vec::new(),
         tentative: HashMap::new(),
+        music_headers: HashMap::new(),
         reference_directory,
         referenced_manifests: Vec::new(),
         external_ids: HashSet::new(),
@@ -102,6 +104,7 @@ struct Compiler<'a> {
     ids: HashSet<AssetId>,
     assets: Vec<CompiledAsset>,
     tentative: HashMap<AssetId, Vec<TentativeAsset>>,
+    music_headers: HashMap<PathBuf, static_assets::music::Header>,
     reference_directory: Option<&'a Path>,
     referenced_manifests: Vec<String>,
     external_ids: HashSet<AssetId>,
@@ -124,6 +127,7 @@ struct CompiledAsset {
     relocations: Vec<u8>,
     imports: Vec<u8>,
     references: Vec<AssetReference>,
+    custom_data: Option<(PathBuf, u32)>,
     sort_order: u8,
 }
 
@@ -231,7 +235,7 @@ impl Compiler<'_> {
                 });
             } else {
                 let asset = if self.reference_directory.is_some() {
-                    static_assets::compile_asset(node, path, &source)?
+                    self.compile_static_node(node, path, &source)?
                 } else {
                     self.compile_apt_asset(node, path, &source)?
                 };
@@ -285,13 +289,27 @@ impl Compiler<'_> {
                 let node = document
                     .get_node(candidate.node)
                     .ok_or_else(|| invalid(&candidate.path, "missing instance declaration"))?;
-                let asset = static_assets::compile_asset(node, &candidate.path, &candidate.source)?;
+                let asset = self.compile_static_node(node, &candidate.path, &candidate.source)?;
                 self.ids.insert(asset.id);
                 self.assets.push(asset);
             }
             index += 1;
         }
         Ok(())
+    }
+
+    fn compile_static_node(
+        &mut self,
+        node: Node<'_, '_>,
+        path: &Path,
+        source: &str,
+    ) -> io::Result<CompiledAsset> {
+        match node.tag_name().name() {
+            "PathMusicEvent" | "PathMusicMap" | "PathMusicTrack" => {
+                self.compile_music(node, path, source)
+            }
+            _ => static_assets::compile_asset(node, path, source),
+        }
     }
 
     fn resolve(&self, document: &Path, value: &str) -> io::Result<PathBuf> {
@@ -467,6 +485,7 @@ impl Compiler<'_> {
             relocations: RELOCATIONS.to_vec(),
             imports: Vec::new(),
             references: Vec::new(),
+            custom_data: None,
             sort_order: 0,
         })
     }
@@ -574,7 +593,29 @@ impl Compiler<'_> {
         }
         .encode()
         .map_err(io::Error::other)?;
-        Ok(CompiledStream { manifest, files })
+        let custom_data = self
+            .assets
+            .into_iter()
+            .filter_map(|asset| {
+                let (path, hash) = asset.custom_data?;
+                Some((
+                    format!(
+                        "{:08x}.{:08x}.{:08x}.{:08x}.cdata",
+                        asset.id.type_id,
+                        asset.type_hash,
+                        asset.id.instance_id,
+                        asset.instance_hash
+                    ),
+                    path,
+                    hash,
+                ))
+            })
+            .collect();
+        Ok(CompiledStream {
+            manifest,
+            files,
+            custom_data,
+        })
     }
 }
 
@@ -623,6 +664,27 @@ fn hash_asset(
         .chunks(FILE_HASH_BLOCK)
         .fold(length, fast_hash_with_seed);
     Ok(xml_hash ^ memory_stream_hash(file_hash.to_le_bytes().to_vec()))
+}
+
+pub(crate) fn hash_source_file(path: &Path, mut copy: impl Write) -> io::Result<u32> {
+    let mut file = fs::File::open(path)?;
+    let length = u32::try_from(file.metadata()?.len())
+        .map_err(|_| invalid(path, "source file is too large"))?;
+    let mut remaining = length as usize;
+    let mut buffer = vec![0; FILE_HASH_BLOCK.min(remaining)];
+    let mut hash = length;
+    while remaining != 0 {
+        let size = buffer.len().min(remaining);
+        let chunk = &mut buffer[..size];
+        file.read_exact(chunk)?;
+        hash = fast_hash_with_seed(hash, chunk);
+        copy.write_all(chunk)?;
+        remaining -= size;
+    }
+    if file.read(&mut [0])? != 0 {
+        return Err(invalid(path, "source file changed during compilation"));
+    }
+    Ok(hash)
 }
 
 fn hash_xml(node: Node<'_, '_>, processing_hash: u32, path: &Path) -> io::Result<u32> {

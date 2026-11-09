@@ -3,7 +3,7 @@
 use binary_asset_builder::big::pack_big;
 use binary_asset_builder::compile::{
     CompiledStream, compile_apt_ui, compile_apt_ui_directory, compile_sdk_global,
-    compile_sdk_static, compile_static,
+    compile_sdk_static, compile_static, write_compiled_stream,
 };
 use binary_asset_builder::fix_assets::fix_assets;
 use binary_asset_builder::linked_stream::{check_linked_files, link_assets};
@@ -192,38 +192,9 @@ fn relink(input: &Path, assets: &Path, output: &Path) -> Result<(), Box<dyn Erro
         CompiledStream {
             manifest: bytes,
             files,
+            custom_data: Vec::new(),
         },
     )?;
-    Ok(())
-}
-
-fn write_compiled_stream(input: &Path, output: &Path, stream: CompiledStream) -> io::Result<()> {
-    let stem = input.file_stem().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, "input must have a file name")
-    })?;
-    let files = [
-        (".bin", stream.files.bin),
-        (".relo", stream.files.relo),
-        (".imp", stream.files.imp),
-        (".manifest", stream.manifest),
-    ];
-    fs::create_dir(output)?;
-    let mut paths = Vec::new();
-    for (extension, bytes) in files {
-        let mut name = stem.to_ascii_lowercase();
-        name.push(extension);
-        paths.push(output.join(name));
-        let path = paths.last().unwrap();
-        if let Err(error) = fs::write(path, bytes) {
-            let error = io::Error::new(error.kind(), format!("{} ({error})", path.display()));
-            for path in paths {
-                let _ = fs::remove_file(path);
-            }
-            let _ = fs::remove_dir(output);
-            return Err(error);
-        }
-    }
-    println!("Compiled {}", paths.last().unwrap().display());
     Ok(())
 }
 

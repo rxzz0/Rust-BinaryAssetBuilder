@@ -1,4 +1,4 @@
-use crate::compile::{CompiledStream, compile_apt_ui};
+use crate::compile::{CompiledStream, compile_apt_ui, hash_source_file};
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fs;
@@ -6,6 +6,13 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 const GENERATED: [&str; 5] = ["manifest", "bin", "relo", "imp", "version"];
+
+pub(crate) enum Contents {
+    Bytes(Vec<u8>),
+    CustomData(Vec<(String, PathBuf, u32)>),
+}
+
+type Output = (OsString, Contents);
 
 pub fn compile_apt_ui_directory(input: &Path, root: &Path, output: &Path) -> io::Result<()> {
     let sources = xml_sources(input, |_| true)?;
@@ -41,7 +48,7 @@ pub(crate) fn compile_streams(
     sources: &[PathBuf],
     version: &[u8],
     compile: impl Fn(&Path) -> io::Result<CompiledStream>,
-) -> io::Result<Vec<(OsString, Vec<u8>)>> {
+) -> io::Result<Vec<Output>> {
     let mut names = HashSet::new();
     let mut outputs = Vec::new();
     for source in sources {
@@ -54,25 +61,62 @@ pub(crate) fn compile_streams(
         }
         println!("Compiling XML with Rust {}", source.display());
         let stream = compile(source)?;
-        for (extension, bytes) in [
-            ("bin", stream.files.bin),
-            ("relo", stream.files.relo),
-            ("imp", stream.files.imp),
-            ("manifest", stream.manifest),
-            ("version", version.to_vec()),
-        ] {
-            let mut name = stem.clone();
-            name.push(".");
-            name.push(extension);
-            outputs.push((name, bytes));
-        }
+        stream_outputs(&stem, stream, &mut outputs);
+        outputs.push((
+            with_suffix(&stem, ".version"),
+            Contents::Bytes(version.to_vec()),
+        ));
     }
     Ok(outputs)
 }
 
+fn stream_outputs(stem: &OsString, stream: CompiledStream, outputs: &mut Vec<Output>) {
+    for (suffix, bytes) in [
+        (".bin", stream.files.bin),
+        (".relo", stream.files.relo),
+        (".imp", stream.files.imp),
+        (".manifest", stream.manifest),
+    ] {
+        outputs.push((with_suffix(stem, suffix), Contents::Bytes(bytes)));
+    }
+    outputs.push((
+        Path::new(stem).join("cdata").into_os_string(),
+        Contents::CustomData(stream.custom_data),
+    ));
+}
+
+fn with_suffix(stem: &OsString, suffix: &str) -> OsString {
+    let mut name = stem.clone();
+    name.push(suffix);
+    name
+}
+
+pub fn write_compiled_stream(
+    input: &Path,
+    output: &Path,
+    stream: CompiledStream,
+) -> io::Result<()> {
+    let stem = input
+        .file_stem()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "input must have a file name"))?
+        .to_ascii_lowercase();
+    fs::create_dir(output)?;
+    let mut outputs = Vec::new();
+    stream_outputs(&stem, stream, &mut outputs);
+    if let Err(error) = publish(output, outputs, |_| false) {
+        let _ = fs::remove_dir(output);
+        return Err(error);
+    }
+    println!(
+        "Compiled {}",
+        output.join(with_suffix(&stem, ".manifest")).display()
+    );
+    Ok(())
+}
+
 pub(crate) fn publish(
     output: &Path,
-    outputs: Vec<(OsString, Vec<u8>)>,
+    outputs: Vec<Output>,
     replace: impl Fn(&Path) -> bool,
 ) -> io::Result<()> {
     publish_prepared(output, || Ok(outputs), replace)
@@ -80,7 +124,7 @@ pub(crate) fn publish(
 
 pub(crate) fn publish_prepared(
     output: &Path,
-    prepare: impl FnOnce() -> io::Result<Vec<(OsString, Vec<u8>)>>,
+    prepare: impl FnOnce() -> io::Result<Vec<Output>>,
     replace: impl Fn(&Path) -> bool,
 ) -> io::Result<()> {
     fs::create_dir_all(output)?;
@@ -90,18 +134,43 @@ pub(crate) fn publish_prepared(
     let old = stage.join("previous");
     let mut backed_up = Vec::new();
     let mut published = Vec::new();
-    let outputs = match prepare() {
+    let mut outputs = match prepare() {
         Ok(outputs) => outputs,
         Err(error) => {
             fs::remove_dir(&stage)?;
             return Err(error);
         }
     };
+    outputs.retain(|(name, contents)| {
+        !matches!(contents, Contents::CustomData(files) if files.is_empty())
+            || output.join(name).exists()
+    });
     let result = (|| {
         fs::create_dir(&fresh)?;
         fs::create_dir(&old)?;
-        for (name, bytes) in &outputs {
-            fs::write(fresh.join(name), bytes)?;
+        for (name, contents) in &outputs {
+            let destination = fresh.join(name);
+            match contents {
+                Contents::Bytes(bytes) => fs::write(destination, bytes)?,
+                Contents::CustomData(files) => {
+                    fs::create_dir_all(&destination)?;
+                    for (file, source, hash) in files {
+                        if Path::new(file).file_name() != Some(file.as_ref()) {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidInput,
+                                "invalid custom-data file name",
+                            ));
+                        }
+                        let staged = fs::File::create(destination.join(file))?;
+                        if hash_source_file(source, staged)? != *hash {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                format!("{} changed during compilation", source.display()),
+                            ));
+                        }
+                    }
+                }
+            }
         }
         let output_names: HashSet<_> = outputs
             .iter()
@@ -117,12 +186,21 @@ pub(crate) fn publish_prepared(
                 previous.push(entry.file_name());
             }
         }
+        for (name, contents) in &outputs {
+            if matches!(contents, Contents::CustomData(_)) && output.join(name).exists() {
+                previous.push(name.clone());
+            }
+        }
         for name in previous {
-            fs::rename(output.join(&name), old.join(&name))?;
+            let backup = old.join(&name);
+            fs::create_dir_all(backup.parent().unwrap())?;
+            fs::rename(output.join(&name), backup)?;
             backed_up.push(name);
         }
         for (name, _) in &outputs {
-            fs::rename(fresh.join(name), output.join(name))?;
+            let destination = output.join(name);
+            fs::create_dir_all(destination.parent().unwrap())?;
+            fs::rename(fresh.join(name), destination)?;
             published.push(name);
         }
         Ok::<(), io::Error>(())
@@ -169,12 +247,7 @@ fn rollback(
 
 fn remove_stage(stage: &Path, fresh: &Path, old: &Path) {
     for dir in [fresh, old] {
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let _ = fs::remove_file(entry.path());
-            }
-            let _ = fs::remove_dir(dir);
-        }
+        let _ = fs::remove_dir_all(dir);
     }
     let _ = fs::remove_dir(stage);
 }

@@ -97,6 +97,60 @@ fn sdk_global_compiles_multiplayer_colors_with_the_sdk_layout() {
 }
 
 #[test]
+fn sdk_global_publishes_inherited_music_events_and_track_data() {
+    let root = scratch_root();
+    let data = root.join("Mods/Example/Data/AdditionalMaps");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    fs::write(
+        data.join("events.h"),
+        "#define PATH_EVENT_Intro 0x1234\n#define PATH_TRACK_Song 0x5678\n",
+    )
+    .unwrap();
+    fs::write(data.join("song.mus"), b"test track bytes").unwrap();
+    fs::write(
+        data.join("base.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <PathMusicEvent id="Base" PathfinderEventHeader="events.h"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        data.join("mapmetadata_music.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes><Include type="instance" source="base.xml"/></Includes>
+            <PathMusicEvent id="Intro" inheritFrom="PathMusicEvent:Base"/>
+            <PathMusicTrack id="Song" File="song.mus" Type="MAIN" PathfinderTrackHeader="events.h"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    compile_sdk_global(&data, &root, &built).unwrap();
+    let output = built.join("mods/example/data/additionalmaps");
+    let manifest = fs::read(output.join("mapmetadata_music.manifest")).unwrap();
+    let manifest = Manifest::parse(&manifest).unwrap();
+    let [event, track] = manifest.assets.as_slice() else {
+        panic!("expected the inherited event and track");
+    };
+    assert_eq!(event.name, b"PathMusicEvent:Intro");
+    assert_eq!(track.name, b"PathMusicTrack:Song");
+    let binary = fs::read(output.join("mapmetadata_music.bin")).unwrap();
+    assert_eq!(&binary[8..12], &0x1234_u32.to_le_bytes());
+    let cdata = output.join("mapmetadata_music/cdata");
+    let files: Vec<_> = fs::read_dir(&cdata)
+        .unwrap()
+        .map(|file| file.unwrap().path())
+        .collect();
+    assert_eq!(files.len(), 1);
+    assert_eq!(fs::read(&files[0]).unwrap(), b"test track bytes");
+
+    fs::write(data.join("song.mus"), b"new track").unwrap();
+    compile_sdk_global(&data, &root, &built).unwrap();
+    assert!(!files[0].exists());
+    assert_eq!(fs::read_dir(&cdata).unwrap().count(), 1);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn resolves_sdk_art_buckets_and_mod_audio_paths() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data");

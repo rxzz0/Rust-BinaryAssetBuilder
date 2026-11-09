@@ -12,6 +12,7 @@ mod ai_personality;
 mod credits;
 mod global_ui;
 mod hotkeys;
+pub(super) mod music;
 
 type Marshal = fn(Node<'_, '_>, &Path) -> io::Result<Marshaled>;
 
@@ -37,6 +38,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "UIMouseTacticalMainCommandBarHotKeys" => (0x73e3_11a9, 17, hotkeys::tactical),
         "DefaultHotKeys" => (0x4949_5abd, 18, hotkeys::defaults),
         "AIPersonalityDefinition" => (0xcb3c_9d2b, 19, ai_personality::compile),
+        "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         _ => return None,
     };
     Some(encoder)
@@ -72,6 +74,7 @@ pub(super) fn compile_asset(
         relocations: encode_words(data.relocations),
         imports: encode_words(data.imports),
         references: data.references,
+        custom_data: None,
         sort_order,
     })
 }

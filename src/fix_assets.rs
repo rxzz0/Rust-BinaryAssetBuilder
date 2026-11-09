@@ -1,6 +1,6 @@
 //! Native post-processing for a linked RA3 mod stream.
 
-use crate::compile_batch::publish_prepared;
+use crate::compile_batch::{Contents, publish_prepared};
 use crate::linked_stream::check_linked_files;
 use crate::manifest::{AssetId, ByteOrder, Manifest};
 use std::cmp::Reverse;
@@ -89,7 +89,10 @@ pub fn fix_assets(input: &Path, references: &Path) -> io::Result<FixResult> {
             if let Some(base) = changed {
                 outputs.push((name.into(), base));
             }
-            Ok(outputs)
+            Ok(outputs
+                .into_iter()
+                .map(|(name, bytes)| (name, Contents::Bytes(bytes)))
+                .collect())
         },
         |_| false,
     )?;
