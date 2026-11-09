@@ -8,6 +8,7 @@ use roxmltree::Node;
 use std::io;
 use std::path::Path;
 
+mod ai_personality;
 mod credits;
 mod hotkeys;
 
@@ -31,6 +32,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "DefaultHotKeys" => (0x4949_5abd, 13, hotkeys::defaults),
         "Credits" => (0x10d6_57ee, 14, credits::credits),
         "MpGameRules" => (0x34d9_1648, 15, mp_game_rules),
+        "AIPersonalityDefinition" => (0xcb3c_9d2b, 16, ai_personality::compile),
         _ => return None,
     };
     Some(encoder)

@@ -315,6 +315,33 @@ fn compiles_multiplayer_game_rules_with_the_sdk_layout() {
 }
 
 #[test]
+fn compiles_standalone_ai_personality_and_hashes_its_default_portrait_reference() {
+    let root = scratch_root();
+    let xml = root.join("personality.xml");
+    fs::write(
+        &xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <AIPersonalityDefinition id="base" PersonalityType="Sample">
+                <CountAsStructureForBuildPurposesFilter />
+            </AIPersonalityDefinition>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stream = compile_static(&xml, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let asset = &manifest.assets[0];
+    assert_eq!(asset.type_hash, 0xcb3c_9d2b);
+    assert_eq!(asset.instance_hash, 0x3eab_387e);
+    assert_eq!(asset.chunk_sizes.instance, 520);
+    assert_eq!(asset.references.iter().len(), 0);
+    let payload = &stream.files.bin[4..];
+    assert_eq!(&payload[224..228], &0x97a0_e672_u32.to_le_bytes());
+    assert_eq!(&payload[512..], b"Sample\0\0");
+    assert_eq!(&stream.files.relo[4..], &[8, 0, 0, 0, 255, 255, 255, 255]);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn compiles_credits_with_ansi_strings_and_empty_lines() {
     let root = scratch_root();
     let xml = root.join("credits.xml");
