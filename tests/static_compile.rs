@@ -63,6 +63,96 @@ fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
 }
 
 #[test]
+fn static_expressions_use_transitive_defines_and_explicit_overrides() {
+    let root = scratch_root();
+    let defs = root.join("defs.xml");
+    let scope = root.join("scope.xml");
+    let input = root.join("Mod.xml");
+    fs::write(
+        &defs,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Defines>
+                <Define name="DISTANCE" value="200"/>
+                <Define name="MARGIN" value="30"/>
+                <Define name="LABEL" value="repair drone"/>
+            </Defines>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        &scope,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes><Include type="instance" source="defs.xml"/></Includes>
+            <Defines>
+                <Define name="MARGIN" override="true" value="40"/>
+                <Define name="SIZE" value="= ($DISTANCE * 2) + $MARGIN"/>
+            </Defines>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let source = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <Includes><Include type="all" source="scope.xml"/></Includes>
+        <Video id="shadow" Filename="=$SIZE"/>
+        <Video id="label" Filename='=$LABEL + &quot; &apos;preview&apos; &amp; details&quot;'/>
+        <Video id="numeric" Filename="= round(3.5) + (5 % 2) + (1 &lt;= 2 and 1 != 0) + 1 / 3"/>
+    </AssetDeclaration>"#;
+    fs::write(&input, source).unwrap();
+    let evaluated = compile_static(&input, &root, &root).unwrap();
+    let literal = source
+        .replace("=$SIZE", "440")
+        .replace(
+            "=$LABEL + &quot; &apos;preview&apos; &amp; details&quot;",
+            "repair drone &apos;preview&apos; &amp; details",
+        )
+        .replace(
+            "= round(3.5) + (5 % 2) + (1 &lt;= 2 and 1 != 0) + 1 / 3",
+            "6.33333333333333",
+        );
+    fs::write(&input, literal).unwrap();
+    let expected = compile_static(&input, &root, &root).unwrap();
+    assert_eq!(evaluated.manifest, expected.manifest);
+    assert_eq!(evaluated.files.bin, expected.files.bin);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn static_expressions_do_not_use_defines_from_sibling_documents() {
+    let root = scratch_root();
+    fs::write(
+        root.join("left.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Defines><Define name="LEFT" value="30"/></Defines>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("right.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Video id="isolated" Filename="=$LEFT"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let input = root.join("Mod.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes>
+                <Include type="all" source="left.xml"/>
+                <Include type="all" source="right.xml"/>
+            </Includes>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let error = compile_static(&input, &root, &root)
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(error.contains("right.xml"));
+    assert!(error.contains("unknown define $LEFT"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn static_includes_accept_empty_legacy_w3x_placeholders() {
     let root = scratch_root();
     let input = root.join("Mod.xml");
@@ -220,7 +310,8 @@ fn compiles_campaign_movies_and_missions_with_unused_defines() {
     )
     .unwrap();
     let error = compile_static(&xml, &root, &root).err().unwrap();
-    assert!(error.to_string().contains("unsupported XML expression"));
+    assert!(error.to_string().contains("XML expression at"));
+    assert!(error.to_string().contains("expected a 32-bit integer"));
     fs::remove_dir_all(root).unwrap();
 }
 

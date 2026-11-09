@@ -5,6 +5,7 @@ use crate::linked_stream::LinkedFiles;
 use crate::manifest::{
     AssetEntry, AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest, ReferencedManifest,
 };
+use expressions::{Definitions, expand_assets, merge_definitions, read_definitions};
 use roxmltree::{Document, Node, NodeId};
 use std::borrow::Cow;
 use std::cmp::Reverse;
@@ -14,6 +15,7 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+mod expressions;
 mod sdk_static;
 mod static_assets;
 mod texture;
@@ -71,6 +73,7 @@ fn compile(
         ids: HashSet::new(),
         assets: Vec::new(),
         tentative: HashMap::new(),
+        definitions: HashMap::new(),
         music_headers: HashMap::new(),
         reference_directory,
         implicit_sdk_references,
@@ -106,6 +109,7 @@ struct Compiler<'a> {
     ids: HashSet<AssetId>,
     assets: Vec<CompiledAsset>,
     tentative: HashMap<AssetId, Vec<TentativeAsset>>,
+    definitions: HashMap<PathBuf, Rc<Definitions>>,
     music_headers: HashMap<PathBuf, static_assets::music::Header>,
     reference_directory: Option<&'a Path>,
     implicit_sdk_references: bool,
@@ -202,66 +206,56 @@ impl Compiler<'_> {
         if !root.has_tag_name((SAGE_NS, "AssetDeclaration")) || root.attributes().len() != 0 {
             return Err(invalid(path, "expected a SAGE AssetDeclaration root"));
         }
+        let mut definitions = Rc::default();
+        let expanded = if self.reference_directory.is_some() {
+            for node in root
+                .children()
+                .filter(|node| node.has_tag_name((SAGE_NS, "Includes")))
+            {
+                self.read_includes(node, path, tentative, &mut definitions)?;
+            }
+            for node in root
+                .children()
+                .filter(|node| node.has_tag_name((SAGE_NS, "Defines")))
+            {
+                read_definitions(node, &mut definitions, path)?;
+            }
+            let expanded = expand_assets(root, &definitions, path)?;
+            if !definitions.is_empty() {
+                self.definitions
+                    .insert(path.to_path_buf(), definitions.clone());
+            }
+            expanded
+        } else {
+            None
+        };
+        let expanded_document = expanded
+            .as_ref()
+            .map(|xml| Document::parse(xml))
+            .transpose()
+            .map_err(|error| invalid(path, error))?;
+        let root = expanded_document
+            .as_ref()
+            .map_or(root, Document::root_element);
+        let xml = expanded.as_ref().unwrap_or(&xml);
         for node in root.children().filter(Node::is_element) {
             if node.has_tag_name((SAGE_NS, "Includes")) {
-                if node.attributes().len() != 0 {
-                    return Err(invalid(path, "unsupported Includes attributes"));
-                }
-                for include in node.children().filter(Node::is_element) {
-                    let source = include.attribute("source");
-                    if !include.has_tag_name((SAGE_NS, "Include"))
-                        || include.attributes().len() != 2
-                        || has_content(include)
-                    {
-                        return Err(invalid(path, "invalid Include element"));
-                    }
-                    let source = source.ok_or_else(|| invalid(path, "missing include source"))?;
-                    match include.attribute("type") {
-                        Some("all") => {
-                            let target = self.resolve(path, source)?;
-                            self.read_document(&target, tentative)?;
-                        }
-                        Some("instance") if self.reference_directory.is_some() => {
-                            let target = self.resolve(path, source)?;
-                            self.read_document(&target, true)?;
-                        }
-                        Some("reference") if self.reference_directory.is_some() && !tentative => {
-                            self.read_reference(path, source)?;
-                        }
-                        Some(kind) => {
-                            return Err(invalid(
-                                path,
-                                format!("unsupported include type {kind:?}"),
-                            ));
-                        }
-                        None => return Err(invalid(path, "missing include type")),
-                    }
+                if self.reference_directory.is_none() {
+                    self.read_includes(node, path, tentative, &mut definitions)?;
                 }
             } else if self.reference_directory.is_some()
-                && node.has_tag_name((SAGE_NS, "Tags"))
-                && node.attributes().len() == 0
-                && !has_content(node)
+                && (node.has_tag_name((SAGE_NS, "Defines"))
+                    || node.has_tag_name((SAGE_NS, "Tags"))
+                        && node.attributes().len() == 0
+                        && !has_content(node))
             {
                 continue;
-            } else if self.reference_directory.is_some() && node.has_tag_name((SAGE_NS, "Defines"))
-            {
-                if node.attributes().len() != 0
-                    || node.children().filter(Node::is_element).any(|define| {
-                        !define.has_tag_name((SAGE_NS, "Define"))
-                            || define.attributes().len() != 2
-                            || define.attribute("name").is_none()
-                            || define.attribute("value").is_none()
-                            || has_content(define)
-                    })
-                {
-                    return Err(invalid(path, "unsupported Defines declaration"));
-                }
             } else if tentative {
                 let (_, id) = static_assets::declaration_id(node, path)?;
                 self.tentative.entry(id).or_default().push(TentativeAsset {
                     path: path.to_path_buf(),
                     source: Rc::clone(&source),
-                    xml: Rc::clone(&xml),
+                    xml: Rc::clone(xml),
                     node: node.id(),
                 });
             } else {
@@ -291,6 +285,43 @@ impl Compiler<'_> {
             }
         }
         self.active.remove(path);
+        Ok(())
+    }
+
+    fn read_includes(
+        &mut self,
+        node: Node<'_, '_>,
+        path: &Path,
+        tentative: bool,
+        definitions: &mut Rc<Definitions>,
+    ) -> io::Result<()> {
+        if node.attributes().len() != 0 {
+            return Err(invalid(path, "unsupported Includes attributes"));
+        }
+        for include in node.children().filter(Node::is_element) {
+            if !include.has_tag_name((SAGE_NS, "Include"))
+                || include.attributes().len() != 2
+                || has_content(include)
+            {
+                return Err(invalid(path, "invalid Include element"));
+            }
+            let source = required(include, "source", path)?;
+            let kind = required(include, "type", path)?;
+            let included_tentative = match kind {
+                "all" => tentative,
+                "instance" if self.reference_directory.is_some() => true,
+                "reference" if self.reference_directory.is_some() && !tentative => {
+                    self.read_reference(path, source)?;
+                    continue;
+                }
+                _ => return Err(invalid(path, format!("unsupported include type {kind:?}"))),
+            };
+            let target = self.resolve(path, source)?;
+            self.read_document(&target, included_tentative)?;
+            if let Some(included) = self.definitions.get(&target) {
+                merge_definitions(definitions, included, path)?;
+            }
+        }
         Ok(())
     }
 
@@ -350,13 +381,6 @@ impl Compiler<'_> {
         path: &Path,
         source: &str,
     ) -> io::Result<CompiledAsset> {
-        if node.descendants().filter(Node::is_element).any(|element| {
-            element
-                .attributes()
-                .any(|attribute| attribute.value().starts_with('='))
-        }) {
-            return Err(invalid(path, "asset uses an unsupported XML expression"));
-        }
         match node.tag_name().name() {
             "PathMusicEvent" | "PathMusicMap" | "PathMusicTrack" => {
                 self.compile_music(node, path, source)

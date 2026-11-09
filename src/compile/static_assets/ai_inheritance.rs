@@ -140,7 +140,7 @@ impl Element {
             ));
         }
         for attr in node.attributes() {
-            if attr.namespace().is_some() || attr.value().starts_with('=') {
+            if attr.namespace().is_some() {
                 return Err(invalid(
                     path,
                     format!("unsupported AI inheritance attribute {}", attr.name()),
