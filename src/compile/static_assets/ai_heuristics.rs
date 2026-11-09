@@ -90,6 +90,8 @@ fn write_heuristic(
                 Some("EnemyFilter"),
             ),
             (Some(SAGE_NS), "IncomeAdvantageHeuristic") => (12, &["Value", "Above"], None),
+            (Some(SAGE_NS), "OpenNodeHeuristic") => (12, &["Exists", "MinDistanceFromEnemy"], None),
+            (Some(SAGE_NS), "TimeSinceLastExpansionHeuristic") => (12, &["Time", "Past"], None),
             (Some(SAGE_NS), "PowerAdvantageHeuristic") => (
                 84,
                 &[
@@ -198,6 +200,14 @@ fn write_heuristic(
         "IncomeAdvantageHeuristic" => {
             binary.word(offset + 4, float("Value", "1.0")?);
             binary.word(offset + 8, flag("Above", true)?);
+        }
+        "OpenNodeHeuristic" => {
+            binary.word(offset + 4, float("MinDistanceFromEnemy", "400.0")?);
+            binary.word(offset + 8, flag("Exists", true)?);
+        }
+        "TimeSinceLastExpansionHeuristic" => {
+            binary.word(offset + 4, time("Time", "60s")?);
+            binary.word(offset + 8, flag("Past", true)?);
         }
         "PowerAdvantageHeuristic" => {
             binary.word(offset + 4, float("Value", "1.0")?);

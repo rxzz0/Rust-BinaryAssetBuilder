@@ -11,6 +11,7 @@ use std::path::Path;
 mod ai_build;
 mod ai_heuristics;
 mod ai_personality;
+mod ai_strategic;
 mod binary;
 mod campaign;
 mod credits;
@@ -42,6 +43,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "DefaultHotKeys" => (0x4949_5abd, 18, hotkeys::defaults),
         "AIPersonalityDefinition" => (0xcb3c_9d2b, 19, ai_personality::compile),
         "AIBuildStateDefinition" => (0xcaac_2e6e, 28, ai_build::compile),
+        "AIStrategicStateDefinition" => (0xd63d_e874, 29, ai_strategic::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),
         "MissionTemplate" => (0xd299_ec3a, 25, campaign::mission),
