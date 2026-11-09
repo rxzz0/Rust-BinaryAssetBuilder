@@ -1,0 +1,430 @@
+mod schema;
+
+use super::{asset_reference, compile_asset, declaration_id};
+use crate::compile::{
+    CompiledAsset, Compiler, SAGE_NS, XML_NS, escape_xml, invalid, is_xml_whitespace,
+};
+use crate::manifest::AssetId;
+use roxmltree::{Document, Node};
+pub(in crate::compile) use schema::Schema;
+use schema::Shape;
+use std::io;
+use std::path::{Path, PathBuf};
+
+const XAI_NS: &str = "uri:ea.com:eala:asset:instance";
+
+impl Compiler<'_> {
+    pub(in crate::compile) fn compile_inherited_game_object(
+        &mut self,
+        node: Node<'_, '_>,
+        path: &Path,
+        source: &str,
+    ) -> io::Result<CompiledAsset> {
+        if self.game_object_schema.is_none() {
+            self.game_object_schema = Some(Schema::load(&self.root.join("Schemas/xsd"))?);
+        }
+        let schema = self
+            .game_object_schema
+            .as_ref()
+            .expect("loaded GameObject schema");
+        let result = self.game_object_xml(node, path, schema, &mut Vec::new())?;
+        let mut xml = String::new();
+        result.write_xml(&mut xml, true);
+        let document = Document::parse(&xml).map_err(|error| invalid(path, error))?;
+        compile_asset(document.root_element(), path, source)
+    }
+
+    fn game_object_xml(
+        &self,
+        node: Node<'_, '_>,
+        path: &Path,
+        schema: &Schema,
+        chain: &mut Vec<(PathBuf, AssetId)>,
+    ) -> io::Result<Element> {
+        let overlay = Element::read(node, path)?;
+        let Some(inherit_from) = node.attribute("inheritFrom") else {
+            return Ok(overlay);
+        };
+        let (_, id) = declaration_id(node, path)?;
+        if chain.len() >= 128
+            || chain
+                .iter()
+                .any(|(file, asset)| file == path && *asset == id)
+        {
+            return Err(invalid(
+                path,
+                format!("cyclic or excessively deep GameObject inheritance from {inherit_from}"),
+            ));
+        }
+        if overlay.action == Some(Join::Remove) {
+            return Err(invalid(path, "cannot remove a top-level GameObject"));
+        }
+        chain.push((path.to_path_buf(), id));
+        let kind = node.tag_name().name();
+        let mut result = Element::new(kind);
+        self.with_xml_base(node, path, inherit_from, |parent, parent_path, included| {
+            if overlay.action != Some(Join::Replace) {
+                let mut base = self.game_object_xml(parent, parent_path, schema, chain)?;
+                if included {
+                    base.materialize(schema, kind, &mut 0, parent_path)?;
+                }
+                result.merge(base, schema, kind, Join::Append, path)?;
+            }
+            Ok(())
+        })?;
+        chain.pop();
+        let action = overlay.action.unwrap_or(Join::Append);
+        result.merge(overlay, schema, kind, action, path)?;
+        Ok(result)
+    }
+
+    pub(super) fn with_xml_base<T>(
+        &self,
+        node: Node<'_, '_>,
+        path: &Path,
+        inherit_from: &str,
+        use_base: impl FnOnce(Node<'_, '_>, &Path, bool) -> io::Result<T>,
+    ) -> io::Result<T> {
+        let kind = node.tag_name().name();
+        let parent_id = asset_reference(inherit_from, kind, path)?;
+        let declaration = node.document().root_element();
+        if let Some(parent) = declaration.children().find(|candidate| {
+            *candidate != node
+                && candidate.has_tag_name((SAGE_NS, kind))
+                && declaration_id(*candidate, path).is_ok_and(|(_, id)| id == parent_id)
+        }) {
+            return use_base(parent, path, false);
+        }
+        let mut instance_paths = Vec::new();
+        for include in declaration
+            .children()
+            .filter(|item| item.has_tag_name((SAGE_NS, "Includes")))
+            .flat_map(|includes| includes.children())
+            .filter(|item| {
+                item.has_tag_name((SAGE_NS, "Include"))
+                    && item.attribute("type") == Some("instance")
+            })
+        {
+            if let Some(source) = include.attribute("source") {
+                instance_paths.push(self.resolve(path, source)?);
+            }
+        }
+        let mut candidates = self
+            .tentative
+            .get(&parent_id)
+            .into_iter()
+            .flatten()
+            .filter(|candidate| instance_paths.contains(&candidate.path));
+        let candidate = candidates
+            .next()
+            .filter(|_| candidates.next().is_none())
+            .ok_or_else(|| {
+                invalid(
+                    path,
+                    format!("expected one instance include for {kind} {inherit_from}"),
+                )
+            })?;
+        let document =
+            Document::parse(&candidate.xml).map_err(|error| invalid(&candidate.path, error))?;
+        let parent = document
+            .get_node(candidate.node)
+            .ok_or_else(|| invalid(&candidate.path, "missing inherited asset declaration"))?;
+        use_base(parent, &candidate.path, true)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Join {
+    Append,
+    Replace,
+    Remove,
+}
+
+struct Element {
+    name: String,
+    attributes: Vec<(String, String)>,
+    children: Vec<Element>,
+    text: String,
+    action: Option<Join>,
+    top: bool,
+}
+
+impl Element {
+    fn new(name: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            attributes: Vec::new(),
+            children: Vec::new(),
+            text: String::new(),
+            action: None,
+            top: false,
+        }
+    }
+
+    fn read(node: Node<'_, '_>, path: &Path) -> io::Result<Self> {
+        let name = node.tag_name().name();
+        if node.tag_name().namespace() != Some(SAGE_NS) {
+            return Err(invalid(
+                path,
+                format!("unexpected namespace on GameObject element {name}"),
+            ));
+        }
+        let mut element = Self::new(name);
+        for attr in node.attributes() {
+            let value = attr.value();
+            match (attr.namespace(), attr.name()) {
+                (None, "inheritFrom" | "TypeId") => {}
+                (None, name) => element.attributes.push((name.to_owned(), value.to_owned())),
+                (Some(XML_NS), "base") => element
+                    .attributes
+                    .push(("xml:base".to_owned(), value.to_owned())),
+                (Some(XAI_NS), "joinAction") => {
+                    element.action = Some(match value.to_ascii_lowercase().as_str() {
+                        "append" => Join::Append,
+                        "replace" | "overwrite" | "override" => Join::Replace,
+                        "remove" => Join::Remove,
+                        _ => {
+                            return Err(invalid(
+                                path,
+                                format!("invalid {name} joinAction {value:?}"),
+                            ));
+                        }
+                    });
+                }
+                (Some(XAI_NS), "insertPosition") => {
+                    element.top = match value.to_ascii_lowercase().as_str() {
+                        "top" => true,
+                        "bottom" => false,
+                        _ => {
+                            return Err(invalid(
+                                path,
+                                format!("invalid {name} insertPosition {value:?}"),
+                            ));
+                        }
+                    };
+                }
+                _ => {
+                    return Err(invalid(
+                        path,
+                        format!("unsupported {name} attribute {}", attr.name()),
+                    ));
+                }
+            }
+        }
+        for child in node.children() {
+            if child.is_element() {
+                element.children.push(Self::read(child, path)?);
+            } else if let Some(text) = child
+                .text()
+                .filter(|text| child.is_text() && !is_xml_whitespace(text))
+            {
+                element.text.push_str(text);
+            }
+        }
+        Ok(element)
+    }
+
+    fn attribute(&self, name: &str) -> Option<&str> {
+        self.attributes
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.as_str())
+    }
+
+    fn merge(
+        &mut self,
+        source: Self,
+        schema: &Schema,
+        kind: &str,
+        action: Join,
+        path: &Path,
+    ) -> io::Result<()> {
+        let shape = schema.shape(kind, path)?;
+        self.text.push_str(&source.text);
+        for child in source.children {
+            self.merge_child(child, schema, &shape, action, path)?;
+        }
+        for (name, value) in source.attributes {
+            let index = self.attributes.iter().position(|(key, _)| *key == name);
+            let value = if (value.contains('+') || value.contains('-'))
+                && shape
+                    .fields
+                    .iter()
+                    .find(|field| field.name == name)
+                    .is_some_and(|field| schema.is_enum_list(&field.kind))
+            {
+                let previous = index.map_or("", |index| self.attributes[index].1.as_str());
+                update_flags(previous, &value, &name, path)?
+            } else {
+                value
+            };
+            if let Some(index) = index {
+                self.attributes[index].1 = value;
+            } else {
+                self.attributes.push((name, value));
+            }
+        }
+        Ok(())
+    }
+
+    fn merge_child(
+        &mut self,
+        child: Self,
+        schema: &Schema,
+        shape: &Shape<'_>,
+        action: Join,
+        path: &Path,
+    ) -> io::Result<()> {
+        let position = shape
+            .children
+            .iter()
+            .position(|field| field.name == child.name)
+            .ok_or_else(|| invalid(path, format!("unexpected {} in {}", child.name, self.name)))?;
+        let field = shape.children[position];
+        let action = child.action.unwrap_or(action);
+        let matched = if shape.repeated_choice || !shape.choice && field.repeated {
+            child.attribute("id").and_then(|id| {
+                self.children
+                    .iter()
+                    .position(|item| item.attribute("id") == Some(id))
+            })
+        } else if shape.choice && self.children.len() == 1 {
+            Some(0)
+        } else {
+            self.children
+                .iter()
+                .position(|item| item.name == child.name)
+        };
+        if let Some(index) = matched {
+            if action == Join::Append && self.children[index].name == child.name {
+                return self.children[index].merge(child, schema, &field.kind, action, path);
+            }
+            self.children.remove(index);
+        }
+        if action == Join::Remove {
+            return Ok(());
+        }
+        let mut element = Self::new(&child.name);
+        let index = if shape.choice {
+            if child.top { 0 } else { self.children.len() }
+        } else if child.top && self.children.iter().any(|item| item.name == child.name) {
+            0
+        } else {
+            self.children
+                .iter()
+                .position(|item| {
+                    shape
+                        .children
+                        .iter()
+                        .position(|field| field.name == item.name)
+                        .is_some_and(|rank| rank > position)
+                })
+                .unwrap_or(self.children.len())
+        };
+        element.merge(child, schema, &field.kind, action, path)?;
+        self.children.insert(index, element);
+        Ok(())
+    }
+
+    fn materialize(
+        &mut self,
+        schema: &Schema,
+        kind: &str,
+        ordinal: &mut u32,
+        path: &Path,
+    ) -> io::Result<()> {
+        let shape = schema.shape(kind, path)?;
+        for field in &shape.fields {
+            if let Some(default) = &field.default
+                && self.attribute(&field.name).is_none()
+            {
+                self.attributes.push((field.name.clone(), default.clone()));
+            }
+        }
+        if schema.is_reference(kind) {
+            index_reference(&mut self.text, ordinal);
+        }
+        for (name, value) in &mut self.attributes {
+            if shape
+                .fields
+                .iter()
+                .find(|field| field.name == *name)
+                .is_some_and(|field| schema.is_reference(&field.kind))
+            {
+                index_reference(value, ordinal);
+            }
+        }
+        for child in &mut self.children {
+            let field = shape
+                .children
+                .iter()
+                .find(|field| field.name == child.name)
+                .ok_or_else(|| {
+                    invalid(path, format!("unexpected {} in {}", child.name, self.name))
+                })?;
+            child.materialize(schema, &field.kind, ordinal, path)?;
+        }
+        Ok(())
+    }
+
+    fn write_xml(&self, xml: &mut String, root: bool) {
+        xml.push('<');
+        xml.push_str(&self.name);
+        for (name, value) in &self.attributes {
+            xml.push(' ');
+            xml.push_str(name);
+            xml.push_str("=\"");
+            escape_xml(value, true, xml);
+            xml.push('"');
+        }
+        if root {
+            xml.push_str(" xmlns=\"uri:ea.com:eala:asset\"");
+        }
+        if self.children.is_empty() && self.text.is_empty() {
+            xml.push_str(" />");
+            return;
+        }
+        xml.push('>');
+        escape_xml(&self.text, false, xml);
+        for child in &self.children {
+            child.write_xml(xml, false);
+        }
+        xml.push_str("</");
+        xml.push_str(&self.name);
+        xml.push('>');
+    }
+}
+
+fn update_flags(previous: &str, delta: &str, field: &str, path: &Path) -> io::Result<String> {
+    let mut value = previous.to_owned();
+    for change in delta.split_ascii_whitespace() {
+        if let Some(flag) = change.strip_prefix('+').filter(|flag| !flag.is_empty()) {
+            if !value.contains(flag) {
+                value.push(' ');
+                value.push_str(flag);
+            }
+        } else if let Some(flag) = change.strip_prefix('-').filter(|flag| !flag.is_empty()) {
+            if !value.contains(flag) {
+                return Err(invalid(
+                    path,
+                    format!("cannot remove missing {field} flag {flag}"),
+                ));
+            }
+            value = value.replace(flag, "");
+        } else {
+            return Err(invalid(
+                path,
+                format!("invalid {field} flag override {change:?}"),
+            ));
+        }
+    }
+    Ok(value)
+}
+
+fn index_reference(value: &mut String, ordinal: &mut u32) {
+    let name = value.trim().split('\\').next().unwrap_or_default();
+    if !name.is_empty() {
+        *value = format!("{name}\\{ordinal}");
+        *ordinal += 1;
+    }
+}

@@ -18,6 +18,7 @@ mod ai_targeting;
 mod binary;
 mod campaign;
 mod credits;
+pub(super) mod game_object;
 mod global_ui;
 mod hotkeys;
 pub(super) mod music;

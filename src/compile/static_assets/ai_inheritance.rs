@@ -1,6 +1,6 @@
 use super::ai_personality::{CHILDREN, CRITERIA, FILTER, child_index, reference_name};
 use super::ai_settings::MICRO_SCHEMA;
-use super::{asset_reference, compile_asset, declaration_id, significant_children};
+use super::{compile_asset, declaration_id, significant_children};
 use crate::compile::{CompiledAsset, Compiler, SAGE_NS, escape_xml, invalid, is_xml_whitespace};
 use crate::manifest::AssetId;
 use roxmltree::{Document, Node};
@@ -50,54 +50,14 @@ impl Compiler<'_> {
         }
         chain.push((path.to_path_buf(), id));
         let kind = node.tag_name().name();
-        let parent_id = asset_reference(inherit_from, kind, path)?;
-        let declaration = node.document().root_element();
-        let local = declaration.children().find(|candidate| {
-            *candidate != node
-                && candidate.has_tag_name((SAGE_NS, kind))
-                && declaration_id(*candidate, path).is_ok_and(|(_, id)| id == parent_id)
-        });
-        let base = if let Some(parent) = local {
-            self.inherited_ai_xml(parent, path, chain)?
-        } else {
-            let mut instance_paths = Vec::new();
-            for include in declaration
-                .children()
-                .filter(|item| item.has_tag_name((SAGE_NS, "Includes")))
-                .flat_map(|includes| includes.children())
-                .filter(|item| {
-                    item.has_tag_name((SAGE_NS, "Include"))
-                        && item.attribute("type") == Some("instance")
-                })
-            {
-                if let Some(source) = include.attribute("source") {
-                    instance_paths.push(self.resolve(path, source)?);
+        let base =
+            self.with_xml_base(node, path, inherit_from, |parent, parent_path, included| {
+                let mut base = self.inherited_ai_xml(parent, parent_path, chain)?;
+                if included {
+                    base.validate_for_inheritance(parent_path)?;
                 }
-            }
-            let mut candidates = self
-                .tentative
-                .get(&parent_id)
-                .into_iter()
-                .flatten()
-                .filter(|candidate| instance_paths.contains(&candidate.path));
-            let candidate = candidates
-                .next()
-                .filter(|_| candidates.next().is_none())
-                .ok_or_else(|| {
-                    invalid(
-                        path,
-                        format!("expected one instance include for {kind} {inherit_from}"),
-                    )
-                })?;
-            let document =
-                Document::parse(&candidate.xml).map_err(|error| invalid(&candidate.path, error))?;
-            let parent = document
-                .get_node(candidate.node)
-                .ok_or_else(|| invalid(&candidate.path, "missing inherited AI base"))?;
-            let mut base = self.inherited_ai_xml(parent, &candidate.path, chain)?;
-            base.validate_for_inheritance(&candidate.path)?;
-            base
-        };
+                Ok(base)
+            })?;
         chain.pop();
 
         // The SDK merges declarations in schema order and strips comments and

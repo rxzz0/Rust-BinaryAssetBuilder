@@ -77,6 +77,7 @@ fn compile(
         tentative: HashMap::new(),
         definitions: HashMap::new(),
         xml_fragments: HashMap::new(),
+        game_object_schema: None,
         music_headers: HashMap::new(),
         reference_directory,
         implicit_sdk_references,
@@ -114,6 +115,7 @@ struct Compiler<'a> {
     tentative: HashMap<AssetId, Vec<TentativeAsset>>,
     definitions: HashMap<PathBuf, Rc<Definitions>>,
     xml_fragments: HashMap<PathBuf, Rc<str>>,
+    game_object_schema: Option<static_assets::game_object::Schema>,
     music_headers: HashMap<PathBuf, static_assets::music::Header>,
     reference_directory: Option<&'a Path>,
     implicit_sdk_references: bool,
@@ -397,6 +399,9 @@ impl Compiler<'_> {
                 if node.attribute("inheritFrom").is_some() =>
             {
                 self.compile_inherited_ai(node, path, source)
+            }
+            "GameObject" if node.attribute("inheritFrom").is_some() => {
+                self.compile_inherited_game_object(node, path, source)
             }
             _ => static_assets::compile_asset(node, path, source),
         }
