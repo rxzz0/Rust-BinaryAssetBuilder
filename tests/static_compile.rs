@@ -342,6 +342,54 @@ fn compiles_standalone_ai_personality_and_hashes_its_default_portrait_reference(
 }
 
 #[test]
+fn compiles_health_bar_imports_and_weak_object_filters() {
+    let root = scratch_root();
+    let xml = root.join("health.xml");
+    fs::write(
+        &xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <HealthBarSettings id="bars" DefaultHealthBar="small">
+                <ObjectMapping HealthBar="small">
+                    <ObjectFilter Rule="ANY" Include="INFANTRY">
+                        <IncludeThing>SampleObject</IncludeThing>
+                    </ObjectFilter>
+                </ObjectMapping>
+            </HealthBarSettings>
+            <HealthBarTemplate id="small" Length="20"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stream = compile_static(&xml, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let [template, settings] = manifest.assets.as_slice() else {
+        panic!("expected health bar template and settings");
+    };
+    assert_eq!(
+        settings.references.iter().collect::<Vec<_>>(),
+        [template.id, template.id]
+    );
+    let payload = &stream.files.bin[4 + 8..];
+    assert_eq!(
+        &payload[..20],
+        [0_u32, 1, 1, 16, 2].map(u32::to_le_bytes).as_flattened()
+    );
+    assert_eq!(&payload[36..40], &(1_u32 << 10).to_le_bytes());
+    assert_eq!(
+        &payload[116..124],
+        [1_u32, 132].map(u32::to_le_bytes).as_flattened()
+    );
+    assert_eq!(
+        &stream.files.relo[4..],
+        [12_u32, 120, u32::MAX].map(u32::to_le_bytes).as_flattened()
+    );
+    assert_eq!(
+        &stream.files.imp[4..],
+        [4_u32, 16, u32::MAX].map(u32::to_le_bytes).as_flattened()
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn compiles_credits_with_ansi_strings_and_empty_lines() {
     let root = scratch_root();
     let xml = root.join("credits.xml");

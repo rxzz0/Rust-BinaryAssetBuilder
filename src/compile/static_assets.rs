@@ -10,6 +10,7 @@ use std::path::Path;
 
 mod ai_personality;
 mod credits;
+mod global_ui;
 mod hotkeys;
 
 type Marshal = fn(Node<'_, '_>, &Path) -> io::Result<Marshaled>;
@@ -18,21 +19,24 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
     let encoder: (u32, u8, Marshal) = match type_name {
         "AIBudgetStateDefinition" => (0x99ff_1736, 0, ai_budget),
         "PlayerTechRank" => (0x1227_1bce, 1, player_tech_rank),
-        "Video" => (0x8433_efa6, 2, video),
-        "UnitIntro" => (0x5708_06d2, 3, unit_intro),
-        "VideoEventList" => (0x96da_1c03, 4, video_events),
-        "CampaignEnumerator" => (0x0714_c282, 5, campaign_enumerator),
-        "LogicCommandSet" => (0x8ae8_b68c, 6, logic_commands),
-        "W3DCollisionBox" => (0x6e26_f699, 7, w3d_collision_box),
-        "W3DHierarchy" => (0xed94_de61, 8, w3d_hierarchy),
-        "MultiplayerColor" => (0x131c_20a0, 9, multiplayer_color),
-        "HotKeySlot" => (0x93e2_3672, 10, hotkeys::slot),
-        "MappableKey" => (0x84b6_aec1, 11, hotkeys::mappable_key),
-        "UIMouseTacticalMainCommandBarHotKeys" => (0x73e3_11a9, 12, hotkeys::tactical),
-        "DefaultHotKeys" => (0x4949_5abd, 13, hotkeys::defaults),
-        "Credits" => (0x10d6_57ee, 14, credits::credits),
-        "MpGameRules" => (0x34d9_1648, 15, mp_game_rules),
-        "AIPersonalityDefinition" => (0xcb3c_9d2b, 16, ai_personality::compile),
+        "CameraSettings" => (0xfdcc_69de, 2, global_ui::camera),
+        "Credits" => (0x10d6_57ee, 3, credits::credits),
+        "HealthBarTemplate" => (0xaa4f_0d82, 4, global_ui::health_bar_template),
+        "MpGameRules" => (0x34d9_1648, 5, mp_game_rules),
+        "Video" => (0x8433_efa6, 6, video),
+        "HealthBarSettings" => (0xf62c_9169, 7, global_ui::health_bar_settings),
+        "UnitIntro" => (0x5708_06d2, 8, unit_intro),
+        "VideoEventList" => (0x96da_1c03, 9, video_events),
+        "CampaignEnumerator" => (0x0714_c282, 10, campaign_enumerator),
+        "LogicCommandSet" => (0x8ae8_b68c, 11, logic_commands),
+        "W3DCollisionBox" => (0x6e26_f699, 12, w3d_collision_box),
+        "W3DHierarchy" => (0xed94_de61, 13, w3d_hierarchy),
+        "MultiplayerColor" => (0x131c_20a0, 14, multiplayer_color),
+        "HotKeySlot" => (0x93e2_3672, 15, hotkeys::slot),
+        "MappableKey" => (0x84b6_aec1, 16, hotkeys::mappable_key),
+        "UIMouseTacticalMainCommandBarHotKeys" => (0x73e3_11a9, 17, hotkeys::tactical),
+        "DefaultHotKeys" => (0x4949_5abd, 18, hotkeys::defaults),
+        "AIPersonalityDefinition" => (0xcb3c_9d2b, 19, ai_personality::compile),
         _ => return None,
     };
     Some(encoder)
