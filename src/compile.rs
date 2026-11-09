@@ -34,7 +34,7 @@ pub struct CompiledStream {
 
 /// Compiles a linked RA3 PC stream from AptUI declarations and their includes.
 pub fn compile_apt_ui(input: &Path, data_root: &Path) -> io::Result<CompiledStream> {
-    compile(input, data_root, None)
+    compile(input, data_root, None, false)
 }
 
 /// Compiles supported static XML assets against the SDK's precompiled streams.
@@ -43,13 +43,14 @@ pub fn compile_static(
     data_root: &Path,
     reference_directory: &Path,
 ) -> io::Result<CompiledStream> {
-    compile(input, data_root, Some(reference_directory))
+    compile(input, data_root, Some(reference_directory), false)
 }
 
 fn compile(
     input: &Path,
     data_root: &Path,
     reference_directory: Option<&Path>,
+    implicit_sdk_references: bool,
 ) -> io::Result<CompiledStream> {
     let root = fs::canonicalize(data_root)?;
     let input = fs::canonicalize(input)?;
@@ -72,6 +73,7 @@ fn compile(
         tentative: HashMap::new(),
         music_headers: HashMap::new(),
         reference_directory,
+        implicit_sdk_references,
         referenced_manifests: Vec::new(),
         external_ids: HashSet::new(),
     };
@@ -106,6 +108,7 @@ struct Compiler<'a> {
     tentative: HashMap<AssetId, Vec<TentativeAsset>>,
     music_headers: HashMap<PathBuf, static_assets::music::Header>,
     reference_directory: Option<&'a Path>,
+    implicit_sdk_references: bool,
     referenced_manifests: Vec<String>,
     external_ids: HashSet<AssetId>,
 }
@@ -225,6 +228,19 @@ impl Compiler<'_> {
                 && !has_content(node)
             {
                 continue;
+            } else if self.reference_directory.is_some() && node.has_tag_name((SAGE_NS, "Defines"))
+            {
+                if node.attributes().len() != 0
+                    || node.children().filter(Node::is_element).any(|define| {
+                        !define.has_tag_name((SAGE_NS, "Define"))
+                            || define.attributes().len() != 2
+                            || define.attribute("name").is_none()
+                            || define.attribute("value").is_none()
+                            || has_content(define)
+                    })
+                {
+                    return Err(invalid(path, "unsupported Defines declaration"));
+                }
             } else if tentative {
                 let (_, id) = static_assets::declaration_id(node, path)?;
                 self.tentative.entry(id).or_default().push(TentativeAsset {
@@ -304,6 +320,13 @@ impl Compiler<'_> {
         path: &Path,
         source: &str,
     ) -> io::Result<CompiledAsset> {
+        if node.descendants().filter(Node::is_element).any(|element| {
+            element
+                .attributes()
+                .any(|attribute| attribute.value().starts_with('='))
+        }) {
+            return Err(invalid(path, "asset uses an unsupported XML expression"));
+        }
         match node.tag_name().name() {
             "PathMusicEvent" | "PathMusicMap" | "PathMusicTrack" => {
                 self.compile_music(node, path, source)
@@ -493,6 +516,34 @@ impl Compiler<'_> {
     fn finish(mut self) -> io::Result<CompiledStream> {
         if self.assets.is_empty() {
             return Err(invalid(&self.root, "input contains no supported assets"));
+        }
+        if self.implicit_sdk_references
+            && self
+                .assets
+                .iter()
+                .flat_map(|asset| &asset.references)
+                .any(|reference| {
+                    !self.ids.contains(&reference.id)
+                        && !self.external_ids.contains(&reference.output_id(&self.ids))
+                })
+        {
+            let root = self.reference_directory.unwrap();
+            for file in ["audio.manifest", "global.manifest", "static.manifest"] {
+                let path = root.join(file);
+                if path.is_file() {
+                    let bytes = read_with_context(&path, fs::read)?;
+                    let manifest =
+                        Manifest::parse(&bytes).map_err(|error| invalid(&path, error))?;
+                    if manifest.version != 6
+                        || manifest.byte_order != ByteOrder::Little
+                        || manifest.all_types_hash != RA3_ALL_TYPES_HASH
+                    {
+                        return Err(invalid(&path, "expected an RA3 PC reference stream"));
+                    }
+                    self.external_ids
+                        .extend(manifest.assets.iter().map(|asset| asset.id));
+                }
+            }
         }
         self.assets
             .sort_by_cached_key(|asset| (asset.sort_order, asset_name_order(&asset.name)));

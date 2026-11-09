@@ -151,6 +151,45 @@ fn sdk_global_publishes_inherited_music_events_and_track_data() {
 }
 
 #[test]
+fn compiles_campaign_movies_and_missions_with_unused_defines() {
+    let root = scratch_root();
+    let xml = root.join("campaign.xml");
+    let document = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <Defines><Define name="Unused" value="Example"/></Defines>
+        <CampaignEnumerator id="campaigns"><Campaign>campaign</Campaign></CampaignEnumerator>
+        <CampaignTemplate id="campaign">
+            <Mission>mission</Mission>
+            <FinalMovie FileName="Final"/>
+            <AlternateFinalMovie FileName="Alternate"/>
+        </CampaignTemplate>
+        <MissionTemplate id="mission">
+            <Prerequisite>0</Prerequisite>
+            <AICommander Faction="Japan"/>
+            <IntroMovie FileName="Intro"/>
+        </MissionTemplate>
+    </AssetDeclaration>"#;
+    fs::write(&xml, document).unwrap();
+    let stream = compile_static(&xml, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let [mission, campaign, enumerator] = manifest.assets.as_slice() else {
+        panic!("expected the mission, campaign and campaign enumerator");
+    };
+    assert_eq!(mission.name, b"MissionTemplate:mission");
+    assert_eq!(campaign.references.iter().next(), Some(mission.id));
+    assert_eq!(enumerator.references.iter().next(), Some(campaign.id));
+    assert_eq!(&stream.files.bin[4 + 176..4 + 184], b"Intro\0\0\0");
+
+    fs::write(
+        &xml,
+        document.replace("FileName=\"Intro\"", "FileName=\"=Unused\""),
+    )
+    .unwrap();
+    let error = compile_static(&xml, &root, &root).err().unwrap();
+    assert!(error.to_string().contains("unsupported XML expression"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn resolves_sdk_art_buckets_and_mod_audio_paths() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data");

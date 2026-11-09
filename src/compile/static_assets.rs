@@ -9,6 +9,8 @@ use std::io;
 use std::path::Path;
 
 mod ai_personality;
+mod binary;
+mod campaign;
 mod credits;
 mod global_ui;
 mod hotkeys;
@@ -28,7 +30,6 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "HealthBarSettings" => (0xf62c_9169, 7, global_ui::health_bar_settings),
         "UnitIntro" => (0x5708_06d2, 8, unit_intro),
         "VideoEventList" => (0x96da_1c03, 9, video_events),
-        "CampaignEnumerator" => (0x0714_c282, 10, campaign_enumerator),
         "LogicCommandSet" => (0x8ae8_b68c, 11, logic_commands),
         "W3DCollisionBox" => (0x6e26_f699, 12, w3d_collision_box),
         "W3DHierarchy" => (0xed94_de61, 13, w3d_hierarchy),
@@ -39,6 +40,10 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "DefaultHotKeys" => (0x4949_5abd, 18, hotkeys::defaults),
         "AIPersonalityDefinition" => (0xcb3c_9d2b, 19, ai_personality::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
+        "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),
+        "MissionTemplate" => (0xd299_ec3a, 25, campaign::mission),
+        "CampaignTemplate" => (0xd0c4_5a63, 26, campaign::campaign),
+        "CampaignEnumerator" => (0x0714_c282, 27, campaign_enumerator),
         _ => return None,
     };
     Some(encoder)
