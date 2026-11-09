@@ -195,9 +195,22 @@ case 9:
     BuildHelper.RunStep(StepType.RunExecutable, argsRustMaps);
     break;
 '@
+$nativeSource = $source
+$source = [regex]::Replace($source, '(?m)^[\t ]*(?:string (?:HashFix|AssetResolver);|(?:HashFix|AssetResolver) = .*;)\r?\n', '')
+$source = Set-ModBuildStep $source 8 9 @'
+case 8:
+    BuildHelper.DisplayLine("Step 8: Fixing linked assets with Rust");
+    RunExecutableArguments argsRustFix = new RunExecutableArguments(Cmd);
+    argsRustFix.Arguments = String.Format(
+        "/C (@echo off) & (\"{0}\" fix-assets \"{1}\" --references \"{2}\" 2>&1)"
+        + " || (echo ERROR Fix Assets failed. & exit /b 1)",
+        RUST_EXE, Path.Combine(BuiltModDataPath, "mod.manifest"), BuiltModsPath);
+    BuildHelper.RunStep(StepType.RunExecutable, argsRustFix);
+    break;
+'@
 
 if ($InstallDefault) {
-    $knownSources = @($source, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
+    $knownSources = @($source, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
     if ($hasRustCheck -and $knownSources -cnotcontains $currentSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."
     }
@@ -224,7 +237,7 @@ if ($InstallDefault) {
     }
 
     if ($currentSource -cne $source) {
-        $replacementBackup = if ($hasRustCheck) { "$sourcePath.before-rust-native" } else { $backupPath }
+        $replacementBackup = if ($hasRustCheck) { "$sourcePath.before-rust-fix-assets" } else { $backupPath }
         $pendingPath = Join-Path $SdkRoot ("defaultscript.cs." + [Guid]::NewGuid().ToString('N') + '.tmp')
         try {
             [IO.File]::WriteAllText($pendingPath, $source)
