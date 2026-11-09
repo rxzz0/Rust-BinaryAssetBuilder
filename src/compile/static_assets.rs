@@ -128,7 +128,14 @@ fn video(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     if has_content(node) {
         return Err(invalid(path, "unexpected content in Video"));
     }
-    let filename = required(node, "Filename", path)?;
+    let filename = node
+        .attribute("Filename")
+        .filter(|value| {
+            value
+                .bytes()
+                .all(|byte| byte == b' ' || byte.is_ascii_graphic())
+        })
+        .ok_or_else(|| invalid(path, "expected an ASCII Video Filename attribute"))?;
     let comment = node.attribute("Comment").unwrap_or("No Comment");
     if !comment
         .bytes()

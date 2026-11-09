@@ -263,6 +263,26 @@ fn compiles_video_with_the_ra3_sdk_hash_and_binary_layout() {
 }
 
 #[test]
+fn compiles_a_video_with_an_explicitly_empty_filename() {
+    let root = scratch_root();
+    let xml = root.join("video.xml");
+    fs::write(
+        &xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Video id="EALogoMovie" Filename="" />
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stream = compile_static(&xml, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let asset = &manifest.assets[0];
+    assert_eq!(asset.instance_hash, 0x84d1_dd89);
+    assert_eq!(asset.chunk_sizes.instance, 44);
+    assert_eq!(&stream.files.bin[4 + 28..], b"\0\0\0\0No Comment\0\0");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn compiles_multiplayer_game_rules_with_the_sdk_layout() {
     let root = scratch_root();
     let xml = root.join("rules.xml");
