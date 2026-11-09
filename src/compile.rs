@@ -186,6 +186,19 @@ impl Compiler<'_> {
         let xml: Rc<str> = read_with_context(path, fs::read_to_string)?.into();
         let document = Document::parse(&xml).map_err(|error| invalid(path, error))?;
         let root = document.root_element();
+        if self.reference_directory.is_some()
+            && path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("w3x"))
+            && root.tag_name().namespace().is_none()
+            && root.has_tag_name("AssetDeclaration")
+            && root.attributes().len() == 0
+            && !has_content(root)
+        {
+            // The SDK uses empty namespace-free W3X files as model placeholders.
+            self.active.remove(path);
+            return Ok(());
+        }
         if !root.has_tag_name((SAGE_NS, "AssetDeclaration")) || root.attributes().len() != 0 {
             return Err(invalid(path, "expected a SAGE AssetDeclaration root"));
         }

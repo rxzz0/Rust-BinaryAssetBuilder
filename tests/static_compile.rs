@@ -63,6 +63,41 @@ fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
 }
 
 #[test]
+fn static_includes_accept_empty_legacy_w3x_placeholders() {
+    let root = scratch_root();
+    let input = root.join("Mod.xml");
+    let placeholder = root.join("Placeholder.w3x");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes><Include type="all" source="Placeholder.w3x"/></Includes>
+            <Video id="example" Filename="example"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(&placeholder, "<AssetDeclaration></AssetDeclaration>").unwrap();
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    assert_eq!(manifest.assets.len(), 1);
+    assert_eq!(manifest.assets[0].name, b"Video:example");
+
+    fs::write(
+        &placeholder,
+        "<AssetDeclaration><Unknown/></AssetDeclaration>",
+    )
+    .unwrap();
+    let error = compile_static(&input, &root, &root).err().unwrap();
+    assert!(
+        error
+            .to_string()
+            .contains("expected a SAGE AssetDeclaration root")
+    );
+    fs::remove_file(placeholder).unwrap();
+    fs::remove_file(input).unwrap();
+    fs::remove_dir(root).unwrap();
+}
+
+#[test]
 fn sdk_global_compiles_multiplayer_colors_with_the_sdk_layout() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data/AdditionalMaps");
