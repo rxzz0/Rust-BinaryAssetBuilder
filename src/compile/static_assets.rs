@@ -28,6 +28,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "MappableKey" => (0x84b6_aec1, 11, hotkeys::mappable_key),
         "UIMouseTacticalMainCommandBarHotKeys" => (0x73e3_11a9, 12, hotkeys::tactical),
         "DefaultHotKeys" => (0x4949_5abd, 13, hotkeys::defaults),
+        "MpGameRules" => (0x34d9_1648, 14, mp_game_rules),
         _ => return None,
     };
     Some(encoder)
@@ -264,6 +265,40 @@ fn finite_number(value: &str, field: &str, path: &Path) -> io::Result<f32> {
         .ok()
         .filter(|number| number.is_finite())
         .ok_or_else(|| invalid(path, format!("invalid {field}")))
+}
+
+fn mp_game_rules(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    const TRANSFER: &str = "NumMinutesBeforePlayersCanTransferMoney";
+    const CASH_FIELDS: [(&str, &str); 4] = [
+        ("LoCash", "0"),
+        ("HiCash", "0"),
+        ("ChoiceStepAmount", "0"),
+        ("DefaultChoiceIndex", "1"),
+    ];
+    validate_attributes(node, &["id", TRANSFER], path)?;
+    let mut children = significant_children(node);
+    let cash = required_element(&mut children, "SkirmishStartCash", path)?;
+    validate_attributes(cash, &CASH_FIELDS.map(|(field, _)| field), path)?;
+    if has_content(cash) || children.next().is_some() {
+        return Err(invalid(path, "unexpected content in MpGameRules"));
+    }
+    let read = |node: Node<'_, '_>, field, default| {
+        node.attribute(field)
+            .unwrap_or(default)
+            .trim()
+            .parse::<i32>()
+            .map(|value| value as u32)
+            .map_err(|_| invalid(path, format!("invalid MpGameRules {field}")))
+    };
+    let mut words = [0; 6];
+    words[1] = read(node, TRANSFER, "5")?;
+    for (word, (field, default)) in words[2..].iter_mut().zip(CASH_FIELDS) {
+        *word = read(cash, field, default)?;
+    }
+    Ok(Marshaled {
+        payload: encode_words(words),
+        ..Marshaled::default()
+    })
 }
 
 fn w3d_collision_box(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {

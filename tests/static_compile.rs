@@ -263,6 +263,38 @@ fn compiles_video_with_the_ra3_sdk_hash_and_binary_layout() {
 }
 
 #[test]
+fn compiles_multiplayer_game_rules_with_the_sdk_layout() {
+    let root = scratch_root();
+    let xml = root.join("rules.xml");
+    fs::write(
+        &xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <MpGameRules id="TheMpGameRules">
+                <SkirmishStartCash LoCash="10000" HiCash="1000000"
+                    ChoiceStepAmount="10000" DefaultChoiceIndex="1"/>
+            </MpGameRules>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stream = compile_static(&xml, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let [asset] = manifest.assets.as_slice() else {
+        panic!("expected one MpGameRules asset");
+    };
+    assert_eq!(asset.type_hash, 0x34d9_1648);
+    assert_eq!(asset.instance_hash, 0xd239_7a1c);
+    assert_eq!(
+        &stream.files.bin[4..],
+        [0_u32, 5, 10000, 1000000, 10000, 1]
+            .map(u32::to_le_bytes)
+            .as_flattened()
+    );
+    assert_eq!(stream.files.imp.len(), 4);
+    assert_eq!(stream.files.relo.len(), 4);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn emits_the_sdk_external_audio_type_and_local_movie_import() {
     let root = scratch_root();
     let xml = root.join("sample.xml");
