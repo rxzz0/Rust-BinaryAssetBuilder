@@ -18,7 +18,6 @@ fn scratch_root() -> PathBuf {
 }
 
 #[test]
-#[ignore = "GameObject binary encoder is not implemented yet"]
 fn game_object_minimal_matches_ea_oracle() {
     for (name, xml, expected_manifest, bin, relo, imp) in [
         (
@@ -37,6 +36,22 @@ fn game_object_minimal_matches_ea_oracle() {
             include_bytes!("fixtures/game-object-minimal.relo").as_slice(),
             include_bytes!("fixtures/game-object-minimal.imp").as_slice(),
         ),
+        (
+            "variant.xml",
+            include_bytes!("fixtures/game-object-variant.xml").as_slice(),
+            include_bytes!("fixtures/game-object-variant.manifest").as_slice(),
+            include_bytes!("fixtures/game-object-variant.bin").as_slice(),
+            include_bytes!("fixtures/game-object-variant.relo").as_slice(),
+            include_bytes!("fixtures/game-object-variant.imp").as_slice(),
+        ),
+        (
+            "default.xml",
+            include_bytes!("fixtures/game-object-default-health.xml").as_slice(),
+            include_bytes!("fixtures/game-object-default-health.manifest").as_slice(),
+            include_bytes!("fixtures/game-object-default-health.bin").as_slice(),
+            include_bytes!("fixtures/game-object-default-health.relo").as_slice(),
+            include_bytes!("fixtures/game-object-default-health.imp").as_slice(),
+        ),
     ] {
         let root = scratch_root();
         let input = root.join(name);
@@ -45,14 +60,41 @@ fn game_object_minimal_matches_ea_oracle() {
         let manifest = Manifest::parse(&stream.manifest).unwrap();
         let oracle = Manifest::parse(expected_manifest).unwrap();
         assert_eq!(manifest.assets.len(), 1);
-        assert_eq!(manifest.assets[0].type_hash, oracle.assets[0].type_hash);
-        assert_eq!(manifest.assets[0].instance_hash, oracle.assets[0].instance_hash);
-        assert_eq!(manifest.assets[0].tokenized, oracle.assets[0].tokenized);
-        assert_eq!(stream.files.bin, bin);
+        assert_eq!(stream.files.bin.len(), bin.len(), "{name} binary length");
+        assert_eq!(
+            stream
+                .files
+                .bin
+                .iter()
+                .zip(bin)
+                .position(|(actual, expected)| actual != expected),
+            None,
+            "{name} first binary mismatch"
+        );
         assert_eq!(stream.files.relo, relo);
         assert_eq!(stream.files.imp, imp);
+        assert_eq!(manifest.assets[0].type_hash, oracle.assets[0].type_hash);
+        assert_eq!(
+            manifest.assets[0].instance_hash,
+            oracle.assets[0].instance_hash
+        );
+        assert_eq!(manifest.assets[0].tokenized, oracle.assets[0].tokenized);
         fs::remove_dir_all(root).unwrap();
     }
+}
+
+#[test]
+fn game_object_rejects_nonfinite_health() {
+    let root = scratch_root();
+    let input = root.join("bad-health.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="BadHealth"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="NaN" /></Body></GameObject></AssetDeclaration>"#,
+    )
+    .unwrap();
+    let error = compile_static(&input, &root, &root).err().unwrap();
+    assert!(error.to_string().contains("invalid MaxHealth"));
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

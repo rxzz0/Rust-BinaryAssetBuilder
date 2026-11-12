@@ -1,4 +1,7 @@
+mod encoder;
 mod schema;
+
+pub(super) use encoder::compile;
 
 use super::{asset_reference, compile_asset, declaration_id};
 use crate::compile::{
