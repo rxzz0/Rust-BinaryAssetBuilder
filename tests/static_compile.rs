@@ -18,6 +18,44 @@ fn scratch_root() -> PathBuf {
 }
 
 #[test]
+#[ignore = "GameObject binary encoder is not implemented yet"]
+fn game_object_minimal_matches_ea_oracle() {
+    for (name, xml, expected_manifest, bin, relo, imp) in [
+        (
+            "bare.xml",
+            include_bytes!("fixtures/game-object-bare.xml").as_slice(),
+            include_bytes!("fixtures/game-object-bare.manifest").as_slice(),
+            include_bytes!("fixtures/game-object-bare.bin").as_slice(),
+            include_bytes!("fixtures/game-object-bare.relo").as_slice(),
+            include_bytes!("fixtures/game-object-bare.imp").as_slice(),
+        ),
+        (
+            "probe.xml",
+            include_bytes!("fixtures/game-object-minimal.xml").as_slice(),
+            include_bytes!("fixtures/game-object-minimal.manifest").as_slice(),
+            include_bytes!("fixtures/game-object-minimal.bin").as_slice(),
+            include_bytes!("fixtures/game-object-minimal.relo").as_slice(),
+            include_bytes!("fixtures/game-object-minimal.imp").as_slice(),
+        ),
+    ] {
+        let root = scratch_root();
+        let input = root.join(name);
+        fs::write(&input, xml).unwrap();
+        let stream = compile_static(&input, &root, &root).unwrap();
+        let manifest = Manifest::parse(&stream.manifest).unwrap();
+        let oracle = Manifest::parse(expected_manifest).unwrap();
+        assert_eq!(manifest.assets.len(), 1);
+        assert_eq!(manifest.assets[0].type_hash, oracle.assets[0].type_hash);
+        assert_eq!(manifest.assets[0].instance_hash, oracle.assets[0].instance_hash);
+        assert_eq!(manifest.assets[0].tokenized, oracle.assets[0].tokenized);
+        assert_eq!(stream.files.bin, bin);
+        assert_eq!(stream.files.relo, relo);
+        assert_eq!(stream.files.imp, imp);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
 fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data");
