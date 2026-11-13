@@ -397,57 +397,45 @@ pub(super) fn encode_vision(
     let Some(child) = find(node, "VisionInfo")? else {
         return Ok(None);
     };
-    validate_attributes(child, &["VisionRange", "ShroudClearingRange"], data.path)?;
+    const FIELDS: [(&str, &str); 10] = [
+        ("VisionRange", "0"),
+        ("ShroudClearingRange", "0"),
+        ("ShroudClearingHeight", "50"),
+        ("VisionSide", "100"),
+        ("VisionRear", "100"),
+        ("VisionBonusTestRadius", "100"),
+        ("VisionBonusTestSegments", "8"),
+        ("VisionBonusPercentPerFoot", "0"),
+        ("MaxVisionBonusPercent", "50"),
+        ("MinVisionBonusPercent", "-50"),
+    ];
+    let path = data.path;
+    validate_attributes(child, &FIELDS.map(|(name, _)| name), path)?;
     if has_content(child) {
-        return Err(invalid(data.path, "VisionInfo cannot contain content"));
+        return Err(invalid(path, "VisionInfo cannot contain content"));
     }
     let start = data.allocate(0x224, 0x28)?;
-    let defaults = [
-        0.0f32.to_bits(),
-        0.0f32.to_bits(),
-        50.0f32.to_bits(),
-        1.0f32.to_bits(),
-        1.0f32.to_bits(),
-        100.0f32.to_bits(),
-        8,
-        0,
-        0.5f32.to_bits(),
-        (-0.5f32).to_bits(),
-    ];
-    for (index, word) in defaults.into_iter().enumerate() {
-        data.word(start + 4 * index, word);
+    let mut entries = Vec::with_capacity(FIELDS.len());
+    for (index, (name, default)) in FIELDS.into_iter().enumerate() {
+        let value = child.attribute(name).unwrap_or(default);
+        let (kind, word) = match index {
+            6 => (
+                0x7631_77a4,
+                value
+                    .trim()
+                    .parse::<u32>()
+                    .map_err(|_| invalid(path, format!("invalid {name}")))?,
+            ),
+            3 | 4 | 7..=9 => (
+                0x6458_64f3,
+                super::super::percentage(value, name, path)?.to_bits(),
+            ),
+            _ => (0x6458_64f3, finite_float(value, name, path)?.to_bits()),
+        };
+        let offset = start + index * 4;
+        data.word(offset, word);
+        entries.push(Entry::named(name, kind, Target::Data(offset)));
     }
-    for (name, offset) in [("VisionRange", 0), ("ShroudClearingRange", 4)] {
-        if let Some(value) = child.attribute(name) {
-            data.word(
-                start + offset,
-                finite_float(value, name, data.path)?.to_bits(),
-            );
-        }
-    }
-    let names = [
-        "VisionRange",
-        "ShroudClearingRange",
-        "ShroudClearingHeight",
-        "VisionSide",
-        "VisionRear",
-        "VisionBonusTestRadius",
-        "VisionBonusTestSegments",
-        "VisionBonusPercentPerFoot",
-        "MaxVisionBonusPercent",
-        "MinVisionBonusPercent",
-    ];
-    let entries = names
-        .into_iter()
-        .enumerate()
-        .map(|(index, name)| {
-            Entry::named(
-                name,
-                if index == 6 { 0x7631_77a4 } else { 0x6458_64f3 },
-                Target::Data(start + index * 4),
-            )
-        })
-        .collect();
     Ok(Some(Target::Table(Table::record(entries))))
 }
 

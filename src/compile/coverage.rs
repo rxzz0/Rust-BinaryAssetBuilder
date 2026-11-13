@@ -492,6 +492,11 @@ mod tests {
         assert_ea_fixture("physics-fields", 1);
     }
 
+    #[test]
+    fn vision_fields_match_ea_batch() {
+        assert_ea_fixture("vision-fields", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
