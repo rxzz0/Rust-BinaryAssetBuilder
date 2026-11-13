@@ -413,6 +413,47 @@ fn static_includes_accept_empty_legacy_w3x_placeholders() {
 }
 
 #[test]
+fn static_art_includes_accept_only_empty_namespace_free_xml_placeholders() {
+    let root = scratch_root();
+    let input = root.join("Mod.xml");
+    let art = root.join("Art");
+    fs::create_dir(&art).unwrap();
+    let placeholder = art.join("beam.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes><Include type="all" source="ART:./beam.xml"/></Includes>
+            <Video id="example" Filename="example"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(&placeholder, r#"<?xml version="1.0"?><AssetDeclaration />"#).unwrap();
+
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    assert_eq!(manifest.assets.len(), 1);
+    assert_eq!(manifest.assets[0].name, b"Video:example");
+    assert!(compile_static(&placeholder, &root, &root).is_err());
+
+    fs::write(
+        &placeholder,
+        "<AssetDeclaration><Unknown/></AssetDeclaration>",
+    )
+    .unwrap();
+    let error = compile_static(&input, &root, &root).err().unwrap();
+    assert!(
+        error
+            .to_string()
+            .contains("expected a SAGE AssetDeclaration root")
+    );
+
+    fs::remove_file(placeholder).unwrap();
+    fs::remove_file(input).unwrap();
+    fs::remove_dir(art).unwrap();
+    fs::remove_dir(root).unwrap();
+}
+
+#[test]
 fn sdk_global_compiles_multiplayer_colors_with_the_sdk_layout() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data/AdditionalMaps");

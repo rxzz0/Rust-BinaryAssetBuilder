@@ -86,7 +86,7 @@ fn compile(
         referenced_manifests: Vec::new(),
         external_ids: HashSet::new(),
     };
-    compiler.read_document(&input, false)?;
+    compiler.read_document(&input, false, false)?;
     compiler.add_referenced_instances()?;
     compiler.finish()
 }
@@ -176,7 +176,7 @@ impl AssetReference {
 }
 
 impl Compiler<'_> {
-    fn read_document(&mut self, path: &Path, tentative: bool) -> io::Result<()> {
+    fn read_document(&mut self, path: &Path, tentative: bool, art_include: bool) -> io::Result<()> {
         if self.active.contains(path) {
             return Err(invalid(path, "include cycle"));
         }
@@ -204,15 +204,22 @@ impl Compiler<'_> {
         let document = Document::parse(&xml).map_err(|error| invalid(path, error))?;
         let root = document.root_element();
         if self.reference_directory.is_some()
-            && path
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("w3x"))
+            && path.extension().is_some_and(|ext| {
+                ext.eq_ignore_ascii_case("w3x") || art_include && ext.eq_ignore_ascii_case("xml")
+            })
             && root.tag_name().namespace().is_none()
             && root.has_tag_name("AssetDeclaration")
             && root.attributes().len() == 0
             && !has_content(root)
         {
-            // The SDK uses empty namespace-free W3X files as model placeholders.
+            // EA accepts empty namespace-free W3X and ART XML placeholders.
+            if path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("xml"))
+            {
+                // Acceptance depends on the include alias, not just the resolved file.
+                self.visited.remove(&(path.to_path_buf(), tentative));
+            }
             self.active.remove(path);
             return Ok(());
         }
@@ -330,7 +337,10 @@ impl Compiler<'_> {
                 _ => return Err(invalid(path, format!("unsupported include type {kind:?}"))),
             };
             let target = self.resolve(path, source)?;
-            self.read_document(&target, included_tentative)?;
+            let art_include = source
+                .split_once(':')
+                .is_some_and(|(alias, _)| alias.eq_ignore_ascii_case("art"));
+            self.read_document(&target, included_tentative, art_include)?;
             if let Some(included) = self.definitions.get(&target) {
                 merge_definitions(definitions, included, path)?;
             }
