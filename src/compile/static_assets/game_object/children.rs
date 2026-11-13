@@ -560,6 +560,131 @@ fn find<'a, 'input>(node: Node<'a, 'input>, name: &str) -> io::Result<Option<Nod
     Ok(first)
 }
 
+pub(super) fn encode_buildability(
+    node: Node<'_, '_>,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Option<Target>> {
+    use super::super::global_ui::enum_value;
+    use super::super::{finite_number, significant_children};
+    use super::draws::{boolean, write_model_conditions};
+    use super::parking::encode_filter;
+    use super::secondary_damage::write_status_flags;
+
+    let nodes: Vec<_> = significant_children(node)
+        .filter(|child| child.has_tag_name((SAGE_NS, "ProjectedBuildabilityInfo")))
+        .collect();
+    if nodes.is_empty() {
+        return Ok(None);
+    }
+    let path = data.path;
+    let count = 0x22c;
+    let first = data.list(count, nodes.len(), 0x70)?;
+    let mut items = Vec::with_capacity(nodes.len());
+    for (index, node) in nodes.into_iter().enumerate() {
+        validate_attributes(
+            node,
+            &[
+                "Radius",
+                "RadiusY",
+                "BuildPlacementTypes",
+                "StatusToReject",
+                "ModelConditionsToReject",
+                "AllowedBuildabilityHeightVariation",
+                "PrimaryBuidability",
+            ],
+            path,
+        )?;
+        let start = first + index * 0x70;
+        let radius = finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?;
+        data.word(start, radius.to_bits());
+        let radius_y = if let Some(value) = node.attribute("RadiusY") {
+            let value = finite_number(value, "RadiusY", path)?;
+            let offset = data.allocate(start + 4, 4)?;
+            data.word(offset, value.to_bits());
+            Target::Data(offset)
+        } else {
+            Target::Null
+        };
+        let mut flags = 0;
+        for name in node
+            .attribute("BuildPlacementTypes")
+            .unwrap_or("INVALID")
+            .split_ascii_whitespace()
+        {
+            flags |= 1
+                << enum_value(
+                    name,
+                    &[
+                        "INVALID",
+                        "MAIN_STRUCTURE",
+                        "OTHER_STRUCTURE",
+                        "TIBERIUM_FIELD",
+                        "BLOCKED",
+                    ],
+                    path,
+                )?;
+        }
+        data.word(start + 8, flags);
+        write_status_flags(
+            node.attribute("StatusToReject").unwrap_or(""),
+            start + 0xc,
+            data,
+        )?;
+        write_model_conditions(
+            node.attribute("ModelConditionsToReject")
+                .unwrap_or("STRUCTURE_UNPACKING"),
+            start + 0x28,
+            data,
+        )?;
+        let height = finite_number(
+            node.attribute("AllowedBuildabilityHeightVariation")
+                .unwrap_or("50"),
+            "AllowedBuildabilityHeightVariation",
+            path,
+        )?;
+        data.word(start + 0x64, height.to_bits());
+        data.payload[start + 0x6c] = boolean(node, "PrimaryBuidability", true, path)?;
+        let mut children = significant_children(node).peekable();
+        let filter =
+            match children.next_if(|child| child.has_tag_name((SAGE_NS, "AllowedObjectFilter"))) {
+                Some(child) => {
+                    Target::Table(encode_filter(child, start + 0x68, data, reference_types)?)
+                }
+                None => Target::Null,
+            };
+        if children.next().is_some() {
+            return Err(invalid(path, "unexpected ProjectedBuildabilityInfo child"));
+        }
+        items.push((
+            0,
+            Target::Table(Table::record(vec![
+                Entry::named("Radius", 0x6458_64f3, Target::Data(start)),
+                Entry::named("RadiusY", 0x6458_64f3, radius_y),
+                Entry::named("BuildPlacementTypes", 0xf446_cf6f, Target::Data(start + 8)),
+                Entry::named("StatusToReject", 0xa7bd_811e, Target::Data(start + 0xc)),
+                Entry::named(
+                    "ModelConditionsToReject",
+                    0x67db_bfc9,
+                    Target::Data(start + 0x28),
+                ),
+                Entry::named(
+                    "AllowedBuildabilityHeightVariation",
+                    0x6458_64f3,
+                    Target::Data(start + 0x64),
+                ),
+                Entry::named(
+                    "PrimaryBuidability",
+                    0x77e3_f4f7,
+                    Target::Data(start + 0x6c),
+                ),
+                Entry::named("AllowedObjectFilter", 0xe46e_a3b2, filter),
+            ])),
+        ));
+    }
+    Ok(Some(Target::Table(Table::array(count, items))))
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::super::Marshaled;
@@ -800,129 +925,4 @@ mod tests {
             );
         }
     }
-}
-
-pub(super) fn encode_buildability(
-    node: Node<'_, '_>,
-    data: &mut BinaryData<'_>,
-    reference_types: &mut Vec<u32>,
-) -> io::Result<Option<Target>> {
-    use super::super::global_ui::enum_value;
-    use super::super::{finite_number, significant_children};
-    use super::draws::{boolean, write_model_conditions};
-    use super::parking::encode_filter;
-    use super::secondary_damage::write_status_flags;
-
-    let nodes: Vec<_> = significant_children(node)
-        .filter(|child| child.has_tag_name((SAGE_NS, "ProjectedBuildabilityInfo")))
-        .collect();
-    if nodes.is_empty() {
-        return Ok(None);
-    }
-    let path = data.path;
-    let count = 0x22c;
-    let first = data.list(count, nodes.len(), 0x70)?;
-    let mut items = Vec::with_capacity(nodes.len());
-    for (index, node) in nodes.into_iter().enumerate() {
-        validate_attributes(
-            node,
-            &[
-                "Radius",
-                "RadiusY",
-                "BuildPlacementTypes",
-                "StatusToReject",
-                "ModelConditionsToReject",
-                "AllowedBuildabilityHeightVariation",
-                "PrimaryBuidability",
-            ],
-            path,
-        )?;
-        let start = first + index * 0x70;
-        let radius = finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?;
-        data.word(start, radius.to_bits());
-        let radius_y = if let Some(value) = node.attribute("RadiusY") {
-            let value = finite_number(value, "RadiusY", path)?;
-            let offset = data.allocate(start + 4, 4)?;
-            data.word(offset, value.to_bits());
-            Target::Data(offset)
-        } else {
-            Target::Null
-        };
-        let mut flags = 0;
-        for name in node
-            .attribute("BuildPlacementTypes")
-            .unwrap_or("INVALID")
-            .split_ascii_whitespace()
-        {
-            flags |= 1
-                << enum_value(
-                    name,
-                    &[
-                        "INVALID",
-                        "MAIN_STRUCTURE",
-                        "OTHER_STRUCTURE",
-                        "TIBERIUM_FIELD",
-                        "BLOCKED",
-                    ],
-                    path,
-                )?;
-        }
-        data.word(start + 8, flags);
-        write_status_flags(
-            node.attribute("StatusToReject").unwrap_or(""),
-            start + 0xc,
-            data,
-        )?;
-        write_model_conditions(
-            node.attribute("ModelConditionsToReject")
-                .unwrap_or("STRUCTURE_UNPACKING"),
-            start + 0x28,
-            data,
-        )?;
-        let height = finite_number(
-            node.attribute("AllowedBuildabilityHeightVariation")
-                .unwrap_or("50"),
-            "AllowedBuildabilityHeightVariation",
-            path,
-        )?;
-        data.word(start + 0x64, height.to_bits());
-        data.payload[start + 0x6c] = boolean(node, "PrimaryBuidability", true, path)?;
-        let mut children = significant_children(node).peekable();
-        let filter =
-            match children.next_if(|child| child.has_tag_name((SAGE_NS, "AllowedObjectFilter"))) {
-                Some(child) => {
-                    Target::Table(encode_filter(child, start + 0x68, data, reference_types)?)
-                }
-                None => Target::Null,
-            };
-        if children.next().is_some() {
-            return Err(invalid(path, "unexpected ProjectedBuildabilityInfo child"));
-        }
-        items.push((
-            0,
-            Target::Table(Table::record(vec![
-                Entry::named("Radius", 0x6458_64f3, Target::Data(start)),
-                Entry::named("RadiusY", 0x6458_64f3, radius_y),
-                Entry::named("BuildPlacementTypes", 0xf446_cf6f, Target::Data(start + 8)),
-                Entry::named("StatusToReject", 0xa7bd_811e, Target::Data(start + 0xc)),
-                Entry::named(
-                    "ModelConditionsToReject",
-                    0x67db_bfc9,
-                    Target::Data(start + 0x28),
-                ),
-                Entry::named(
-                    "AllowedBuildabilityHeightVariation",
-                    0x6458_64f3,
-                    Target::Data(start + 0x64),
-                ),
-                Entry::named(
-                    "PrimaryBuidability",
-                    0x77e3_f4f7,
-                    Target::Data(start + 0x6c),
-                ),
-                Entry::named("AllowedObjectFilter", 0xe46e_a3b2, filter),
-            ])),
-        ));
-    }
-    Ok(Some(Target::Table(Table::array(count, items))))
 }
