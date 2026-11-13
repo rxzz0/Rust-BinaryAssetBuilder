@@ -459,6 +459,11 @@ mod tests {
         assert_ea_fixture("game-object-editor-sorting", 1);
     }
 
+    #[test]
+    fn empty_game_object_references_match_ea_batch() {
+        assert_ea_fixture("game-object-empty-references", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

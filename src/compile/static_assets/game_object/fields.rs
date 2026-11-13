@@ -151,12 +151,18 @@ pub(super) fn encode(
             data.word(offset, number as u32);
         }
     }
-    if let Some(value) = node.attribute("CommandSet") {
+    if let Some(value) = node
+        .attribute("CommandSet")
+        .filter(|value| !value.trim().is_empty())
+    {
         data.word(0x90, weak_id(value, "LogicCommandSet", data.path)?);
         reference_types.push(fast_hash(b"LogicCommandSet"));
     }
     for (name, offset) in [("SelectPortrait", 0x94), ("ButtonImage", 0x9c)] {
-        if let Some(value) = node.attribute(name) {
+        if let Some(value) = node
+            .attribute(name)
+            .filter(|value| !value.trim().is_empty())
+        {
             data.word(offset, weak_id(value, "PackedTextureImage", data.path)?);
             reference_types.push(fast_hash(b"PackedTextureImage"));
         }
