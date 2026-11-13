@@ -56,15 +56,7 @@ pub(super) fn encode(
         ));
     }
     if let Some(flags) = node.attribute("KindOf") {
-        for flag in flags.split_ascii_whitespace() {
-            let index = kind_of()
-                .iter()
-                .position(|name| name == flag)
-                .ok_or_else(|| invalid(data.path, format!("invalid KindOf {flag}")))?;
-            let offset = (index / 32) * 4;
-            let old = u32::from_le_bytes(data.payload[offset..offset + 4].try_into().unwrap());
-            data.word(offset, old | (1 << (index % 32)));
-        }
+        write_kind_of(flags, 0, data)?;
     }
     for (name, offset) in [("Description", 0x2c), ("TypeDescription", 0x3c)] {
         if let Some(value) = node.attribute(name) {
@@ -186,6 +178,22 @@ fn enum_value(
         .position(|option| *option == value)
         .map(|index| index as u32)
         .ok_or_else(|| invalid(path, format!("invalid {field} {value}")))
+}
+
+pub(super) fn write_kind_of(
+    value: &str,
+    start: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<()> {
+    for flag in value.split_ascii_whitespace() {
+        let index = kind_of()
+            .iter()
+            .take(36 * 8)
+            .position(|name| name == flag)
+            .ok_or_else(|| invalid(data.path, format!("invalid KindOf {flag}")))?;
+        data.payload[start + index / 8] |= 1 << (index % 8);
+    }
+    Ok(())
 }
 
 fn kind_of() -> &'static [String] {

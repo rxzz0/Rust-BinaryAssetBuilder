@@ -1,7 +1,11 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
-use super::super::{AssetReference, asset_reference, fast_hash, hash_name, validate_attributes};
-use crate::compile::{has_content, required};
+use super::super::{
+    AssetReference, asset_reference, fast_hash, finite_number, hash_name, sage_time,
+    significant_children, validate_attributes,
+};
+use super::draws::{array, boolean, fields};
+use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
 
@@ -20,6 +24,9 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
+    if node.has_tag_name((SAGE_NS, "FireWeaponWhenDead")) {
+        return fire_weapon_when_dead(node, pointer, data, references, reference_types).map(Some);
+    }
     let (kind, size, extra) = match node.tag_name().name() {
         "ObjectSMCHelper" => (0x7f72_f242, 8, None),
         "ObjectDefectionHelper" => (0x18a4_208f, 8, None),
@@ -52,35 +59,10 @@ pub(super) fn encode(
             .next()
             .filter(|n| n.has_tag_name((crate::compile::SAGE_NS, "DieMuxData")))
             .ok_or_else(|| crate::compile::invalid(data.path, "DestroyDie requires DieMuxData"))?;
-        if children.next().is_some() || has_content(die) {
-            return Err(crate::compile::invalid(
-                data.path,
-                "unexpected DestroyDie content",
-            ));
+        if children.next().is_some() {
+            return Err(invalid(data.path, "unexpected DestroyDie content"));
         }
-        validate_attributes(die, &["DeathTypes", "DeathTypesForbidden"], data.path)?;
-        for (field, at) in [("DeathTypes", 36), ("DeathTypesForbidden", 44)] {
-            let flags = death_flags(die.attribute(field).unwrap_or(""), data.path)?;
-            data.word(offset + at, flags as u32);
-            data.word(offset + at + 4, (flags >> 32) as u32);
-        }
-        for (at, value) in [(24, 0xbf80_0000), (28, 0x3c8e_fa35), (32, 0xbc8e_fa35)] {
-            data.word(offset + at, value);
-        }
-        let mux = Table::record(vec![
-            Entry::new(
-                0xf317_4ddf,
-                0x6d66_ae18,
-                Target::Table(Table::array(offset + 8, [])),
-            ),
-            Entry::new(0xac7f_1e22, 0xa7bd_811e, Target::Null),
-            Entry::new(0x239e_b201, 0xa7bd_811e, Target::Null),
-            Entry::new(0x025c_cf9e, 0x6458_64f3, Target::Data(offset + 24)),
-            Entry::new(0x3913_ca4e, 0x4e16_ea4d, Target::Data(offset + 28)),
-            Entry::new(0xdfe5_9442, 0x4e16_ea4d, Target::Data(offset + 32)),
-            Entry::new(0x1335_1530, 0x034d_f1a1, Target::Data(offset + 36)),
-            Entry::new(0x2254_777e, 0x034d_f1a1, Target::Data(offset + 44)),
-        ]);
+        let mux = encode_die_mux(die, offset + 8, data)?;
         let die = Table::record(vec![
             base(0xa50d_729a, behavior),
             Entry::new(0x33d7_093c, 0x0084_001b, Target::Table(mux)),
@@ -121,6 +103,188 @@ pub(super) fn encode(
     Ok(Some((kind, table)))
 }
 
+fn fire_weapon_when_dead(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x90ce_b49c;
+    const BOOL: u32 = 0x77e3_f4f7;
+    const UPGRADE_FLAGS: &[(&str, u32, usize)] = &[
+        ("RequiresAllTriggers", BOOL, 0x1c),
+        ("RequiresAllConflictingTriggers", BOOL, 0x1d),
+        ("Permanent", BOOL, 0x1e),
+        ("WaypointMode", BOOL, 0x1f),
+        ("WaypointModeTerminal", BOOL, 0x20),
+    ];
+    const FIRE_FLAGS: &[(&str, u32, usize)] = &[
+        ("InitiallyActive", BOOL, 0x88),
+        ("ActiveDuringConstruction", BOOL, 0x89),
+        ("ContinueToBezierDestination", BOOL, 0x8a),
+        ("FireAtGround", BOOL, 0x8b),
+        ("UseMyKillerAsWeaponSource", BOOL, 0x8c),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = UPGRADE_FLAGS
+        .iter()
+        .chain(FIRE_FLAGS)
+        .map(|&(name, _, _)| name)
+        .chain(["id", "DelayTime", "DeathWeapon", "FocusFireKindOfFlag"])
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let mut children = significant_children(node);
+    let die = children
+        .next()
+        .filter(|child| child.has_tag_name((SAGE_NS, "DieMuxData")))
+        .ok_or_else(|| invalid(path, "FireWeaponWhenDead requires DieMuxData"))?;
+    if let Some(child) = children.next() {
+        return Err(invalid(
+            path,
+            format!(
+                "unsupported FireWeaponWhenDead child {}",
+                child.tag_name().name()
+            ),
+        ));
+    }
+    let start = data.allocate(pointer, 0x90)?;
+    data.word(start, KIND);
+    data.word(start + 4, hash_name(required(node, "id", path)?));
+    for &(name, _, offset) in UPGRADE_FLAGS.iter().chain(FIRE_FLAGS) {
+        data.payload[start + offset] = boolean(node, name, name == "WaypointModeTerminal", path)?;
+    }
+    let delay = sage_time(
+        node.attribute("DelayTime").unwrap_or("0s"),
+        "DelayTime",
+        path,
+    )?;
+    data.word(start + 0x24, delay.to_bits());
+    if let Some(value) = node
+        .attribute("DeathWeapon")
+        .filter(|value| !value.trim().is_empty())
+    {
+        let plain = value.split_once('\\').map_or(value, |(name, _)| name);
+        let id = asset_reference(plain, "WeaponTemplate", path)?;
+        references.push(id.into());
+        reference_types.push(id.type_id);
+        data.word(start + 0x28, references.len() as u32);
+    }
+    if let Some(value) = node.attribute("FocusFireKindOfFlag") {
+        super::fields::write_kind_of(value, start + 0x2c, data)?;
+    }
+    let module = Table::record(vec![
+        Entry::new(0x19b0_42a0, 0x23e6_50b8, Target::Data(start)),
+        Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
+    ]);
+    let mut upgrade = vec![base(0xa50d_729a, inherited(0xd75d_93a2, module))];
+    upgrade.extend(fields(start, UPGRADE_FLAGS));
+    upgrade.extend([
+        Entry::named("CustomAnimAndDuration", 0x6b74_6af6, Target::Null),
+        array("TriggeredBy", 0x26fa_cfc7, start + 0x0c),
+        array("ConflictsWith", 0x26fa_cfc7, start + 0x14),
+    ]);
+    let mut entries = vec![base(0xae60_ae98, Table::record(upgrade))];
+    entries.extend(fields(start, &FIRE_FLAGS[..4]));
+    entries.extend(fields(
+        start,
+        &[
+            ("DelayTime", 0x9986_69e8, 0x24),
+            ("DeathWeapon", 0xd046_dd22, 0x28),
+            ("FocusFireKindOfFlag", 0x9afc_9193, 0x2c),
+        ],
+    ));
+    entries.extend(fields(start, &FIRE_FLAGS[4..]));
+    entries.extend([
+        Entry::named("WeaponOffset", 0x2936_8077, Target::Null),
+        Entry::named(
+            "DieMuxData",
+            0x0084_001b,
+            Target::Table(encode_die_mux(die, start + 0x54, data)?),
+        ),
+        array("WeaponFireProbability", 0x080b_e21f, start + 0x80),
+    ]);
+    Ok((KIND, Table::record(entries)))
+}
+
+fn encode_die_mux(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Table> {
+    let path = data.path;
+    validate_attributes(
+        node,
+        &[
+            "VeterancyLevels",
+            "DamageAmountRequired",
+            "MinKillerAngle",
+            "MaxKillerAngle",
+            "DeathTypes",
+            "DeathTypesForbidden",
+        ],
+        path,
+    )?;
+    if has_content(node) {
+        return Err(invalid(path, "DieMuxData cannot contain content"));
+    }
+    let levels = node
+        .attribute("VeterancyLevels")
+        .unwrap_or("")
+        .split_ascii_whitespace();
+    let strings = data.list(start, levels.clone().count(), 8)?;
+    let mut items = Vec::new();
+    for (index, level) in levels.enumerate() {
+        let offset = strings + index * 8;
+        data.string(offset, level)?;
+        items.push((0, Target::Data(offset)));
+    }
+    let damage = finite_number(
+        node.attribute("DamageAmountRequired").unwrap_or("-1"),
+        "DamageAmountRequired",
+        path,
+    )?;
+    data.word(start + 16, damage.to_bits());
+    for (name, default, offset) in [("MinKillerAngle", "1d", 20), ("MaxKillerAngle", "-1d", 24)] {
+        let value = node.attribute(name).unwrap_or(default).trim();
+        let (number, degrees) = if let Some(number) = value.strip_suffix('d') {
+            (number, true)
+        } else if let Some(number) = value.strip_suffix('r') {
+            (number, false)
+        } else {
+            return Err(invalid(path, format!("invalid {name}")));
+        };
+        let angle = finite_number(number, name, path)?;
+        let angle = if degrees { angle.to_radians() } else { angle };
+        data.word(start + offset, angle.to_bits());
+    }
+    for (name, offset) in [("DeathTypes", 28), ("DeathTypesForbidden", 36)] {
+        let flags = death_flags(node.attribute(name).unwrap_or(""), path)?;
+        data.word(start + offset, flags as u32);
+        data.word(start + offset + 4, (flags >> 32) as u32);
+    }
+    let mut entries = vec![
+        Entry::named(
+            "VeterancyLevels",
+            0x6d66_ae18,
+            Target::Table(Table::array(start, items)),
+        ),
+        Entry::named("ExemptStatus", 0xa7bd_811e, Target::Null),
+        Entry::named("RequiredStatus", 0xa7bd_811e, Target::Null),
+    ];
+    entries.extend(fields(
+        start,
+        &[
+            ("DamageAmountRequired", 0x6458_64f3, 16),
+            ("MinKillerAngle", 0x4e16_ea4d, 20),
+            ("MaxKillerAngle", 0x4e16_ea4d, 24),
+            ("DeathTypes", 0x034d_f1a1, 28),
+            ("DeathTypesForbidden", 0x034d_f1a1, 36),
+        ],
+    ));
+    Ok(Table::record(entries))
+}
+
 fn death_flags(value: &str, path: &std::path::Path) -> io::Result<u64> {
     let schema = roxmltree::Document::parse(include_str!(
         "../../../../schemas/ra3/xsd/Includes/Death.xsd"
@@ -151,6 +315,48 @@ mod tests {
     use super::*;
     use roxmltree::Document;
     use std::path::Path;
+
+    #[test]
+    fn fire_weapon_when_dead_matches_ea() {
+        use crate::compile::static_assets::compile_asset;
+        use crate::manifest::Manifest;
+
+        let document = Document::parse(include_str!(
+            "../../../../tests/fixtures/game-object-death-behavior.xml"
+        ))
+        .unwrap();
+        let actual = compile_asset(
+            document.root_element().first_element_child().unwrap(),
+            Path::new("game-object-death-behavior.xml"),
+            "",
+        )
+        .unwrap();
+        let bin = include_bytes!("../../../../tests/fixtures/game-object-death-behavior.bin");
+        let relo = include_bytes!("../../../../tests/fixtures/game-object-death-behavior.relo");
+        let expected = Manifest::parse(include_bytes!(
+            "../../../../tests/fixtures/game-object-death-behavior.manifest"
+        ))
+        .unwrap();
+        assert_eq!(actual.payload.len(), bin.len() - 4);
+        assert_eq!(
+            actual
+                .payload
+                .iter()
+                .zip(&bin[4..])
+                .position(|(a, b)| a != b),
+            None
+        );
+        assert_eq!(actual.relocations, relo[4..]);
+        assert!(actual.imports.is_empty());
+        assert_eq!(actual.instance_hash, expected.assets[0].instance_hash);
+        assert!(
+            actual
+                .references
+                .iter()
+                .map(|reference| reference.id)
+                .eq(expected.assets[0].references.iter())
+        );
+    }
 
     fn u32_at(bytes: &[u8], offset: usize) -> usize {
         u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize

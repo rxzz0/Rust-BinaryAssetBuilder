@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DeathBehaviorProbe">
+    <Behaviors>
+      <FireWeaponWhenDead id="ModuleTag_CatalystDeathWeapon" InitiallyActive="true" DeathWeapon="CatalystBuildingDeathWeapon\2" ContinueToBezierDestination="false" UseMyKillerAsWeaponSource="true" ActiveDuringConstruction="false" FireAtGround="false" DelayTime="0s" RequiresAllTriggers="false" RequiresAllConflictingTriggers="false" Permanent="false" WaypointMode="false" WaypointModeTerminal="true">
+        <DieMuxData DeathTypes="CATALYST" DamageAmountRequired="-1" MinKillerAngle="1d" MaxKillerAngle="-1d" />
+      </FireWeaponWhenDead>
+      <FireWeaponWhenDead id="ModuleTag_Default">
+        <DieMuxData />
+      </FireWeaponWhenDead>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>
