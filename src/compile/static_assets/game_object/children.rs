@@ -408,71 +408,89 @@ pub(super) fn encode_geometry(
         return Err(invalid(data.path, "Geometry requires Shape children"));
     }
     let start = data.allocate(0x1e8, 0x1c)?;
-    data.word(
-        start + 0x18,
-        match child.attribute("IsSmall").unwrap_or("false") {
-            "false" => 0,
-            "true" => 1,
-            _ => return Err(invalid(data.path, "invalid Geometry IsSmall")),
-        },
-    );
+    data.payload[start + 0x18] = super::draws::boolean(child, "IsSmall", false, data.path)?;
     let items = data.list(start + 8, shapes.len(), 0x30)?;
     let mut entries = Vec::new();
     for (index, shape) in shapes.iter().enumerate() {
+        let shape = *shape;
+        let path = data.path;
         validate_attributes(
-            *shape,
+            shape,
             &[
                 "Type",
+                "ContactPointGeneration",
+                "Name",
+                "Active",
+                "UsedForHealthBox",
                 "MajorRadius",
                 "MinorRadius",
+                "Other",
                 "Height",
-                "ContactPointGeneration",
+                "FrontAngle",
             ],
-            data.path,
+            path,
         )?;
         let offset = items + index * 0x30;
-        let kind = required(*shape, "Type", data.path)?;
-        if kind != "BOX" {
-            return Err(invalid(
-                data.path,
-                format!("unsupported Geometry Shape Type {kind}"),
-            ));
+        use super::super::global_ui::enum_value;
+        let kind = enum_value(
+            shape.attribute("Type").unwrap_or("SPHERE"),
+            &["SPHERE", "BOX", "CYLINDER", "RING"],
+            path,
+        )?;
+        let contact = enum_value(
+            shape.attribute("ContactPointGeneration").unwrap_or("NONE"),
+            &["NONE", "VEHICLE", "STRUCTURE", "INFANTRY", "SQUAD_MEMBER"],
+            path,
+        )?;
+        data.word(offset, kind);
+        data.word(offset + 4, contact);
+        for (name, field) in [("Name", 8), ("Other", 0x18)] {
+            if let Some(value) = shape.attribute(name) {
+                data.string(offset + field, value)?;
+            }
         }
-        data.word(offset, 1);
-        let contact = required(*shape, "ContactPointGeneration", data.path)?;
-        if contact != "STRUCTURE" {
-            return Err(invalid(
-                data.path,
-                format!("unsupported ContactPointGeneration {contact}"),
-            ));
-        }
-        data.word(offset + 4, 2);
         for (name, field) in [
             ("MajorRadius", 0x10),
             ("MinorRadius", 0x14),
             ("Height", 0x20),
         ] {
-            let value = finite_float(required(*shape, name, data.path)?, name, data.path)?;
+            let value =
+                super::super::finite_number(shape.attribute(name).unwrap_or("1"), name, path)?;
             data.word(offset + field, value.to_bits());
         }
-        data.word(offset + 0x2c, 0x101);
-        let mut offset_node = shape.children().filter(Node::is_element);
-        let coord = offset_node
-            .next()
-            .filter(|node| node.has_tag_name((SAGE_NS, "Offset")))
-            .ok_or_else(|| invalid(data.path, "Geometry Shape requires Offset"))?;
-        if offset_node.next().is_some() {
-            return Err(invalid(data.path, "unexpected Geometry Shape child"));
+        if let Some(value) = shape.attribute("FrontAngle").map(str::trim) {
+            let angle = if let Some(number) = value.strip_suffix('d') {
+                super::super::finite_number(number, "FrontAngle", path)?.to_radians()
+            } else if let Some(number) = value.strip_suffix('r') {
+                super::super::finite_number(number, "FrontAngle", path)?
+            } else {
+                return Err(invalid(path, "invalid FrontAngle"));
+            };
+            data.word(offset + 0x24, angle.to_bits());
         }
-        validate_attributes(coord, &["x", "y", "z"], data.path)?;
-        if has_content(coord) {
-            return Err(invalid(data.path, "Geometry Offset cannot contain content"));
+        data.payload[offset + 0x2c] = super::draws::boolean(shape, "Active", true, path)?;
+        data.payload[offset + 0x2d] = super::draws::boolean(shape, "UsedForHealthBox", true, path)?;
+
+        let mut children = super::super::significant_children(shape).peekable();
+        let coord = children.next_if(|node| node.has_tag_name((SAGE_NS, "Offset")));
+        if children.next().is_some() {
+            return Err(invalid(path, "unexpected Geometry Shape child"));
         }
-        let coord_start = data.allocate(offset + 0x28, 12)?;
-        for (axis, field) in [("x", 0), ("y", 4), ("z", 8)] {
-            let value = finite_float(required(coord, axis, data.path)?, axis, data.path)?;
-            data.word(coord_start + field, value.to_bits());
-        }
+        let coord_target = if let Some(coord) = coord {
+            validate_attributes(coord, &["x", "y", "z"], path)?;
+            if has_content(coord) {
+                return Err(invalid(path, "Geometry Offset cannot contain content"));
+            }
+            let coord_start = data.allocate(offset + 0x28, 12)?;
+            for (axis, field) in [("x", 0), ("y", 4), ("z", 8)] {
+                let value =
+                    super::super::finite_number(coord.attribute(axis).unwrap_or("0"), axis, path)?;
+                data.word(coord_start + field, value.to_bits());
+            }
+            Target::Data(coord_start)
+        } else {
+            Target::Null
+        };
         let attrs = vec![
             Entry::named("Type", 0xb0d4_9164, Target::Data(offset)),
             Entry::named(
@@ -488,7 +506,7 @@ pub(super) fn encode_geometry(
             Entry::named("Other", 0x1a29_33aa, Target::Data(offset + 0x18)),
             Entry::named("Height", 0x6458_64f3, Target::Data(offset + 0x20)),
             Entry::named("FrontAngle", 0x4e16_ea4d, Target::Data(offset + 0x24)),
-            Entry::named("Offset", 0x2936_8077, Target::Data(coord_start)),
+            Entry::named("Offset", 0x2936_8077, coord_target),
         ];
         entries.push((0, Target::Table(Table::record(attrs))));
     }

@@ -285,6 +285,11 @@ mod tests {
         assert_ea_fixture("production-exit");
     }
 
+    #[test]
+    fn geometry_shape_modes_and_defaults_match_ea_batch() {
+        assert_ea_fixture("geometry-shapes");
+    }
+
     fn assert_ea_fixture(name: &str) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

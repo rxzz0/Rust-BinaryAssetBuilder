@@ -1,0 +1,15 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="GeometryDefaultsProbe">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    <Geometry><Shape /><Shape Type="BOX" ContactPointGeneration="STRUCTURE"><Offset x="-6.85" /></Shape></Geometry>
+  </GameObject>
+  <GameObject id="GeometryModesProbe">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    <Geometry IsSmall="true">
+      <Shape Type="BOX" ContactPointGeneration="NONE" Name="ProbeBox" Other="ProbeOther" Active="false" UsedForHealthBox="false" MajorRadius="20" MinorRadius="15" Height="30" FrontAngle="90d"><Offset x="3" y="-2" z="1" /></Shape>
+      <Shape Type="CYLINDER" ContactPointGeneration="VEHICLE" />
+      <Shape Type="RING" ContactPointGeneration="INFANTRY" />
+      <Shape Type="SPHERE" ContactPointGeneration="SQUAD_MEMBER" />
+    </Geometry>
+  </GameObject>
+</AssetDeclaration>
