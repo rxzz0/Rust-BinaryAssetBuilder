@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="WeaponFireAbilityProbe"><Behaviors>
+<WeaponFireSpecialAbilityUpdate id="ModuleTag_Default"/>
+<WeaponFireSpecialAbilityUpdate id="ModuleTag_Fire" SpecialPowerTemplate="ProbePower" SpecialWeapon="ProbeWeapon" WhichSpecialWeapon="2" SkipContinue="true" BusyForDuration="2s" NeedLivingTargets="true" PlayWeaponPreFireFX="true" OffsetTargetLocationFromObject="true" WeaponSlotID="3" WeaponSlotType="SECONDARY_WEAPON" DestealthClosestObjectMatchingFilter="true" ModelConditionsOnUnpack="DYING"/>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>

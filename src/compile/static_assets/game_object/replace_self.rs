@@ -108,6 +108,9 @@ const FIELDS: &[(&str, u32, usize, &str, &str)] = &[
         "",
     ),
     ("ActiveModelCondition", 0x15723e0b, 0xe4, "model", ""),
+];
+
+const REPLACE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
     ("NewObjectUnpackTime", 0x998669e8, 0xf0, "time", "0s"),
     (
         "ReplaceOptions",
@@ -117,6 +120,44 @@ const FIELDS: &[(&str, u32, usize, &str, &str)] = &[
         "DISABLE_DURING_REPLACE",
     ),
     ("ClearTriggerDistance", 0x645864f3, 0xf8, "real", "120"),
+];
+
+const WEAPON_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("SpecialWeapon", 0xd046_dd22, 0xf0, "ref", "WeaponTemplate"),
+    ("WhichSpecialWeapon", 0x23e6_50b8, 0xf4, "int", "0"),
+    ("SkipContinue", 0x77e3_f4f7, 0x108, "bool", "false"),
+    ("BusyForDuration", 0x9986_69e8, 0xf8, "time", "0s"),
+    ("NeedLivingTargets", 0x77e3_f4f7, 0x109, "bool", "false"),
+    ("PlayWeaponPreFireFX", 0x77e3_f4f7, 0x10a, "bool", "false"),
+    (
+        "OffsetTargetLocationFromObject",
+        0x77e3_f4f7,
+        0x10b,
+        "bool",
+        "false",
+    ),
+    ("WeaponSlotID", 0x23e6_50b8, 0xfc, "int", "1"),
+    (
+        "WeaponSlotType",
+        0x1848_c549,
+        0x100,
+        "slot",
+        "PRIMARY_WEAPON",
+    ),
+    (
+        "DestealthClosestObjectMatchingFilter",
+        0x77e3_f4f7,
+        0x10c,
+        "bool",
+        "false",
+    ),
+    (
+        "ModelConditionsOnUnpack",
+        0x1572_3e0b,
+        0x104,
+        "model",
+        "INVALID",
+    ),
 ];
 
 fn flags(value: &str, names: &[&str], path: &std::path::Path) -> io::Result<u32> {
@@ -156,18 +197,25 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
+    let weapon = node.has_tag_name((SAGE_NS, "WeaponFireSpecialAbilityUpdate"));
+    let (kind, size, variant) = if weapon {
+        (0x1e45_a393, 0x110, WEAPON_FIELDS)
+    } else {
+        (KIND, 0x104, REPLACE_FIELDS)
+    };
+    let all_fields = FIELDS.iter().chain(variant);
     let path = data.path;
     let allowed: Vec<_> = std::iter::once("id")
-        .chain(FIELDS.iter().map(|&(name, ..)| name))
+        .chain(all_fields.clone().map(|&(name, ..)| name))
         .collect();
     validate_attributes(node, &allowed, path)?;
-    let start = data.allocate(pointer, 0x104)?;
-    let mut ability = vec![module_base(node, KIND, start, data, true)?];
+    let start = data.allocate(pointer, size)?;
+    let mut ability = vec![module_base(node, kind, start, data, true)?];
     let mut derived = Vec::new();
     // Reference ordinals follow the source attribute order.
     for attr in node.attributes() {
         let Some(&(_, _, offset, storage @ ("ref" | "weak" | "audio"), target)) =
-            FIELDS.iter().find(|&&(name, ..)| name == attr.name())
+            all_fields.clone().find(|&&(name, ..)| name == attr.name())
         else {
             continue;
         };
@@ -190,7 +238,7 @@ pub(super) fn encode(
         };
         data.word(start + offset, word);
     }
-    for &(name, tag, offset, storage, default) in FIELDS {
+    for &(name, tag, offset, storage, default) in all_fields {
         let value = node.attribute(name).unwrap_or(default);
         let offset = start + offset;
         match storage {
@@ -218,6 +266,7 @@ pub(super) fn encode(
                     "options" => options(value, path)?,
                     "conditions" => flags(value, &["MOUNTED", "WEAPON_TOGGLE", "MOVING"], path)?,
                     "disabled" => flags(value, super::production::DISABLED, path)?,
+                    "slot" => super::behaviors_basic::weapon_slot(value, path)?,
                     "model" if value.is_empty() => 0,
                     "model" if value == "INVALID" => u32::MAX,
                     "model" => model_condition_index(value, path)? as u32,
@@ -258,6 +307,17 @@ pub(super) fn encode(
         0x6b74_6af6,
         animation,
     ));
+    let mut entries = vec![base(0xac59_8f82, Table::record(ability))];
+    entries.extend(derived);
+    if weapon {
+        if children.next().is_some() {
+            return Err(invalid(
+                path,
+                "unexpected WeaponFireSpecialAbilityUpdate child",
+            ));
+        }
+        return Ok((kind, Table::record(entries)));
+    }
     let mut ids = Vec::new();
     for child in children {
         if !child.has_tag_name((SAGE_NS, "ReplacementTemplate")) {
@@ -266,12 +326,10 @@ pub(super) fn encode(
         ids.push(weak_reference(child, "GameObject", data, reference_types)?);
     }
     let replacements = id_list(data, start + 0xfc, ids)?;
-    let mut entries = vec![base(0xac59_8f82, Table::record(ability))];
-    entries.extend(derived);
     entries.push(Entry::named(
         "ReplacementTemplate",
         0x148e_d75d,
         Target::Table(replacements),
     ));
-    Ok((KIND, Table::record(entries)))
+    Ok((kind, Table::record(entries)))
 }

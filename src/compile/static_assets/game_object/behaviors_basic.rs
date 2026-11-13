@@ -203,7 +203,10 @@ pub(super) fn encode(
         return super::slow_death::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
-    if node.has_tag_name((SAGE_NS, "ReplaceSelfSpecialAbility")) {
+    if matches!(
+        node.tag_name().name(),
+        "ReplaceSelfSpecialAbility" | "WeaponFireSpecialAbilityUpdate"
+    ) {
         return super::replace_self::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
