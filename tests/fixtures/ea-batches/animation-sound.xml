@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="AnimationSoundProbe"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body><ClientBehaviors>
+<AnimationSoundClientBehavior id="ModuleTag_AnimationSound" MaxUpdateRangeCap="123.5">
+<Sound Sound="ProbeGrab" Animation="ProbeUnload" Frame="4 15" RequiredMC="DOCKING_ACTIVE" ExcludedMC="DYING"/>
+<Sound Sound="ProbeDrop" Animation="ProbeEmpty" Frame="0"/>
+</AnimationSoundClientBehavior>
+<AnimationSoundClientBehavior id="ModuleTag_Default"><Sound Sound="ProbeDone" Animation="ProbeDoneAnim" Frame="33"/></AnimationSoundClientBehavior>
+</ClientBehaviors></GameObject></AssetDeclaration>

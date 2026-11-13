@@ -10,6 +10,7 @@ use std::io;
 use std::path::Path;
 use std::sync::OnceLock;
 
+const ANIMATION_SOUND: u32 = 0x27ef_791d;
 const LOOP: u32 = 0x5a3e_dbf4;
 const SELECTOR: u32 = 0x327c_fb76;
 const SOUND: u32 = 0x63d7_b468;
@@ -32,6 +33,7 @@ pub(super) fn encode(
     let mut items = Vec::with_capacity(modules.len());
     for (index, node) in modules.into_iter().enumerate() {
         let (kind, name, tag, size) = match node.tag_name().name() {
+            "AnimationSoundClientBehavior" => (ANIMATION_SOUND, "Sound", 0xeb6c_6024, 0x18),
             "ModelConditionAudioLoopClientBehavior" => {
                 (LOOP, "ModelConditionSound", 0xd832_6ddd, 0x7c)
             }
@@ -51,21 +53,43 @@ pub(super) fn encode(
                 "unexpected client behavior namespace",
             ));
         }
-        validate_attributes(node, &["id"], encoder.data.path)?;
+        let allowed: &[_] = if kind == ANIMATION_SOUND {
+            &["id", "MaxUpdateRangeCap"]
+        } else {
+            &["id"]
+        };
+        validate_attributes(node, allowed, encoder.data.path)?;
         let children = elements(node, name, encoder.data.path)?;
-        if kind == SELECTOR && children.is_empty() {
+        if kind != LOOP && children.is_empty() {
             return Err(invalid(
                 encoder.data.path,
-                "sound selector requires Override",
+                format!("client behavior requires {name}"),
             ));
         }
-        let start = encoder.data.allocate(pointers + index * 4, 16)?;
+        let is_animation = kind == ANIMATION_SOUND;
+        let start = encoder
+            .data
+            .allocate(pointers + index * 4, if is_animation { 20 } else { 16 })?;
         encoder.data.word(start, kind);
         encoder.data.word(
             start + 4,
             hash_name(required(node, "id", encoder.data.path)?),
         );
-        let first = encoder.data.list(start + 8, children.len(), size)?;
+        let mut range = Target::Null;
+        let count = start + if is_animation { 12 } else { 8 };
+        if is_animation && let Some(value) = node.attribute("MaxUpdateRangeCap") {
+            let value = super::super::finite_number(value, "MaxUpdateRangeCap", encoder.data.path)?;
+            if value <= 0.0 {
+                return Err(invalid(
+                    encoder.data.path,
+                    "MaxUpdateRangeCap must be positive",
+                ));
+            }
+            let offset = encoder.data.allocate(start + 8, 4)?;
+            encoder.data.word(offset, value.to_bits());
+            range = Target::Data(offset);
+        }
+        let first = encoder.data.list(count, children.len(), size)?;
         let mut entries = Vec::with_capacity(children.len());
         for (index, child) in children.into_iter().enumerate() {
             let offset = first + index * size;
@@ -73,6 +97,8 @@ pub(super) fn encode(
                 0,
                 Target::Table(if kind == LOOP {
                     encoder.sound_loop(child, offset)?
+                } else if is_animation {
+                    encoder.animation_sound(child, offset)?
                 } else {
                     encoder.sound_override(child, offset)?
                 }),
@@ -82,10 +108,15 @@ pub(super) fn encode(
             Entry::new(0x19b0_42a0, INT, Target::Data(start)),
             Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
         ]);
-        let fields = Table::record(vec![
-            base(0x7b8c_5772, Table::record(vec![base(0xd75d_93a2, module)])),
-            list(name, tag, start + 8, entries),
-        ]);
+        let mut fields = vec![base(
+            0x7b8c_5772,
+            Table::record(vec![base(0xd75d_93a2, module)]),
+        )];
+        if is_animation {
+            fields.push(Entry::named("MaxUpdateRangeCap", 0xbc2f_1cbf, range));
+        }
+        fields.push(list(name, tag, count, entries));
+        let fields = Table::record(fields);
         items.push((
             0,
             Target::Table(Table::sequence(vec![Entry::new(
@@ -127,6 +158,55 @@ pub(super) fn encode_object_audio(
 }
 
 impl AudioEncoder<'_, '_> {
+    fn animation_sound(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
+        let path = self.data.path;
+        validate_attributes(
+            node,
+            &["Sound", "RequiredMC", "ExcludedMC", "Animation", "Frame"],
+            path,
+        )?;
+        require_empty(node, path)?;
+        let sound = super::passive_area::reference(
+            required(node, "Sound", path)?,
+            "BaseAudioEventInfo",
+            path,
+            self.references,
+            self.reference_types,
+        )?;
+        self.data.word(start, sound);
+        let mut entries = vec![field("Sound", SOUND, start)];
+        for (name, offset) in [("RequiredMC", 4), ("ExcludedMC", 8)] {
+            let target = if let Some(value) = node.attribute(name) {
+                let first = self.data.allocate(start + offset, 0x3c)?;
+                write_model_conditions(value, first, self.data)?;
+                Target::Data(first)
+            } else {
+                Target::Null
+            };
+            entries.push(Entry::named(name, 0x67db_bfc9, target));
+        }
+        let value = required(node, "Animation", path)?;
+        let plain = value.split_once('\\').map_or(value, |(name, _)| name);
+        let animation = asset_reference(plain, "W3DAnimation", path)?;
+        self.reference_types.push(animation.type_id);
+        self.data.word(start + 12, animation.instance_id);
+        entries.push(field("Animation", 0x2648_0425, start + 12));
+        let frames = required(node, "Frame", path)?.split_ascii_whitespace();
+        let count = start + 16;
+        let first = self.data.list(count, frames.clone().count(), 4)?;
+        let mut items = Vec::new();
+        for (index, frame) in frames.enumerate() {
+            let value = frame
+                .parse::<i32>()
+                .map_err(|_| invalid(path, "invalid animation sound frame"))?;
+            let offset = first + 4 * index;
+            self.data.word(offset, value as u32);
+            items.push((0, Target::Data(offset)));
+        }
+        entries.push(list("Frame", 0x49ef_147d, count, items));
+        Ok(Table::record(entries))
+    }
+
     fn eva_array(&mut self, node: Node<'_, '_>) -> io::Result<Target> {
         validate_attributes(node, &[], self.data.path)?;
         let children = elements(node, "EvaEntry", self.data.path)?;
