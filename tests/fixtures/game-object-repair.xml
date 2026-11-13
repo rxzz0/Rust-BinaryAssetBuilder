@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+ <GameObject id="RepairProbe">
+  <Behaviors>
+   <RepairUpdate id="ModuleTag_RepairUpdate"><PercentOfBuildCostToRebuildInfo /><SelfAudio /></RepairUpdate>
+   <RepairUpdate id="ModuleTag_Custom" Toggleable="false" RepairableWhenDead="true" RepopThreshold="0.75" HealAmountPerSecond="71">
+    <PercentOfBuildCostToRebuildInfo Pristine="10%" Damaged="25%" ReallyDamaged="75%" Rubble="90%" />
+    <SelfAudio SelfRepairFromDamageLoop="RepairDamageProbe" SelfRepairFromRubbleLoop="RepairRubbleProbe" />
+   </RepairUpdate>
+  </Behaviors>
+  <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+ </GameObject>
+ <AudioEvent id="RepairDamageProbe" />
+ <AudioEvent id="RepairRubbleProbe" />
+</AssetDeclaration>

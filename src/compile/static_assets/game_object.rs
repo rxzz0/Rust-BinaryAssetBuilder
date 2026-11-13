@@ -15,6 +15,7 @@ mod parking;
 mod physics;
 mod production;
 mod recall;
+mod repair;
 mod schema;
 mod secondary_damage;
 mod shadow;

@@ -300,35 +300,49 @@ impl AudioEncoder<'_, '_> {
     }
 
     fn reference(&mut self, value: &str, kind: &str) -> io::Result<u32> {
+        if kind == "BaseAudioEventInfo" {
+            return audio_reference(value, self.data.path, self.references, self.reference_types);
+        }
         let name = value.split_once('\\').map_or(value, |(name, _)| name);
         if name.trim().is_empty() {
             return Ok(0);
         }
-        let reference = if kind == "BaseAudioEventInfo" {
-            match name.trim().split_once(':') {
-                Some(("AudioEvent", _)) => {
-                    asset_reference(name, "AudioEvent", self.data.path)?.into()
-                }
-                Some((_, plain)) => {
-                    let base = asset_reference(name, kind, self.data.path)?;
-                    AssetReference {
-                        id: asset_reference(plain, "AudioEvent", self.data.path)?,
-                        external_type: Some(base.type_id),
-                    }
-                }
-                None => AssetReference {
-                    id: asset_reference(name, "AudioEvent", self.data.path)?,
-                    external_type: Some(super::super::fast_hash(kind.as_bytes())),
-                },
-            }
-        } else {
-            asset_reference(name, kind, self.data.path)?.into()
-        };
-        self.references.push(reference);
+        self.references
+            .push(asset_reference(name, kind, self.data.path)?.into());
         self.reference_types
             .push(super::super::fast_hash(kind.as_bytes()));
         Ok(self.references.len() as u32)
     }
+}
+
+pub(super) fn audio_reference(
+    value: &str,
+    path: &Path,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<u32> {
+    let kind = "BaseAudioEventInfo";
+    let name = value.split_once('\\').map_or(value, |(name, _)| name);
+    if name.trim().is_empty() {
+        return Ok(0);
+    }
+    let reference = match name.trim().split_once(':') {
+        Some(("AudioEvent", _)) => asset_reference(name, "AudioEvent", path)?.into(),
+        Some((_, plain)) => {
+            let base = asset_reference(name, kind, path)?;
+            AssetReference {
+                id: asset_reference(plain, "AudioEvent", path)?,
+                external_type: Some(base.type_id),
+            }
+        }
+        None => AssetReference {
+            id: asset_reference(name, "AudioEvent", path)?,
+            external_type: Some(super::super::fast_hash(kind.as_bytes())),
+        },
+    };
+    references.push(reference);
+    reference_types.push(super::super::fast_hash(kind.as_bytes()));
+    Ok(references.len() as u32)
 }
 
 fn condition_fields(
