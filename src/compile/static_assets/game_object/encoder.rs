@@ -238,9 +238,13 @@ pub(in crate::compile::static_assets) fn compile(
             };
             let (kind, fields) = match encoded {
                 Some(encoded) => encoded,
-                None if module.has_tag_name((SAGE_NS, "Physics")) => {
-                    physics::encode(module, pointers + index * 4, &mut data)?
-                }
+                None if module.has_tag_name((SAGE_NS, "Physics")) => physics::encode(
+                    module,
+                    pointers + index * 4,
+                    &mut data,
+                    &mut references,
+                    &mut reference_types,
+                )?,
                 None => structures::encode(
                     module,
                     pointers + index * 4,

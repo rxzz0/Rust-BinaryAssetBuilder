@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="PhysicsFieldsProbe"><Behaviors>
+<Physics id="ModuleTag_Default"/>
+<Physics id="ModuleTag_Tumble" TumbleRandomly="true" MaxXRotationVelocity="123.5" AllowBouncing="true" KillWhenRestingOnGround="true" OrientToFlightPath="true" ShockStunnedTimeLow="200ms" FirstPercentIndent="19%" BounceCount="4" GroundHitFX="ProbeHit" GroundBounceFX="ProbeBounce" IgnoreTerrainHeight="true" CurveFlattenMinDist="3.25"/>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>
