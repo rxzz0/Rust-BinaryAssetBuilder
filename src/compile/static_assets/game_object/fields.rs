@@ -23,6 +23,7 @@ pub(super) fn encode(
         "EditorName",
         "EditorSorting",
         "BuildTime",
+        "MaxSimultaneousOfType",
         "EnergyProduction",
         "CommandSet",
         "SelectPortrait",
@@ -105,6 +106,12 @@ pub(super) fn encode(
     }
     if let Some(value) = node.attribute("BuildTime") {
         data.word(0x84, finite_float(value, "BuildTime", data.path)?.to_bits());
+    }
+    if let Some(value) = node.attribute("MaxSimultaneousOfType") {
+        let limit = value
+            .parse::<u16>()
+            .map_err(|_| invalid(data.path, "invalid MaxSimultaneousOfType"))?;
+        data.payload[0x23e..0x240].copy_from_slice(&limit.to_le_bytes());
     }
     if let Some(value) = node.attribute("EnergyProduction") {
         let number = value

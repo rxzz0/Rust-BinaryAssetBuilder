@@ -379,6 +379,11 @@ mod tests {
         assert_ea_fixture("replace-self", 1);
     }
 
+    #[test]
+    fn object_limit_matches_ea_batch() {
+        assert_ea_fixture("object-limit", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
