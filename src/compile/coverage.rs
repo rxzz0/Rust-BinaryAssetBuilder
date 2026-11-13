@@ -540,6 +540,11 @@ mod tests {
         assert_ea_fixture("animation-sound", 1);
     }
 
+    #[test]
+    fn client_update_eva_matches_ea_batch() {
+        assert_ea_fixture("client-update-eva", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

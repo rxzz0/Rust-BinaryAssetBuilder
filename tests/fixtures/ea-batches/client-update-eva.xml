@@ -1,0 +1,5 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="ClientUpdateEvaProbe"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body><ClientUpdates>
+<EvaAnnounceSpecialPowerReadyClientUpdate id="ModuleTag_Ready" AnnouncementEventOwner="ProbeReady" AnnouncementEventAlly="ProbeReadyAlly" AnnouncementEventEnemy="ProbeReadyEnemy" SpecialPowerTemplate="ProbePower" JustMonitorPercentReady="true" CheckPlayerPowerVisibility="true"/>
+<EvaAnnounceClientCreate id="ModuleTag_Create" AnnouncementEventEnemy="ProbeDetected" AnnouncementEventOwner="ProbeCreated" AnnouncementEventAlly="ProbeCreateAlly" DelayBeforeAnnouncementLogicFrames="10" OnlyIfVisible="true" CountAsFirstSightedAnnouncement="true" UseObjectsPosition="true" CreateFakeRadarEvent="true"/>
+<EvaAnnounceClientCreate id="ModuleTag_Default"/>
+</ClientUpdates></GameObject></AssetDeclaration>

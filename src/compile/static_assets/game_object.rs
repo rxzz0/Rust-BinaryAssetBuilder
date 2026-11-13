@@ -6,6 +6,7 @@ mod behaviors_basic;
 mod building_destruction;
 mod children;
 mod client_behaviors;
+mod client_updates;
 mod create_object_die;
 mod draws;
 pub(in crate::compile) use draws::SCRIPTED_FLAGS;
