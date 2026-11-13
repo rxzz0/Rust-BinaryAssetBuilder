@@ -1,4 +1,4 @@
-use super::super::{hash_name, validate_attributes};
+use super::super::{finite_number, hash_name, percentage, sage_time, validate_attributes};
 use crate::compile::{has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
@@ -8,30 +8,60 @@ pub(super) const TOKEN_LAYOUT: &[u8; 0x79c] = include_bytes!("active_body_tokens
 pub(super) const SIZE: usize = 0x4c;
 
 pub(super) fn encode(node: Node<'_, '_>, path: &Path) -> io::Result<[u8; SIZE]> {
-    validate_attributes(node, &["id", "MaxHealth"], path)?;
+    validate_attributes(
+        node,
+        &[
+            "id",
+            "MaxHealth",
+            "MaxHealthDamagedPercentage",
+            "MaxHealthReallyDamagedPercentage",
+            "InitialHealth",
+            "DodgePercent",
+            "EnteringDamagedTransitionTime",
+            "EnteringReallyDamagedTransitionTime",
+            "CheerRadius",
+            "RemoveUpgradesOnDeath",
+            "BurningDeathBehavior",
+        ],
+        path,
+    )?;
     if has_content(node) {
         return Err(invalid(path, "ActiveBody cannot contain child elements"));
     }
     let id = required(node, "id", path)?;
-    let health = node
-        .attribute("MaxHealth")
-        .unwrap_or("0")
-        .parse::<f32>()
-        .map_err(|_| invalid(path, "invalid ActiveBody MaxHealth"))?;
-    if !health.is_finite() {
-        return Err(invalid(path, "invalid ActiveBody MaxHealth"));
-    }
+    let real = |name, default| finite_number(node.attribute(name).unwrap_or(default), name, path);
+    let percent = |name, default| percentage(node.attribute(name).unwrap_or(default), name, path);
+    let time = |name| sage_time(node.attribute(name).unwrap_or("0s"), name, path);
     let mut body = [0; SIZE];
     for (offset, value) in [
         (0, 0x5a0e_3d9b),
         (4, hash_name(id)),
-        (8, health.to_bits()),
-        (0xc, 0x3f2a_aaaa),
-        (0x10, 0x3eaa_aaaa),
-        (0x14, 0xbf80_0000),
-        (0x38, 0x4348_0000),
+        (8, real("MaxHealth", "0")?.to_bits()),
+        (
+            0xc,
+            percent("MaxHealthDamagedPercentage", "66.666666")?.to_bits(),
+        ),
+        (
+            0x10,
+            percent("MaxHealthReallyDamagedPercentage", "33.333333")?.to_bits(),
+        ),
+        (0x14, real("InitialHealth", "-1")?.to_bits()),
+        (0x18, real("DodgePercent", "0")?.to_bits()),
+        (0x1c, time("EnteringDamagedTransitionTime")?.to_bits()),
+        (0x20, time("EnteringReallyDamagedTransitionTime")?.to_bits()),
+        (0x38, real("CheerRadius", "200")?.to_bits()),
     ] {
         body[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    }
+    for (name, offset) in [
+        ("RemoveUpgradesOnDeath", 0x48),
+        ("BurningDeathBehavior", 0x49),
+    ] {
+        body[offset] = match node.attribute(name).map(str::trim) {
+            None | Some("false" | "0") => 0,
+            Some("true" | "1") => 1,
+            Some(_) => return Err(invalid(path, format!("invalid ActiveBody {name}"))),
+        };
     }
     Ok(body)
 }
