@@ -1,0 +1,5 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="WeaponSlotTurretsProbe"><Behaviors>
+<WeaponSetUpdate id="ModuleTag_Weapons">
+<WeaponSlotTurret ID="1"><Weapon Template="ProbeWeapon"/><TurretSettings TurretTurnRate="60" TurretPitchRate="42" AllowsPitch="true" MinimumPitch="10d" PitchHeight="70%" ControlledWeaponSlots="PRIMARY_WEAPON SECONDARY_WEAPON" InvalidIdleScanObjectStatus="UNDER_CONSTRUCTION" IdleTurnRateModifier="25%" MinIdleScanTime="1s" MaxIdleScanTime="4s" MinIdleScanAngle="30" MaxIdleScanAngle="50" MaxDeflectionClockwise="100d" MaxDeflectionAntiClockwise="120d" NaturalTurretAngle="0.25r" RecenterWhenOutOfTurnRange="false" BlindFireDistance="100" ComeToHaltJiggle="2d" SetAngleModelStates="true"><TurretAITargetChooserData IdleScanDelay="0s" CanAcquireDynamicIfAssignedOutOfRange="true" ActiveWhenPerformingSpecialAbility="true" CanPickTargetsOutOfTurretAngle="true"/></TurretSettings></WeaponSlotTurret>
+<WeaponSlotHierarchicalTurret ID="2" ParentID="1"><TurretSettings/></WeaponSlotHierarchicalTurret>
+</WeaponSetUpdate></Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>

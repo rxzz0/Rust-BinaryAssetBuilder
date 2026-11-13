@@ -196,7 +196,7 @@ fn optional_chooser<'a, 'input>(
     Ok(first)
 }
 
-fn encode_chooser(
+pub(super) fn encode_chooser(
     node: Node<'_, '_>,
     pointer: usize,
     data: &mut BinaryData<'_>,
@@ -216,14 +216,29 @@ fn encode_chooser(
         ("CanChaseAttack", BOOL, 0x20),
         ("CanOnlyAttackTargetsInFront", BOOL, 0x21),
     ];
-    validate_fields(node, FIELDS, &["TargetingCompareList"], data.path)?;
+    const TURRET_FIELDS: &[(&str, u32, usize)] = &[
+        ("ActiveWhenPerformingSpecialAbility", BOOL, 0x28),
+        ("CanAcquireDynamicIfAssignedOutOfRange", BOOL, 0x29),
+        ("CanPickTargetsOutOfTurretAngle", BOOL, 0x2a),
+    ];
+    let turret = node.has_tag_name((SAGE_NS, "TurretAITargetChooserData"));
+    let extra: Vec<_> = ["TargetingCompareList"]
+        .into_iter()
+        .chain(
+            TURRET_FIELDS
+                .iter()
+                .filter(|_| turret)
+                .map(|&(name, _, _)| name),
+        )
+        .collect();
+    validate_fields(node, FIELDS, &extra, data.path)?;
     if has_content(node) {
         return Err(invalid(
             data.path,
             "unsupported UnitAITargetChooserData child",
         ));
     }
-    let start = data.allocate(pointer, 0x28)?;
+    let start = data.allocate(pointer, if turret { 0x2c } else { 0x28 })?;
     for (name, default, offset) in [
         ("IdleScanDelay", "0.8s", 0),
         ("ReacquireDelay", "60s", 4),
@@ -251,8 +266,11 @@ fn encode_chooser(
         write_bool(node, name, default, start + offset, data)?;
     }
     let id = asset_reference(
-        node.attribute("TargetingCompareList")
-            .unwrap_or("DefaultTargetingCompareList"),
+        node.attribute("TargetingCompareList").unwrap_or(if turret {
+            "DefaultTurretTargetingCompareList"
+        } else {
+            "DefaultTargetingCompareList"
+        }),
         "TargetingCompareList",
         data.path,
     )?;
@@ -269,14 +287,21 @@ fn encode_chooser(
         0x2e11_fc54,
         Target::Table(Table::array(start + 0x14, [])),
     ));
-    Ok(Table::record(vec![
+    let mut entries = vec![
         base(0xaa42_eb9c, Table::record(fields)),
         Entry::named(
             "TargetingCompareList",
             0x1b85_b469,
             Target::Data(start + 0x24),
         ),
-    ]))
+    ];
+    if turret {
+        for &(name, kind, offset) in TURRET_FIELDS {
+            write_bool(node, name, false, start + offset, data)?;
+            entries.push(Entry::named(name, kind, Target::Data(start + offset)));
+        }
+    }
+    Ok(Table::record(entries))
 }
 
 fn base(kind: u32, table: Table) -> Entry {

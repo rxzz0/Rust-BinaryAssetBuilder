@@ -175,10 +175,6 @@ pub(super) fn encode(
         return super::infiltrator::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
-    if node.has_tag_name((SAGE_NS, "WeaponSetUpdate")) {
-        return super::weapon_set::encode(node, pointer, data, references, reference_types)
-            .map(Some);
-    }
     if node.has_tag_name((SAGE_NS, "LaserState")) {
         return super::laser_state::encode(node, pointer, data, references, reference_types)
             .map(Some);

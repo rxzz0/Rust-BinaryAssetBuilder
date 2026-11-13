@@ -159,6 +159,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut create_object_modules = Vec::new();
     let mut spawn_modules = Vec::new();
     let mut tech_modules = Vec::new();
+    let mut chooser_relocations = Vec::new();
     let mut subobject_modules = Vec::new();
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
     let mut child_targets =
@@ -194,6 +195,15 @@ pub(in crate::compile::static_assets) fn compile(
                 )?;
                 create_object_modules.push(start);
                 Some(result)
+            } else if module.has_tag_name((SAGE_NS, "WeaponSetUpdate")) {
+                Some(super::weapon_set::encode(
+                    module,
+                    pointer,
+                    &mut data,
+                    &mut references,
+                    &mut reference_types,
+                    &mut chooser_relocations,
+                )?)
             } else if module.has_tag_name((SAGE_NS, "SpawnBehavior")) {
                 let start = data.payload.len() as u32;
                 let result =
@@ -392,6 +402,20 @@ pub(in crate::compile::static_assets) fn compile(
         // The SDK lists a float constant's value pointer before its name pointer.
         debug_assert_eq!(data.relocations[index + 1], data.relocations[index] + 8);
         data.relocations.swap(index, index + 1);
+    }
+    for (weapons, chooser) in chooser_relocations {
+        // EA emits the chooser relocation before the inherited weapon-list pointer.
+        let first = data
+            .relocations
+            .iter()
+            .position(|&pointer| pointer == weapons)
+            .expect("weapon list relocation");
+        let last = data
+            .relocations
+            .iter()
+            .position(|&pointer| pointer == chooser)
+            .expect("turret chooser relocation");
+        data.relocations[first..=last].rotate_right(1);
     }
     tokenized::finish(
         table,

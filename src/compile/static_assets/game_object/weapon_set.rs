@@ -1,7 +1,7 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{AssetReference, asset_reference, significant_children, validate_attributes};
-use super::behaviors_basic::{module_base, weapon_slot};
+use super::behaviors_basic::{base, module_base, weapon_slot};
 use super::draws::{boolean, fields};
 use super::secondary_damage::write_status_flags;
 use crate::compile::{SAGE_NS, has_content, invalid};
@@ -32,6 +32,7 @@ pub(super) fn encode(
     data: &mut BinaryData<'_>,
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
+    chooser_relocations: &mut Vec<(u32, u32)>,
 ) -> io::Result<(u32, Table)> {
     let path = data.path;
     validate_attributes(node, &["id"], path)?;
@@ -55,33 +56,29 @@ pub(super) fn encode(
                     ),
                 )
             })?;
-        if matches!(index, 1 | 2) {
-            return Err(invalid(
-                path,
-                format!(
-                    "unsupported WeaponSetUpdate slot {}",
-                    child.tag_name().name()
-                ),
-            ));
-        }
         groups[index].push(child);
     }
     let start = data.allocate(pointer, 0x28)?;
     let mut entries = vec![module_base(node, KIND, start, data, true)?];
     for (index, ((name, kind), nodes)) in slots.into_iter().zip(groups).enumerate() {
         let count = start + 8 + index * 8;
-        let first = data.list(count, nodes.len(), 0x1c)?;
+        let size = [0x1c, 0x7c, 0x80, 0x1c][index];
+        let first = data.list(count, nodes.len(), size)?;
         let mut items = Vec::with_capacity(nodes.len());
         for (index, child) in nodes.into_iter().enumerate() {
-            let slot = encode_slot(
-                child,
-                first + index * 0x1c,
-                data,
-                references,
-                reference_types,
-            )?;
+            let start = first + index * size;
+            let slot = encode_slot(child, start, data, references, reference_types)?;
+            if matches!(name, "WeaponSlotTurret" | "WeaponSlotHierarchicalTurret") {
+                let chooser = start + 0x74;
+                let weapons = start + 0x14;
+                if data.payload[chooser..chooser + 4] != [0; 4]
+                    && data.payload[weapons..weapons + 4] != [0; 4]
+                {
+                    chooser_relocations.push((weapons as u32, chooser as u32));
+                }
+            }
             let slot = if name == "WeaponSlotContained" {
-                Table::record(vec![super::behaviors_basic::base(0xce58_53d7, slot)])
+                Table::record(vec![base(0xce58_53d7, slot)])
             } else {
                 slot
             };
@@ -104,7 +101,13 @@ fn encode_slot(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Table> {
     let path = data.path;
-    let allowed: Vec<_> = SLOT_FIELDS.iter().map(|&(name, _, _)| name).collect();
+    let hierarchy = node.has_tag_name((SAGE_NS, "WeaponSlotHierarchicalTurret"));
+    let turret = hierarchy || node.has_tag_name((SAGE_NS, "WeaponSlotTurret"));
+    let allowed: Vec<_> = SLOT_FIELDS
+        .iter()
+        .map(|&(name, _, _)| name)
+        .chain(hierarchy.then_some("ParentID"))
+        .collect();
     validate_attributes(node, &allowed, path)?;
     let id = node
         .attribute("ID")
@@ -143,8 +146,9 @@ fn encode_slot(
     );
     let allowed: Vec<_> = WEAPON_FIELDS.iter().map(|&(name, _, _)| name).collect();
     let mut weapons = Vec::new();
-    for child in significant_children(node) {
-        if !child.has_tag_name((SAGE_NS, "Weapon")) || has_content(child) {
+    let mut children = significant_children(node).peekable();
+    while let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, "Weapon"))) {
+        if has_content(child) {
             return Err(invalid(path, "expected a leaf Weapon in weapon slot"));
         }
         validate_attributes(child, &allowed, path)?;
@@ -169,6 +173,21 @@ fn encode_slot(
             path,
         )?;
         weapons.push((ordering, child, ordinals));
+    }
+    let settings = if turret {
+        let child = super::super::required_element(&mut children, "TurretSettings", path)?;
+        Some(encode_turret(
+            child,
+            start + 0x1c,
+            data,
+            references,
+            reference_types,
+        )?)
+    } else {
+        None
+    };
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected weapon slot child"));
     }
     weapons.sort_by_key(|&(order, _, _)| order);
     let count = start + 0x10;
@@ -196,5 +215,111 @@ fn encode_slot(
         0x7799_4e4b,
         Target::Table(Table::array(count, items)),
     ));
+    if let Some(settings) = settings {
+        entries = vec![
+            base(0xce58_53d7, Table::record(entries)),
+            Entry::named("TurretSettings", 0xf675_3063, Target::Table(settings)),
+        ];
+        if hierarchy {
+            let parent_id = node
+                .attribute("ParentID")
+                .unwrap_or("0")
+                .trim()
+                .parse::<u32>()
+                .map_err(|_| invalid(path, "invalid weapon turret ParentID"))?;
+            data.word(start + 0x7c, parent_id);
+            entries = vec![
+                base(0x4f14_a301, Table::record(entries)),
+                Entry::named("ParentID", 0x7631_77a4, Target::Data(start + 0x7c)),
+            ];
+        }
+    }
+    Ok(Table::record(entries))
+}
+
+fn encode_turret(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Table> {
+    const REAL: u32 = 0x6458_64f3;
+    const BOOL: u32 = 0x77e3_f4f7;
+    const ANGLE: u32 = 0x4e16_ea4d;
+    const TIME: u32 = 0x9986_69e8;
+    const SLOTS: u32 = 0x28ae_db15;
+    const STATUS: u32 = 0xa7bd_811e;
+    const FIELDS: &[(&str, u32, usize, &str)] = &[
+        ("TurretTurnRate", REAL, 0, "0"),
+        ("TurretPitchRate", REAL, 4, "0"),
+        ("AllowsPitch", BOOL, 0x5c, "false"),
+        ("MinimumPitch", ANGLE, 8, "0d"),
+        ("PitchHeight", REAL, 0xc, "50"),
+        ("ControlledWeaponSlots", SLOTS, 0x10, ""),
+        ("InvalidIdleScanObjectStatus", STATUS, 0x14, ""),
+        ("IdleTurnRateModifier", REAL, 0x30, "50"),
+        ("MinIdleScanTime", TIME, 0x34, "0s"),
+        ("MaxIdleScanTime", TIME, 0x38, "0s"),
+        ("MinIdleScanAngle", REAL, 0x3c, "0"),
+        ("MaxIdleScanAngle", REAL, 0x40, "0"),
+        ("MaxDeflectionClockwise", ANGLE, 0x44, "180d"),
+        ("MaxDeflectionAntiClockwise", ANGLE, 0x48, "180d"),
+        ("NaturalTurretAngle", ANGLE, 0x4c, "0d"),
+        ("RecenterWhenOutOfTurnRange", BOOL, 0x5d, "true"),
+        ("BlindFireDistance", REAL, 0x50, "0"),
+        ("ComeToHaltJiggle", ANGLE, 0x54, "0d"),
+        ("SetAngleModelStates", BOOL, 0x5e, "false"),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = FIELDS.iter().map(|&(name, ..)| name).collect();
+    validate_attributes(node, &allowed, path)?;
+    let mut entries = Vec::with_capacity(FIELDS.len() + 1);
+    for &(name, kind, field, default) in FIELDS {
+        let offset = start + field;
+        let value = node.attribute(name).unwrap_or(default);
+        match kind {
+            BOOL => data.payload[offset] = boolean(node, name, default == "true", path)?,
+            STATUS => write_status_flags(value, offset, data)?,
+            _ => {
+                let word = match kind {
+                    ANGLE => super::slow_death::angle(value, name, data)?.to_bits(),
+                    TIME => super::super::sage_time(value, name, path)?.to_bits(),
+                    SLOTS => {
+                        let mut flags = 0;
+                        for slot in value.split_ascii_whitespace() {
+                            flags |= 1 << weapon_slot(slot, path)?;
+                        }
+                        flags
+                    }
+                    REAL if matches!(name, "PitchHeight" | "IdleTurnRateModifier") => {
+                        super::super::percentage(value, name, path)?.to_bits()
+                    }
+                    REAL => super::super::finite_number(value, name, path)?.to_bits(),
+                    _ => unreachable!(),
+                };
+                data.word(offset, word);
+            }
+        }
+        entries.push(Entry::named(name, kind, Target::Data(offset)));
+    }
+    let mut children = significant_children(node).peekable();
+    let name = "TurretAITargetChooserData";
+    let chooser = if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, name)))
+    {
+        Target::Table(super::ai_update::encode_chooser(
+            child,
+            start + 0x58,
+            data,
+            references,
+            reference_types,
+        )?)
+    } else {
+        Target::Null
+    };
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected TurretSettings child"));
+    }
+    entries.push(Entry::named(name, 0x08cf_34b0, chooser));
     Ok(Table::record(entries))
 }
