@@ -1,0 +1,20 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+ <GameObject id="EngineerContainProbe">
+  <Behaviors>
+   <EngineerContain id="ModuleTag_Default" />
+   <EngineerContain id="ModuleTag_EngineerContain"
+     NameOfVoiceToUseForFriendlyEnter="VoiceEngineerRepair" NameOfVoiceToUseForHostileEnter="VoiceCaptureBuilding"
+     EvaEventForRepair="BuildingRepaired" EvaEventForCapture="EnemyBuildingCaptured" EvaEventForReplace="BuildingRepaired" EvaEventForCaptureAndReplace="EnemyBuildingCaptured"
+     FXForRepair="FX_Building_Repaired" FXForCapture="FX_Building_Captured" FXForReplace="FX_Building_Repaired" FXForCaptureAndReplace="FX_Building_Captured"
+     ReplaceWith="ProbeCreationList" ImmediatelyEnabled="true" ObjectStatusToSet="NO_REFUND CAN_ATTACK">
+    <CanEnterFilter Rule="NONE"><IncludeThing>SovietEngineer</IncludeThing><IncludeThing>JapanEngineer</IncludeThing><IncludeThing>AlliedEngineer</IncludeThing></CanEnterFilter>
+   </EngineerContain>
+  </Behaviors>
+  <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+ </GameObject>
+ <EvaEvent id="BuildingRepaired" />
+ <EvaEvent id="EnemyBuildingCaptured" />
+ <FXList id="FX_Building_Repaired"><NuggetList /></FXList>
+ <FXList id="FX_Building_Captured"><NuggetList /></FXList>
+ <ObjectCreationList id="ProbeCreationList" />
+</AssetDeclaration>

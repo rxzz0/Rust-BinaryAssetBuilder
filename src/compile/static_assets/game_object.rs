@@ -8,6 +8,7 @@ mod client_behaviors;
 mod create_object_die;
 mod draws;
 mod encoder;
+mod engineer;
 mod fields;
 mod fx_list_behavior;
 mod material;

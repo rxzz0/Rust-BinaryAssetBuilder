@@ -117,7 +117,7 @@ pub(super) fn encode(
     Ok((KIND, Table::record(entries)))
 }
 
-fn encode_filter(
+pub(super) fn encode_filter(
     node: Node<'_, '_>,
     pointer: usize,
     data: &mut BinaryData<'_>,
@@ -222,7 +222,7 @@ fn encode_filter(
         ));
     }
     if children.next().is_some() {
-        return Err(invalid(path, "unexpected CanParkHereFilter child"));
+        return Err(invalid(path, "unexpected ObjectFilter child"));
     }
     Ok(Table::record(entries))
 }
