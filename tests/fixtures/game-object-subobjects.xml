@@ -1,0 +1,17 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+ <GameObject id="SubObjectsProbe">
+  <Behaviors>
+   <SubObjectsUpgrade id="ModuleTag_Default"><Nugget Upgrade="Upgrade_AlliedTech2" /></SubObjectsUpgrade>
+   <SubObjectsUpgrade id="ModuleTag_Custom" RequiresAllTriggers="true" WaypointModeTerminal="false">
+    <CustomAnimAndDuration AnimState="SOLD" Frames="7" />
+    <TriggeredBy>Upgrade_AlliedTech2</TriggeredBy><ConflictsWith>Upgrade_AlliedTech3</ConflictsWith>
+    <Nugget ShowSubObjects="Upgrade_02 UpperCase" HideSubObjects="Upgrade_01 Upgrade_03" Upgrade="Upgrade_AlliedTech2" FadeTime="2s" WaitBeforeFadeTime="500ms" SkipFadeOnCreate="true" HideSubObjectsOnRemove="true" UnHideSubObjectsOnRemove="true">
+     <UpgradeTexture Original="OldProbe" New="NewProbe" />
+     <CustomAnimAndDuration AnimState="USER_2" Frames="12" Trigger="3" />
+    </Nugget>
+    <Nugget ShowSubObjects="Upgrade_03" Upgrade="Upgrade_AlliedTech3" />
+   </SubObjectsUpgrade>
+  </Behaviors>
+  <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+ </GameObject>
+</AssetDeclaration>

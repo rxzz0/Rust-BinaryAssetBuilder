@@ -22,6 +22,7 @@ mod secondary_damage;
 mod shadow;
 mod spawn;
 mod structures;
+mod subobjects;
 mod tech_upgrade;
 
 pub(super) use encoder::compile;

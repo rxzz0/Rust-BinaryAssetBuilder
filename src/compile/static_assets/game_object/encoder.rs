@@ -155,6 +155,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut create_object_modules = Vec::new();
     let mut spawn_modules = Vec::new();
     let mut tech_modules = Vec::new();
+    let mut subobject_modules = Vec::new();
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
     let mut child_targets =
         children::encode(node, &mut data, &mut references, &mut reference_types)?;
@@ -200,6 +201,17 @@ pub(in crate::compile::static_assets) fn compile(
                 let result =
                     super::tech_upgrade::encode(module, pointer, &mut data, &mut reference_types)?;
                 tech_modules.push((start, data.payload.len() as u32));
+                Some(result)
+            } else if module.has_tag_name((SAGE_NS, "SubObjectsUpgrade")) {
+                let start = data.payload.len() as u32;
+                let result = super::subobjects::encode(
+                    module,
+                    pointer,
+                    &mut data,
+                    &mut references,
+                    &mut reference_types,
+                )?;
+                subobject_modules.push(start);
                 Some(result)
             } else {
                 behaviors_basic::encode(
@@ -317,6 +329,17 @@ pub(in crate::compile::static_assets) fn compile(
                 8 => return (end - 1, 0),
                 0x10 => return (end - 1, 1),
                 0x18 => return (end - 1, 2),
+                _ => {}
+            }
+        }
+        // EA lists the nugget array pointer before the inherited upgrade pointers.
+        let index = subobject_modules.partition_point(|&start| start <= pointer);
+        if index > 0 {
+            let start = subobject_modules[index - 1];
+            match pointer - start {
+                8 => return (start + 0x2c, 0),
+                0x10 => return (start + 0x2c, 1),
+                0x18 => return (start + 0x2c, 2),
                 _ => {}
             }
         }

@@ -144,7 +144,11 @@ pub(super) fn encode(
     Ok((KIND, Table::record(entries)))
 }
 
-fn encode_anim(node: Node<'_, '_>, pointer: usize, data: &mut BinaryData<'_>) -> io::Result<Table> {
+pub(super) fn encode_anim(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Table> {
     let path = data.path;
     validate_attributes(node, &["AnimState", "Frames", "Trigger"], path)?;
     if has_content(node) {
