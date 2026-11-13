@@ -1,0 +1,21 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="MaterialProbe">
+    <Draws><ScriptedModelDraw id="ModuleTag_Draw">
+      <ModelConditionState ParseCondStateType="PARSE_DEFAULT">
+        <Model Name="ABAirfield" />
+        <Material ShaderName="ObjectsFrozen.fx" TechniqueName="Default" TechniqueIndex="3">
+          <Constants>
+            <Texture Name="DiffuseTexture"><Value>ABAirfield</Value></Texture>
+            <Float Name="EnvMult"><Value>1</Value><Value>0.5</Value><Value>-2</Value><Value>4</Value></Float>
+            <Int Name="IntValue"><Value>-7</Value></Int>
+            <Bool Name="AlphaTestEnable"><Value>true</Value></Bool>
+          </Constants>
+        </Material>
+      </ModelConditionState>
+      <ModelConditionState ParseCondStateType="PARSE_NORMAL" ConditionsYes="PARALYZED">
+        <Material ShaderName="ObjectsFrozen.fx" />
+      </ModelConditionState>
+    </ScriptedModelDraw></Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

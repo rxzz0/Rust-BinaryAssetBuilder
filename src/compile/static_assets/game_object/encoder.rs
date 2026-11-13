@@ -144,11 +144,18 @@ pub(in crate::compile::static_assets) fn compile(
     let mut table = Table::from_layout(tokens, &template_data, path)?;
     let mut reference_types = Vec::new();
     let mut references = Vec::new();
+    let mut material_float_names = Vec::new();
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
     let mut child_targets =
         children::encode(node, &mut data, &mut references, &mut reference_types)?;
     if let Some(group) = draws {
-        let target = draws::encode(group, &mut data, &mut references, &mut reference_types)?;
+        let target = draws::encode(
+            group,
+            &mut data,
+            &mut references,
+            &mut reference_types,
+            &mut material_float_names,
+        )?;
         child_targets.push(("Draws", target));
     }
     let behavior_tokens = if let Some(group) = behaviors {
@@ -236,6 +243,19 @@ pub(in crate::compile::static_assets) fn compile(
         }
     }
     data.relocations.sort_unstable();
+    let float_relocations: Vec<_> = material_float_names
+        .into_iter()
+        .map(|name| {
+            data.relocations
+                .binary_search(&name)
+                .expect("float name relocation")
+        })
+        .collect();
+    for index in float_relocations {
+        // The SDK lists a float constant's value pointer before its name pointer.
+        debug_assert_eq!(data.relocations[index + 1], data.relocations[index] + 8);
+        data.relocations.swap(index, index + 1);
+    }
     tokenized::finish(
         table,
         data,

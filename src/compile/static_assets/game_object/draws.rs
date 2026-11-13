@@ -19,6 +19,7 @@ pub(super) fn encode(
     data: &mut BinaryData<'_>,
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
+    material_float_names: &mut Vec<u32>,
 ) -> io::Result<Target> {
     let modules: Vec<_> = significant_children(group).collect();
     let list = data.allocate(0x1cc, 8)?;
@@ -37,6 +38,7 @@ pub(super) fn encode(
             data,
             references,
             reference_types,
+            material_float_names,
         )?;
         items.push((
             0,
@@ -56,6 +58,7 @@ fn scripted_model(
     data: &mut BinaryData<'_>,
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
+    material_float_names: &mut Vec<u32>,
 ) -> io::Result<Table> {
     validate_attributes(
         node,
@@ -125,6 +128,7 @@ fn scripted_model(
             data,
             references,
             reference_types,
+            material_float_names,
         )?;
         state_tables.push((0, Target::Table(fields)));
     }
@@ -212,6 +216,7 @@ fn model_state(
     data: &mut BinaryData<'_>,
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
+    material_float_names: &mut Vec<u32>,
 ) -> io::Result<Table> {
     validate_attributes(node, &["ParseCondStateType", "ConditionsYes"], data.path)?;
     let parse_type = match required(node, "ParseCondStateType", data.path)? {
@@ -229,18 +234,22 @@ fn model_state(
     if let Some(value) = node.attribute("ConditionsYes") {
         write_model_conditions(value, start + 0xc, data)?;
     }
-    let models: Vec<_> = significant_children(node).collect();
-    if let Some(child) = models
-        .iter()
-        .find(|child| !child.has_tag_name((SAGE_NS, "Model")))
-    {
-        return Err(invalid(
-            data.path,
-            format!(
-                "unsupported ModelConditionState child {}",
-                child.tag_name().name()
-            ),
-        ));
+    let mut models = Vec::new();
+    let mut material = None;
+    for child in significant_children(node) {
+        if child.has_tag_name((SAGE_NS, "Model")) {
+            models.push(child);
+        } else if child.has_tag_name((SAGE_NS, "Material")) && material.is_none() {
+            material = Some(child);
+        } else {
+            return Err(invalid(
+                data.path,
+                format!(
+                    "unsupported or repeated ModelConditionState child {}",
+                    child.tag_name().name()
+                ),
+            ));
+        }
     }
     let model_offset = start + 0x68;
     let model_data = data.list(model_offset, models.len(), 8)?;
@@ -265,6 +274,17 @@ fn model_state(
             )),
         ));
     }
+    let material = match material {
+        Some(node) => Target::Table(super::material::encode(
+            node,
+            start + 0x70,
+            data,
+            references,
+            reference_types,
+            material_float_names,
+        )?),
+        None => Target::Null,
+    };
     let mut entries: Vec<_> = fields(
         start,
         &[
@@ -286,7 +306,7 @@ fn model_state(
             0xcd8e_c40b,
             Target::Table(Table::array(model_offset, model_tables)),
         ),
-        Entry::named("Material", 0xc7ea_3cf4, Target::Null),
+        Entry::named("Material", 0xc7ea_3cf4, material),
         array("Texture", 0x6e5d_40fb, start + 0x74),
         array("WeaponFireFXBone", 0xbd39_d1a1, start + 0x7c),
         array("WeaponRecoilBone", 0xbd39_d1a1, start + 0x84),

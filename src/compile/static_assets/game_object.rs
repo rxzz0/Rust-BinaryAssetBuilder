@@ -7,6 +7,7 @@ mod client_behaviors;
 mod draws;
 mod encoder;
 mod fields;
+mod material;
 mod physics;
 mod schema;
 mod structures;
