@@ -237,6 +237,7 @@ fn model_state(
     let mut models = Vec::new();
     let mut material = None;
     let mut particles = Vec::new();
+    let mut shadow = None;
     for child in significant_children(node) {
         if child.has_tag_name((SAGE_NS, "Model")) {
             models.push(child);
@@ -244,6 +245,8 @@ fn model_state(
             material = Some(child);
         } else if child.has_tag_name((SAGE_NS, "ParticleSysBone")) {
             particles.push(child);
+        } else if child.has_tag_name((SAGE_NS, "ShadowInfo")) && shadow.is_none() {
+            shadow = Some(child);
         } else {
             return Err(invalid(
                 data.path,
@@ -295,6 +298,16 @@ fn model_state(
         references,
         reference_types,
     )?;
+    let shadow = match shadow {
+        Some(node) => Target::Table(super::shadow::encode(
+            node,
+            start + 0xac,
+            data,
+            references,
+            reference_types,
+        )?),
+        None => Target::Null,
+    };
     let mut entries: Vec<_> = fields(
         start,
         &[
@@ -328,7 +341,7 @@ fn model_state(
             Target::Table(particle_table),
         ),
         array("FXEvent", 0x7599_1ad3, start + 0xa4),
-        Entry::named("ShadowInfo", 0x82fe_7e88, Target::Null),
+        Entry::named("ShadowInfo", 0x82fe_7e88, shadow),
         array("Turret", 0xf309_5903, start + 0xb0),
         array("SubObject", 0x03a2_8c40, start + 0xb8),
     ]);

@@ -79,6 +79,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut voice = None;
     let mut sound = None;
     let mut eva = None;
+    let mut shadow = None;
     for child in significant_children(node) {
         let slot = match child.tag_name().name() {
             "Body" => &mut body,
@@ -89,6 +90,12 @@ pub(in crate::compile::static_assets) fn compile(
             "AudioArrayVoice" => &mut voice,
             "AudioArraySound" => &mut sound,
             "EvaEventArray" => &mut eva,
+            "ShadowInfo" if child.tag_name().namespace() == Some(SAGE_NS) => {
+                if shadow.replace(child).is_some() {
+                    return Err(invalid(path, "repeated GameObject ShadowInfo"));
+                }
+                continue;
+            }
             "DisplayName"
             | "GameDependency"
             | "ObjectResourceInfo"
@@ -225,6 +232,16 @@ pub(in crate::compile::static_assets) fn compile(
             &mut reference_types,
         )?;
         child_targets.push((node.tag_name().name(), target));
+    }
+    if let Some(node) = shadow {
+        let table = super::shadow::encode(
+            node,
+            0x21c,
+            &mut data,
+            &mut references,
+            &mut reference_types,
+        )?;
+        child_targets.push(("ShadowInfo", Target::Table(table)));
     }
     if let Some(target) = children::encode_vision(node, &mut data)? {
         child_targets.push(("VisionInfo", target));

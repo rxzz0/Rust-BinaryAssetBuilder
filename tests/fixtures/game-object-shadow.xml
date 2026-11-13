@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ShadowProbe">
+    <Draws><ScriptedModelDraw id="ModuleTag_Draw">
+      <ModelConditionState ParseCondStateType="PARSE_DEFAULT">
+        <Model Name="ABAirfield" />
+        <ShadowInfo Type="ADDITIVE_DECAL" SizeX="440" SizeY="440" OverrideLODVisibility="true" MaxHeight="200" UseHouseColor="true" Texture="Decal_Rig_CO" LocalPlayerOnly="true" />
+      </ModelConditionState>
+      <ModelConditionState ParseCondStateType="PARSE_NORMAL" ConditionsYes="SOLD"><ShadowInfo /></ModelConditionState>
+    </ScriptedModelDraw></Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    <ShadowInfo Type="ALPHA_DECAL" AdditionalTexture="Decal_Rig_CO" SizeX="80" OffsetY="-2" OpacityStart="0.3" OpacityFadeInTime="300ms" OpacityPeak="0.8" OpacityFadeOutTime="1s" OpacityEnd="0.2" IsRotatingWithObject="false" SunAngle="10" />
+  </GameObject>
+</AssetDeclaration>

@@ -10,6 +10,7 @@ mod fields;
 mod material;
 mod physics;
 mod schema;
+mod shadow;
 mod structures;
 
 pub(super) use encoder::compile;
