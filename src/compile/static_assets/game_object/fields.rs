@@ -33,6 +33,7 @@ pub(super) fn encode(
         "ProductionQueueType",
         "BuildPlacementTypeFlag",
         "UnitCategory",
+        "WeaponCategory",
     ];
     for attribute in node.attributes() {
         if attribute.namespace() == Some(XML_NS) && attribute.name() == "base" {
@@ -146,6 +147,19 @@ pub(super) fn encode(
             }
             data.word(offset, number);
         }
+    }
+    if let Some(value) = node.attribute("WeaponCategory") {
+        let category = if value == "NONE" {
+            u32::MAX
+        } else {
+            enum_value(
+                value,
+                &["GUN", "BLAST", "CANNON", "MISSILE", "LIGHTNING"],
+                "WeaponCategory",
+                data.path,
+            )?
+        };
+        data.word(0x15c, category);
     }
     Ok(())
 }

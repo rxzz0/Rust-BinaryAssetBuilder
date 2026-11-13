@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="WeaponCategoryDefault"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="WeaponCategoryNONE" WeaponCategory="NONE"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="WeaponCategoryGUN" WeaponCategory="GUN"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="WeaponCategoryBLAST" WeaponCategory="BLAST"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="WeaponCategoryCANNON" WeaponCategory="CANNON"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="WeaponCategoryMISSILE" WeaponCategory="MISSILE"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="WeaponCategoryLIGHTNING" WeaponCategory="LIGHTNING"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+</AssetDeclaration>

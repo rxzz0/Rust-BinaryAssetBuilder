@@ -277,20 +277,25 @@ mod tests {
             .collect();
         assert_eq!(sdk_flags, rust_flags);
 
-        assert_ea_fixture("scripted-model-draw");
+        assert_ea_fixture("scripted-model-draw", 2);
     }
 
     #[test]
     fn production_exit_family_matches_ea_batch() {
-        assert_ea_fixture("production-exit");
+        assert_ea_fixture("production-exit", 2);
     }
 
     #[test]
     fn geometry_shape_modes_and_defaults_match_ea_batch() {
-        assert_ea_fixture("geometry-shapes");
+        assert_ea_fixture("geometry-shapes", 2);
     }
 
-    fn assert_ea_fixture(name: &str) {
+    #[test]
+    fn weapon_categories_match_ea_batch() {
+        assert_ea_fixture("weapon-category", 7);
+    }
+
+    fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
         verify_ea_batch(
@@ -303,7 +308,7 @@ mod tests {
         assert!(
             String::from_utf8(report)
                 .unwrap()
-                .ends_with("Matched 2 EA assets\n")
+                .ends_with(&format!("Matched {count} EA assets\n"))
         );
     }
 }
