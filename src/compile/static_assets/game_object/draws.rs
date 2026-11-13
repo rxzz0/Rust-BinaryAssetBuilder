@@ -98,6 +98,24 @@ pub(super) fn encode(
     Ok(Target::Table(Table::array(list, items)))
 }
 
+const SCRIPTED_STRINGS: [(&str, usize); 4] = [
+    ("Name", 8),
+    ("AttachToBoneInAnotherModule", 0x34),
+    ("TrackMarksLeftBone", 0x78),
+    ("TrackMarksRightBone", 0x80),
+];
+const SCRIPTED_REALS: [(&str, usize); 9] = [
+    ("InitialRecoilSpeed", 0x10),
+    ("MaxRecoilDistance", 0x14),
+    ("RecoilDamping", 0x18),
+    ("RecoilSettleSpeed", 0x1c),
+    ("HighDetailLODThreshold", 0x88),
+    ("LowDetailLODThreshold", 0x8c),
+    ("AlphaCameraFadeOuterRadius", 0x94),
+    ("AlphaCameraFadeInnerRadius", 0x98),
+    ("AlphaCameraAtInnerRadius", 0x9c),
+];
+
 fn scripted_model(
     node: Node<'_, '_>,
     pointer: usize,
@@ -106,10 +124,21 @@ fn scripted_model(
     reference_types: &mut Vec<u32>,
     material_float_names: &mut Vec<u32>,
 ) -> io::Result<Table> {
-    let allowed: Vec<_> = ["id", "ExtraPublicBone"]
-        .into_iter()
-        .chain(SCRIPTED_FLAGS.iter().map(|&(name, _, _)| name))
-        .collect();
+    let allowed: Vec<_> = [
+        "id",
+        "ExtraPublicBone",
+        "DependencySharedModelFlags",
+        "BirthFadeTime",
+    ]
+    .into_iter()
+    .chain(SCRIPTED_FLAGS.iter().map(|&(name, _, _)| name))
+    .chain(
+        SCRIPTED_STRINGS
+            .into_iter()
+            .chain(SCRIPTED_REALS)
+            .map(|(name, _)| name),
+    )
+    .collect();
     validate_attributes(node, &allowed, data.path)?;
     let mut states = Vec::new();
     let mut animations = Vec::new();
@@ -140,6 +169,33 @@ fn scripted_model(
         (0x9c, 0x3f80_0000),
     ] {
         data.word(start + offset, bits);
+    }
+    for (name, offset) in SCRIPTED_STRINGS {
+        if let Some(value) = node.attribute(name) {
+            data.string(start + offset, value)?;
+        }
+    }
+    for (name, offset) in SCRIPTED_REALS {
+        if let Some(value) = node.attribute(name) {
+            let value = match name {
+                "AlphaCameraAtInnerRadius" => super::super::percentage(value, name, data.path)?,
+                "InitialRecoilSpeed" | "RecoilSettleSpeed" => {
+                    super::super::finite_number(value, name, data.path)? * 0.2
+                }
+                _ => super::super::finite_number(value, name, data.path)?,
+            };
+            data.word(start + offset, value.to_bits());
+        }
+    }
+    if let Some(value) = node.attribute("DependencySharedModelFlags") {
+        write_model_conditions(value, start + 0x3c, data)?;
+    }
+    if let Some(value) = node.attribute("BirthFadeTime") {
+        let value = value
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| invalid(data.path, "invalid BirthFadeTime"))?;
+        data.word(start + 0xa0, value as u32);
     }
     for &(name, offset, default) in SCRIPTED_FLAGS {
         data.payload[start + offset] = boolean(node, name, default, data.path)?;

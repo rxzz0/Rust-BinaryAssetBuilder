@@ -1,0 +1,3 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="ScriptedDrawScalarsProbe"><Draws>
+<ScriptedModelDraw id="ModuleTag_Draw" Name="DrawName" InitialRecoilSpeed="5" MaxRecoilDistance="6" RecoilDamping="0.75" RecoilSettleSpeed="1.25" AttachToBoneInAnotherModule="AttachBone" DependencySharedModelFlags="DYING" TrackMarksLeftBone="LeftBone" TrackMarksRightBone="RightBone" HighDetailLODThreshold="12.5" LowDetailLODThreshold="8" AlphaCameraFadeOuterRadius="44" AlphaCameraFadeInnerRadius="22" AlphaCameraAtInnerRadius="0.5" BirthFadeTime="12"><ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name="" /></ModelConditionState></ScriptedModelDraw>
+</Draws><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>
