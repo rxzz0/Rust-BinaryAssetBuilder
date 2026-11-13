@@ -564,6 +564,11 @@ mod tests {
         assert_ea_fixture("monitor-power", 1);
     }
 
+    #[test]
+    fn model_state_turrets_match_ea_batch() {
+        assert_ea_fixture("model-state-turrets", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

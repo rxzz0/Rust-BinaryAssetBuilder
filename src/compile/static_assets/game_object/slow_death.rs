@@ -211,7 +211,7 @@ pub(super) fn encode(
     Ok((KIND, Table::record(entries)))
 }
 
-fn angle(value: &str, name: &str, data: &BinaryData<'_>) -> io::Result<f32> {
+pub(super) fn angle(value: &str, name: &str, data: &BinaryData<'_>) -> io::Result<f32> {
     let value = value.trim();
     if let Some(number) = value.strip_suffix('d') {
         Ok(finite_number(number, name, data.path)?.to_radians())

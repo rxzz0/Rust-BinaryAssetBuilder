@@ -347,6 +347,7 @@ fn model_state(
     let mut material = None;
     let mut textures = Vec::new();
     let mut particles = Vec::new();
+    let mut turrets = Vec::new();
     let mut shadow = None;
     for child in significant_children(node) {
         if child.has_tag_name((SAGE_NS, "Model")) {
@@ -365,6 +366,8 @@ fn model_state(
             particles.push(child);
         } else if child.has_tag_name((SAGE_NS, "ShadowInfo")) && shadow.is_none() {
             shadow = Some(child);
+        } else if child.has_tag_name((SAGE_NS, "Turret")) {
+            turrets.push(child);
         } else {
             return Err(invalid(
                 data.path,
@@ -471,10 +474,66 @@ fn model_state(
         ),
         array("FXEvent", 0x7599_1ad3, start + 0xa4),
         Entry::named("ShadowInfo", 0x82fe_7e88, shadow),
-        array("Turret", 0xf309_5903, start + 0xb0),
+        Entry::named(
+            "Turret",
+            0xf309_5903,
+            Target::Table(encode_turrets(turrets, start + 0xb0, data)?),
+        ),
         array("SubObject", 0x03a2_8c40, start + 0xb8),
     ]);
     Ok(Table::record(entries))
+}
+
+fn encode_turrets(
+    nodes: Vec<Node<'_, '_>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Table> {
+    const FIELDS: &[(&str, u32, usize)] = &[
+        ("TurretNameKey", STRING, 0),
+        ("TurretArtAngle", 0x4e16_ea4d, 8),
+        ("TurretPitch", STRING, 12),
+        ("TurretArtPitch", 0x4e16_ea4d, 20),
+        ("TurretID", 0x23e6_50b8, 24),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = FIELDS.iter().map(|&(name, _, _)| name).collect();
+    let start = data.list(count, nodes.len(), 0x1c)?;
+    let mut items = Vec::with_capacity(nodes.len());
+    for (index, node) in nodes.into_iter().enumerate() {
+        validate_attributes(node, &allowed, path)?;
+        if has_content(node) {
+            return Err(invalid(path, "unexpected model-state Turret content"));
+        }
+        let offset = start + index * 0x1c;
+        for &(name, kind, field) in FIELDS {
+            let value = node.attribute(name);
+            match kind {
+                STRING => {
+                    if let Some(value) = value {
+                        data.string(offset + field, value)?;
+                    }
+                }
+                0x4e16_ea4d => {
+                    let value = super::slow_death::angle(value.unwrap_or("0r"), name, data)?;
+                    data.word(offset + field, value.to_bits());
+                }
+                _ => {
+                    let id = value
+                        .unwrap_or("-1")
+                        .trim()
+                        .parse::<i32>()
+                        .map_err(|_| invalid(path, "invalid TurretID"))?;
+                    data.word(offset + field, id as u32);
+                }
+            }
+        }
+        items.push((
+            0,
+            Target::Table(Table::record(fields(offset, FIELDS).collect())),
+        ));
+    }
+    Ok(Table::array(count, items))
 }
 
 fn encode_weapon_bones(
