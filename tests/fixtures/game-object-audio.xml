@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="AudioProbe">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    <AudioArrayVoice>
+      <AudioEntry EvaEvent="BuildingStolen\17" AudioType="voiceDefectingAway" />
+      <AudioEntry Sound="AudioEvent:ALL_AirfieldSelect" AudioType="voiceSelect" />
+    </AudioArrayVoice>
+    <AudioArraySound><AudioEntry Sound="BuildingUnderConstructionLoop\19" AudioType="soundUnderConstruction" /></AudioArraySound>
+    <EvaEventArray><EvaEntry EvaEvent="BuildingConstructionStarted\20" EvaType="productionStarted" /></EvaEventArray>
+  </GameObject>
+</AssetDeclaration>

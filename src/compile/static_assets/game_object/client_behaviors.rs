@@ -104,7 +104,60 @@ struct AudioEncoder<'a, 'path> {
     reference_types: &'a mut Vec<u32>,
 }
 
+pub(super) fn encode_object_audio(
+    node: Node<'_, '_>,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Target> {
+    let mut encoder = AudioEncoder {
+        data,
+        references,
+        reference_types,
+    };
+    match node.tag_name().name() {
+        "AudioArrayVoice" => encoder.audio_array(Some(node), 0x208, true),
+        "AudioArraySound" => encoder.audio_array(Some(node), 0x20c, false),
+        "EvaEventArray" => encoder.eva_array(node),
+        name => Err(invalid(
+            encoder.data.path,
+            format!("unsupported GameObject audio array {name}"),
+        )),
+    }
+}
+
 impl AudioEncoder<'_, '_> {
+    fn eva_array(&mut self, node: Node<'_, '_>) -> io::Result<Target> {
+        validate_attributes(node, &[], self.data.path)?;
+        let children = elements(node, "EvaEntry", self.data.path)?;
+        let start = self.data.allocate(0x210, 8)?;
+        let first = self.data.list(start, children.len(), 8)?;
+        let mut items = Vec::with_capacity(children.len());
+        for (index, child) in children.into_iter().enumerate() {
+            validate_attributes(child, &["EvaEvent", "EvaType"], self.data.path)?;
+            require_empty(child, self.data.path)?;
+            let offset = first + index * 8;
+            let event = self.reference(required(child, "EvaEvent", self.data.path)?, "EvaEvent")?;
+            self.data.word(offset, event);
+            self.data.word(
+                offset + 4,
+                audio_type(child, AudioType::Eva, self.data.path)?,
+            );
+            items.push((
+                0,
+                Target::Table(Table::record(vec![
+                    field("EvaEvent", 0xc4ec_43b1, offset),
+                    field("EvaType", 0xc053_b716, offset + 4),
+                ])),
+            ));
+        }
+        Ok(Target::Table(Table::record(vec![list(
+            "EvaEntry",
+            0xd7b4_dedb,
+            start,
+            items,
+        )])))
+    }
     fn sound_loop(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
         validate_attributes(
             node,
@@ -205,8 +258,10 @@ impl AudioEncoder<'_, '_> {
         let sound = self.optional_sound(node, start)?;
         let event = self.reference(node.attribute("EvaEvent").unwrap_or(""), "EvaEvent")?;
         self.data.word(start + 4, event);
-        self.data
-            .word(start + 8, audio_type(node, true, self.data.path)?);
+        self.data.word(
+            start + 8,
+            audio_type(node, AudioType::Voice, self.data.path)?,
+        );
         let parent = Table::record(vec![sound, field("EvaEvent", 0xc4ec_43b1, start + 4)]);
         Ok(Table::record(vec![
             base(0x1ae6_b6b7, parent),
@@ -222,8 +277,10 @@ impl AudioEncoder<'_, '_> {
             "BaseAudioEventInfo",
         )?;
         self.data.word(start, sound);
-        self.data
-            .word(start + 4, audio_type(node, false, self.data.path)?);
+        self.data.word(
+            start + 4,
+            audio_type(node, AudioType::Sound, self.data.path)?,
+        );
         Ok(Table::record(vec![
             field("Sound", SOUND, start),
             field("AudioType", 0xd50d_c497, start + 4),
@@ -247,21 +304,29 @@ impl AudioEncoder<'_, '_> {
         if name.trim().is_empty() {
             return Ok(0);
         }
-        let id = asset_reference(name, kind, self.data.path)?;
         let reference = if kind == "BaseAudioEventInfo" {
-            AssetReference {
-                id: asset_reference(
-                    name.split_once(':').map_or(name, |(_, name)| name),
-                    "AudioEvent",
-                    self.data.path,
-                )?,
-                external_type: Some(id.type_id),
+            match name.trim().split_once(':') {
+                Some(("AudioEvent", _)) => {
+                    asset_reference(name, "AudioEvent", self.data.path)?.into()
+                }
+                Some((_, plain)) => {
+                    let base = asset_reference(name, kind, self.data.path)?;
+                    AssetReference {
+                        id: asset_reference(plain, "AudioEvent", self.data.path)?,
+                        external_type: Some(base.type_id),
+                    }
+                }
+                None => AssetReference {
+                    id: asset_reference(name, "AudioEvent", self.data.path)?,
+                    external_type: Some(super::super::fast_hash(kind.as_bytes())),
+                },
             }
         } else {
-            id.into()
+            asset_reference(name, kind, self.data.path)?.into()
         };
         self.references.push(reference);
-        self.reference_types.push(id.type_id);
+        self.reference_types
+            .push(super::super::fast_hash(kind.as_bytes()));
         Ok(self.references.len() as u32)
     }
 }
@@ -284,28 +349,39 @@ fn condition_fields(
     ])
 }
 
-fn audio_type(node: Node<'_, '_>, voice: bool, path: &Path) -> io::Result<u32> {
+enum AudioType {
+    Voice,
+    Sound,
+    Eva,
+}
+
+fn audio_type(node: Node<'_, '_>, kind: AudioType, path: &Path) -> io::Result<u32> {
     static VOICE: OnceLock<Vec<String>> = OnceLock::new();
     static SOUND: OnceLock<Vec<String>> = OnceLock::new();
-    let (cache, type_name) = if voice {
-        (&VOICE, "ThingTemplateVoiceType")
-    } else {
-        (&SOUND, "ThingTemplateSoundType")
+    static EVA: OnceLock<Vec<String>> = OnceLock::new();
+    let sound_types = include_str!("../../../../schemas/ra3/xsd/Includes/ObjectSoundTypes.xsd");
+    let (cache, schema, type_name, attribute) = match kind {
+        AudioType::Voice => (&VOICE, sound_types, "ThingTemplateVoiceType", "AudioType"),
+        AudioType::Sound => (&SOUND, sound_types, "ThingTemplateSoundType", "AudioType"),
+        AudioType::Eva => (
+            &EVA,
+            include_str!("../../../../schemas/ra3/xsd/Includes/ObjectEvaTypes.xsd"),
+            "ThingTemplateEvaEventType",
+            "EvaType",
+        ),
     };
     let values = cache.get_or_init(|| {
-        Document::parse(include_str!(
-            "../../../../schemas/ra3/xsd/Includes/ObjectSoundTypes.xsd"
-        ))
-        .unwrap()
-        .descendants()
-        .find(|node| node.attribute("name") == Some(type_name))
-        .unwrap()
-        .descendants()
-        .filter(|node| node.tag_name().name() == "enumeration")
-        .filter_map(|node| node.attribute("value").map(str::to_owned))
-        .collect()
+        Document::parse(schema)
+            .unwrap()
+            .descendants()
+            .find(|node| node.attribute("name") == Some(type_name))
+            .unwrap()
+            .descendants()
+            .filter(|node| node.tag_name().name() == "enumeration")
+            .filter_map(|node| node.attribute("value").map(str::to_owned))
+            .collect()
     });
-    let name = required(node, "AudioType", path)?;
+    let name = required(node, attribute, path)?;
     values
         .iter()
         .position(|value| value == name)
@@ -372,19 +448,31 @@ mod tests {
 
     #[test]
     fn client_behaviors_match_ea() {
-        let document = Document::parse(include_str!(
-            "../../../../tests/fixtures/game-object-client-behaviors.xml"
-        ))
-        .unwrap();
+        assert_matches_ea(
+            include_str!("../../../../tests/fixtures/game-object-client-behaviors.xml"),
+            include_bytes!("../../../../tests/fixtures/game-object-client-behaviors.bin"),
+            include_bytes!("../../../../tests/fixtures/game-object-client-behaviors.relo"),
+            include_bytes!("../../../../tests/fixtures/game-object-client-behaviors.imp"),
+            include_bytes!("../../../../tests/fixtures/game-object-client-behaviors.manifest"),
+        );
+    }
+
+    #[test]
+    fn top_level_audio_arrays_match_ea() {
+        assert_matches_ea(
+            include_str!("../../../../tests/fixtures/game-object-audio.xml"),
+            include_bytes!("../../../../tests/fixtures/game-object-audio.bin"),
+            include_bytes!("../../../../tests/fixtures/game-object-audio.relo"),
+            include_bytes!("../../../../tests/fixtures/game-object-audio.imp"),
+            include_bytes!("../../../../tests/fixtures/game-object-audio.manifest"),
+        );
+    }
+
+    fn assert_matches_ea(xml: &str, bin: &[u8], relo: &[u8], imp: &[u8], manifest: &[u8]) {
+        let document = Document::parse(xml).unwrap();
         let node = document.root_element().first_element_child().unwrap();
-        let actual = compile_asset(node, Path::new("client-behaviors-oracle.xml"), "").unwrap();
-        let bin = include_bytes!("../../../../tests/fixtures/game-object-client-behaviors.bin");
-        let relo = include_bytes!("../../../../tests/fixtures/game-object-client-behaviors.relo");
-        let imp = include_bytes!("../../../../tests/fixtures/game-object-client-behaviors.imp");
-        let expected = Manifest::parse(include_bytes!(
-            "../../../../tests/fixtures/game-object-client-behaviors.manifest"
-        ))
-        .unwrap();
+        let actual = compile_asset(node, Path::new("audio-oracle.xml"), "").unwrap();
+        let expected = Manifest::parse(manifest).unwrap();
         assert_eq!(actual.payload.len(), bin.len() - 4);
         assert_eq!(
             actual

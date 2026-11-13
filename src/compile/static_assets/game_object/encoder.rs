@@ -76,6 +76,9 @@ pub(in crate::compile::static_assets) fn compile(
     let mut draws = None;
     let mut ai = None;
     let mut client = None;
+    let mut voice = None;
+    let mut sound = None;
+    let mut eva = None;
     for child in significant_children(node) {
         let slot = match child.tag_name().name() {
             "Body" => &mut body,
@@ -83,6 +86,9 @@ pub(in crate::compile::static_assets) fn compile(
             "Draws" => &mut draws,
             "AI" => &mut ai,
             "ClientBehaviors" => &mut client,
+            "AudioArrayVoice" => &mut voice,
+            "AudioArraySound" => &mut sound,
+            "EvaEventArray" => &mut eva,
             "DisplayName"
             | "GameDependency"
             | "ObjectResourceInfo"
@@ -203,6 +209,15 @@ pub(in crate::compile::static_assets) fn compile(
     }
     if let Some(target) = children::encode_geometry(node, &mut data)? {
         child_targets.push(("Geometry", target));
+    }
+    for node in [voice, sound, eva].into_iter().flatten() {
+        let target = client_behaviors::encode_object_audio(
+            node,
+            &mut data,
+            &mut references,
+            &mut reference_types,
+        )?;
+        child_targets.push((node.tag_name().name(), target));
     }
     if let Some(target) = children::encode_vision(node, &mut data)? {
         child_targets.push(("VisionInfo", target));
