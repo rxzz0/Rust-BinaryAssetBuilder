@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="ReplaceSelfProbe"><Behaviors>
+<ReplaceSelfSpecialAbility id="ModuleTag_Default" />
+<ReplaceSelfSpecialAbility id="ModuleTag_ReplaceSelf" SpecialPowerTemplate="SpecialPower_PackReplaceSelf" Options="RECONSTITUTE_STORED_COMMAND" NewObjectUnpackTime="2s" ReplaceOptions="COPY_UPGRADES DISABLE_DURING_REPLACE DISABLE_NEW_OBJECT_DURING_UNPACK"><ReplacementTemplate>AlliedMCV</ReplacementTemplate></ReplaceSelfSpecialAbility>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>

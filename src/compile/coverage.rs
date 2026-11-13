@@ -31,6 +31,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "CommandSetUpgrade",
             "ProductionUpdateInfo",
             "SpecialPower",
+            "ReplaceSelfSpecialAbility",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -371,6 +372,11 @@ mod tests {
     #[test]
     fn special_power_matches_ea_batch() {
         assert_ea_fixture("special-power", 1);
+    }
+
+    #[test]
+    fn replace_self_matches_ea_batch() {
+        assert_ea_fixture("replace-self", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

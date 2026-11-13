@@ -22,6 +22,7 @@ mod physics;
 mod production;
 mod recall;
 mod repair;
+mod replace_self;
 mod schema;
 mod secondary_damage;
 mod shadow;

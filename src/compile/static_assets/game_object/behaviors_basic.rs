@@ -121,6 +121,10 @@ pub(super) fn encode(
     ) {
         return super::attack_assist::encode(node, pointer, data, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "ReplaceSelfSpecialAbility")) {
+        return super::replace_self::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
     let (kind, size, extra) = match node.tag_name().name() {
         "ProductionUpdateInfo" => (0x1b33_7783, 8, None),
         "ObjectSMCHelper" => (0x7f72_f242, 8, None),
