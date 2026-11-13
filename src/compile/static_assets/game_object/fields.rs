@@ -25,6 +25,8 @@ pub(super) fn encode(
         "EditorSorting",
         "BuildTime",
         "MaxSimultaneousOfType",
+        "RefundValue",
+        "IsTrainable",
         "EnergyProduction",
         "EnergyBonus",
         "VoicePriority",
@@ -133,12 +135,16 @@ pub(super) fn encode(
     if let Some(value) = node.attribute("BuildTime") {
         data.word(0x84, finite_float(value, "BuildTime", data.path)?.to_bits());
     }
-    if let Some(value) = node.attribute("MaxSimultaneousOfType") {
-        let limit = value
-            .parse::<u16>()
-            .map_err(|_| invalid(data.path, "invalid MaxSimultaneousOfType"))?;
-        data.payload[0x23e..0x240].copy_from_slice(&limit.to_le_bytes());
+    for (name, offset) in [("RefundValue", 0x23c), ("MaxSimultaneousOfType", 0x23e)] {
+        if let Some(value) = node.attribute(name) {
+            let number = value
+                .trim()
+                .parse::<u16>()
+                .map_err(|_| invalid(data.path, format!("invalid {name}")))?;
+            data.payload[offset..offset + 2].copy_from_slice(&number.to_le_bytes());
+        }
     }
+    data.payload[0x241] = super::draws::boolean(node, "IsTrainable", true, data.path)?;
     for (name, offset) in [
         ("EnergyProduction", 0x88),
         ("EnergyBonus", 0x8c),
