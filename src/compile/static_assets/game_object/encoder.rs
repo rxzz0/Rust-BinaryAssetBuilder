@@ -197,7 +197,10 @@ pub(in crate::compile::static_assets) fn compile(
                     super::spawn::encode(module, pointer, &mut data, &mut reference_types)?;
                 spawn_modules.push(start);
                 Some(result)
-            } else if module.has_tag_name((SAGE_NS, "TechUpgradeReceiver")) {
+            } else if matches!(
+                module.tag_name().name(),
+                "TechUpgrade" | "TechUpgradeReceiver"
+            ) {
                 let start = data.payload.len() as u32;
                 let result =
                     super::tech_upgrade::encode(module, pointer, &mut data, &mut reference_types)?;

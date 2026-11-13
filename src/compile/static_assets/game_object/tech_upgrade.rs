@@ -23,19 +23,14 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
     let path = data.path;
-    let allowed: Vec<_> = [
-        "id",
-        "Radius",
-        "RadiusY",
-        "DistanceType",
-        "FXLineBoneName",
-        "RadarDrawModule",
-        "RadarRotateSpeed",
-        "RadarRotateOffset",
-    ]
-    .into_iter()
-    .chain(UPGRADE.iter().map(|&(name, _, _)| name))
-    .collect();
+    let receiver = node.has_tag_name((SAGE_NS, "TechUpgradeReceiver"));
+    let kind = if receiver { KIND } else { 0xff7b_cdb3 };
+    let radar = ["RadarDrawModule", "RadarRotateSpeed", "RadarRotateOffset"];
+    let allowed: Vec<_> = ["id", "Radius", "RadiusY", "DistanceType", "FXLineBoneName"]
+        .into_iter()
+        .chain(radar.into_iter().filter(|_| receiver))
+        .chain(UPGRADE.iter().map(|&(name, _, _)| name))
+        .collect();
     validate_attributes(node, &allowed, path)?;
     let mut children = significant_children(node).peekable();
     let anim = children.next_if(|child| child.has_tag_name((SAGE_NS, "CustomAnimAndDuration")));
@@ -52,11 +47,11 @@ pub(super) fn encode(
     }
     let filter = children.next_if(|child| child.has_tag_name((SAGE_NS, "ObjectFilter")));
     if children.next().is_some() {
-        return Err(invalid(path, "unexpected TechUpgradeReceiver child"));
+        return Err(invalid(path, "unexpected tech upgrade child"));
     }
 
-    let start = data.allocate(pointer, 0xb4)?;
-    data.word(start, KIND);
+    let start = data.allocate(pointer, if receiver { 0xb4 } else { 0xa8 })?;
+    data.word(start, kind);
     data.word(start + 4, hash_name(required(node, "id", path)?));
     for &(name, _, offset) in UPGRADE {
         data.payload[start + offset] = boolean(node, name, name == "WaypointModeTerminal", path)?;
@@ -80,24 +75,26 @@ pub(super) fn encode(
     if let Some(value) = node.attribute("FXLineBoneName") {
         data.string(start + 0x30, value)?;
     }
-    if let Some(value) = node.attribute("RadarDrawModule") {
-        data.word(start + 0x38, hash_name(value));
+    if receiver {
+        if let Some(value) = node.attribute("RadarDrawModule") {
+            data.word(start + 0x38, hash_name(value));
+        }
+        for (name, default, offset) in [
+            ("RadarRotateSpeed", "0.1r", 0x3c),
+            ("RadarRotateOffset", "0r", 0x40),
+        ] {
+            let value = node.attribute(name).unwrap_or(default).trim();
+            let radians = if let Some(number) = value.strip_suffix('d') {
+                finite_number(number, name, path)?.to_radians()
+            } else if let Some(number) = value.strip_suffix('r') {
+                finite_number(number, name, path)?
+            } else {
+                return Err(invalid(path, format!("invalid {name}")));
+            };
+            data.word(start + offset, radians.to_bits());
+        }
     }
-    for (name, default, offset) in [
-        ("RadarRotateSpeed", "0.1r", 0x3c),
-        ("RadarRotateOffset", "0r", 0x40),
-    ] {
-        let value = node.attribute(name).unwrap_or(default).trim();
-        let radians = if let Some(number) = value.strip_suffix('d') {
-            finite_number(number, name, path)?.to_radians()
-        } else if let Some(number) = value.strip_suffix('r') {
-            finite_number(number, name, path)?
-        } else {
-            return Err(invalid(path, format!("invalid {name}")));
-        };
-        data.word(start + offset, radians.to_bits());
-    }
-    let filter_start = start + 0x44;
+    let filter_start = start + if receiver { 0x44 } else { 0x38 };
     let filter = match filter {
         Some(node) => encode_inline_filter(node, filter_start, data, reference_types)?,
         None => filter_table(filter_start, [Vec::new(), Vec::new()]),
@@ -129,19 +126,30 @@ pub(super) fn encode(
     entries.extend(fields(
         start,
         &[
-            ("DistanceType", 0x3412_7322, 0x2c),
+            (
+                "DistanceType",
+                if receiver { 0x3412_7322 } else { 0x01c9_f540 },
+                0x2c,
+            ),
             ("FXLineBoneName", 0x1a29_33aa, 0x30),
-            ("RadarDrawModule", 0xbdf0_7965, 0x38),
-            ("RadarRotateSpeed", ANGLE, 0x3c),
-            ("RadarRotateOffset", ANGLE, 0x40),
         ],
     ));
+    if receiver {
+        entries.extend(fields(
+            start,
+            &[
+                ("RadarDrawModule", 0xbdf0_7965, 0x38),
+                ("RadarRotateSpeed", ANGLE, 0x3c),
+                ("RadarRotateOffset", ANGLE, 0x40),
+            ],
+        ));
+    }
     entries.push(Entry::named(
         "ObjectFilter",
         0xe46e_a3b2,
         Target::Table(filter),
     ));
-    Ok((KIND, Table::record(entries)))
+    Ok((kind, Table::record(entries)))
 }
 
 pub(super) fn encode_anim(

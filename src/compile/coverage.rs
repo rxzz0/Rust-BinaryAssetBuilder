@@ -27,6 +27,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "LaserState",
             "AttackAssistResponseBehavior",
             "NotifyWhenAttackingBehavior",
+            "TechUpgrade",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -347,6 +348,11 @@ mod tests {
     #[test]
     fn model_texture_replacements_match_ea_batch() {
         assert_ea_fixture("model-texture", 1);
+    }
+
+    #[test]
+    fn tech_upgrade_matches_ea_batch() {
+        assert_ea_fixture("tech-upgrade", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {
