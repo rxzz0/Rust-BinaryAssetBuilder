@@ -284,6 +284,7 @@ fn model_state(
     let mut weapon_bones: [Vec<_>; 4] = std::array::from_fn(|_| Vec::new());
     let mut models = Vec::new();
     let mut material = None;
+    let mut textures = Vec::new();
     let mut particles = Vec::new();
     let mut shadow = None;
     for child in significant_children(node) {
@@ -291,6 +292,8 @@ fn model_state(
             models.push(child);
         } else if child.has_tag_name((SAGE_NS, "Material")) && material.is_none() {
             material = Some(child);
+        } else if child.has_tag_name((SAGE_NS, "Texture")) {
+            textures.push(child);
         } else if child.tag_name().namespace() == Some(SAGE_NS)
             && let Some(index) = WEAPON_BONE_LISTS
                 .iter()
@@ -345,6 +348,13 @@ fn model_state(
         )?),
         None => Target::Null,
     };
+    let textures = super::subobjects::encode_texture_replacements(
+        textures,
+        start + 0x74,
+        data,
+        references,
+        reference_types,
+    )?;
     let mut bone_entries = Vec::with_capacity(WEAPON_BONE_LISTS.len());
     for ((name, offset), bones) in WEAPON_BONE_LISTS.into_iter().zip(weapon_bones) {
         let table = encode_weapon_bones(bones, start + offset, data)?;
@@ -389,7 +399,7 @@ fn model_state(
             Target::Table(Table::array(model_offset, model_tables)),
         ),
         Entry::named("Material", 0xc7ea_3cf4, material),
-        array("Texture", 0x6e5d_40fb, start + 0x74),
+        Entry::named("Texture", 0x6e5d_40fb, Target::Table(textures)),
     ]);
     entries.extend(bone_entries);
     entries.extend([

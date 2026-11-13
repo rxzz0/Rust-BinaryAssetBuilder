@@ -1,0 +1,3 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="ModelTextureProbe">
+<Draws><ScriptedModelDraw id="ModuleTag_Draw"><ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name="ABAirfield" /><Texture New="AUMCV_D" Original="AUMCV" /><Texture Original="Another" /></ModelConditionState></ScriptedModelDraw></Draws>
+<Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject></AssetDeclaration>

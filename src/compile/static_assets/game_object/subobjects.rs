@@ -170,14 +170,36 @@ fn encode_nugget(
     }
     entries.extend(fields(start, NUGGET_FIELDS));
 
-    let count = start + 0x1c;
+    let texture_table =
+        encode_texture_replacements(textures, start + 0x1c, data, references, reference_types)?;
+    entries.push(Entry::named(
+        "UpgradeTexture",
+        0x6e5d_40fb,
+        Target::Table(texture_table),
+    ));
+    let anim = match anim {
+        Some(node) => Target::Table(encode_anim(node, start + 0x24, data)?),
+        None => Target::Null,
+    };
+    entries.push(Entry::named("CustomAnimAndDuration", ANIM, anim));
+    Ok(Table::record(entries))
+}
+
+pub(super) fn encode_texture_replacements(
+    textures: Vec<Node<'_, '_>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Table> {
+    let path = data.path;
     let first = data.list(count, textures.len(), 8)?;
     let mut items = Vec::with_capacity(textures.len());
     for (i, texture) in textures.into_iter().enumerate() {
         let offset = first + i * 8;
         validate_attributes(texture, &["Original", "New"], path)?;
         if has_content(texture) {
-            return Err(invalid(path, "unexpected UpgradeTexture content"));
+            return Err(invalid(path, "unexpected texture replacement content"));
         }
         for attr in texture.attributes() {
             let value = attr.value();
@@ -200,17 +222,7 @@ fn encode_nugget(
         );
         items.push((0, Target::Table(table)));
     }
-    entries.push(Entry::named(
-        "UpgradeTexture",
-        0x6e5d_40fb,
-        Target::Table(Table::array(count, items)),
-    ));
-    let anim = match anim {
-        Some(node) => Target::Table(encode_anim(node, start + 0x24, data)?),
-        None => Target::Null,
-    };
-    entries.push(Entry::named("CustomAnimAndDuration", ANIM, anim));
-    Ok(Table::record(entries))
+    Ok(Table::array(count, items))
 }
 
 #[cfg(test)]
