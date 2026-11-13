@@ -94,6 +94,9 @@ pub(super) fn encode(
         return super::production::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "AssistedPlacementBehavior")) {
+        return assisted_placement(node, pointer, data, reference_types).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "QueueDockBehavior")) {
         return queue_dock(node, pointer, data).map(Some);
     }
@@ -221,6 +224,62 @@ pub(super) fn encode(
         inherited(0x29ca_d490, update)
     };
     Ok(Some((kind, table)))
+}
+
+fn assisted_placement(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xae0e_e9a0;
+    let path = data.path;
+    validate_attributes(node, &["id", "PlacementHint", "SnappingDistance"], path)?;
+    let start = data.allocate(pointer, 0x14)?;
+    let mut entries = vec![module_base(node, KIND, start, data, false)?];
+    let mut flags = 0;
+    for flag in node
+        .attribute("PlacementHint")
+        .unwrap_or("NONE")
+        .split_ascii_whitespace()
+    {
+        flags |= 1
+            << super::super::global_ui::enum_value(
+                flag,
+                &["NONE", "FACING_TOWARDS", "FACING_AWAY", "ALLOW_SHROUDED"],
+                path,
+            )?;
+    }
+    data.word(start + 8, flags);
+    let distance = finite_number(
+        node.attribute("SnappingDistance").unwrap_or("0"),
+        "SnappingDistance",
+        path,
+    )?;
+    data.word(start + 0xc, distance.to_bits());
+    let mut children = significant_children(node).peekable();
+    let filter = if let Some(child) =
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "RequirementObjectFilter")))
+    {
+        let offset = data.allocate(start + 0x10, 0x70)?;
+        Target::Table(super::parking::encode_inline_filter(
+            child,
+            offset,
+            data,
+            reference_types,
+        )?)
+    } else {
+        Target::Null
+    };
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected AssistedPlacementBehavior child"));
+    }
+    entries.extend([
+        Entry::named("PlacementHint", 0xfa98_de4d, Target::Data(start + 8)),
+        Entry::named("SnappingDistance", 0x6458_64f3, Target::Data(start + 0xc)),
+        Entry::named("RequirementObjectFilter", 0xe46e_a3b2, filter),
+    ]);
+    Ok((KIND, Table::record(entries)))
 }
 
 fn queue_dock(

@@ -41,6 +41,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "PassiveAreaEffectBehavior",
             "AttachUpdate",
             "QueueDockBehavior",
+            "AssistedPlacementBehavior",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -521,6 +522,11 @@ mod tests {
     #[test]
     fn queue_dock_matches_ea_batch() {
         assert_ea_fixture("queue-dock", 1);
+    }
+
+    #[test]
+    fn assisted_placement_matches_ea_batch() {
+        assert_ea_fixture("assisted-placement", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="AssistedPlacementProbe"><Behaviors>
+<AssistedPlacementBehavior id="ModuleTag_Default"/>
+<AssistedPlacementBehavior id="ModuleTag_Placement" PlacementHint="FACING_TOWARDS ALLOW_SHROUDED" SnappingDistance="42.5"><RequirementObjectFilter Rule="ANY" Include="STRUCTURE" Relationship="ALLIES"/></AssistedPlacementBehavior>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>
