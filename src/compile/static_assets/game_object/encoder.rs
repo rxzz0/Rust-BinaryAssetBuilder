@@ -101,6 +101,7 @@ pub(in crate::compile::static_assets) fn compile(
             | "ProjectedBuildabilityInfo"
             | "ObjectResourceInfo"
             | "ArmorSet"
+            | "LocomotorSet"
             | "SkirmishAIInformation"
             | "VisionInfo"
             | "Geometry"

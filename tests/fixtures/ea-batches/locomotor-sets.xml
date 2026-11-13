@@ -1,0 +1,5 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="LocomotorSetProbe">
+<LocomotorSet id="NormalMovement" Speed="123.5" Condition="NORMAL" Locomotor="ProbeLocomotor"/>
+<LocomotorSet Speed="75" Condition="WALL_SCALING" Locomotor="LocomotorTemplate:ProbeSecond"/>
+<LocomotorSet/>
+<Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>

@@ -124,6 +124,60 @@ pub(super) fn encode(
         }
         targets.push(("ArmorSet", Target::Table(Table::array(0x198, entries))));
     }
+    let locomotors: Vec<_> = node
+        .children()
+        .filter(|child| child.has_tag_name((SAGE_NS, "LocomotorSet")))
+        .collect();
+    if !locomotors.is_empty() {
+        let count = 0x1a0;
+        let start = data.list(count, locomotors.len(), 12)?;
+        let mut entries = Vec::with_capacity(locomotors.len());
+        for (index, locomotor) in locomotors.into_iter().enumerate() {
+            let path = data.path;
+            validate_attributes(locomotor, &["id", "Speed", "Condition", "Locomotor"], path)?;
+            if has_content(locomotor) {
+                return Err(invalid(path, "LocomotorSet cannot contain content"));
+            }
+            let offset = start + index * 12;
+            let speed = super::super::finite_number(
+                locomotor.attribute("Speed").unwrap_or("0"),
+                "Speed",
+                path,
+            )?;
+            let condition = super::ai_update::locomotor_condition(
+                locomotor.attribute("Condition").unwrap_or("NORMAL"),
+                "Condition",
+                path,
+            )?;
+            data.word(offset, speed.to_bits());
+            data.word(offset + 4, condition);
+            if let Some(value) = locomotor
+                .attribute("Locomotor")
+                .filter(|value| !value.trim().is_empty())
+            {
+                let plain = value.split_once('\\').map_or(value, |(name, _)| name);
+                let id = asset_reference(plain, "LocomotorTemplate", path)?;
+                references.push(id.into());
+                reference_types.push(id.type_id);
+                data.word(offset + 8, references.len() as u32);
+            }
+            entries.push((
+                0,
+                Target::Table(Table::record(
+                    super::draws::fields(
+                        offset,
+                        &[
+                            ("Speed", 0x6458_64f3, 0),
+                            ("Condition", 0x845d_12b2, 4),
+                            ("Locomotor", 0xfed2_0c6c, 8),
+                        ],
+                    )
+                    .collect(),
+                )),
+            ));
+        }
+        targets.push(("LocomotorSet", Target::Table(Table::array(count, entries))));
+    }
     if let Some(child) = find(node, "SkirmishAIInformation")? {
         targets.push(("SkirmishAIInformation", skirmish(child, data)?));
     }

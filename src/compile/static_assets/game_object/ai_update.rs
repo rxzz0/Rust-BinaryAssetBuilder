@@ -371,6 +371,14 @@ fn state_machine(node: Node<'_, '_>, path: &Path) -> io::Result<u32> {
 }
 
 fn locomotor_set(node: Node<'_, '_>, path: &Path) -> io::Result<u32> {
+    locomotor_condition(
+        node.attribute("DefaultLocomotorSet").unwrap_or("NORMAL"),
+        "DefaultLocomotorSet",
+        path,
+    )
+}
+
+pub(super) fn locomotor_condition(value: &str, field: &str, path: &Path) -> io::Result<u32> {
     static VALUES: OnceLock<Vec<String>> = OnceLock::new();
     let values = VALUES.get_or_init(|| {
         enum_values(
@@ -378,10 +386,11 @@ fn locomotor_set(node: Node<'_, '_>, path: &Path) -> io::Result<u32> {
             "LocomotorSetType",
         )
     });
-    if node.attribute("DefaultLocomotorSet") == Some("INVALID") {
-        return Ok(u32::MAX);
-    }
-    enum_index(node, "DefaultLocomotorSet", "NORMAL", &values[1..], path)
+    values
+        .iter()
+        .position(|candidate| candidate == value)
+        .map(|index| (index as u32).wrapping_sub(1))
+        .ok_or_else(|| invalid(path, format!("invalid {field} {value}")))
 }
 
 fn enum_values(schema: &str, name: &str) -> Vec<String> {
