@@ -106,6 +106,7 @@ pub(in crate::compile::static_assets) fn compile(
             | "LocomotorSet"
             | "SkirmishAIInformation"
             | "VisionInfo"
+            | "CrusherInfo"
             | "Geometry"
                 if child.tag_name().namespace() == Some(SAGE_NS) =>
             {
@@ -326,6 +327,11 @@ pub(in crate::compile::static_assets) fn compile(
     }
     if let Some(target) = children::encode_vision(node, &mut data)? {
         child_targets.push(("VisionInfo", target));
+    }
+    if let Some(target) =
+        children::encode_crusher(node, &mut data, &mut references, &mut reference_types)?
+    {
+        child_targets.push(("CrusherInfo", target));
     }
     if let Some(target) = children::encode_buildability(node, &mut data, &mut reference_types)? {
         child_targets.push(("ProjectedBuildabilityInfo", target));

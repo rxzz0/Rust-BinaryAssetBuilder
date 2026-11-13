@@ -399,6 +399,132 @@ fn base_selection(
     )))
 }
 
+pub(super) fn encode_crusher(
+    node: Node<'_, '_>,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Option<Target>> {
+    let Some(node) = find(node, "CrusherInfo")? else {
+        return Ok(None);
+    };
+    const BYTE: u32 = 0x371e_5dc2;
+    const BOOL: u32 = 0x77e3_f4f7;
+    const REAL: u32 = 0x6458_64f3;
+    const FIELDS: &[(&str, u32, usize, &str)] = &[
+        ("CrusherLevel", BYTE, 0x1c, "0"),
+        ("CrushableLevel", BYTE, 0x1d, "127"),
+        ("CrushKnockback", 0x23e6_50b8, 0, "0"),
+        ("CrushZFactor", REAL, 4, "1"),
+        ("CrushEqualLevelProps", BOOL, 0x1e, "false"),
+        ("UseCrushAttack", BOOL, 0x1f, "true"),
+        ("CrushOnlyWhileCharging", BOOL, 0x20, "false"),
+        ("MinCrushVelocityPercent", REAL, 8, "1"),
+        ("CrushDecelerationPercent", REAL, 12, "0"),
+        ("CrushAllies", BOOL, 0x21, "false"),
+        ("CrushWeapon", 0xd046_dd22, 16, ""),
+        ("CrushWhileStationary", BOOL, 0x22, "false"),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = FIELDS
+        .iter()
+        .map(|&(name, ..)| name)
+        .chain(["id"])
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let start = data.allocate(0x228, 0x24)?;
+    let mut entries = Vec::with_capacity(FIELDS.len() + 1);
+    for &(name, kind, relative, default) in FIELDS {
+        let offset = start + relative;
+        let value = node.attribute(name).unwrap_or(default);
+        match kind {
+            BYTE => {
+                data.payload[offset] = value
+                    .trim()
+                    .parse::<i8>()
+                    .map_err(|_| invalid(path, format!("invalid {name}")))?
+                    as u8
+            }
+            BOOL => {
+                data.payload[offset] = super::draws::boolean(node, name, default == "true", path)?
+            }
+            _ => {
+                let word = match kind {
+                    REAL if name.ends_with("Percent") => {
+                        super::super::percentage(value, name, path)?.to_bits()
+                    }
+                    REAL => super::super::finite_number(value, name, path)?.to_bits(),
+                    0x23e6_50b8 => value
+                        .trim()
+                        .parse::<i32>()
+                        .map_err(|_| invalid(path, "invalid CrushKnockback"))?
+                        as u32,
+                    _ => super::passive_area::reference(
+                        value,
+                        "WeaponTemplate",
+                        path,
+                        references,
+                        reference_types,
+                    )?,
+                };
+                data.word(offset, word);
+            }
+        }
+        entries.push(Entry::named(name, kind, Target::Data(offset)));
+    }
+    let children: Vec<_> = super::super::significant_children(node).collect();
+    let count = start + 0x14;
+    let first = data.list(count, children.len(), 8)?;
+    let mut items = Vec::with_capacity(children.len());
+    for (index, child) in children.into_iter().enumerate() {
+        if !child.has_tag_name((SAGE_NS, "ExtraCrushLevels")) || has_content(child) {
+            return Err(invalid(path, "unexpected CrusherInfo child"));
+        }
+        validate_attributes(
+            child,
+            &["CrusherLevel", "CrushableLevel", "ModelConditionMatch"],
+            path,
+        )?;
+        let offset = first + index * 8;
+        let flag = required(child, "ModelConditionMatch", path)?;
+        let value = if flag == "INVALID" {
+            u32::MAX
+        } else {
+            super::draws::model_condition_index(flag, path)? as u32
+        };
+        data.word(offset, value);
+        for (name, default, field) in [("CrusherLevel", "0", 4), ("CrushableLevel", "127", 5)] {
+            data.payload[offset + field] = child
+                .attribute(name)
+                .unwrap_or(default)
+                .trim()
+                .parse::<i8>()
+                .map_err(|_| invalid(path, format!("invalid {name}")))?
+                as u8;
+        }
+        items.push((
+            0,
+            Target::Table(Table::record(
+                super::draws::fields(
+                    offset,
+                    &[
+                        ("CrusherLevel", BYTE, 4),
+                        ("CrushableLevel", BYTE, 5),
+                        ("ModelConditionMatch", 0x1572_3e0b, 0),
+                    ],
+                )
+                .collect(),
+            )),
+        ));
+    }
+    entries.push(Entry::named(
+        "ExtraCrushLevels",
+        0x9091_f97b,
+        Target::Table(Table::array(count, items)),
+    ));
+    Ok(Some(Target::Table(Table::record(entries))))
+}
+
 pub(super) fn encode_vision(
     node: Node<'_, '_>,
     data: &mut BinaryData<'_>,
