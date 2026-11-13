@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="OclSpecialPowerProbe"><Behaviors>
+<OCLSpecialPower id="ModuleTag_Default" SpecialPowerTemplate="ProbePower"/>
+<OCLSpecialPower id="ModuleTag_Create" SpecialPowerTemplate="ProbePower" OCL="ProbeCreate" CreateLocation="CREATE_AT_LOCATION" CreateLocationOffset="12.5" MaxCreateCount="4" NumberToSpawn="3" DestinationOCL="ProbeDestination" RegisterObjectsWithSpecialAbilityUpdate="true"><UpgradeOCL OCL="ProbeUpgradeOcl"/><NearestSecondaryObjectFilter Rule="ANY" Include="STRUCTURE"/><Upgrade>ProbeUpgrade</Upgrade></OCLSpecialPower>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>

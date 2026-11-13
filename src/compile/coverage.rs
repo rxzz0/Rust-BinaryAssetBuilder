@@ -48,6 +48,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "TeleportStoredObjectsUpdate",
             "MonitorSpecialPowerTimerUpdate",
             "WeaponFireSpecialAbilityUpdate",
+            "OCLSpecialPower",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -583,6 +584,11 @@ mod tests {
     #[test]
     fn weapon_fire_ability_matches_ea_batch() {
         assert_ea_fixture("weapon-fire-ability", 1);
+    }
+
+    #[test]
+    fn ocl_special_power_matches_ea_batch() {
+        assert_ea_fixture("ocl-special-power", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

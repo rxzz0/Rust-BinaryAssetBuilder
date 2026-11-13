@@ -75,6 +75,7 @@ pub(super) fn encode(
         "RecallUnitsSpecialPower"
             | "SpecialPower"
             | "AssignSlavesTargetObjectSpecialPower"
+            | "OCLSpecialPower"
             | "StoreObjectsSpecialPower"
             | "TeleportStoredObjectsSpecialPower"
     ) {

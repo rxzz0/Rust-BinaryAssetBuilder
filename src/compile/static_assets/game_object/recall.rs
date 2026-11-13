@@ -9,6 +9,7 @@ use super::draws::{boolean, fields, model_condition_index};
 use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::Node;
 use std::io;
+use std::sync::OnceLock;
 
 const KIND: u32 = 0x4e2d_96c9;
 const BOOL: u32 = 0x77e3_f4f7;
@@ -73,6 +74,17 @@ const TELEPORT_FIELDS: &[(&str, u32, usize)] = &[
     ("OCL", 0x42e4_e9d1, 0x1c8),
 ];
 
+const OCL_POWER: u32 = 0x8999_c6a4;
+const OCL_FIELDS: &[(&str, u32, usize)] = &[
+    ("OCL", 0x42e4_e9d1, 0x1c4),
+    ("CreateLocation", 0xe5c0_9280, 0x1c8),
+    ("CreateLocationOffset", REAL, 0x1cc),
+    ("MaxCreateCount", 0x7631_77a4, 0x1d0),
+    ("NumberToSpawn", 0x7631_77a4, 0x1d4),
+    ("DestinationOCL", 0x42e4_e9d1, 0x1d8),
+    ("RegisterObjectsWithSpecialAbilityUpdate", BOOL, 0x1f0),
+];
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,
@@ -83,6 +95,7 @@ pub(super) fn encode(
     let path = data.path;
     const SPECIAL_POWER: u32 = 0xcefe_1113;
     let (kind, size, derived) = match node.tag_name().name() {
+        "OCLSpecialPower" => (OCL_POWER, 0x1f4, OCL_FIELDS),
         "StoreObjectsSpecialPower" => (0xa74a_234c, 0x1d4, STORE_FIELDS),
         "TeleportStoredObjectsSpecialPower" => (0x318d_c4d6, 0x1d0, TELEPORT_FIELDS),
         "RecallUnitsSpecialPower" => (KIND, 0x1cc, RECALL_FIELDS),
@@ -127,6 +140,34 @@ pub(super) fn encode(
                 data.word(start + offset, value as u32);
             }
             _ => {}
+        }
+    }
+    if kind == OCL_POWER {
+        if let Some(value) = node.attribute("CreateLocation") {
+            static LOCATIONS: OnceLock<Vec<String>> = OnceLock::new();
+            let locations = LOCATIONS.get_or_init(|| {
+                super::ai_update::enum_values(
+                    include_str!("../../../../schemas/ra3/xsd/Modules/OCLSpecialPower.xsd"),
+                    "OCLCreateLocType",
+                )
+            });
+            let index = locations
+                .iter()
+                .position(|candidate| candidate == value)
+                .ok_or_else(|| invalid(path, "invalid OCL CreateLocation"))?;
+            data.word(start + 0x1c8, index as u32);
+        }
+        for (name, default, offset) in [
+            ("MaxCreateCount", "0", 0x1d0),
+            ("NumberToSpawn", "1", 0x1d4),
+        ] {
+            let value = node
+                .attribute(name)
+                .unwrap_or(default)
+                .trim()
+                .parse::<u32>()
+                .map_err(|_| invalid(path, format!("invalid {name}")))?;
+            data.word(start + offset, value);
         }
     }
     let time = sage_time(
@@ -209,10 +250,14 @@ pub(super) fn encode(
             "LeechRechargePercentPlayerTechTrigger" => ("PlayerTech", 0x4c),
             "LeechRechargePercentFromSpecialPower" => ("SpecialPowerTemplate", 0x50),
             FILTER => ("ObjectFilterAsset", 0x58),
-            "OCL" => (
-                "ObjectCreationList",
-                if kind == 0xa74a_234c { 0x1cc } else { 0x1c8 },
-            ),
+            "OCL" | "DestinationOCL" => {
+                let offset = derived
+                    .iter()
+                    .find(|&&(field, _, _)| field == name)
+                    .unwrap()
+                    .2;
+                ("ObjectCreationList", offset)
+            }
             "TargetMarkerObjectRef" => ("GameObject", 0x1d0),
             _ => continue,
         };
@@ -284,7 +329,9 @@ pub(super) fn encode(
         ));
     }
     power.push(Entry::named("InitiateSound", 0x1ae6_b6b7, Target::Null));
-    if let Some(child) = children.next() {
+    if kind != OCL_POWER
+        && let Some(child) = children.next()
+    {
         return Err(invalid(
             path,
             format!(
@@ -298,7 +345,115 @@ pub(super) fn encode(
     }
     let mut entries = vec![base(SPECIAL_POWER, Table::record(power))];
     entries.extend(fields(start, derived));
+    if kind == OCL_POWER {
+        entries.extend(ocl_children(
+            &mut children,
+            start,
+            data,
+            references,
+            reference_types,
+        )?);
+    }
     Ok((kind, Table::record(entries)))
+}
+
+fn ocl_children<'a, 'input: 'a>(
+    children: &mut std::iter::Peekable<impl Iterator<Item = Node<'a, 'input>>>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<[Entry; 3]> {
+    let path = data.path;
+    let mut pairs = Vec::new();
+    while let Some(child) = children.next_if(|node| node.has_tag_name((SAGE_NS, "UpgradeOCL"))) {
+        validate_attributes(child, &["OCL"], path)?;
+        if super::super::has_content(child) {
+            return Err(invalid(path, "unexpected UpgradeOCL content"));
+        }
+        pairs.push(super::passive_area::reference(
+            child.attribute("OCL").unwrap_or(""),
+            "ObjectCreationList",
+            path,
+            references,
+            reference_types,
+        )?);
+    }
+    let pair_count = start + 0x1dc;
+    let first = data.list(pair_count, pairs.len(), 4)?;
+    let pair_items: Vec<_> = pairs
+        .into_iter()
+        .enumerate()
+        .map(|(index, ordinal)| {
+            let offset = first + index * 4;
+            data.word(offset, ordinal);
+            (
+                0,
+                Target::Table(Table::record(vec![Entry::named(
+                    "OCL",
+                    0x42e4_e9d1,
+                    Target::Data(offset),
+                )])),
+            )
+        })
+        .collect();
+    let name = "NearestSecondaryObjectFilter";
+    let filter = if let Some(child) = children.next_if(|node| node.has_tag_name((SAGE_NS, name))) {
+        let offset = data.allocate(start + 0x1e4, 0x70)?;
+        Target::Table(super::parking::encode_inline_filter(
+            child,
+            offset,
+            data,
+            reference_types,
+        )?)
+    } else {
+        Target::Null
+    };
+    let mut upgrades = Vec::new();
+    for child in children {
+        if !child.has_tag_name((SAGE_NS, "Upgrade"))
+            || child.children().any(|node| node.is_element())
+        {
+            return Err(invalid(path, "unexpected OCLSpecialPower child"));
+        }
+        validate_attributes(child, &[], path)?;
+        let value: String = child
+            .children()
+            .filter(Node::is_text)
+            .filter_map(|node| node.text())
+            .collect();
+        upgrades.push(super::passive_area::reference(
+            &value,
+            "UpgradeTemplate",
+            path,
+            references,
+            reference_types,
+        )?);
+    }
+    let upgrade_count = start + 0x1e8;
+    let first = data.list(upgrade_count, upgrades.len(), 4)?;
+    let upgrade_items: Vec<_> = upgrades
+        .into_iter()
+        .enumerate()
+        .map(|(index, ordinal)| {
+            let offset = first + index * 4;
+            data.word(offset, ordinal);
+            (0, Target::Data(offset))
+        })
+        .collect();
+    Ok([
+        Entry::named(
+            "UpgradeOCL",
+            0xa8b8_56f2,
+            Target::Table(Table::array(pair_count, pair_items)),
+        ),
+        Entry::named(name, 0xe46e_a3b2, filter),
+        Entry::named(
+            "Upgrade",
+            0x4aba_1f29,
+            Target::Table(Table::array(upgrade_count, upgrade_items)),
+        ),
+    ])
 }
 
 fn empty_filter(start: usize) -> Table {
