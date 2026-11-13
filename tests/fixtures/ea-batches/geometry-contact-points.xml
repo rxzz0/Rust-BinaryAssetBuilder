@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="GeometryContactProbe">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    <Geometry IsSmall="false">
+      <RotationAnchorOffset x="1.5" y="-2" />
+      <PlacementShape Type="BOX" Name="Placement" MajorRadius="30"><Offset x="1" /></PlacementShape>
+      <Shape Type="BOX" MajorRadius="27.5" MinorRadius="27.5" Height="25"><Offset x="0" y="0" z="0" /></Shape>
+      <ContactPoint><Pos x="-13" y="13" z="20" /></ContactPoint>
+      <ContactPoint Label="Upper"><Pos x="13" y="-13" /></ContactPoint>
+    </Geometry>
+  </GameObject>
+</AssetDeclaration>
