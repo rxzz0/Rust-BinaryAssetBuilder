@@ -1,0 +1,21 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DefaultAI">
+    <AI><AIUpdate id="ModuleTag_AIUpdate" /></AI>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="StructureAI">
+    <AI><AIUpdate id="ModuleTag_AIUpdate" AutoAcquireEnemiesWhenIdle="NO" StateMachine="StructureAIStateMachine" /></AI>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="CustomAI">
+    <AI><AIUpdate id="ModuleTag_AIUpdate" AttackPriority="TestPriority" AutoAcquireEnemiesWhenIdle="YES STEALTHED ATTACK_BUILDINGS"
+      StopChaseDistance="750" StandGround="true" MinCowerTime="1s" MaxCowerTime="500ms" BurningDeathTime="1.25s"
+      ComboLocoAttackDistance="95.5" SpecialContactPoints="FirstBone SecondBone" FadeOnPortals="true" IdleTargetTime="1.1s"
+      MaxCombineChildren="3" SpawnOffsetRadius="20" StateMachine="UnitAIStateMachine" DefaultLocomotorSet="NORMAL_UPGRADED" /></AI>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="ChooserAI">
+    <AI><AIUpdate id="ModuleTag_AIUpdate"><UnitAITargetChooserData /></AIUpdate></AI>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

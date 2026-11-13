@@ -6,7 +6,9 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{self, Entry, Table, Target};
 use super::super::{Marshaled, hash_name, significant_children, validate_attributes};
-use super::{active_body, behaviors_basic, children, draws, fields, physics, structures};
+use super::{
+    active_body, ai_update, behaviors_basic, children, draws, fields, physics, structures,
+};
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
@@ -71,11 +73,13 @@ pub(in crate::compile::static_assets) fn compile(
     let mut body = None;
     let mut behaviors = None;
     let mut draws = None;
+    let mut ai = None;
     for child in significant_children(node) {
         let slot = match child.tag_name().name() {
             "Body" => &mut body,
             "Behaviors" => &mut behaviors,
             "Draws" => &mut draws,
+            "AI" => &mut ai,
             "DisplayName"
             | "GameDependency"
             | "ObjectResourceInfo"
@@ -181,6 +185,10 @@ pub(in crate::compile::static_assets) fn compile(
     } else {
         None
     };
+    if let Some(group) = ai {
+        let target = ai_update::encode(group, &mut data, &mut references, &mut reference_types)?;
+        child_targets.push(("AI", target));
+    }
     let body_shift = data.payload.len() - ROOT_SIZE;
     table.shift_data_from(ROOT_SIZE, body_shift);
     let body_start = data.allocate(0x1dc, BODY_SIZE)?;

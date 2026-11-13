@@ -1,4 +1,5 @@
 mod active_body;
+mod ai_update;
 mod behaviors_basic;
 mod children;
 mod draws;
