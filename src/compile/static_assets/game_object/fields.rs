@@ -110,12 +110,24 @@ pub(super) fn encode(
         data.string(0x74, value)?;
     }
     if let Some(value) = node.attribute("EditorSorting") {
-        let number = match value {
-            "NONE" => 0,
-            "STRUCTURE" => 1,
-            "AUDIO" => 8,
-            _ => return Err(invalid(data.path, format!("invalid EditorSorting {value}"))),
-        };
+        static VALUES: OnceLock<Vec<String>> = OnceLock::new();
+        let values = VALUES.get_or_init(|| {
+            Document::parse(include_str!(
+                "../../../../schemas/ra3/xsd/GameObject/ThingSort.xsd"
+            ))
+            .unwrap()
+            .descendants()
+            .find(|node| node.attribute("name") == Some("EditorSortingType"))
+            .unwrap()
+            .descendants()
+            .filter_map(|node| node.attribute("value").map(str::to_owned))
+            .collect()
+        });
+        let number = values
+            .iter()
+            .position(|candidate| candidate == value)
+            .ok_or_else(|| invalid(data.path, format!("invalid EditorSorting {value}")))?
+            as u32;
         data.word(0x7c, number);
     }
     if let Some(value) = node.attribute("BuildTime") {
