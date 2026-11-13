@@ -219,7 +219,7 @@ fn encode_effect(
     Ok(Table::record(entries))
 }
 
-fn encode_status(
+pub(super) fn encode_status(
     node: Node<'_, '_>,
     pointer: usize,
     data: &mut BinaryData<'_>,

@@ -16,13 +16,24 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
     float_names: &mut Vec<u32>,
 ) -> io::Result<Table> {
+    let start = data.allocate(pointer, 0x1c)?;
+    encode_inline(node, start, data, references, reference_types, float_names)
+}
+
+pub(super) fn encode_inline(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+    float_names: &mut Vec<u32>,
+) -> io::Result<Table> {
     let path = data.path;
     validate_attributes(
         node,
         &["ShaderName", "TechniqueName", "TechniqueIndex"],
         path,
     )?;
-    let start = data.allocate(pointer, 0x1c)?;
     data.string(start, required(node, "ShaderName", path)?)?;
     data.string(start + 8, node.attribute("TechniqueName").unwrap_or(""))?;
     data.payload[start + 0x18] = node

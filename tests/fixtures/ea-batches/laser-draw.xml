@@ -1,0 +1,19 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="LaserDrawProbe">
+    <Draws>
+      <LaserDraw id="ModuleTag_Default"><FXShader ShaderName="Laser.fx" /></LaserDraw>
+      <LaserDraw id="ModuleTag_Custom" UseDistortionShader="true"
+          Texture1_UTile="2" Texture1_VTile="3" Texture2_UTile="4" Texture2_VTile="5"
+          Texture1_UScrollRate=".2" Texture1_VScrollRate=".3" Texture2_UScrollRate="-.4" Texture2_VScrollRate="-.5"
+          Texture1_NumFrames="6" Texture1_FrameRate="7" Texture2_NumFrames="8" Texture2_FrameRate="9"
+          LaserWidth="25" FadeInTime="500ms" FadeOutTime="2s" WeaponSlotID="3" LaserStateID="2">
+        <FXShader ShaderName="Laser.fx" TechniqueIndex="1"><Constants>
+          <Texture Name="Texture1"><Value>FXAlliedPrismBeam</Value></Texture>
+          <Float Name="ColorEmissive"><Value>4</Value><Value>5</Value></Float>
+        </Constants></FXShader>
+        <ObjectStatusValidation ForbiddenStatus="SOLD" RequiredStatus="CAN_ATTACK" />
+      </LaserDraw>
+    </Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

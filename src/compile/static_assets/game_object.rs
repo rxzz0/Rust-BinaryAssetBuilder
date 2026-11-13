@@ -13,6 +13,7 @@ mod engineer;
 mod fields;
 mod fx_list_behavior;
 mod infiltrator;
+mod laser_draw;
 mod material;
 mod parking;
 mod physics;

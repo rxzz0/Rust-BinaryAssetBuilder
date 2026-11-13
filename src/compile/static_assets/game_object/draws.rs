@@ -55,25 +55,42 @@ pub(super) fn encode(
     let pointers = data.list(list, modules.len(), 4)?;
     let mut items = Vec::with_capacity(modules.len());
     for (index, node) in modules.into_iter().enumerate() {
-        if !node.has_tag_name((SAGE_NS, "ScriptedModelDraw")) {
-            return Err(invalid(
-                data.path,
-                format!("unsupported Draws module {}", node.tag_name().name()),
-            ));
-        }
-        let module = scripted_model(
-            node,
-            pointers + index * 4,
-            data,
-            references,
-            reference_types,
-            material_float_names,
-        )?;
+        let pointer = pointers + index * 4;
+        let (kind, module) = match node.tag_name().name() {
+            "ScriptedModelDraw" if node.has_tag_name((SAGE_NS, "ScriptedModelDraw")) => (
+                SCRIPTED_MODEL_DRAW,
+                scripted_model(
+                    node,
+                    pointer,
+                    data,
+                    references,
+                    reference_types,
+                    material_float_names,
+                )?,
+            ),
+            "LaserDraw" if node.has_tag_name((SAGE_NS, "LaserDraw")) => (
+                super::laser_draw::KIND,
+                super::laser_draw::encode(
+                    node,
+                    pointer,
+                    data,
+                    references,
+                    reference_types,
+                    material_float_names,
+                )?,
+            ),
+            name => {
+                return Err(invalid(
+                    data.path,
+                    format!("unsupported Draws module {name}"),
+                ));
+            }
+        };
         items.push((
             0,
             Target::Table(Table::sequence(vec![Entry::new(
                 2,
-                SCRIPTED_MODEL_DRAW,
+                kind,
                 Target::Table(module),
             )])),
         ));
