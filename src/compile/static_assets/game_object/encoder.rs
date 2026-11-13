@@ -239,14 +239,19 @@ pub(in crate::compile::static_assets) fn compile(
                 None if module.has_tag_name((SAGE_NS, "Physics")) => {
                     physics::encode(module, pointers + index * 4, &mut data)?
                 }
-                None => structures::encode(module, pointers + index * 4, &mut data)?.ok_or_else(
-                    || {
-                        invalid(
-                            path,
-                            format!("unsupported behavior {}", module.tag_name().name()),
-                        )
-                    },
-                )?,
+                None => structures::encode(
+                    module,
+                    pointers + index * 4,
+                    &mut data,
+                    &mut references,
+                    &mut reference_types,
+                )?
+                .ok_or_else(|| {
+                    invalid(
+                        path,
+                        format!("unsupported behavior {}", module.tag_name().name()),
+                    )
+                })?,
             };
             items.push((
                 0,

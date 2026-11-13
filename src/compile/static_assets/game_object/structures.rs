@@ -1,7 +1,7 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    finite_number, hash_name, sage_time, significant_children, validate_attributes,
+    AssetReference, finite_number, hash_name, sage_time, significant_children, validate_attributes,
 };
 use super::draws::boolean;
 use crate::compile::{SAGE_NS, has_content, invalid, required};
@@ -24,12 +24,23 @@ pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,
     data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
     let (kind, size, allowed): (u32, usize, &[&str]) = match node.tag_name().name() {
         "BuildingBehavior" => (0x815a_9161, 0x28, &["id", "NightWindowObject"]),
         "DefaultProductionExit" => (DEFAULT_EXIT, 0x10, &["id"]),
         "QueueProductionExitUpdate" => (QUEUE_EXIT, 0x30, &[]),
-        "StructureUnpackUpdate" => (0x977f_8391, 0x14, &["id", "UnpackTime"]),
+        "StructureUnpackUpdate" => (
+            0x977f_8391,
+            0x14,
+            &[
+                "id",
+                "UnpackTime",
+                "UnpackCompleteSound",
+                "OffsetHeightAboveWater",
+            ],
+        ),
         "StructureSellUpdate" => (
             0x4e9c_b811,
             0x10,
@@ -92,10 +103,31 @@ pub(super) fn encode(
                 )?
                 .to_bits(),
             );
-            data.word(offset + 0x10, 5.0_f32.to_bits());
+            let sound = if let Some(value) = node.attribute("UnpackCompleteSound") {
+                let target = data.allocate(offset + 0xc, 4)?;
+                let ordinal = if value.trim().is_empty() {
+                    0
+                } else {
+                    let name = value.split_once('\\').map_or(value, |(name, _)| name);
+                    let id = super::super::asset_reference(name, "BaseAudioEventInfo", data.path)?;
+                    references.push(id.into());
+                    reference_types.push(id.type_id);
+                    references.len() as u32
+                };
+                data.word(target, ordinal);
+                Target::Data(target)
+            } else {
+                Target::Null
+            };
+            let height = finite_number(
+                node.attribute("OffsetHeightAboveWater").unwrap_or("5.0"),
+                "OffsetHeightAboveWater",
+                data.path,
+            )?;
+            data.word(offset + 0x10, height.to_bits());
             entries.extend([
                 Entry::named("UnpackTime", 0x9986_69e8, Target::Data(offset + 8)),
-                Entry::named("UnpackCompleteSound", 0x63d7_b468, Target::Null),
+                Entry::named("UnpackCompleteSound", 0x63d7_b468, sound),
                 Entry::named(
                     "OffsetHeightAboveWater",
                     0x6458_64f3,

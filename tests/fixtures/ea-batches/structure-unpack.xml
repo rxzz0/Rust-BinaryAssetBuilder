@@ -1,0 +1,5 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="StructureUnpackProbe"><Behaviors>
+<StructureUnpackUpdate id="ModuleTag_Default"/>
+<StructureUnpackUpdate id="ModuleTag_Silent" UnpackTime="1s" UnpackCompleteSound=""/>
+<StructureUnpackUpdate id="ModuleTag_Sound" UnpackTime="2s" UnpackCompleteSound="ProbeUnpack" OffsetHeightAboveWater="12.5"/>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>
