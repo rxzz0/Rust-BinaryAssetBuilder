@@ -6,7 +6,7 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{self, Entry, Table, Target};
 use super::super::{Marshaled, hash_name, significant_children, validate_attributes};
-use super::{active_body, behaviors_basic, children, fields, physics, structures};
+use super::{active_body, behaviors_basic, children, draws, fields, physics, structures};
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
@@ -70,10 +70,12 @@ pub(in crate::compile::static_assets) fn compile(
 ) -> io::Result<Marshaled> {
     let mut body = None;
     let mut behaviors = None;
+    let mut draws = None;
     for child in significant_children(node) {
         let slot = match child.tag_name().name() {
             "Body" => &mut body,
             "Behaviors" => &mut behaviors,
+            "Draws" => &mut draws,
             "DisplayName"
             | "GameDependency"
             | "ObjectResourceInfo"
@@ -132,6 +134,10 @@ pub(in crate::compile::static_assets) fn compile(
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
     let mut child_targets =
         children::encode(node, &mut data, &mut references, &mut reference_types)?;
+    if let Some(group) = draws {
+        let target = draws::encode(group, &mut data, &mut references, &mut reference_types)?;
+        child_targets.push(("Draws", target));
+    }
     let behavior_tokens = if let Some(group) = behaviors {
         let modules: Vec<_> = significant_children(group).collect();
         let list = data.allocate(0x1d0, 8)?;
