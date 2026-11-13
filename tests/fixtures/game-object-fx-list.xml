@@ -1,0 +1,17 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="FXListBehaviorProbe">
+    <Behaviors>
+      <FXListBehavior id="ModuleTag_FXList">
+        <DieMuxData DeathTypes="ALL" DeathTypesForbidden="SUICIDED" />
+        <Event Index="onDeath" FX="FX_YU_Hotel02_Explode" />
+        <Event Index="onDeath" FX="FX_LargeBuildingDieExplosionRumble" />
+      </FXListBehavior>
+      <FXListBehavior id="ModuleTag_Custom">
+        <DieMuxData />
+        <Event />
+        <Event Index="onTransitionToReallyDamaged" FX="FX_LargeBuildingDieExplosion" MinThreshold="0.25" MaxThreshold="0.75" OrientToObject="false" ForceUseDoFXObj="true" Direction="Side" />
+      </FXListBehavior>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

@@ -8,6 +8,7 @@ mod client_behaviors;
 mod draws;
 mod encoder;
 mod fields;
+mod fx_list_behavior;
 mod material;
 mod physics;
 mod recall;
