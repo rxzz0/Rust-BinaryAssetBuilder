@@ -11,6 +11,7 @@ mod encoder;
 mod engineer;
 mod fields;
 mod fx_list_behavior;
+mod infiltrator;
 mod material;
 mod parking;
 mod physics;

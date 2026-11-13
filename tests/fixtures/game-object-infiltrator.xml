@@ -1,0 +1,15 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+ <GameObject id="InfiltratorContainProbe">
+  <Behaviors>
+   <InfiltratorContain id="ModuleTag_Default" />
+   <InfiltratorContain id="ModuleTag_Custom" ImmediatelyEnabled="true" Effect="ENERGY"
+     ObjectRef="InfiltratorContainProbe" UnitFilter="ProbeUnits" StructureFilter="ProbeStructures"
+     CanEnterFilter="ProbeEntry" ReplaceWith="ProbeReplacement" FXForInfiltrate="ProbeFX"
+     EvaEventForInfiltratingPlayer="ProbeAttacker" EvaEventForInfiltratedPlayer="ProbeTarget"
+     BlockedDuration="500ms" Duration="4s" UnitDuration="8s" Amount="37.5"
+     NameOfVoiceToUseForHostileEnter="VoiceProbeEntry" NameOfVoiceToUseForInfiltrationDeath="VoiceProbeDeath"
+     InfiltratedStatusFilter="CAN_ATTACK" ObjectStatusToSet="NO_REFUND CAN_ATTACK" />
+  </Behaviors>
+  <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+ </GameObject>
+</AssetDeclaration>
