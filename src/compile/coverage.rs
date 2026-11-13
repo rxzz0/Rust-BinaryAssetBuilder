@@ -418,6 +418,11 @@ mod tests {
         assert_ea_fixture("structure-unpack", 1);
     }
 
+    #[test]
+    fn just_built_time_matches_ea_batch() {
+        assert_ea_fixture("game-object-just-built", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
