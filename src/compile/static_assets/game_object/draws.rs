@@ -14,6 +14,35 @@ const STRING: u32 = 0x1a29_33aa;
 const FLOAT: u32 = 0x6458_64f3;
 const BOOL: u32 = 0x77e3_f4f7;
 
+pub(in crate::compile) const SCRIPTED_FLAGS: &[(&str, usize, bool)] = &[
+    ("OkToChangeModelColor", 0xc4, false),
+    ("AnimationsRequirePower", 0xc5, true),
+    ("UseYAxisForTurretRotation", 0xc6, false),
+    ("TrackMarksOnlyWhenCorneringQuickly", 0xc7, false),
+    ("UseProducerTexture", 0xc8, false),
+    ("NoRotate", 0xc9, false),
+    ("UseFiringArcRotation", 0xca, false),
+    ("Selectable", 0xcb, true),
+    ("RandomTextureFixedRandomIndex", 0xcc, false),
+    ("ParticleBonesCheckDrawable", 0xcd, false),
+    ("ShadowForceDisable", 0xce, false),
+    ("SwitchModelLODMode", 0xcf, false),
+    ("StaticModelLODMode", 0xd0, false),
+    ("ShowShadowWhileContained", 0xd1, false),
+    ("MultiPlayerOnly", 0xd2, false),
+    ("AffectedByStealth", 0xd3, true),
+    ("InvertStealthOpacity", 0xd4, false),
+    ("HighDetailOnly", 0xd5, false),
+];
+
+fn scripted_flag(name: &'static str) -> (&'static str, u32, usize) {
+    let &(_, offset, _) = SCRIPTED_FLAGS
+        .iter()
+        .find(|&&(field, _, _)| field == name)
+        .expect("ScriptedModelDraw flag in layout");
+    (name, BOOL, offset)
+}
+
 pub(super) fn encode(
     group: Node<'_, '_>,
     data: &mut BinaryData<'_>,
@@ -60,16 +89,11 @@ fn scripted_model(
     reference_types: &mut Vec<u32>,
     material_float_names: &mut Vec<u32>,
 ) -> io::Result<Table> {
-    validate_attributes(
-        node,
-        &[
-            "id",
-            "OkToChangeModelColor",
-            "Selectable",
-            "ExtraPublicBone",
-        ],
-        data.path,
-    )?;
+    let allowed: Vec<_> = ["id", "ExtraPublicBone"]
+        .into_iter()
+        .chain(SCRIPTED_FLAGS.iter().map(|&(name, _, _)| name))
+        .collect();
+    validate_attributes(node, &allowed, data.path)?;
     let mut states = Vec::new();
     let mut animations = Vec::new();
     for child in significant_children(node) {
@@ -100,10 +124,9 @@ fn scripted_model(
     ] {
         data.word(start + offset, bits);
     }
-    data.payload[start + 0xc4] = boolean(node, "OkToChangeModelColor", false, data.path)?;
-    data.payload[start + 0xc5] = 1;
-    data.payload[start + 0xcb] = boolean(node, "Selectable", true, data.path)?;
-    data.payload[start + 0xd3] = 1;
+    for &(name, offset, default) in SCRIPTED_FLAGS {
+        data.payload[start + offset] = boolean(node, name, default, data.path)?;
+    }
 
     let bones = node
         .attribute("ExtraPublicBone")
@@ -149,13 +172,13 @@ fn scripted_model(
             ("MaxRecoilDistance", FLOAT, 0x14),
             ("RecoilDamping", FLOAT, 0x18),
             ("RecoilSettleSpeed", 0x7a76_c60e, 0x1c),
-            ("OkToChangeModelColor", BOOL, 0xc4),
-            ("AnimationsRequirePower", BOOL, 0xc5),
-            ("UseYAxisForTurretRotation", BOOL, 0xc6),
+            scripted_flag("OkToChangeModelColor"),
+            scripted_flag("AnimationsRequirePower"),
+            scripted_flag("UseYAxisForTurretRotation"),
             ("MinLODRequired", 0xa80d_9f50, 0x20),
             ("ProjectileBoneFeedbackEnabledSlots", 0x28ae_db15, 0x24),
             ("TrackMarks", 0x4c3e_3938, 0x28),
-            ("TrackMarksOnlyWhenCorneringQuickly", BOOL, 0xc7),
+            scripted_flag("TrackMarksOnlyWhenCorneringQuickly"),
         ],
     ));
     entries.push(Entry::named(
@@ -168,29 +191,29 @@ fn scripted_model(
         &[
             ("AttachToBoneInAnotherModule", STRING, 0x34),
             ("DependencySharedModelFlags", 0x67db_bfc9, 0x3c),
-            ("UseProducerTexture", BOOL, 0xc8),
-            ("NoRotate", BOOL, 0xc9),
-            ("UseFiringArcRotation", BOOL, 0xca),
-            ("Selectable", BOOL, 0xcb),
-            ("RandomTextureFixedRandomIndex", BOOL, 0xcc),
+            scripted_flag("UseProducerTexture"),
+            scripted_flag("NoRotate"),
+            scripted_flag("UseFiringArcRotation"),
+            scripted_flag("Selectable"),
+            scripted_flag("RandomTextureFixedRandomIndex"),
             ("TrackMarksLeftBone", STRING, 0x78),
             ("TrackMarksRightBone", STRING, 0x80),
-            ("ParticleBonesCheckDrawable", BOOL, 0xcd),
-            ("ShadowForceDisable", BOOL, 0xce),
+            scripted_flag("ParticleBonesCheckDrawable"),
+            scripted_flag("ShadowForceDisable"),
             ("HighDetailLODThreshold", FLOAT, 0x88),
             ("LowDetailLODThreshold", FLOAT, 0x8c),
-            ("SwitchModelLODMode", BOOL, 0xcf),
-            ("StaticModelLODMode", BOOL, 0xd0),
-            ("ShowShadowWhileContained", BOOL, 0xd1),
+            scripted_flag("SwitchModelLODMode"),
+            scripted_flag("StaticModelLODMode"),
+            scripted_flag("ShowShadowWhileContained"),
             ("WadingParticleSys", 0x43f1_ce36, 0x90),
             ("AlphaCameraFadeOuterRadius", FLOAT, 0x94),
             ("AlphaCameraFadeInnerRadius", FLOAT, 0x98),
             ("AlphaCameraAtInnerRadius", FLOAT, 0x9c),
             ("BirthFadeTime", 0x23e6_50b8, 0xa0),
-            ("MultiPlayerOnly", BOOL, 0xd2),
-            ("AffectedByStealth", BOOL, 0xd3),
-            ("InvertStealthOpacity", BOOL, 0xd4),
-            ("HighDetailOnly", BOOL, 0xd5),
+            scripted_flag("MultiPlayerOnly"),
+            scripted_flag("AffectedByStealth"),
+            scripted_flag("InvertStealthOpacity"),
+            scripted_flag("HighDetailOnly"),
         ],
     ));
     entries.extend([

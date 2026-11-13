@@ -65,6 +65,14 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
     Some(encoder)
 }
 
+pub(super) fn has_encoder(type_name: &str) -> bool {
+    encoder(type_name).is_some()
+        || matches!(
+            type_name,
+            "PathMusicEvent" | "PathMusicMap" | "PathMusicTrack"
+        )
+}
+
 pub(super) fn compile_asset(
     node: Node<'_, '_>,
     path: &Path,

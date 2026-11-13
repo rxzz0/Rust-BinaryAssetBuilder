@@ -148,3 +148,20 @@ BinaryAssetBuilder implementation for Kane's Wrath in .Net
 * [ ] UIJoypadCommandBarStances
 * [ ] UIJoypadCommandBarTopMenu
 * [ ] UIJoypadCommandBarMgTopMenu
+
+### RA3 SDK coverage and EA verification
+
+Run these from the repository root after building the Rust release.
+
+~~~powershell
+cargo build --release --locked
+$compiler = 'target/release/binary-asset-builder.exe'
+$sdk = 'X:\RA3 MOD SDK'
+& $compiler sdk-coverage (Join-Path $sdk 'Schemas/xsd') |
+    Set-Content -Encoding utf8 sdk-coverage.tsv
+& ./sdk/Test-EaBatch.ps1 -SdkRoot $sdk -RustCompiler $compiler -InputXml tests/fixtures/ea-batches/scripted-model-draw.xml -OutputDirectory .scratch/ea-draw-run
+~~~
+
+The TSV inventories the SDK's top-level declarations and the five GameObject module groups. Asset status covers native static dispatch. Module status records the currently implemented dispatch names. An encoder entry does not imply full support. ScriptedModelDraw also reports attribute and child coverage.
+
+Use a new output directory for each EA run. A batch is a self-contained AssetDeclaration with independent probes and no includes or inheritance. The comparator matches each asset by ID and checks binary payload, relocations, imports, ordered references, and metadata. The checked-in pilot oracle also runs under cargo test without EA installed. EA is used only to generate verification data.

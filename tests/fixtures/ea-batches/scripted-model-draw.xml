@@ -1,0 +1,19 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DrawDefaultsProbe">
+    <Draws><ScriptedModelDraw id="ModuleTag_Draw" /></Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="DrawFlagsProbe">
+    <Draws>
+      <ScriptedModelDraw id="ModuleTag_Draw" OkToChangeModelColor="true"
+          AnimationsRequirePower="false" UseYAxisForTurretRotation="true" TrackMarksOnlyWhenCorneringQuickly="true"
+          UseProducerTexture="true" NoRotate="true" UseFiringArcRotation="true" Selectable="false"
+          RandomTextureFixedRandomIndex="true" ParticleBonesCheckDrawable="true" ShadowForceDisable="true"
+          SwitchModelLODMode="true" StaticModelLODMode="true" ShowShadowWhileContained="true"
+          MultiPlayerOnly="true" AffectedByStealth="false" InvertStealthOpacity="true" HighDetailOnly="true">
+        <ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name="ABAirfield" /></ModelConditionState>
+      </ScriptedModelDraw>
+    </Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

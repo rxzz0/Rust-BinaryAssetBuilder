@@ -3,7 +3,7 @@
 use binary_asset_builder::big::pack_big;
 use binary_asset_builder::compile::{
     CompiledStream, compile_apt_ui, compile_apt_ui_directory, compile_sdk_global,
-    compile_sdk_static, compile_static, write_compiled_stream,
+    compile_sdk_static, compile_static, sdk_coverage, verify_ea_batch, write_compiled_stream,
 };
 use binary_asset_builder::fix_assets::fix_assets;
 use binary_asset_builder::linked_stream::{check_linked_files, link_assets};
@@ -25,8 +25,20 @@ Usage
   binary-asset-builder fix-assets <mod.manifest> --references <builtmods-directory>
   binary-asset-builder pack-big <directory> --output <file.big>
   binary-asset-builder relink <file.manifest> --assets <directory> --output <new-directory>
+  binary-asset-builder sdk-coverage <schema-directory>
+  binary-asset-builder verify-ea-batch <file.xml> <ea.manifest> <ea-assets-directory>
   binary-asset-builder inspect <file.manifest>
   binary-asset-builder check-linked <file.manifest>";
+
+fn diagnostic(result: io::Result<()>) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
 
 fn main() -> ExitCode {
     let args: Vec<_> = env::args_os().skip(1).collect();
@@ -34,6 +46,17 @@ fn main() -> ExitCode {
         [flag] if flag == "--help" || flag == "-h" || flag == "/?" => {
             println!("{USAGE}");
             ExitCode::SUCCESS
+        }
+        [command, schema] if command == "sdk-coverage" => {
+            diagnostic(sdk_coverage(Path::new(schema), io::stdout().lock()))
+        }
+        [command, input, manifest, assets] if command == "verify-ea-batch" => {
+            diagnostic(verify_ea_batch(
+                Path::new(input),
+                Path::new(manifest),
+                Path::new(assets),
+                io::stdout().lock(),
+            ))
         }
         [command, input, flag, references] if command == "fix-assets" && flag == "--references" => {
             let input = Path::new(input);

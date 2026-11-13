@@ -10,6 +10,7 @@ const XSD: &str = "http://www.w3.org/2001/XMLSchema";
 #[derive(Default)]
 pub(in crate::compile) struct Schema {
     types: HashMap<String, Type>,
+    pub(in crate::compile) assets: Vec<(String, String)>,
 }
 
 #[derive(Default)]
@@ -23,23 +24,23 @@ struct Type {
     enumeration: bool,
 }
 
-pub(super) struct Field {
-    pub(super) name: String,
-    pub(super) kind: String,
-    pub(super) default: Option<String>,
+pub(in crate::compile) struct Field {
+    pub(in crate::compile) name: String,
+    pub(in crate::compile) kind: String,
+    pub(in crate::compile) default: Option<String>,
     pub(super) repeated: bool,
 }
 
 #[derive(Default)]
-pub(super) struct Shape<'a> {
-    pub(super) fields: Vec<&'a Field>,
-    pub(super) children: Vec<&'a Field>,
+pub(in crate::compile) struct Shape<'a> {
+    pub(in crate::compile) fields: Vec<&'a Field>,
+    pub(in crate::compile) children: Vec<&'a Field>,
     pub(super) choice: bool,
     pub(super) repeated_choice: bool,
 }
 
 impl Schema {
-    pub(super) fn load(root: &Path) -> io::Result<Self> {
+    pub(in crate::compile) fn load(root: &Path) -> io::Result<Self> {
         let root = fs::canonicalize(root).map_err(|error| invalid(root, error))?;
         let mut pending = vec![root.join("CnC3Types.xsd")];
         let mut visited = HashSet::<PathBuf>::new();
@@ -64,6 +65,24 @@ impl Schema {
                         .attribute("schemaLocation")
                         .ok_or_else(|| invalid(&path, "missing schemaLocation"))?;
                     pending.push(directory.join(location));
+                } else if node.has_tag_name((XSD, "element"))
+                    && node.attribute("name") == Some("AssetDeclaration")
+                {
+                    for choice in node
+                        .descendants()
+                        .filter(|child| child.has_tag_name((XSD, "choice")))
+                    {
+                        schema.assets.extend(choice.children().filter_map(|child| {
+                            if child.has_tag_name((XSD, "element")) {
+                                Some((
+                                    child.attribute("name")?.to_owned(),
+                                    type_name(child.attribute("type")?),
+                                ))
+                            } else {
+                                None
+                            }
+                        }));
+                    }
                 } else if is_type(node)
                     && let Some(name) = node.attribute("name")
                 {
@@ -147,7 +166,7 @@ impl Schema {
         })
     }
 
-    pub(super) fn shape(&self, kind: &str, path: &Path) -> io::Result<Shape<'_>> {
+    pub(in crate::compile) fn shape(&self, kind: &str, path: &Path) -> io::Result<Shape<'_>> {
         let mut lineage = Vec::new();
         let mut name = kind;
         while !name.starts_with("xs:") {
