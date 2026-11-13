@@ -176,12 +176,19 @@ pub(super) fn encode(
 
 fn skirmish(node: Node<'_, '_>, data: &mut BinaryData<'_>) -> io::Result<Target> {
     validate_attributes(node, &["BaseBuildingLocation"], data.path)?;
-    if node.attribute("BaseBuildingLocation").unwrap_or("FRONT") != "BACK" {
-        return Err(invalid(
-            data.path,
-            "unsupported SkirmishAIInformation BaseBuildingLocation",
-        ));
-    }
+    let location = super::super::global_ui::enum_value(
+        node.attribute("BaseBuildingLocation").unwrap_or("FRONT"),
+        &[
+            "FRONT",
+            "SIDE",
+            "BACK",
+            "SPREAD",
+            "CENTER",
+            "DEFENSE",
+            "NEAR_RESOURCE_NODE",
+        ],
+        data.path,
+    )?;
     let mut children = node.children().filter(Node::is_element);
     let criteria = children
         .next()
@@ -223,7 +230,7 @@ fn skirmish(node: Node<'_, '_>, data: &mut BinaryData<'_>) -> io::Result<Target>
     }
     let start = data.allocate(0x1c8, 0x58)?;
     for (offset, value) in [
-        (0, 2),
+        (0, location),
         (8, 3),
         (0x10, 0x3fa6_6666),
         (0x18, 0xe),
@@ -654,7 +661,7 @@ mod tests {
     #[test]
     fn child_token_layouts_match_ea_oracles() {
         const BARE: &[u8] = include_bytes!("../../../../tests/fixtures/game-object-bare.bin");
-        const CASES: [(&str, &str, &[u8], &[u8]); 7] = [
+        const CASES: [(&str, &str, &[u8], &[u8]); 8] = [
             (
                 "display",
                 include_str!("../../../../tests/fixtures/game-object-children-display.xml"),
@@ -684,6 +691,12 @@ mod tests {
                 include_str!("../../../../tests/fixtures/game-object-children-skirmish.xml"),
                 include_bytes!("../../../../tests/fixtures/game-object-children-skirmish.bin"),
                 include_bytes!("../../../../tests/fixtures/game-object-children-skirmish.relo"),
+            ),
+            (
+                "skirmish-front",
+                include_str!("../../../../tests/fixtures/game-object-skirmish-front.xml"),
+                include_bytes!("../../../../tests/fixtures/game-object-skirmish-front.bin"),
+                include_bytes!("../../../../tests/fixtures/game-object-skirmish-front.relo"),
             ),
             (
                 "geometry",
