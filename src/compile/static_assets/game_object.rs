@@ -11,6 +11,7 @@ mod encoder;
 mod fields;
 mod fx_list_behavior;
 mod material;
+mod parking;
 mod physics;
 mod production;
 mod recall;

@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+ <GameObject id="ParkingProbe">
+  <Behaviors>
+   <ParkingPlaceBehavior id="ModuleTag_Default" />
+   <ParkingPlaceBehavior id="ModuleTag_Custom" NumRows="2" NumCols="3" ApproachHeight="130" ParkInHangars="true" DoorOpenTime="2s" DoorCloseTime="500ms" LowersOntoParkingPlaceOnProduction="true" CanSetRallyPoint="false" DoorsUnpackOpen="false" QueueDistance="42" LimitedProductionAircraftSpots="4" HelipadBoneName="RUNWAY2PARK0HAN">
+    <CanParkHereFilter Rule="ALL" Relationship="SAME_PLAYER ALLIES" Exclude="SUMMONED" StatusBitFlagsExclude="CANNOT_LAND_AT_AIRFIELD"><ExcludeThing>ParkingProbe</ExcludeThing></CanParkHereFilter>
+    <DefaultRallyPointOffset x="1" y="2" z="3" />
+   </ParkingPlaceBehavior>
+  </Behaviors>
+  <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+ </GameObject>
+</AssetDeclaration>

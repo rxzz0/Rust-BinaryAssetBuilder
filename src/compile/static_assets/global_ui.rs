@@ -216,7 +216,7 @@ pub(super) fn filter_reference_types(node: Node<'_, '_>) -> impl Iterator<Item =
     std::iter::repeat_n(fast_hash(b"GameObject"), significant_children(node).count())
 }
 
-fn enum_value(value: &str, options: &[&str], path: &Path) -> io::Result<u32> {
+pub(super) fn enum_value(value: &str, options: &[&str], path: &Path) -> io::Result<u32> {
     options
         .iter()
         .position(|&item| item == value.trim())
