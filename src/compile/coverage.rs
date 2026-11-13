@@ -502,6 +502,11 @@ mod tests {
         assert_ea_fixture("scripted-draw-scalars", 1);
     }
 
+    #[test]
+    fn model_state_retain_subobjects_matches_ea_batch() {
+        assert_ea_fixture("model-state-retain", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

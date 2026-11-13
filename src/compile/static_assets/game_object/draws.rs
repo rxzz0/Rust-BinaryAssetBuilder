@@ -321,7 +321,11 @@ fn model_state(
     reference_types: &mut Vec<u32>,
     material_float_names: &mut Vec<u32>,
 ) -> io::Result<Table> {
-    validate_attributes(node, &["ParseCondStateType", "ConditionsYes"], data.path)?;
+    validate_attributes(
+        node,
+        &["ParseCondStateType", "ConditionsYes", "RetainSubObjects"],
+        data.path,
+    )?;
     let parse_type = match required(node, "ParseCondStateType", data.path)? {
         "PARSE_NORMAL" => 0,
         "PARSE_DEFAULT" => 1,
@@ -334,6 +338,7 @@ fn model_state(
         }
     };
     data.word(start, parse_type);
+    data.payload[start + 0xc0] = boolean(node, "RetainSubObjects", false, data.path)?;
     if let Some(value) = node.attribute("ConditionsYes") {
         write_model_conditions(value, start + 0xc, data)?;
     }
