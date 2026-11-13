@@ -305,6 +305,11 @@ mod tests {
         assert_ea_fixture("game-dependency", 2);
     }
 
+    #[test]
+    fn game_object_base_selection_matches_ea_batch() {
+        assert_ea_fixture("base-selection", 3);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

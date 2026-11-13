@@ -1,0 +1,19 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DefenseCriteriaProbe">
+    <SkirmishAIInformation BaseBuildingLocation="DEFENSE">
+      <ConstructionBaseSelectionCriteria ExcludedBaseTypes="NO_BUILD_RADIUS" PreferredBaseTypes="ENEMIES_IN_BASE UNDER_ATTACK" SortOrder="PREFER_MOST_RECENTLY_ATTACKED" />
+    </SkirmishAIInformation>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="ResourceCriteriaProbe">
+    <SkirmishAIInformation BaseBuildingLocation="NEAR_RESOURCE_NODE">
+      <ConstructionBaseSelectionCriteria />
+      <ResourceNodeBaseClosenessTestSelectionCriteria RequiredBaseTypes="MAIN_BASE LAND_CENTERED" ExcludedBaseTypes="PRIMARY_TYPE_MAX" PreferredBaseTypes="EXPANSION" PreferredNotBaseTypes="POINT_CENTERED" SortOrder="PREFER_CLOSEST" />
+    </SkirmishAIInformation>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="NoCriteriaProbe">
+    <SkirmishAIInformation />
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

@@ -217,44 +217,20 @@ fn skirmish(node: Node<'_, '_>, data: &mut BinaryData<'_>) -> io::Result<Target>
         ],
         data.path,
     )?;
-    let mut children = node.children().filter(Node::is_element);
-    let criteria = children
-        .next()
-        .filter(|child| child.has_tag_name((SAGE_NS, "ConstructionBaseSelectionCriteria")))
-        .ok_or_else(|| {
-            invalid(
-                data.path,
-                "SkirmishAIInformation requires ConstructionBaseSelectionCriteria",
-            )
-        })?;
-    if children.next().is_some() {
+    let mut children = super::super::significant_children(node).peekable();
+    let construction = children
+        .next_if(|child| child.has_tag_name((SAGE_NS, "ConstructionBaseSelectionCriteria")));
+    let resource = children.next_if(|child| {
+        child.has_tag_name((SAGE_NS, "ResourceNodeBaseClosenessTestSelectionCriteria"))
+    });
+    if let Some(child) = children.next() {
         return Err(invalid(
             data.path,
-            "unsupported SkirmishAIInformation child",
+            format!(
+                "unsupported SkirmishAIInformation child {}",
+                child.tag_name().name()
+            ),
         ));
-    }
-    validate_attributes(
-        criteria,
-        &["ExcludedBaseTypes", "PreferredBaseTypes", "SortOrder"],
-        data.path,
-    )?;
-    if has_content(criteria) {
-        return Err(invalid(
-            data.path,
-            "ConstructionBaseSelectionCriteria cannot contain content",
-        ));
-    }
-    for (name, expected) in [
-        ("ExcludedBaseTypes", "NO_BUILD_RADIUS CAPTURED"),
-        ("PreferredBaseTypes", "MAIN_BASE"),
-        ("SortOrder", "PREFER_OLDEST"),
-    ] {
-        if criteria.attribute(name) != Some(expected) {
-            return Err(invalid(
-                data.path,
-                format!("unsupported ConstructionBaseSelectionCriteria {name}"),
-            ));
-        }
     }
     let start = data.allocate(0x1c8, 0x58)?;
     for (offset, value) in [
@@ -270,9 +246,6 @@ fn skirmish(node: Node<'_, '_>, data: &mut BinaryData<'_>) -> io::Result<Target>
     ] {
         data.word(start + offset, value);
     }
-    let selection = data.allocate(start + 0x44, 0x14)?;
-    data.word(selection + 4, 0x204);
-    data.word(selection + 8, 1);
     let fields = [
         ("BaseBuildingLocation", 0xce5b_5436, Some(0)),
         ("AdditionalRotation", 0x4e16_ea4d, Some(4)),
@@ -323,36 +296,44 @@ fn skirmish(node: Node<'_, '_>, data: &mut BinaryData<'_>) -> io::Result<Target>
         0xcba6_c0c2,
         Target::Table(Table::array(start + 0x3c, [])),
     ));
-    entries.push(Entry::named(
-        "ConstructionBaseSelectionCriteria",
-        0xc153_d5e0,
-        Target::Table(Table::record(vec![
-            Entry::named("RequiredBaseTypes", 0xd743_1325, Target::Data(selection)),
-            Entry::named(
-                "ExcludedBaseTypes",
-                0xd743_1325,
-                Target::Data(selection + 4),
-            ),
-            Entry::named(
-                "PreferredBaseTypes",
-                0xd743_1325,
-                Target::Data(selection + 8),
-            ),
-            Entry::named(
-                "PreferredNotBaseTypes",
-                0xd743_1325,
-                Target::Data(selection + 12),
-            ),
-            Entry::named("SortOrder", 0xb0e6_6c4e, Target::Data(selection + 16)),
-        ])),
-    ));
-    entries.push(Entry::named(
-        "ResourceNodeBaseClosenessTestSelectionCriteria",
-        0xc153_d5e0,
-        Target::Null,
-    ));
+    for (name, criteria, pointer) in [
+        ("ConstructionBaseSelectionCriteria", construction, 0x44),
+        (
+            "ResourceNodeBaseClosenessTestSelectionCriteria",
+            resource,
+            0x48,
+        ),
+    ] {
+        let target = match criteria {
+            Some(criteria) => base_selection(criteria, start + pointer, data)?,
+            None => Target::Null,
+        };
+        entries.push(Entry::named(name, 0xc153_d5e0, target));
+    }
     entries.push(Entry::named("DodgeWithUnits", 0xe46e_a3b2, Target::Null));
     Ok(Target::Table(Table::record(entries)))
+}
+
+fn base_selection(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Target> {
+    let start = data.payload.len();
+    super::super::ai_personality::write_base_criteria(node, pointer, data)?;
+    Ok(Target::Table(Table::record(
+        super::draws::fields(
+            start,
+            &[
+                ("RequiredBaseTypes", 0xd743_1325, 0),
+                ("ExcludedBaseTypes", 0xd743_1325, 4),
+                ("PreferredBaseTypes", 0xd743_1325, 8),
+                ("PreferredNotBaseTypes", 0xd743_1325, 12),
+                ("SortOrder", 0xb0e6_6c4e, 16),
+            ],
+        )
+        .collect(),
+    )))
 }
 
 pub(super) fn encode_vision(
