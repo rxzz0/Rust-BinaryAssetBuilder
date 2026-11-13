@@ -7,7 +7,8 @@ use super::super::binary::BinaryData;
 use super::super::tokenized::{self, Entry, Table, Target};
 use super::super::{Marshaled, hash_name, significant_children, validate_attributes};
 use super::{
-    active_body, ai_update, behaviors_basic, children, draws, fields, physics, structures,
+    active_body, ai_update, behaviors_basic, children, client_behaviors, draws, fields, physics,
+    structures,
 };
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
@@ -74,12 +75,14 @@ pub(in crate::compile::static_assets) fn compile(
     let mut behaviors = None;
     let mut draws = None;
     let mut ai = None;
+    let mut client = None;
     for child in significant_children(node) {
         let slot = match child.tag_name().name() {
             "Body" => &mut body,
             "Behaviors" => &mut behaviors,
             "Draws" => &mut draws,
             "AI" => &mut ai,
+            "ClientBehaviors" => &mut client,
             "DisplayName"
             | "GameDependency"
             | "ObjectResourceInfo"
@@ -193,6 +196,11 @@ pub(in crate::compile::static_assets) fn compile(
     table.shift_data_from(ROOT_SIZE, body_shift);
     let body_start = data.allocate(0x1dc, BODY_SIZE)?;
     data.payload[body_start..body_start + BODY_SIZE].copy_from_slice(&body_bytes);
+    if let Some(group) = client {
+        let target =
+            client_behaviors::encode(group, &mut data, &mut references, &mut reference_types)?;
+        child_targets.push(("ClientBehaviors", target));
+    }
     if let Some(target) = children::encode_geometry(node, &mut data)? {
         child_targets.push(("Geometry", target));
     }

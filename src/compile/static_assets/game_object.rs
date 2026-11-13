@@ -2,6 +2,7 @@ mod active_body;
 mod ai_update;
 mod behaviors_basic;
 mod children;
+mod client_behaviors;
 mod draws;
 mod encoder;
 mod fields;

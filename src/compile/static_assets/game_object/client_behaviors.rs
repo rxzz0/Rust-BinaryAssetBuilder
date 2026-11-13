@@ -1,0 +1,409 @@
+use super::super::binary::BinaryData;
+use super::super::tokenized::{Entry, Table, Target};
+use super::super::{
+    AssetReference, asset_reference, hash_name, significant_children, validate_attributes,
+};
+use super::draws::write_model_conditions;
+use crate::compile::{SAGE_NS, has_content, invalid, required};
+use roxmltree::{Document, Node};
+use std::io;
+use std::path::Path;
+use std::sync::OnceLock;
+
+const LOOP: u32 = 0x5a3e_dbf4;
+const SELECTOR: u32 = 0x327c_fb76;
+const SOUND: u32 = 0x63d7_b468;
+const INT: u32 = 0x23e6_50b8;
+
+pub(super) fn encode(
+    group: Node<'_, '_>,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Target> {
+    let mut encoder = AudioEncoder {
+        data,
+        references,
+        reference_types,
+    };
+    let modules: Vec<_> = significant_children(group).collect();
+    let count = encoder.data.allocate(0x1e4, 8)?;
+    let pointers = encoder.data.list(count, modules.len(), 4)?;
+    let mut items = Vec::with_capacity(modules.len());
+    for (index, node) in modules.into_iter().enumerate() {
+        let (kind, name, tag, size) = match node.tag_name().name() {
+            "ModelConditionAudioLoopClientBehavior" => {
+                (LOOP, "ModelConditionSound", 0xd832_6ddd, 0x7c)
+            }
+            "ModelConditionSoundSelectorClientBehavior" => {
+                (SELECTOR, "Override", 0xbfa5_beba, 0x84)
+            }
+            name => {
+                return Err(invalid(
+                    encoder.data.path,
+                    format!("unsupported client behavior {name}"),
+                ));
+            }
+        };
+        if node.tag_name().namespace() != Some(SAGE_NS) {
+            return Err(invalid(
+                encoder.data.path,
+                "unexpected client behavior namespace",
+            ));
+        }
+        validate_attributes(node, &["id"], encoder.data.path)?;
+        let children = elements(node, name, encoder.data.path)?;
+        if kind == SELECTOR && children.is_empty() {
+            return Err(invalid(
+                encoder.data.path,
+                "sound selector requires Override",
+            ));
+        }
+        let start = encoder.data.allocate(pointers + index * 4, 16)?;
+        encoder.data.word(start, kind);
+        encoder.data.word(
+            start + 4,
+            hash_name(required(node, "id", encoder.data.path)?),
+        );
+        let first = encoder.data.list(start + 8, children.len(), size)?;
+        let mut entries = Vec::with_capacity(children.len());
+        for (index, child) in children.into_iter().enumerate() {
+            let offset = first + index * size;
+            entries.push((
+                0,
+                Target::Table(if kind == LOOP {
+                    encoder.sound_loop(child, offset)?
+                } else {
+                    encoder.sound_override(child, offset)?
+                }),
+            ));
+        }
+        let module = Table::record(vec![
+            Entry::new(0x19b0_42a0, INT, Target::Data(start)),
+            Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
+        ]);
+        let fields = Table::record(vec![
+            base(0x7b8c_5772, Table::record(vec![base(0xd75d_93a2, module)])),
+            list(name, tag, start + 8, entries),
+        ]);
+        items.push((
+            0,
+            Target::Table(Table::sequence(vec![Entry::new(
+                2,
+                kind,
+                Target::Table(fields),
+            )])),
+        ));
+    }
+    Ok(Target::Table(Table::array(count, items)))
+}
+
+struct AudioEncoder<'a, 'path> {
+    data: &'a mut BinaryData<'path>,
+    references: &'a mut Vec<AssetReference>,
+    reference_types: &'a mut Vec<u32>,
+}
+
+impl AudioEncoder<'_, '_> {
+    fn sound_loop(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
+        validate_attributes(
+            node,
+            &["Sound", "RequiredFlags", "ExcludedFlags"],
+            self.data.path,
+        )?;
+        require_empty(node, self.data.path)?;
+        let sound = self.optional_sound(node, start)?;
+        let [required, excluded] = condition_fields(node, start + 4, self.data)?;
+        Ok(Table::record(vec![sound, required, excluded]))
+    }
+
+    fn sound_override(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
+        validate_attributes(
+            node,
+            &["RequiredFlags", "ExcludedFlags", "VoicePriorityOverride"],
+            self.data.path,
+        )?;
+        let mut voice = None;
+        let mut sound = None;
+        for child in significant_children(node) {
+            let slot = if child.has_tag_name((SAGE_NS, "AudioArrayVoice")) {
+                &mut voice
+            } else if child.has_tag_name((SAGE_NS, "AudioArraySound")) {
+                &mut sound
+            } else {
+                return Err(invalid(self.data.path, "unsupported sound override child"));
+            };
+            if slot.replace(child).is_some() {
+                return Err(invalid(self.data.path, "repeated sound override child"));
+            }
+        }
+        let [required, excluded] = condition_fields(node, start, self.data)?;
+        let priority = if let Some(value) = node.attribute("VoicePriorityOverride") {
+            let value = value
+                .trim()
+                .parse::<i32>()
+                .map_err(|_| invalid(self.data.path, "invalid VoicePriorityOverride"))?;
+            let target = self.data.allocate(start + 0x78, 4)?;
+            self.data.word(target, value as u32);
+            Target::Data(target)
+        } else {
+            Target::Null
+        };
+        let voice = self.audio_array(voice, start + 0x7c, true)?;
+        let sound = self.audio_array(sound, start + 0x80, false)?;
+        Ok(Table::record(vec![
+            required,
+            excluded,
+            Entry::named("VoicePriorityOverride", INT, priority),
+            Entry::named("AudioArrayVoice", 0x09d1_8241, voice),
+            Entry::named("AudioArraySound", 0x5986_7d0b, sound),
+        ]))
+    }
+
+    fn audio_array(
+        &mut self,
+        node: Option<Node<'_, '_>>,
+        pointer: usize,
+        voice: bool,
+    ) -> io::Result<Target> {
+        let Some(node) = node else {
+            return Ok(Target::Null);
+        };
+        validate_attributes(node, &[], self.data.path)?;
+        let children = elements(node, "AudioEntry", self.data.path)?;
+        let start = self.data.allocate(pointer, if voice { 24 } else { 8 })?;
+        let size = if voice { 12 } else { 8 };
+        let first = self.data.list(start, children.len(), size)?;
+        let mut items = Vec::with_capacity(children.len());
+        for (index, child) in children.into_iter().enumerate() {
+            let offset = first + index * size;
+            let table = if voice {
+                self.voice_entry(child, offset)?
+            } else {
+                self.sound_entry(child, offset)?
+            };
+            items.push((0, Target::Table(table)));
+        }
+        let mut fields = vec![list(
+            "AudioEntry",
+            if voice { 0x8aa9_cb14 } else { 0x87d0_686c },
+            start,
+            items,
+        )];
+        if voice {
+            fields.extend([
+                list("ObjectSpecificEntry", 0xaedf_c4cd, start + 8, []),
+                list("NamedEntry", 0xf8ed_487b, start + 16, []),
+            ]);
+        }
+        Ok(Target::Table(Table::record(fields)))
+    }
+
+    fn voice_entry(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
+        validate_attributes(node, &["Sound", "EvaEvent", "AudioType"], self.data.path)?;
+        require_empty(node, self.data.path)?;
+        let sound = self.optional_sound(node, start)?;
+        let event = self.reference(node.attribute("EvaEvent").unwrap_or(""), "EvaEvent")?;
+        self.data.word(start + 4, event);
+        self.data
+            .word(start + 8, audio_type(node, true, self.data.path)?);
+        let parent = Table::record(vec![sound, field("EvaEvent", 0xc4ec_43b1, start + 4)]);
+        Ok(Table::record(vec![
+            base(0x1ae6_b6b7, parent),
+            field("AudioType", 0x4da7_08b0, start + 8),
+        ]))
+    }
+
+    fn sound_entry(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
+        validate_attributes(node, &["Sound", "AudioType"], self.data.path)?;
+        require_empty(node, self.data.path)?;
+        let sound = self.reference(
+            required(node, "Sound", self.data.path)?,
+            "BaseAudioEventInfo",
+        )?;
+        self.data.word(start, sound);
+        self.data
+            .word(start + 4, audio_type(node, false, self.data.path)?);
+        Ok(Table::record(vec![
+            field("Sound", SOUND, start),
+            field("AudioType", 0xd50d_c497, start + 4),
+        ]))
+    }
+
+    fn optional_sound(&mut self, node: Node<'_, '_>, pointer: usize) -> io::Result<Entry> {
+        let target = if let Some(value) = node.attribute("Sound") {
+            let ordinal = self.reference(value, "BaseAudioEventInfo")?;
+            let offset = self.data.allocate(pointer, 4)?;
+            self.data.word(offset, ordinal);
+            Target::Data(offset)
+        } else {
+            Target::Null
+        };
+        Ok(Entry::named("Sound", SOUND, target))
+    }
+
+    fn reference(&mut self, value: &str, kind: &str) -> io::Result<u32> {
+        let name = value.split_once('\\').map_or(value, |(name, _)| name);
+        if name.trim().is_empty() {
+            return Ok(0);
+        }
+        let id = asset_reference(name, kind, self.data.path)?;
+        let reference = if kind == "BaseAudioEventInfo" {
+            AssetReference {
+                id: asset_reference(
+                    name.split_once(':').map_or(name, |(_, name)| name),
+                    "AudioEvent",
+                    self.data.path,
+                )?,
+                external_type: Some(id.type_id),
+            }
+        } else {
+            id.into()
+        };
+        self.references.push(reference);
+        self.reference_types.push(id.type_id);
+        Ok(self.references.len() as u32)
+    }
+}
+
+fn condition_fields(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<[Entry; 2]> {
+    let excluded = start + 0x3c;
+    write_model_conditions(node.attribute("RequiredFlags").unwrap_or(""), start, data)?;
+    write_model_conditions(
+        node.attribute("ExcludedFlags").unwrap_or(""),
+        excluded,
+        data,
+    )?;
+    Ok([
+        field("RequiredFlags", 0x67db_bfc9, start),
+        field("ExcludedFlags", 0x67db_bfc9, excluded),
+    ])
+}
+
+fn audio_type(node: Node<'_, '_>, voice: bool, path: &Path) -> io::Result<u32> {
+    static VOICE: OnceLock<Vec<String>> = OnceLock::new();
+    static SOUND: OnceLock<Vec<String>> = OnceLock::new();
+    let (cache, type_name) = if voice {
+        (&VOICE, "ThingTemplateVoiceType")
+    } else {
+        (&SOUND, "ThingTemplateSoundType")
+    };
+    let values = cache.get_or_init(|| {
+        Document::parse(include_str!(
+            "../../../../schemas/ra3/xsd/Includes/ObjectSoundTypes.xsd"
+        ))
+        .unwrap()
+        .descendants()
+        .find(|node| node.attribute("name") == Some(type_name))
+        .unwrap()
+        .descendants()
+        .filter(|node| node.tag_name().name() == "enumeration")
+        .filter_map(|node| node.attribute("value").map(str::to_owned))
+        .collect()
+    });
+    let name = required(node, "AudioType", path)?;
+    values
+        .iter()
+        .position(|value| value == name)
+        .map(|index| index as u32)
+        .ok_or_else(|| invalid(path, format!("invalid {type_name} {name}")))
+}
+
+fn elements<'a, 'input>(
+    node: Node<'a, 'input>,
+    name: &str,
+    path: &Path,
+) -> io::Result<Vec<Node<'a, 'input>>> {
+    significant_children(node)
+        .map(|child| {
+            if child.has_tag_name((SAGE_NS, name)) {
+                Ok(child)
+            } else {
+                Err(invalid(
+                    path,
+                    format!(
+                        "unsupported {} child {}",
+                        node.tag_name().name(),
+                        child.tag_name().name()
+                    ),
+                ))
+            }
+        })
+        .collect()
+}
+
+fn require_empty(node: Node<'_, '_>, path: &Path) -> io::Result<()> {
+    if has_content(node) {
+        return Err(invalid(
+            path,
+            format!("unexpected content in {}", node.tag_name().name()),
+        ));
+    }
+    Ok(())
+}
+
+fn base(kind: u32, table: Table) -> Entry {
+    Entry::new(1, kind, Target::Table(table))
+}
+
+fn field(name: &str, kind: u32, offset: usize) -> Entry {
+    Entry::named(name, kind, Target::Data(offset))
+}
+
+fn list(
+    name: &str,
+    kind: u32,
+    count: usize,
+    items: impl IntoIterator<Item = (u32, Target)>,
+) -> Entry {
+    Entry::named(name, kind, Target::Table(Table::array(count, items)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::compile::static_assets::compile_asset;
+    use crate::manifest::Manifest;
+    use std::collections::HashSet;
+
+    #[test]
+    fn client_behaviors_match_ea() {
+        let document = Document::parse(include_str!(
+            "../../../../tests/fixtures/game-object-client-behaviors.xml"
+        ))
+        .unwrap();
+        let node = document.root_element().first_element_child().unwrap();
+        let actual = compile_asset(node, Path::new("client-behaviors-oracle.xml"), "").unwrap();
+        let bin = include_bytes!("../../../../tests/fixtures/game-object-client-behaviors.bin");
+        let relo = include_bytes!("../../../../tests/fixtures/game-object-client-behaviors.relo");
+        let imp = include_bytes!("../../../../tests/fixtures/game-object-client-behaviors.imp");
+        let expected = Manifest::parse(include_bytes!(
+            "../../../../tests/fixtures/game-object-client-behaviors.manifest"
+        ))
+        .unwrap();
+        assert_eq!(actual.payload.len(), bin.len() - 4);
+        assert_eq!(
+            actual
+                .payload
+                .iter()
+                .zip(&bin[4..])
+                .position(|(a, b)| a != b),
+            None,
+            "first mismatched payload byte"
+        );
+        assert_eq!(actual.relocations, relo[4..]);
+        assert_eq!(actual.imports, imp[4..]);
+        assert_eq!(actual.instance_hash, expected.assets[0].instance_hash);
+        assert!(
+            actual
+                .references
+                .iter()
+                .map(|reference| reference.output_id(&HashSet::new()))
+                .eq(expected.assets[0].references.iter())
+        );
+    }
+}

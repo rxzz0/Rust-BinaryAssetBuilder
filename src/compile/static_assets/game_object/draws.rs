@@ -318,7 +318,11 @@ fn boolean(
     }
 }
 
-fn write_model_conditions(value: &str, start: usize, data: &mut BinaryData<'_>) -> io::Result<()> {
+pub(super) fn write_model_conditions(
+    value: &str,
+    start: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<()> {
     static FLAGS: OnceLock<Vec<String>> = OnceLock::new();
     let flags = FLAGS.get_or_init(|| {
         let document = roxmltree::Document::parse(include_str!(

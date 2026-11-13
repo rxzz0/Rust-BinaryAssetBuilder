@@ -1,0 +1,22 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ClientProbe">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    <ClientBehaviors>
+      <ModelConditionAudioLoopClientBehavior id="ModuleTag_Loop">
+        <ModelConditionSound Sound="BuildingPlacedLand" RequiredFlags="STRUCTURE_UNPACKING" ExcludedFlags="OVER_WATER" />
+        <ModelConditionSound Sound="BuildingPlacedLand" RequiredFlags="SOLD" />
+        <ModelConditionSound />
+      </ModelConditionAudioLoopClientBehavior>
+      <ModelConditionSoundSelectorClientBehavior id="Frozen">
+        <Override RequiredFlags="PARALYZED" VoicePriorityOverride="2">
+          <AudioArrayVoice>
+            <AudioEntry Sound="" AudioType="voiceAttack" EvaEvent="" />
+            <AudioEntry Sound="BuildingSelectFrozen" AudioType="voiceSelect" EvaEvent="TestEvaEvent" />
+          </AudioArrayVoice>
+          <AudioArraySound><AudioEntry Sound="BuildingPlacedLand" AudioType="soundMoveLoop" /></AudioArraySound>
+        </Override>
+        <Override ExcludedFlags="SOLD" />
+      </ModelConditionSoundSelectorClientBehavior>
+    </ClientBehaviors>
+  </GameObject>
+</AssetDeclaration>
