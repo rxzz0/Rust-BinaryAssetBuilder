@@ -1185,3 +1185,78 @@ fn compiles_w3d_hierarchy_with_hashed_pivot_names() {
     assert_eq!(&stream.files.relo[4..], &[8, 0, 0, 0, 255, 255, 255, 255]);
     assert_eq!(stream.files.imp.len(), 4);
 }
+
+#[test]
+fn game_object_duplicate_precedence_matches_ea() {
+    let root = scratch_root();
+    let schemas = root.join("Schemas/xsd");
+    fs::create_dir_all(&schemas).unwrap();
+    fs::write(schemas.join("CnC3Types.xsd"), r#"
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:complexType name="GameObject"><xs:sequence><xs:element name="Body" type="Body"/></xs:sequence></xs:complexType>
+            <xs:complexType name="Body"><xs:sequence><xs:element name="ImmortalBody" type="ImmortalBody"/></xs:sequence></xs:complexType>
+            <xs:complexType name="ImmortalBody"/>
+        </xs:schema>
+    "#).unwrap();
+    let declaration = |body: &str| {
+        format!("<AssetDeclaration xmlns=\"uri:ea.com:eala:asset\">{body}</AssetDeclaration>")
+    };
+    let game_object = |energy| {
+        format!(
+            "<GameObject id=\"SameObject\" EnergyProduction=\"{energy}\"><Body><ImmortalBody id=\"Body\" MaxHealth=\"1\"/></Body></GameObject>"
+        )
+    };
+    fs::write(root.join("base.xml"), declaration(&game_object(11))).unwrap();
+    fs::write(
+        root.join("overlay.xml"),
+        declaration(
+            r#"
+        <Includes><Include type="instance" source="base.xml"/></Includes>
+        <GameObject id="SameObject" inheritFrom="SameObject" EnergyProduction="22"/>
+    "#,
+        ),
+    )
+    .unwrap();
+    fs::write(
+        root.join("wrapper.xml"),
+        declaration(r#"<Includes><Include type="all" source="base.xml"/></Includes>"#),
+    )
+    .unwrap();
+    let input = root.join("root.xml");
+    for (first, second, source, energy, local) in [
+        ("base.xml", "overlay.xml", "DATA:base.xml", 11, false),
+        ("wrapper.xml", "overlay.xml", "DATA:base.xml", 11, false),
+        ("overlay.xml", "base.xml", "DATA:overlay.xml", 22, false),
+        ("base.xml", "overlay.xml", "DATA:root.xml", 44, true),
+    ] {
+        let local = if local {
+            game_object(44)
+        } else {
+            String::new()
+        };
+        fs::write(&input, declaration(&format!(
+            r#"<Includes><Include type="all" source="{first}"/><Include type="all" source="{second}"/></Includes>{local}"#,
+        ))).unwrap();
+        let stream = compile_static(&input, &root, &root).unwrap();
+        let manifest = Manifest::parse(&stream.manifest).unwrap();
+        assert_eq!(manifest.assets.len(), 1);
+        assert_eq!(manifest.assets[0].source_file_name, source.as_bytes());
+        let bytes = &stream.files.bin[4..];
+        let object = u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize;
+        assert_eq!(
+            i32::from_le_bytes(bytes[object + 0x88..object + 0x8c].try_into().unwrap()),
+            energy
+        );
+    }
+    fs::write(
+        &input,
+        declaration(&format!("{}{}", game_object(11), game_object(66))),
+    )
+    .unwrap();
+    let error = compile_static(&input, &root, &root).err().unwrap();
+    assert!(
+        error
+            .to_string()
+            .contains("duplicate asset ID GameObject:SameObject")
+    );
+}
