@@ -300,6 +300,11 @@ mod tests {
         assert_ea_fixture("queue-placement", 9);
     }
 
+    #[test]
+    fn game_dependency_prerequisites_match_ea_batch() {
+        assert_ea_fixture("game-dependency", 2);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

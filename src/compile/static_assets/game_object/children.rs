@@ -23,51 +23,7 @@ pub(super) fn encode(
         targets.push(("DisplayName", Target::Data(header)));
     }
     if let Some(child) = find(node, "GameDependency")? {
-        validate_attributes(child, &[], data.path)?;
-        let mut required_objects = Vec::new();
-        for item in child.children().filter(Node::is_element) {
-            if !item.has_tag_name((SAGE_NS, "RequiredObject")) {
-                return Err(invalid(data.path, "unsupported GameDependency child"));
-            }
-            validate_attributes(item, &[], data.path)?;
-            let name = item.text().unwrap_or("").trim();
-            let id = asset_reference(name, "GameObject", data.path)?;
-            required_objects.push(id.instance_id);
-            reference_types.push(fast_hash(b"GameObject"));
-        }
-        let start = data.allocate(0x190, 0x28)?;
-        let count = required_objects.len();
-        let items = data.list(start + 0xc, count, 4)?;
-        for (index, value) in required_objects.into_iter().enumerate() {
-            data.word(items + index * 4, value);
-        }
-        targets.push((
-            "GameDependency",
-            Target::Table(Table::record(vec![
-                Entry::named("RequiredModelConditionsAny", 0x67db_bfc9, Target::Null),
-                Entry::named("ForbiddenModelConditions", 0x67db_bfc9, Target::Null),
-                Entry::named("RequiredObjectStatusAny", 0xa7bd_811e, Target::Null),
-                Entry::named(
-                    "RequiredObject",
-                    0x148e_d75d,
-                    Target::Table(Table::array(
-                        start + 0xc,
-                        (0..count).map(|index| (0, Target::Data(items + index * 4))),
-                    )),
-                ),
-                Entry::named(
-                    "ForbiddenUpgrade",
-                    0x26fa_cfc7,
-                    Target::Table(Table::array(start + 0x14, [])),
-                ),
-                Entry::named(
-                    "NeededUpgrade",
-                    0x26fa_cfc7,
-                    Target::Table(Table::array(start + 0x1c, [])),
-                ),
-                Entry::named("ObjectFilter", 0xe46e_a3b2, Target::Null),
-            ])),
-        ));
+        targets.push(("GameDependency", dependency(child, data, reference_types)?));
     }
     if let Some(child) = find(node, "ObjectResourceInfo")? {
         validate_attributes(child, &[], data.path)?;
@@ -172,6 +128,78 @@ pub(super) fn encode(
         targets.push(("SkirmishAIInformation", skirmish(child, data)?));
     }
     Ok(targets)
+}
+
+fn dependency(
+    node: Node<'_, '_>,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Target> {
+    use super::draws::write_model_conditions;
+    use super::parking::encode_filter;
+    use super::secondary_damage::{STATUS_BYTES, write_status_flags};
+    use super::spawn::{id_list, weak_reference};
+
+    let path = data.path;
+    validate_attributes(
+        node,
+        &[
+            "id",
+            "RequiredModelConditionsAny",
+            "ForbiddenModelConditions",
+            "RequiredObjectStatusAny",
+        ],
+        path,
+    )?;
+    let start = data.allocate(0x190, 0x28)?;
+    let mut entries = Vec::new();
+    for (name, kind, offset, size) in [
+        ("RequiredModelConditionsAny", 0x67db_bfc9, 0, 0x3c),
+        ("ForbiddenModelConditions", 0x67db_bfc9, 4, 0x3c),
+        ("RequiredObjectStatusAny", 0xa7bd_811e, 8, STATUS_BYTES),
+    ] {
+        let target = if let Some(value) = node.attribute(name) {
+            let flags = data.allocate(start + offset, size)?;
+            if name == "RequiredObjectStatusAny" {
+                write_status_flags(value, flags, data)?;
+            } else {
+                write_model_conditions(value, flags, data)?;
+            }
+            Target::Data(flags)
+        } else {
+            Target::Null
+        };
+        entries.push(Entry::named(name, kind, target));
+    }
+
+    let mut children = super::super::significant_children(node).peekable();
+    for (name, kind, token, offset) in [
+        ("RequiredObject", "GameObject", 0x148e_d75d, 0xc),
+        ("ForbiddenUpgrade", "UpgradeTemplate", 0x26fa_cfc7, 0x14),
+        ("NeededUpgrade", "UpgradeTemplate", 0x26fa_cfc7, 0x1c),
+    ] {
+        let mut ids = Vec::new();
+        while let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, name))) {
+            ids.push(weak_reference(child, kind, data, reference_types)?);
+        }
+        let table = id_list(data, start + offset, ids)?;
+        entries.push(Entry::named(name, token, Target::Table(table)));
+    }
+    let filter = match children.next_if(|child| child.has_tag_name((SAGE_NS, "ObjectFilter"))) {
+        Some(child) => Target::Table(encode_filter(child, start + 0x24, data, reference_types)?),
+        None => Target::Null,
+    };
+    if let Some(child) = children.next() {
+        return Err(invalid(
+            path,
+            format!(
+                "unexpected GameDependency child {}",
+                child.tag_name().name()
+            ),
+        ));
+    }
+    entries.push(Entry::named("ObjectFilter", 0xe46e_a3b2, filter));
+    Ok(Target::Table(Table::record(entries)))
 }
 
 fn skirmish(node: Node<'_, '_>, data: &mut BinaryData<'_>) -> io::Result<Target> {

@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DependencyUpgradeProbe">
+    <GameDependency><RequiredObject>AlliedTechStructure</RequiredObject><RequiredObject>AlliedPowerPlant</RequiredObject><NeededUpgrade>Upgrade_AlliedTech2</NeededUpgrade></GameDependency>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="DependencyFilterProbe">
+    <GameDependency id="Dependency" RequiredModelConditionsAny="SOLD" ForbiddenModelConditions="DAMAGED" RequiredObjectStatusAny="CAN_ATTACK">
+      <RequiredObject>AlliedBarracks</RequiredObject><ForbiddenUpgrade>Upgrade_AlliedTech3</ForbiddenUpgrade><NeededUpgrade>Upgrade_AlliedTech2</NeededUpgrade>
+      <ObjectFilter Rule="ANY" Relationship="ALLIES" StatusBitFlags="CAN_ATTACK"><IncludeThing>AlliedConstructionYard</IncludeThing></ObjectFilter>
+    </GameDependency>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>
