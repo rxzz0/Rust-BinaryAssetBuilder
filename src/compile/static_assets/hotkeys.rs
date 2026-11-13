@@ -1,6 +1,7 @@
 use super::{
     Marshaled, Node, Path, SAGE_NS, asset_reference, encode_words, fast_hash, has_content, invalid,
-    io, required, required_element, significant_children, text_value, validate_attributes,
+    io, production_queue_type, required, required_element, significant_children, text_value,
+    validate_attributes,
 };
 
 const SLOT: &str = "HotKeySlot";
@@ -42,16 +43,6 @@ pub(super) fn slot(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
 }
 
 pub(super) fn tactical(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
-    const QUEUES: &[&str] = &[
-        "INVALID",
-        "MAIN_STRUCTURE",
-        "OTHER_STRUCTURE",
-        "INFANTRY",
-        "VEHICLE",
-        "AIRCRAFT",
-        "UPGRADE",
-        "WATERCRAFT",
-    ];
     validate_attributes(node, &["id", "SelectionRefinementPageSlot"], path)?;
     let mut data = Marshaled::default();
     let mut words = vec![0; 6];
@@ -66,8 +57,8 @@ pub(super) fn tactical(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled>
         if has_content(page) {
             return Err(invalid(path, "unexpected content in BuildQueuePage"));
         }
-        let queue = enum_value(required(page, "QueueType", path)?, QUEUES, path)?;
-        words.push(queue.wrapping_sub(1));
+        let queue = production_queue_type(required(page, "QueueType", path)?, "QueueType", path)?;
+        words.push(queue);
         let slot = match page.attribute("Slot") {
             Some(value) => {
                 data.reference_types.push(fast_hash(SLOT.as_bytes()));

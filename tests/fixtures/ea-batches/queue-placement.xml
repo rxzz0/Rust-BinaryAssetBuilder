@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="QueuePlacementDefault"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="QueuePlacement0" ProductionQueueType="INVALID" BuildPlacementTypeFlag="INVALID"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="QueuePlacement1" ProductionQueueType="MAIN_STRUCTURE" BuildPlacementTypeFlag="MAIN_STRUCTURE"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="QueuePlacement2" ProductionQueueType="OTHER_STRUCTURE" BuildPlacementTypeFlag="OTHER_STRUCTURE"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="QueuePlacement3" ProductionQueueType="INFANTRY" BuildPlacementTypeFlag="TIBERIUM_FIELD"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="QueuePlacement4" ProductionQueueType="VEHICLE" BuildPlacementTypeFlag="BLOCKED"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="QueuePlacement5" ProductionQueueType="AIRCRAFT"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="QueuePlacement6" ProductionQueueType="UPGRADE"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="QueuePlacement7" ProductionQueueType="WATERCRAFT"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+</AssetDeclaration>

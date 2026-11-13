@@ -1,5 +1,5 @@
 use super::super::binary::BinaryData;
-use super::super::{AssetReference, asset_reference, fast_hash};
+use super::super::{AssetReference, asset_reference, fast_hash, production_queue_type};
 use crate::compile::{XML_NS, invalid};
 use roxmltree::{Document, Node};
 use std::collections::HashMap;
@@ -136,17 +136,32 @@ pub(super) fn encode(
             data.word(offset, finite_float(value, name, data.path)?.to_bits());
         }
     }
-    for (name, offset, value, number) in [
-        ("ProductionQueueType", 0x12c, "MAIN_STRUCTURE", 0),
-        ("BuildPlacementTypeFlag", 0x130, "MAIN_STRUCTURE", 1),
-        ("UnitCategory", 0x158, "STRUCTURE", 0),
-    ] {
-        if let Some(actual) = node.attribute(name) {
-            if actual != value {
-                return Err(invalid(data.path, format!("invalid {name} {actual}")));
-            }
-            data.word(offset, number);
+    if let Some(value) = node.attribute("ProductionQueueType") {
+        data.word(
+            0x12c,
+            production_queue_type(value, "ProductionQueueType", data.path)?,
+        );
+    }
+    if let Some(value) = node.attribute("BuildPlacementTypeFlag") {
+        let placement = enum_value(
+            value,
+            &[
+                "INVALID",
+                "MAIN_STRUCTURE",
+                "OTHER_STRUCTURE",
+                "TIBERIUM_FIELD",
+                "BLOCKED",
+            ],
+            "BuildPlacementTypeFlag",
+            data.path,
+        )?;
+        data.word(0x130, placement);
+    }
+    if let Some(value) = node.attribute("UnitCategory") {
+        if value != "STRUCTURE" {
+            return Err(invalid(data.path, format!("invalid UnitCategory {value}")));
         }
+        data.word(0x158, 0);
     }
     if let Some(value) = node.attribute("WeaponCategory") {
         let category = if value == "NONE" {

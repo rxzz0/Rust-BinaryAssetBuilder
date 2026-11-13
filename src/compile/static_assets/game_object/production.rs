@@ -2,8 +2,8 @@ use super::super::binary::BinaryData;
 use super::super::global_ui::object_filter;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, asset_reference, finite_number, hash_name, sage_time, significant_children,
-    validate_attributes,
+    AssetReference, asset_reference, finite_number, hash_name, production_queue_type, sage_time,
+    significant_children, validate_attributes,
 };
 use super::behaviors_basic::{base, inherited};
 use super::draws::{boolean, fields};
@@ -37,15 +37,6 @@ const FIELDS: &[(&str, u32, usize)] = &[
     ("IgnorePreReqs", BOOL, 0x53),
     ("ProductionTimeDelayScalar", TIME, 0x34),
     ("NewObjectFadeInTime", TIME, 0x38),
-];
-const QUEUES: &[&str] = &[
-    "MAIN_STRUCTURE",
-    "OTHER_STRUCTURE",
-    "INFANTRY",
-    "VEHICLE",
-    "AIRCRAFT",
-    "UPGRADE",
-    "WATERCRAFT",
 ];
 const DISABLED: &[&str] = &[
     "DEFAULT",
@@ -112,14 +103,7 @@ pub(super) fn encode(
             INT => signed(value.unwrap_or("0"), name, data)?,
             TIME => sage_time(value.unwrap_or("0s"), name, path)?.to_bits(),
             GAME_OBJECT => weak_object(value, data)?,
-            _ if name == "Type" => {
-                let value = value.unwrap_or("INVALID");
-                if value == "INVALID" {
-                    u32::MAX
-                } else {
-                    enum_index(value, QUEUES, name, data)?
-                }
-            }
+            _ if name == "Type" => production_queue_type(value.unwrap_or("INVALID"), name, path)?,
             _ => {
                 let mut flags = 0;
                 for flag in value.unwrap_or("").split_ascii_whitespace() {

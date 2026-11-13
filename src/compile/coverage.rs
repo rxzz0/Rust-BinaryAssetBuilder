@@ -295,6 +295,11 @@ mod tests {
         assert_ea_fixture("weapon-category", 7);
     }
 
+    #[test]
+    fn queue_and_placement_types_match_ea_batch() {
+        assert_ea_fixture("queue-placement", 9);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

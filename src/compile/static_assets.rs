@@ -315,6 +315,24 @@ fn percentage(value: &str, field: &str, path: &Path) -> io::Result<f32> {
     Ok(finite_number(value.strip_suffix('%').unwrap_or(value), field, path)? * 0.01)
 }
 
+fn production_queue_type(value: &str, field: &str, path: &Path) -> io::Result<u32> {
+    const QUEUES: &[&str] = &[
+        "INVALID",
+        "MAIN_STRUCTURE",
+        "OTHER_STRUCTURE",
+        "INFANTRY",
+        "VEHICLE",
+        "AIRCRAFT",
+        "UPGRADE",
+        "WATERCRAFT",
+    ];
+    QUEUES
+        .iter()
+        .position(|&queue| queue == value)
+        .map(|index| (index as u32).wrapping_sub(1))
+        .ok_or_else(|| invalid(path, format!("invalid {field} {value}")))
+}
+
 fn finite_number(value: &str, field: &str, path: &Path) -> io::Result<f32> {
     value
         .trim()
