@@ -555,7 +555,7 @@ fn encode_geometry_vector(
     Ok(())
 }
 
-fn encode_geometry_shape(
+pub(super) fn encode_geometry_shape(
     shape: Node<'_, '_>,
     offset: usize,
     data: &mut BinaryData<'_>,

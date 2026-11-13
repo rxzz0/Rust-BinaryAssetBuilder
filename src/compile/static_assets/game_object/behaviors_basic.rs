@@ -94,6 +94,26 @@ pub(super) fn encode(
         return super::production::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "StructurePlacementBehavior")) {
+        const KIND: u32 = 0xe9d1_b7eb;
+        let path = data.path;
+        validate_attributes(node, &["id"], path)?;
+        let mut children = significant_children(node);
+        let shape = super::super::required_element(&mut children, "RestrictedAreaShape", path)?;
+        if children.next().is_some() {
+            return Err(invalid(path, "unexpected StructurePlacementBehavior child"));
+        }
+        let start = data.allocate(pointer, 0x38)?;
+        let parent = module_base(node, KIND, start, data, false)?;
+        let shape = super::children::encode_geometry_shape(shape, start + 8, data)?;
+        return Ok(Some((
+            KIND,
+            Table::record(vec![
+                parent,
+                Entry::named("RestrictedAreaShape", 0xe721_0555, Target::Table(shape)),
+            ]),
+        )));
+    }
     if node.has_tag_name((SAGE_NS, "AssistedPlacementBehavior")) {
         return assisted_placement(node, pointer, data, reference_types).map(Some);
     }
