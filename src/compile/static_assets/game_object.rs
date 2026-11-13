@@ -10,6 +10,7 @@ mod fields;
 mod material;
 mod physics;
 mod schema;
+mod secondary_damage;
 mod shadow;
 mod structures;
 

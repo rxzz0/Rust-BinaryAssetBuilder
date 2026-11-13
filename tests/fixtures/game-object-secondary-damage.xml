@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="SecondaryDamageProbe">
+    <Behaviors>
+      <SecondaryDamageTracker id="ModuleTag_Default" />
+      <SecondaryDamageTracker id="ModuleTag_SecondaryDamageTracker" UpdateDuration="500ms" DissipateAmount="25" MaxDamageClampScaler="200%">
+        <Color R="1.0" G="0.5" B="1.75" />
+        <EffectInfo Fraction="0.2" AttributeModifier="AttributeModifer_CryoBeam_02" />
+        <EffectInfo Fraction="1.0" SetUpgradedArmor="true" OnEnterDisable="true" OnEnterCancelSpecialAbilities="true" AttributeModifier="AttributeModifer_CryoBeam_10" Options="DIE_ON_ENTER" />
+        <ObjectStatusValidation ForbiddenStatus="UNDER_IRON_CURTAIN" RequiredStatus="CAN_ATTACK" />
+      </SecondaryDamageTracker>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

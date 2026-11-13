@@ -9,11 +9,11 @@ use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
 
-fn base(kind: u32, table: Table) -> Entry {
+pub(super) fn base(kind: u32, table: Table) -> Entry {
     Entry::new(1, kind, Target::Table(table))
 }
 
-fn inherited(kind: u32, table: Table) -> Table {
+pub(super) fn inherited(kind: u32, table: Table) -> Table {
     Table::record(vec![base(kind, table)])
 }
 
@@ -26,6 +26,10 @@ pub(super) fn encode(
 ) -> io::Result<Option<(u32, Table)>> {
     if node.has_tag_name((SAGE_NS, "FireWeaponWhenDead")) {
         return fire_weapon_when_dead(node, pointer, data, references, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "SecondaryDamageTracker")) {
+        return super::secondary_damage::encode(node, pointer, data, references, reference_types)
+            .map(Some);
     }
     let (kind, size, extra) = match node.tag_name().name() {
         "ObjectSMCHelper" => (0x7f72_f242, 8, None),
