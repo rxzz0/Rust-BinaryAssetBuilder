@@ -1,5 +1,6 @@
 mod active_body;
 mod ai_update;
+mod animation;
 mod behaviors_basic;
 mod children;
 mod client_behaviors;

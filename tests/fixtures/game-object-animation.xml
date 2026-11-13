@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="AnimationProbe">
+    <Draws><ScriptedModelDraw id="ModuleTag_Draw">
+      <ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name="ABAirfield" /></ModelConditionState>
+      <AnimationState ParseCondStateType="PARSE_DEFAULT" />
+      <AnimationState ParseCondStateType="PARSE_NORMAL" ConditionsYes="SOLD" Flags="START_FRAME_LAST">
+        <Animation AnimationName="ABAirfield" AnimationMode="ONCE_BACKWARDS" AnimationBlendTime="0" AnimationAbsoluteTime="2s" />
+        <Script>
+          CurDrawableHideSubObjectPermanently("FX_LightsBuilding")
+        </Script>
+        <ParticleSysBone BoneName="NONE" FXParticleSystemTemplate="Con_Tiny" FollowBone="true" />
+      </AnimationState>
+    </ScriptedModelDraw></Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

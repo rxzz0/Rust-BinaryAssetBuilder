@@ -67,18 +67,22 @@ fn scripted_model(
         ],
         data.path,
     )?;
-    let states: Vec<_> = significant_children(node).collect();
-    if let Some(child) = states
-        .iter()
-        .find(|child| !child.has_tag_name((SAGE_NS, "ModelConditionState")))
-    {
-        return Err(invalid(
-            data.path,
-            format!(
-                "unsupported ScriptedModelDraw child {}",
-                child.tag_name().name()
-            ),
-        ));
+    let mut states = Vec::new();
+    let mut animations = Vec::new();
+    for child in significant_children(node) {
+        if child.has_tag_name((SAGE_NS, "ModelConditionState")) {
+            states.push(child);
+        } else if child.has_tag_name((SAGE_NS, "AnimationState")) {
+            animations.push(child);
+        } else {
+            return Err(invalid(
+                data.path,
+                format!(
+                    "unsupported ScriptedModelDraw child {}",
+                    child.tag_name().name()
+                ),
+            ));
+        }
     }
 
     let start = data.allocate(pointer, 0xd8)?;
@@ -124,6 +128,8 @@ fn scripted_model(
         )?;
         state_tables.push((0, Target::Table(fields)));
     }
+    let animation_table =
+        super::animation::encode(animations, start + 0xac, data, references, reference_types)?;
 
     let module = Table::record(vec![
         Entry::new(0x19b0_42a0, 0x23e6_50b8, Target::Data(start)),
@@ -189,7 +195,11 @@ fn scripted_model(
             MODEL_STATE,
             Target::Table(Table::array(state_offset, state_tables)),
         ),
-        array("AnimationState", 0x99b3_42c4, start + 0xac),
+        Entry::named(
+            "AnimationState",
+            0x99b3_42c4,
+            Target::Table(animation_table),
+        ),
         array("AttachModel", 0xb4e5_23bf, start + 0xb4),
         array("EmbedPortal", 0xafc5_e3e3, start + 0xbc),
     ]);
@@ -291,7 +301,7 @@ fn model_state(
     Ok(Table::record(entries))
 }
 
-fn fields<'a>(
+pub(super) fn fields<'a>(
     start: usize,
     fields: &'a [(&'a str, u32, usize)],
 ) -> impl Iterator<Item = Entry> + 'a {
@@ -300,11 +310,11 @@ fn fields<'a>(
         .map(move |&(name, kind, offset)| Entry::named(name, kind, Target::Data(start + offset)))
 }
 
-fn array(name: &str, kind: u32, count: usize) -> Entry {
+pub(super) fn array(name: &str, kind: u32, count: usize) -> Entry {
     Entry::named(name, kind, Target::Table(Table::array(count, [])))
 }
 
-fn boolean(
+pub(super) fn boolean(
     node: Node<'_, '_>,
     name: &str,
     default: bool,

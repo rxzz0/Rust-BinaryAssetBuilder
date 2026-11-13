@@ -903,7 +903,15 @@ fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
             roxmltree::NodeType::Text => {
                 let text = child.text().unwrap();
                 if !is_xml_whitespace(text) {
-                    escape_xml(text, false, xml);
+                    // The Windows XmlWriter normalizes line breaks in text to CRLF.
+                    for line in text.split_inclusive('\n') {
+                        if let Some(line) = line.strip_suffix('\n') {
+                            escape_xml(line, false, xml);
+                            xml.push_str("\r\n");
+                        } else {
+                            escape_xml(line, false, xml);
+                        }
+                    }
                 }
             }
             roxmltree::NodeType::Comment => {
