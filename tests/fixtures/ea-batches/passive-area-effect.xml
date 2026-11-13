@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="PassiveAreaProbe"><Behaviors>
+<PassiveAreaEffectBehavior id="ModuleTag_Default"/>
+<PassiveAreaEffectBehavior id="ModuleTag_Repair" EffectRadius="-1" MaxBeneficiaries="5" HealingPercentPerSecond="25%" HealingPointsPerSecond="20" SurveyDelayFrames="45" UpgradeRequired="ProbeUpgrade" NonStackable="true" AntiCategoryMask="BUFF DEBUFF" AntiFX="ProbeAnti" HealFX="FX_Repair" AffectAttached="true" AffectWoundedOnly="true" AffectUnderAttack="true" AffectContained="true" DisabledTypesToProcess="HELD"><Modifier>ProbeModifier</Modifier><AllowFilter Rule="ANY" Include="VEHICLE AIRCRAFT HUGE_VEHICLE" StatusBitFlagsExclude="NOT_IN_WORLD" Relationship="ALLIES"/><ContainerFilter Rule="ANY" Include="STRUCTURE"/><ObjectStatusValidation RequiredStatus="UNDER_CONSTRUCTION"/></PassiveAreaEffectBehavior>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>

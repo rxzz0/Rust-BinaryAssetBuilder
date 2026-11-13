@@ -124,6 +124,10 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "SlavedUpdate")) {
         return super::slaved::encode(node, pointer, data, references, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "PassiveAreaEffectBehavior")) {
+        return super::passive_area::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "SlowDeath")) {
         return super::slow_death::encode(node, pointer, data, references, reference_types)
             .map(Some);

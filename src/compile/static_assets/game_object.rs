@@ -18,6 +18,7 @@ mod laser_draw;
 mod laser_state;
 mod material;
 mod parking;
+mod passive_area;
 mod physics;
 mod production;
 mod recall;
