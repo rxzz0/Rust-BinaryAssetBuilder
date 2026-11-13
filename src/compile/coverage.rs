@@ -310,6 +310,11 @@ mod tests {
         assert_ea_fixture("base-selection", 3);
     }
 
+    #[test]
+    fn weapon_bone_lists_match_ea_batch() {
+        assert_ea_fixture("weapon-bones", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

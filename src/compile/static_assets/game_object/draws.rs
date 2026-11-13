@@ -233,6 +233,13 @@ fn scripted_model(
     Ok(Table::record(entries))
 }
 
+const WEAPON_BONE_LISTS: [(&str, usize); 4] = [
+    ("WeaponFireFXBone", 0x7c),
+    ("WeaponRecoilBone", 0x84),
+    ("WeaponMuzzleFlash", 0x8c),
+    ("WeaponLaunchBone", 0x94),
+];
+
 fn model_state(
     node: Node<'_, '_>,
     start: usize,
@@ -257,6 +264,7 @@ fn model_state(
     if let Some(value) = node.attribute("ConditionsYes") {
         write_model_conditions(value, start + 0xc, data)?;
     }
+    let mut weapon_bones: [Vec<_>; 4] = std::array::from_fn(|_| Vec::new());
     let mut models = Vec::new();
     let mut material = None;
     let mut particles = Vec::new();
@@ -266,6 +274,12 @@ fn model_state(
             models.push(child);
         } else if child.has_tag_name((SAGE_NS, "Material")) && material.is_none() {
             material = Some(child);
+        } else if child.tag_name().namespace() == Some(SAGE_NS)
+            && let Some(index) = WEAPON_BONE_LISTS
+                .iter()
+                .position(|&(name, _)| child.tag_name().name() == name)
+        {
+            weapon_bones[index].push(child);
         } else if child.has_tag_name((SAGE_NS, "ParticleSysBone")) {
             particles.push(child);
         } else if child.has_tag_name((SAGE_NS, "ShadowInfo")) && shadow.is_none() {
@@ -314,6 +328,11 @@ fn model_state(
         )?),
         None => Target::Null,
     };
+    let mut bone_entries = Vec::with_capacity(WEAPON_BONE_LISTS.len());
+    for ((name, offset), bones) in WEAPON_BONE_LISTS.into_iter().zip(weapon_bones) {
+        let table = encode_weapon_bones(bones, start + offset, data)?;
+        bone_entries.push(Entry::named(name, 0xbd39_d1a1, Target::Table(table)));
+    }
     let particle_table = super::animation::encode_particles(
         particles,
         start + 0x9c,
@@ -354,10 +373,9 @@ fn model_state(
         ),
         Entry::named("Material", 0xc7ea_3cf4, material),
         array("Texture", 0x6e5d_40fb, start + 0x74),
-        array("WeaponFireFXBone", 0xbd39_d1a1, start + 0x7c),
-        array("WeaponRecoilBone", 0xbd39_d1a1, start + 0x84),
-        array("WeaponMuzzleFlash", 0xbd39_d1a1, start + 0x8c),
-        array("WeaponLaunchBone", 0xbd39_d1a1, start + 0x94),
+    ]);
+    entries.extend(bone_entries);
+    entries.extend([
         Entry::named(
             "ParticleSysBone",
             0x98c5_3fe6,
@@ -369,6 +387,48 @@ fn model_state(
         array("SubObject", 0x03a2_8c40, start + 0xb8),
     ]);
     Ok(Table::record(entries))
+}
+
+fn encode_weapon_bones(
+    nodes: Vec<Node<'_, '_>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Table> {
+    const SLOTS: &[&str] = &[
+        "PRIMARY_WEAPON",
+        "SECONDARY_WEAPON",
+        "TERTIARY_WEAPON",
+        "QUATERNARY_WEAPON",
+        "QUINARY_WEAPON",
+        "NO_WEAPON",
+    ];
+    let path = data.path;
+    let start = data.list(count, nodes.len(), 0x10)?;
+    let mut items = Vec::with_capacity(nodes.len());
+    for (index, node) in nodes.into_iter().enumerate() {
+        validate_attributes(node, &["WeaponSlotType", "BoneName"], path)?;
+        if has_content(node) {
+            return Err(invalid(path, "unexpected weapon bone content"));
+        }
+        let offset = start + index * 0x10;
+        let slot = super::super::global_ui::enum_value(
+            node.attribute("WeaponSlotType").unwrap_or("PRIMARY_WEAPON"),
+            SLOTS,
+            path,
+        )?;
+        data.word(offset, 1);
+        data.word(offset + 4, slot);
+        if let Some(name) = node.attribute("BoneName") {
+            data.string(offset + 8, name)?;
+        }
+        let mut entries = vec![Entry::new(0x5e25_9cb2, 0x23e6_50b8, Target::Data(offset))];
+        entries.extend(fields(
+            offset,
+            &[("WeaponSlotType", 0x1848_c549, 4), ("BoneName", STRING, 8)],
+        ));
+        items.push((0, Target::Table(Table::record(entries))));
+    }
+    Ok(Table::array(count, items))
 }
 
 pub(super) fn fields<'a>(

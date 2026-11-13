@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="WeaponBonesMixed">
+    <Draws><ScriptedModelDraw id="ModuleTag_Draw"><ModelConditionState ParseCondStateType="PARSE_DEFAULT">
+      <Model Name="ABAirfield" />
+      <WeaponFireFXBone BoneName="FX_Primary" />
+      <WeaponFireFXBone WeaponSlotType="SECONDARY_WEAPON" BoneName="FX_Secondary" />
+      <WeaponRecoilBone WeaponSlotType="TERTIARY_WEAPON" BoneName="Recoil" />
+      <WeaponMuzzleFlash WeaponSlotType="QUATERNARY_WEAPON" BoneName="Muzzle" />
+      <WeaponLaunchBone WeaponSlotType="QUINARY_WEAPON" BoneName="FX_Launch" />
+      <WeaponLaunchBone WeaponSlotType="NO_WEAPON" />
+    </ModelConditionState></ScriptedModelDraw></Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>
