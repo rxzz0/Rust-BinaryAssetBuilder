@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DestructionProbe">
+    <Behaviors>
+      <BuildingDestructionBehavior id="ModuleTag_BuildingDestruction" FillerMesh="NEWSKIN_FILL">
+        <DieMuxData DeathTypes="ALL" />
+        <Item BonePrefix="BONE_CONTACT_POINT_" FX="SovietRefineryHit" CreationObject="AlliedBarracks_Debris" FlingVelocity="100.0" />
+      </BuildingDestructionBehavior>
+      <BuildingDestructionBehavior id="ModuleTag_Custom" AssociatedModule="ModuleTag_Body" MaxDebrisCloudsPerSecond="3.5">
+        <DieMuxData DeathTypes="NORMAL" />
+        <Item />
+        <Item BonePrefix="SECOND_" FlingVelocity="2.5" />
+      </BuildingDestructionBehavior>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

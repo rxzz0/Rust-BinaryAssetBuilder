@@ -2,6 +2,7 @@ mod active_body;
 mod ai_update;
 mod animation;
 mod behaviors_basic;
+mod building_destruction;
 mod children;
 mod client_behaviors;
 mod draws;
