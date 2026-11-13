@@ -98,6 +98,7 @@ pub(in crate::compile::static_assets) fn compile(
             }
             "DisplayName"
             | "GameDependency"
+            | "ProjectedBuildabilityInfo"
             | "ObjectResourceInfo"
             | "ArmorSet"
             | "SkirmishAIInformation"
@@ -286,6 +287,9 @@ pub(in crate::compile::static_assets) fn compile(
     }
     if let Some(target) = children::encode_vision(node, &mut data)? {
         child_targets.push(("VisionInfo", target));
+    }
+    if let Some(target) = children::encode_buildability(node, &mut data, &mut reference_types)? {
+        child_targets.push(("ProjectedBuildabilityInfo", target));
     }
     if let Some(target) = behavior_tokens
         && !table.replace_target("Behaviors", target)
