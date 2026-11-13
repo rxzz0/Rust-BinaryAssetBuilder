@@ -25,6 +25,8 @@ const MODULES: &[(&str, &[&str])] = &[
         &[
             "WeaponSetUpdate",
             "LaserState",
+            "AttackAssistResponseBehavior",
+            "NotifyWhenAttackingBehavior",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -330,6 +332,11 @@ mod tests {
     #[test]
     fn laser_state_matches_ea_batch() {
         assert_ea_fixture("laser-state", 1);
+    }
+
+    #[test]
+    fn attack_assist_pair_matches_ea_batch() {
+        assert_ea_fixture("attack-assist", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

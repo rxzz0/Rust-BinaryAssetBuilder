@@ -1,6 +1,7 @@
 mod active_body;
 mod ai_update;
 mod animation;
+mod attack_assist;
 mod behaviors_basic;
 mod building_destruction;
 mod children;

@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+ <GameObject id="AttackAssistProbe"><Behaviors>
+  <NotifyWhenAttackingBehavior id="ModuleTag_NotifyDefault" />
+  <NotifyWhenAttackingBehavior id="ModuleTag_Notify" NotifyRadius="350" SleepTime="100ms" HasMobileFriends="true" IgnoreDisabledStatus="true" MaxFriendsToNotify="2" AssistResponseModuleId="ModuleTag_Respond" WeaponSlotID="3" WeaponSlotType="SECONDARY_WEAPON">
+   <AcceptableFriends Rule="NONE" Relationship="ALLIES"><IncludeThing>AttackAssistProbe</IncludeThing></AcceptableFriends>
+  </NotifyWhenAttackingBehavior>
+  <AttackAssistResponseBehavior id="ModuleTag_ResponseDefault" />
+  <AttackAssistResponseBehavior id="ModuleTag_Respond" ObjectStatus="CAN_ATTACK" WeaponSlotID="3" WeaponSlotType="TERTIARY_WEAPON" />
+ </Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+</AssetDeclaration>
