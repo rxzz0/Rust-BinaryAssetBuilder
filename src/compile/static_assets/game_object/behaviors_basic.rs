@@ -98,6 +98,44 @@ pub(super) fn encode(
         return super::production::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "MonitorSpecialPowerTimerUpdate")) {
+        const KIND: u32 = 0x8da1_2662;
+        let path = data.path;
+        validate_attributes(
+            node,
+            &["id", "SpecialPowerTemplate", "ReadyCondition"],
+            path,
+        )?;
+        if has_content(node) {
+            return Err(invalid(
+                path,
+                "unexpected special-power timer monitor content",
+            ));
+        }
+        let start = data.allocate(pointer, 0x48)?;
+        let parent = module_base(node, KIND, start, data, true)?;
+        let ordinal = super::passive_area::reference(
+            node.attribute("SpecialPowerTemplate").unwrap_or(""),
+            "SpecialPowerTemplate",
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + 8, ordinal);
+        super::draws::write_model_conditions(
+            node.attribute("ReadyCondition").unwrap_or(""),
+            start + 0xc,
+            data,
+        )?;
+        return Ok(Some((
+            KIND,
+            Table::record(vec![
+                parent,
+                Entry::named("SpecialPowerTemplate", 0xaee8_3888, Target::Data(start + 8)),
+                Entry::named("ReadyCondition", 0x67db_bfc9, Target::Data(start + 0xc)),
+            ]),
+        )));
+    }
     if node.has_tag_name((SAGE_NS, "StructurePlacementBehavior")) {
         const KIND: u32 = 0xe9d1_b7eb;
         let path = data.path;
