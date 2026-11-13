@@ -34,6 +34,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "ReplaceSelfSpecialAbility",
             "SlowDeath",
             "SubStructureBehavior",
+            "AssignSlavesTargetObjectSpecialPower",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -399,6 +400,11 @@ mod tests {
     #[test]
     fn geometry_contact_points_match_ea_batch() {
         assert_ea_fixture("geometry-contact-points", 1);
+    }
+
+    #[test]
+    fn assign_slaves_target_matches_ea_batch() {
+        assert_ea_fixture("assign-slaves-target", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

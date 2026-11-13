@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="AssignSlavesProbe">
+    <Behaviors>
+      <AssignSlavesTargetObjectSpecialPower id="ModuleTag_Repair" SpecialPowerTemplate="SpecialPower_TargetedRepairVehicle" />
+      <AssignSlavesTargetObjectSpecialPower id="ModuleTag_Additional" SpecialPowerTemplate="SpecialPower_TargetedRepairVehicle" StartsPaused="true" SetModelConditionTime="2s" GiveLevels="3" />
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

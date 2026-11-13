@@ -72,7 +72,7 @@ pub(super) fn encode(
     }
     if matches!(
         node.tag_name().name(),
-        "RecallUnitsSpecialPower" | "SpecialPower"
+        "RecallUnitsSpecialPower" | "SpecialPower" | "AssignSlavesTargetObjectSpecialPower"
     ) {
         return super::recall::encode(node, pointer, data, references, reference_types).map(Some);
     }

@@ -69,9 +69,12 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
     let path = data.path;
-    let recall = !node.has_tag_name((SAGE_NS, "SpecialPower"));
-    let derived = if recall { RECALL_FIELDS } else { &[] };
-    let kind = if recall { KIND } else { 0xcefe_1113 };
+    const SPECIAL_POWER: u32 = 0xcefe_1113;
+    let (kind, size, derived) = match node.tag_name().name() {
+        "RecallUnitsSpecialPower" => (KIND, 0x1cc, RECALL_FIELDS),
+        "AssignSlavesTargetObjectSpecialPower" => (0x9daf_d38c, 0x1c4, &[][..]),
+        _ => (SPECIAL_POWER, 0x1c4, &[][..]),
+    };
     let allowed: Vec<_> = POWER_FIELDS
         .iter()
         .chain(derived)
@@ -79,7 +82,7 @@ pub(super) fn encode(
         .chain(["id"])
         .collect();
     validate_attributes(node, &allowed, path)?;
-    let start = data.allocate(pointer, if recall { 0x1cc } else { 0x1c4 })?;
+    let start = data.allocate(pointer, size)?;
     data.word(start, kind);
     data.word(start + 4, hash_name(required(node, "id", path)?));
     for &(name, kind, offset) in POWER_FIELDS.iter().chain(derived) {
@@ -268,12 +271,12 @@ pub(super) fn encode(
             ),
         ));
     }
-    if !recall {
+    if kind == SPECIAL_POWER {
         return Ok((kind, Table::record(power)));
     }
-    let mut recall = vec![base(0xcefe_1113, Table::record(power))];
-    recall.extend(fields(start, RECALL_FIELDS));
-    Ok((KIND, Table::record(recall)))
+    let mut entries = vec![base(SPECIAL_POWER, Table::record(power))];
+    entries.extend(fields(start, derived));
+    Ok((kind, Table::record(entries)))
 }
 
 fn empty_filter(start: usize) -> Table {
