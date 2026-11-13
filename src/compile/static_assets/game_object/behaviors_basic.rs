@@ -121,6 +121,9 @@ pub(super) fn encode(
     ) {
         return super::attack_assist::encode(node, pointer, data, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "SlavedUpdate")) {
+        return super::slaved::encode(node, pointer, data, references, reference_types).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "SlowDeath")) {
         return super::slow_death::encode(node, pointer, data, references, reference_types)
             .map(Some);

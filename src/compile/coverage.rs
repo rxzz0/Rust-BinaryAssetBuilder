@@ -37,6 +37,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "AssignSlavesTargetObjectSpecialPower",
             "AttributeModifierUpgrade",
             "ModelConditionUpgrade",
+            "SlavedUpdate",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -467,6 +468,11 @@ mod tests {
     #[test]
     fn unit_categories_match_ea_batch() {
         assert_ea_fixture("game-object-unit-categories", 5);
+    }
+
+    #[test]
+    fn slaved_update_matches_ea_batch() {
+        assert_ea_fixture("slaved-update", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

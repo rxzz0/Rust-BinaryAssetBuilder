@@ -393,7 +393,7 @@ pub(super) fn locomotor_condition(value: &str, field: &str, path: &Path) -> io::
         .ok_or_else(|| invalid(path, format!("invalid {field} {value}")))
 }
 
-fn enum_values(schema: &str, name: &str) -> Vec<String> {
+pub(super) fn enum_values(schema: &str, name: &str) -> Vec<String> {
     Document::parse(schema)
         .unwrap()
         .descendants()

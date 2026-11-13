@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="SlavedProbe"><Behaviors>
+<SlavedUpdate id="ModuleTag_Default"/>
+<SlavedUpdate id="ModuleTag_Drone" LeashRange="100" GuardMaxRange="200" GuardWanderRange="50" RepairMinAltitude="1.5" RepairMaxAltitude="3.75" RepairWhenHealthBelowPercentage="75" RepairRatePerSecond="8.5" WeldingSysId="ProbeWeld" WeldingFXBone="BONE_WELD" StayOnSameLayerAsMaster="true" DieOnMastersDeath="true" DieOnMastersDeathDamageType="CANNON" DieOnMastersDeathType="BURNED" FadeOutRange="60" FadeTime="700" MarkUnselectable="true" UseSlaverAsControlForEvaObjectSightedEvents="true"><GuardPosOffset x="1" y="2" z="3"/></SlavedUpdate>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>
