@@ -153,6 +153,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut references = Vec::new();
     let mut material_float_names = Vec::new();
     let mut create_object_modules = Vec::new();
+    let mut spawn_modules = Vec::new();
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
     let mut child_targets =
         children::encode(node, &mut data, &mut references, &mut reference_types)?;
@@ -186,6 +187,12 @@ pub(in crate::compile::static_assets) fn compile(
                     &mut reference_types,
                 )?;
                 create_object_modules.push(start);
+                Some(result)
+            } else if module.has_tag_name((SAGE_NS, "SpawnBehavior")) {
+                let start = data.payload.len() as u32;
+                let result =
+                    super::spawn::encode(module, pointer, &mut data, &mut reference_types)?;
+                spawn_modules.push(start);
                 Some(result)
             } else {
                 behaviors_basic::encode(
@@ -282,6 +289,16 @@ pub(in crate::compile::static_assets) fn compile(
             match pointer - start {
                 0x10 => return (start + 0x48, 0),
                 0x14 => return (start + 0x48, 1),
+                _ => {}
+            }
+        }
+        // SpawnBehavior lists its inherited upgrade pointers after its own fields.
+        let index = spawn_modules.partition_point(|&start| start <= pointer);
+        if index > 0 {
+            let start = spawn_modules[index - 1];
+            match pointer - start {
+                0x10 => return (start + 0x5c, 0),
+                0x18 => return (start + 0x5c, 1),
                 _ => {}
             }
         }

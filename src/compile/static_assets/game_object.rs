@@ -17,6 +17,7 @@ mod recall;
 mod schema;
 mod secondary_damage;
 mod shadow;
+mod spawn;
 mod structures;
 
 pub(super) use encoder::compile;

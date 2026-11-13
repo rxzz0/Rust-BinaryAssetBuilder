@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="SpawnProbe">
+    <Behaviors>
+      <SpawnBehavior id="ModuleTag_SpawnRepairDrones" SpawnNumberData="3" InitialBurst="3" SpawnReplaceDelayData="10s" SpawnedRequireSpawner="true" KillSpawnsOnCaptured="true" SpawnInsideBuilding="true" KillSpawnsOnDisabled="true"><Die DeathTypes="ALL" /><SpawnTemplate>AlliedAirfieldRepairDrone</SpawnTemplate></SpawnBehavior>
+      <SpawnBehavior id="ModuleTag_Default" />
+      <SpawnBehavior id="ModuleTag_Custom" DamageTypesToPropagateToSlaves="FORCE CRUSH" FadeInTime="500ms" InitialDelay="2s" IsOneShotData="true" WaypointModeTerminal="false" RequiresAllTriggers="true">
+        <TriggeredBy>Upgrade_TestRequired</TriggeredBy>
+        <ConflictsWith>Upgrade_TestConflict</ConflictsWith>
+        <Die RequiredStatus="CAN_ATTACK" />
+        <SpawnTemplate>AlliedAirfieldRepairDrone</SpawnTemplate>
+        <SpawnTemplate>AlliedAirfield</SpawnTemplate>
+      </SpawnBehavior>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>
