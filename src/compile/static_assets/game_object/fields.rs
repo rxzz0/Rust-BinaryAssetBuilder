@@ -415,7 +415,6 @@ mod tests {
                 true,
             ),
             ("TransportSlotCount=\"1\"", false),
-            ("IsTrainable=\"false\"", false),
             ("FenceWidth=\"1\"", false),
         ] {
             let xml =

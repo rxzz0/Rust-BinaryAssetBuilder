@@ -94,6 +94,9 @@ pub(super) fn encode(
         return super::production::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "QueueDockBehavior")) {
+        return queue_dock(node, pointer, data).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "ParkingPlaceBehavior")) {
         return super::parking::encode(node, pointer, data, reference_types).map(Some);
     }
@@ -218,6 +221,53 @@ pub(super) fn encode(
         inherited(0x29ca_d490, update)
     };
     Ok(Some((kind, table)))
+}
+
+fn queue_dock(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xaf4c_1f21;
+    const BONES: [&str; 5] = [
+        "DockStartBoneName",
+        "DockActionBoneName",
+        "DockEndBoneName",
+        "QueueBonePrefix",
+        "TurnTableBoneName",
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = BONES
+        .into_iter()
+        .chain(["id", "DockingAnimation"])
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected QueueDockBehavior content"));
+    }
+    let start = data.allocate(pointer, 0x34)?;
+    let parent = module_base(node, KIND, start, data, false)?;
+    let mut entries = vec![base(0x30a3_6b8d, Table::record(vec![parent]))];
+    for (index, name) in BONES.into_iter().enumerate() {
+        let offset = start + 8 + index * 8;
+        data.string(offset, node.attribute(name).unwrap_or(""))?;
+        entries.push(Entry::named(name, 0x1a29_33aa, Target::Data(offset)));
+    }
+    let offset = start + 0x30;
+    if let Some(flag) = node.attribute("DockingAnimation") {
+        let value = if flag == "INVALID" {
+            u32::MAX
+        } else {
+            super::draws::model_condition_index(flag, path)? as u32
+        };
+        data.word(offset, value);
+    }
+    entries.push(Entry::named(
+        "DockingAnimation",
+        0x1572_3e0b,
+        Target::Data(offset),
+    ));
+    Ok((KIND, Table::record(entries)))
 }
 
 fn fire_weapon_when_dead(

@@ -40,6 +40,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "SlavedUpdate",
             "PassiveAreaEffectBehavior",
             "AttachUpdate",
+            "QueueDockBehavior",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -515,6 +516,11 @@ mod tests {
     #[test]
     fn skirmish_resource_node_matches_ea_batch() {
         assert_ea_fixture("skirmish-resource", 1);
+    }
+
+    #[test]
+    fn queue_dock_matches_ea_batch() {
+        assert_ea_fixture("queue-dock", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

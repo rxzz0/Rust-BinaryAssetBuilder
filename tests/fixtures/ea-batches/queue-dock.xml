@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="QueueDockProbe"><Behaviors>
+<QueueDockBehavior id="ModuleTag_Default"/>
+<QueueDockBehavior id="ModuleTag_Dock" DockStartBoneName="DockStart" DockActionBoneName="DockAction" DockEndBoneName="DockEnd" QueueBonePrefix="Que" TurnTableBoneName="BONE_TABLE" DockingAnimation="DOCKING_ACTIVE"/>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>
