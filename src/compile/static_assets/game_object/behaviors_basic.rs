@@ -130,6 +130,7 @@ pub(super) fn encode(
             .map(Some);
     }
     let (kind, size, extra) = match node.tag_name().name() {
+        "SubStructureBehavior" => (0x331e_6db8, 8, None),
         "ProductionUpdateInfo" => (0x1b33_7783, 8, None),
         "ObjectSMCHelper" => (0x7f72_f242, 8, None),
         "ObjectDefectionHelper" => (0x18a4_208f, 8, None),
@@ -172,7 +173,7 @@ pub(super) fn encode(
         ]);
         return Ok(Some((kind, inherited(0x9e4f_2b72, die))));
     }
-    if kind == 0x1b33_7783 {
+    if matches!(kind, 0x1b33_7783 | 0x331e_6db8) {
         return Ok(Some((kind, inherited(0xa50d_729a, behavior))));
     }
     if kind == 0xfa6a_c8b6 {

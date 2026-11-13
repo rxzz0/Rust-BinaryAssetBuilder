@@ -33,6 +33,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "SpecialPower",
             "ReplaceSelfSpecialAbility",
             "SlowDeath",
+            "SubStructureBehavior",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -388,6 +389,11 @@ mod tests {
     #[test]
     fn slow_death_matches_ea_batch() {
         assert_ea_fixture("slow-death", 1);
+    }
+
+    #[test]
+    fn substructure_matches_ea_batch() {
+        assert_ea_fixture("substructure", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {
