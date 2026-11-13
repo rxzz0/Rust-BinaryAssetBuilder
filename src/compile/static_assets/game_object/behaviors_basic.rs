@@ -70,7 +70,10 @@ pub(super) fn encode(
         return super::secondary_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
-    if node.has_tag_name((SAGE_NS, "RecallUnitsSpecialPower")) {
+    if matches!(
+        node.tag_name().name(),
+        "RecallUnitsSpecialPower" | "SpecialPower"
+    ) {
         return super::recall::encode(node, pointer, data, references, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "BuildingDestructionBehavior")) {

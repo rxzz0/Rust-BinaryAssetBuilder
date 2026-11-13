@@ -38,7 +38,7 @@ const FIELDS: &[(&str, u32, usize)] = &[
     ("ProductionTimeDelayScalar", TIME, 0x34),
     ("NewObjectFadeInTime", TIME, 0x38),
 ];
-const DISABLED: &[&str] = &[
+pub(super) const DISABLED: &[&str] = &[
     "DEFAULT",
     "USER_PARALYZED",
     "EMP",

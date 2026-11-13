@@ -1,11 +1,12 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, asset_reference, finite_number, hash_name, sage_time, validate_attributes,
+    AssetReference, asset_reference, finite_number, hash_name, sage_time, significant_children,
+    validate_attributes,
 };
 use super::behaviors_basic::{base, inherited};
-use super::draws::{array, boolean, fields};
-use crate::compile::{has_content, invalid, required};
+use super::draws::{boolean, fields, model_condition_index};
+use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::Node;
 use std::io;
 
@@ -68,30 +69,20 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
     let path = data.path;
+    let recall = !node.has_tag_name((SAGE_NS, "SpecialPower"));
+    let derived = if recall { RECALL_FIELDS } else { &[] };
+    let kind = if recall { KIND } else { 0xcefe_1113 };
     let allowed: Vec<_> = POWER_FIELDS
         .iter()
-        .filter(|&&(name, kind, _)| {
-            kind == BOOL
-                || kind == REAL
-                || kind == INT
-                || matches!(
-                    name,
-                    TEMPLATE | FILTER | "SetModelConditionTime" | "BurnDecayModifier"
-                )
-        })
-        .chain(RECALL_FIELDS)
+        .chain(derived)
         .map(|&(name, _, _)| name)
         .chain(["id"])
         .collect();
     validate_attributes(node, &allowed, path)?;
-    if has_content(node) {
-        return Err(invalid(path, "unsupported RecallUnitsSpecialPower child"));
-    }
-    let start = data.allocate(pointer, 0x1cc)?;
-    data.word(start, KIND);
+    let start = data.allocate(pointer, if recall { 0x1cc } else { 0x1c4 })?;
+    data.word(start, kind);
     data.word(start + 4, hash_name(required(node, "id", path)?));
-    data.word(start + 0x54, 8); // HELD
-    for &(name, kind, offset) in POWER_FIELDS.iter().chain(RECALL_FIELDS) {
+    for &(name, kind, offset) in POWER_FIELDS.iter().chain(derived) {
         match kind {
             BOOL => {
                 let default = matches!(
@@ -134,46 +125,118 @@ pub(super) fn encode(
         .parse::<u32>()
         .map_err(|_| invalid(path, "invalid BurnDecayModifier"))?;
     data.word(start + 0x44, decay);
-    let template = required(node, TEMPLATE, path)?;
-    let filter = node
-        .attribute(FILTER)
-        .unwrap_or("GenericSpecialPowerObjectFilter");
-    let mut ids = Vec::with_capacity(2);
-    for (name, kind, value, offset) in [
-        (TEMPLATE, "SpecialPowerTemplate", template, 0x08),
-        (FILTER, "ObjectFilterAsset", filter, 0x58),
-    ] {
-        if !value.trim().is_empty() {
-            let plain = value.split_once('\\').map_or(value, |(name, _)| name);
-            let id = asset_reference(plain, kind, path)?;
-            references.push(id.into());
-            data.word(start + offset, references.len() as u32);
-            ids.push((name, id.type_id));
-        }
-    }
-    for attribute in node.attributes() {
-        if let Some((_, kind)) = ids.iter().find(|&&(name, _)| name == attribute.name()) {
-            reference_types.push(*kind);
-        }
-    }
-    if node.attribute(FILTER).is_none()
-        && let Some((_, kind)) = ids.iter().find(|&&(name, _)| name == FILTER)
+    use super::super::global_ui::enum_value;
+    let mut disabled = 0;
+    for name in node
+        .attribute("DisabledTypesToIgnore")
+        .unwrap_or("HELD")
+        .split_ascii_whitespace()
     {
-        reference_types.push(*kind);
+        disabled |= 1 << enum_value(name, super::production::DISABLED, path)?;
+    }
+    data.word(start + 0x54, disabled);
+    if let Some(state) = node.attribute("SetModelCondition") {
+        let value = if state == "INVALID" {
+            u32::MAX
+        } else {
+            model_condition_index(state, path)? as u32
+        };
+        data.word(start + 0x30, value);
+    }
+    for (name, offset, options) in [
+        (
+            "ChangeWeather",
+            0x3c,
+            [
+                "NORMAL",
+                "CLOUDY",
+                "RAINY",
+                "CLOUDYRAINY",
+                "SUNNY",
+                "SNOWY",
+                "INVALID",
+            ]
+            .as_slice(),
+        ),
+        (
+            "ObjectFilterDistType",
+            0x5c,
+            ["CENTER_2D", "CIRCLE", "CENTER_3D", "SPHERE", "EXTENTS_3D"].as_slice(),
+        ),
+    ] {
+        if let Some(value) = node.attribute(name) {
+            data.word(start + offset, enum_value(value, options, path)?);
+        }
+    }
+    if let Some(value) = node.attribute("WeatherDuration") {
+        data.word(
+            start + 0x1c,
+            value
+                .trim()
+                .parse()
+                .map_err(|_| invalid(path, "invalid WeatherDuration"))?,
+        );
+    }
+    required(node, TEMPLATE, path)?;
+    for (name, value) in node.attributes().map(|a| (a.name(), a.value())).chain(
+        (node.attribute(FILTER).is_none()).then_some((FILTER, "GenericSpecialPowerObjectFilter")),
+    ) {
+        let (kind, offset) = match name {
+            TEMPLATE => ("SpecialPowerTemplate", 8),
+            "AntiFX" => ("FXList", 0xc),
+            "AttributeModifier" => ("AttributeModifier", 0x10),
+            "AttributeModifierFX" => ("FXList", 0x18),
+            "InitiateFX" => ("FXList", 0x28),
+            "TriggerFX" => ("FXList", 0x2c),
+            "OnTriggerRechargeSpecialPower" => ("SpecialPowerTemplate", 0x40),
+            "LeechRechargePercentPlayerTechTrigger" => ("PlayerTech", 0x4c),
+            "LeechRechargePercentFromSpecialPower" => ("SpecialPowerTemplate", 0x50),
+            FILTER => ("ObjectFilterAsset", 0x58),
+            _ => continue,
+        };
+        if value.trim().is_empty() {
+            continue;
+        }
+        let plain = value.split_once('\\').map_or(value, |(name, _)| name);
+        let id = asset_reference(plain, kind, path)?;
+        reference_types.push(id.type_id);
+        let word = if offset == 0x40 {
+            id.instance_id
+        } else {
+            references.push(id.into());
+            references.len() as u32
+        };
+        data.word(start + offset, word);
     }
 
+    let names: Vec<_> = node
+        .attribute("RequirementsFilterMPSkirmish")
+        .unwrap_or("")
+        .split_ascii_whitespace()
+        .collect();
+    let count = start + 0x20;
+    let first = data.list(count, names.len(), 8)?;
+    let mut strings = Vec::new();
+    for (index, name) in names.into_iter().enumerate() {
+        let offset = first + index * 8;
+        data.string(offset, name)?;
+        strings.push((0, Target::Data(offset)));
+    }
     let module = Table::record(vec![
         Entry::new(0x19b0_42a0, INT, Target::Data(start)),
         Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
     ]);
     let mut power = vec![base(0xa50d_729a, inherited(0xd75d_93a2, module))];
+    let mut strings = Some(Table::array(count, strings));
     power.extend(POWER_FIELDS.iter().map(|&(name, kind, offset)| {
-        if name == "RequirementsFilterMPSkirmish" {
-            array(name, kind, start + offset)
+        let target = if name == "RequirementsFilterMPSkirmish" {
+            Target::Table(strings.take().unwrap())
         } else {
-            Entry::named(name, kind, Target::Data(start + offset))
-        }
+            Target::Data(start + offset)
+        };
+        Entry::named(name, kind, target)
     }));
+    let mut children = significant_children(node).peekable();
     for (name, offset) in [
         ("AttributeModifierAffects", 0x60),
         ("RequirementsFilterMP", 0xd0),
@@ -182,10 +245,32 @@ pub(super) fn encode(
         power.push(Entry::named(
             name,
             0xe46e_a3b2,
-            Target::Table(empty_filter(start + offset)),
+            Target::Table(
+                match children.next_if(|child| child.has_tag_name((SAGE_NS, name))) {
+                    Some(child) => super::parking::encode_inline_filter(
+                        child,
+                        start + offset,
+                        data,
+                        reference_types,
+                    )?,
+                    None => empty_filter(start + offset),
+                },
+            ),
         ));
     }
     power.push(Entry::named("InitiateSound", 0x1ae6_b6b7, Target::Null));
+    if let Some(child) = children.next() {
+        return Err(invalid(
+            path,
+            format!(
+                "unsupported special power child {}",
+                child.tag_name().name()
+            ),
+        ));
+    }
+    if !recall {
+        return Ok((kind, Table::record(power)));
+    }
     let mut recall = vec![base(0xcefe_1113, Table::record(power))];
     recall.extend(fields(start, RECALL_FIELDS));
     Ok((KIND, Table::record(recall)))

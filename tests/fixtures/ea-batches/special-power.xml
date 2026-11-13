@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="SpecialPowerProbe"><Behaviors>
+<SpecialPower id="ModuleTag_Default" SpecialPowerTemplate="SpecialPower_PackReplaceSelf" />
+<SpecialPower id="ModuleTag_Unpack" SpecialPowerTemplate="SpecialPower_UnpackReplaceSelf" UpdateModuleStartsAttack="true" DisabledTypesToIgnore="" />
+<SpecialPower id="ModuleTag_Custom" SpecialPowerTemplate="ProbePower" DisabledTypesToIgnore="HELD EMP" AttributeModifier="ProbeModifier" TriggerFX="ProbeFX" SetModelCondition="SOLD" RequirementsFilterMPSkirmish="First Second">
+<RequirementsFilterMP Rule="ANY"><IncludeThing>SpecialPowerProbe</IncludeThing></RequirementsFilterMP>
+</SpecialPower></Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>
