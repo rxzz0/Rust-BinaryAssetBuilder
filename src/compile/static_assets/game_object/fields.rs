@@ -33,6 +33,7 @@ pub(super) fn encode(
         "CampnessValue",
         "CampnessValueRadius",
         "HealthBoxHeightOffset",
+        "ShockwaveResistance",
         "ProductionQueueType",
         "BuildPlacementTypeFlag",
         "UnitCategory",
@@ -146,6 +147,7 @@ pub(super) fn encode(
     for (name, offset) in [
         ("CampnessValueRadius", 0xb4),
         ("HealthBoxHeightOffset", 0xbc),
+        ("ShockwaveResistance", 0xdc),
     ] {
         if let Some(value) = node.attribute(name) {
             data.word(offset, finite_float(value, name, data.path)?.to_bits());

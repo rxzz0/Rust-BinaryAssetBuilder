@@ -439,6 +439,11 @@ mod tests {
         assert_ea_fixture("locomotor-sets", 1);
     }
 
+    #[test]
+    fn shockwave_resistance_matches_ea_batch() {
+        assert_ea_fixture("game-object-shockwave", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
