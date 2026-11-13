@@ -553,7 +553,7 @@ fn encode_weapon_bones(
     let start = data.list(count, nodes.len(), 0x10)?;
     let mut items = Vec::with_capacity(nodes.len());
     for (index, node) in nodes.into_iter().enumerate() {
-        validate_attributes(node, &["WeaponSlotType", "BoneName"], path)?;
+        validate_attributes(node, &["WeaponSlotID", "WeaponSlotType", "BoneName"], path)?;
         if has_content(node) {
             return Err(invalid(path, "unexpected weapon bone content"));
         }
@@ -563,7 +563,13 @@ fn encode_weapon_bones(
             SLOTS,
             path,
         )?;
-        data.word(offset, 1);
+        let id = node
+            .attribute("WeaponSlotID")
+            .unwrap_or("1")
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| invalid(path, "invalid WeaponSlotID"))?;
+        data.word(offset, id as u32);
         data.word(offset + 4, slot);
         if let Some(name) = node.attribute("BoneName") {
             data.string(offset + 8, name)?;
