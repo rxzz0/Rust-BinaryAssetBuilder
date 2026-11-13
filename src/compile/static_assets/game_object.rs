@@ -9,6 +9,7 @@ mod client_behaviors;
 mod create_object_die;
 mod draws;
 pub(in crate::compile) use draws::SCRIPTED_FLAGS;
+mod attach;
 mod encoder;
 mod engineer;
 mod fields;

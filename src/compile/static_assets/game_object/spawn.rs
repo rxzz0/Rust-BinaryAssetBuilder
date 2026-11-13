@@ -187,7 +187,7 @@ pub(super) fn id_list(data: &mut BinaryData<'_>, count: usize, ids: Vec<u32>) ->
     Ok(Table::array(count, entries))
 }
 
-fn damage_flags(value: &str, data: &BinaryData<'_>) -> io::Result<u64> {
+pub(super) fn damage_flags(value: &str, data: &BinaryData<'_>) -> io::Result<u64> {
     static FLAGS: OnceLock<Vec<String>> = OnceLock::new();
     let flags = FLAGS.get_or_init(|| {
         Document::parse(include_str!(

@@ -39,6 +39,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "ModelConditionUpgrade",
             "SlavedUpdate",
             "PassiveAreaEffectBehavior",
+            "AttachUpdate",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -479,6 +480,11 @@ mod tests {
     #[test]
     fn passive_area_effect_matches_ea_batch() {
         assert_ea_fixture("passive-area-effect", 1);
+    }
+
+    #[test]
+    fn attach_update_matches_ea_batch() {
+        assert_ea_fixture("attach-update", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

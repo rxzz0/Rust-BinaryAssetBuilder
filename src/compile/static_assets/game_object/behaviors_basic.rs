@@ -128,6 +128,9 @@ pub(super) fn encode(
         return super::passive_area::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "AttachUpdate")) {
+        return super::attach::encode(node, pointer, data, references, reference_types).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "SlowDeath")) {
         return super::slow_death::encode(node, pointer, data, references, reference_types)
             .map(Some);
@@ -407,7 +410,7 @@ pub(super) fn encode_die_mux(
     Ok(Table::record(entries))
 }
 
-fn death_flags(value: &str, path: &std::path::Path) -> io::Result<u64> {
+pub(super) fn death_flags(value: &str, path: &std::path::Path) -> io::Result<u64> {
     let schema = roxmltree::Document::parse(include_str!(
         "../../../../schemas/ra3/xsd/Includes/Death.xsd"
     ))

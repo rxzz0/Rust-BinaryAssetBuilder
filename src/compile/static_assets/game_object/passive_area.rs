@@ -181,7 +181,7 @@ pub(super) fn encode(
     Ok((KIND, Table::record(entries)))
 }
 
-fn reference(
+pub(super) fn reference(
     value: &str,
     kind: &str,
     path: &std::path::Path,
