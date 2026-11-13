@@ -192,6 +192,10 @@ pub(super) fn encode(
 }
 
 fn empty_filter(start: usize) -> Table {
+    filter_table(start, [Vec::new(), Vec::new()])
+}
+
+pub(super) fn filter_table(start: usize, [included, excluded]: [Vec<(u32, Target)>; 2]) -> Table {
     let mut entries: Vec<_> = fields(
         start,
         &[
@@ -207,8 +211,16 @@ fn empty_filter(start: usize) -> Table {
     entries.extend([
         Entry::named("StatusBitFlags", 0xa7bd_811e, Target::Null),
         Entry::named("StatusBitFlagsExclude", 0xa7bd_811e, Target::Null),
-        array("IncludeThing", 0x9b19_049f, start + 0x60),
-        array("ExcludeThing", 0x9b19_049f, start + 0x68),
+        Entry::named(
+            "IncludeThing",
+            0x9b19_049f,
+            Target::Table(Table::array(start + 0x60, included)),
+        ),
+        Entry::named(
+            "ExcludeThing",
+            0x9b19_049f,
+            Target::Table(Table::array(start + 0x68, excluded)),
+        ),
     ]);
     Table::record(entries)
 }

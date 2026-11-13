@@ -12,6 +12,7 @@ mod fields;
 mod fx_list_behavior;
 mod material;
 mod physics;
+mod production;
 mod recall;
 mod schema;
 mod secondary_damage;

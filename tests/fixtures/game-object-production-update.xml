@@ -1,0 +1,20 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProductionProbe">
+    <Behaviors>
+      <ProductionUpdate id="ProductionUpdateModuleTag" GiveNoXP="true" Type="AIRCRAFT">
+        <GiveUpgradeToProduced>
+          <UpgradeTranslate RequiredUpgrade="Upgrade_ProductionVeterancy_VETERAN" ProvidedUpgrade="Upgrade_CreationVeterancy_VETERAN" />
+          <UpgradeTranslate ProvidedUpgrade="Upgrade_CreationVeterancy_ELITE" RequiredUpgrade="Upgrade_ProductionVeterancy_ELITE" />
+        </GiveUpgradeToProduced>
+      </ProductionUpdate>
+      <ProductionUpdate id="ModuleTag_Default" />
+      <ProductionUpdate id="ModuleTag_Custom" MaxQueueEntries="17" NumDoorAnimations="2" DoorOpeningTime="200ms" DoorWaitOpenTime="1s" DoorCloseTime="3s" ConstructionCompleteDuration="10" DisabledTypesToProcess="EMP HELD" UnitInvulnerableTime="12" SpecialPrepModelconditionTime="15" VeteranUnitsFromVeteranFactory="true" BonusForType="AlliedAirfield" SecondaryQueue="true" Type="VEHICLE" IgnorePreReqs="true" ProductionTimeDelayScalar="2s" NewObjectFadeInTime="0.75s">
+        <QuantityModifier Name="AlliedAirfield" Count="3" />
+        <ProductionModifier RequiredUpgrade="Upgrade_ProductionVeterancy_VETERAN" CostMultiplier="0.5" TimeMultiplier="0.75">
+          <ModifierFilter Rule="ALL" Include="VEHICLE" />
+        </ProductionModifier>
+      </ProductionUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>
