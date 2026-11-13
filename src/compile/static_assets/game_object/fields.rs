@@ -26,6 +26,7 @@ pub(super) fn encode(
         "BuildTime",
         "MaxSimultaneousOfType",
         "EnergyProduction",
+        "EnergyBonus",
         "CommandSet",
         "SelectPortrait",
         "ButtonImage",
@@ -118,11 +119,13 @@ pub(super) fn encode(
             .map_err(|_| invalid(data.path, "invalid MaxSimultaneousOfType"))?;
         data.payload[0x23e..0x240].copy_from_slice(&limit.to_le_bytes());
     }
-    if let Some(value) = node.attribute("EnergyProduction") {
-        let number = value
-            .parse::<i32>()
-            .map_err(|_| invalid(data.path, "invalid EnergyProduction"))?;
-        data.word(0x88, number as u32);
+    for (name, offset) in [("EnergyProduction", 0x88), ("EnergyBonus", 0x8c)] {
+        if let Some(value) = node.attribute(name) {
+            let number = value
+                .parse::<i32>()
+                .map_err(|_| invalid(data.path, format!("invalid {name}")))?;
+            data.word(offset, number as u32);
+        }
     }
     if let Some(value) = node.attribute("CommandSet") {
         data.word(0x90, weak_id(value, "LogicCommandSet", data.path)?);
