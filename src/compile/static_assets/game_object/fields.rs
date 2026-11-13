@@ -27,6 +27,7 @@ pub(super) fn encode(
         "MaxSimultaneousOfType",
         "EnergyProduction",
         "EnergyBonus",
+        "VoicePriority",
         "CommandSet",
         "SelectPortrait",
         "ButtonImage",
@@ -120,7 +121,11 @@ pub(super) fn encode(
             .map_err(|_| invalid(data.path, "invalid MaxSimultaneousOfType"))?;
         data.payload[0x23e..0x240].copy_from_slice(&limit.to_le_bytes());
     }
-    for (name, offset) in [("EnergyProduction", 0x88), ("EnergyBonus", 0x8c)] {
+    for (name, offset) in [
+        ("EnergyProduction", 0x88),
+        ("EnergyBonus", 0x8c),
+        ("VoicePriority", 0xa4),
+    ] {
         if let Some(value) = node.attribute(name) {
             let number = value
                 .parse::<i32>()
