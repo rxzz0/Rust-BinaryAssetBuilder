@@ -14,6 +14,7 @@ mod fields;
 mod fx_list_behavior;
 mod infiltrator;
 mod laser_draw;
+mod laser_state;
 mod material;
 mod parking;
 mod physics;

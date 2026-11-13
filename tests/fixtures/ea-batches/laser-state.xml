@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+ <GameObject id="LaserStateProbe"><Behaviors>
+  <LaserState id="ModuleTag_Default" />
+  <LaserState id="ModuleTag_Custom" LaserId="7" OriginBoneName="Origin">
+   <LaserEndParticleSystem>EndA</LaserEndParticleSystem><LaserEndParticleSystem>EndB</LaserEndParticleSystem>
+   <LaserStartParticleSystem>StartA</LaserStartParticleSystem>
+   <EndOffset x="2" y="-3" /><ObjectStatusValidation RequiredStatus="CAN_ATTACK" ForbiddenStatus="SOLD" />
+  </LaserState>
+ </Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+</AssetDeclaration>
