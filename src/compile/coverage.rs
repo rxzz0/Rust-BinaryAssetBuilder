@@ -29,6 +29,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "NotifyWhenAttackingBehavior",
             "TechUpgrade",
             "CommandSetUpgrade",
+            "ProductionUpdateInfo",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -359,6 +360,11 @@ mod tests {
     #[test]
     fn command_upgrade_matches_ea_batch() {
         assert_ea_fixture("command-upgrade", 1);
+    }
+
+    #[test]
+    fn production_update_info_matches_ea_batch() {
+        assert_ea_fixture("production-info", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

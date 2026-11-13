@@ -119,6 +119,7 @@ pub(super) fn encode(
         return super::attack_assist::encode(node, pointer, data, reference_types).map(Some);
     }
     let (kind, size, extra) = match node.tag_name().name() {
+        "ProductionUpdateInfo" => (0x1b33_7783, 8, None),
         "ObjectSMCHelper" => (0x7f72_f242, 8, None),
         "ObjectDefectionHelper" => (0x18a4_208f, 8, None),
         "AttributeModifierPoolUpdate" => (0xe622_f055, 8, None),
@@ -159,6 +160,9 @@ pub(super) fn encode(
             Entry::new(0x33d7_093c, 0x0084_001b, Target::Table(mux)),
         ]);
         return Ok(Some((kind, inherited(0x9e4f_2b72, die))));
+    }
+    if kind == 0x1b33_7783 {
+        return Ok(Some((kind, inherited(0xa50d_729a, behavior))));
     }
     if kind == 0xfa6a_c8b6 {
         let name = required(node, "EventListName", data.path)?;
