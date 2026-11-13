@@ -449,6 +449,11 @@ mod tests {
         assert_ea_fixture("game-object-voice-priority", 1);
     }
 
+    #[test]
+    fn radar_priority_matches_ea_batch() {
+        assert_ea_fixture("game-object-radar", 5);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+<GameObject id="RadarHidden" RadarPriority="NOT_ON_RADAR"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject>
+<GameObject id="RadarUnset" RadarPriority="INVALID"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject>
+<GameObject id="RadarStructure" RadarPriority="STRUCTURE"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject>
+<GameObject id="RadarUnit" RadarPriority="UNIT"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject>
+<GameObject id="RadarCommando" RadarPriority="COMMANDO"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject>
+</AssetDeclaration>

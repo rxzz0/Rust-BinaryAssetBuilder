@@ -72,7 +72,13 @@ pub(super) fn encode(
     if let Some(value) = node.attribute("RadarPriority") {
         data.word(
             0x4c,
-            enum_value(value, &["STRUCTURE"], "RadarPriority", data.path)?,
+            enum_value(
+                value,
+                &["NOT_ON_RADAR", "INVALID", "STRUCTURE", "UNIT", "COMMANDO"],
+                "RadarPriority",
+                data.path,
+            )?
+            .wrapping_sub(2),
         );
     }
     if let Some(value) = node.attribute("PlacementViewAngle") {
@@ -340,7 +346,7 @@ mod tests {
         for attribute in [
             "Health=100",
             "KindOf=UNKNOWN_KIND",
-            "RadarPriority=UNIT",
+            "RadarPriority=UNKNOWN",
             "PlacementViewAngle=NaNd",
             "Side=PlayerTemplate:Allies",
             "BuildTime=NaN",
