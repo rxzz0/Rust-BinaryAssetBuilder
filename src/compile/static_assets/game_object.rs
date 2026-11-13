@@ -1,5 +1,11 @@
+mod active_body;
+mod behaviors_basic;
+mod children;
 mod encoder;
+mod fields;
+mod physics;
 mod schema;
+mod structures;
 
 pub(super) use encoder::compile;
 

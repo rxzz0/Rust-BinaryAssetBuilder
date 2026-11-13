@@ -1,0 +1,1 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="Bare"><SkirmishAIInformation BaseBuildingLocation="BACK"><ConstructionBaseSelectionCriteria ExcludedBaseTypes="NO_BUILD_RADIUS CAPTURED" PreferredBaseTypes="MAIN_BASE" SortOrder="PREFER_OLDEST" /></SkirmishAIInformation><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1.0" /></Body></GameObject></AssetDeclaration>

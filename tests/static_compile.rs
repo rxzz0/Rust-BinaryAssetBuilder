@@ -21,6 +21,38 @@ fn scratch_root() -> PathBuf {
 fn game_object_minimal_matches_ea_oracle() {
     for (name, xml, expected_manifest, bin, relo, imp) in [
         (
+            "building.xml",
+            include_bytes!("fixtures/game-object-building.xml").as_slice(),
+            include_bytes!("fixtures/game-object-building.manifest").as_slice(),
+            include_bytes!("fixtures/game-object-building.bin").as_slice(),
+            include_bytes!("fixtures/game-object-building.relo").as_slice(),
+            include_bytes!("fixtures/game-object-building.imp").as_slice(),
+        ),
+        (
+            "unpack.xml",
+            include_bytes!("fixtures/game-object-unpack.xml").as_slice(),
+            include_bytes!("fixtures/game-object-unpack.manifest").as_slice(),
+            include_bytes!("fixtures/game-object-unpack.bin").as_slice(),
+            include_bytes!("fixtures/game-object-unpack.relo").as_slice(),
+            include_bytes!("fixtures/game-object-unpack.imp").as_slice(),
+        ),
+        (
+            "sell.xml",
+            include_bytes!("fixtures/game-object-sell.xml").as_slice(),
+            include_bytes!("fixtures/game-object-sell.manifest").as_slice(),
+            include_bytes!("fixtures/game-object-sell.bin").as_slice(),
+            include_bytes!("fixtures/game-object-sell.relo").as_slice(),
+            include_bytes!("fixtures/game-object-sell.imp").as_slice(),
+        ),
+        (
+            "physics.xml",
+            include_bytes!("fixtures/game-object-physics.xml").as_slice(),
+            include_bytes!("fixtures/game-object-physics.manifest").as_slice(),
+            include_bytes!("fixtures/game-object-physics.bin").as_slice(),
+            include_bytes!("fixtures/game-object-physics.relo").as_slice(),
+            include_bytes!("fixtures/game-object-physics.imp").as_slice(),
+        ),
+        (
             "bare.xml",
             include_bytes!("fixtures/game-object-bare.xml").as_slice(),
             include_bytes!("fixtures/game-object-bare.manifest").as_slice(),
@@ -51,6 +83,30 @@ fn game_object_minimal_matches_ea_oracle() {
             include_bytes!("fixtures/game-object-default-health.bin").as_slice(),
             include_bytes!("fixtures/game-object-default-health.relo").as_slice(),
             include_bytes!("fixtures/game-object-default-health.imp").as_slice(),
+        ),
+        (
+            "active.xml",
+            include_bytes!("fixtures/game-object-active-body.xml").as_slice(),
+            include_bytes!("fixtures/game-object-active-body.manifest").as_slice(),
+            include_bytes!("fixtures/game-object-active-body.bin").as_slice(),
+            include_bytes!("fixtures/game-object-active-body.relo").as_slice(),
+            include_bytes!("fixtures/game-object-active-body.imp").as_slice(),
+        ),
+        (
+            "fields.xml",
+            include_bytes!("fixtures/game-object-fields-all.xml").as_slice(),
+            include_bytes!("fixtures/game-object-fields-all.manifest").as_slice(),
+            include_bytes!("fixtures/game-object-fields-all.bin").as_slice(),
+            include_bytes!("fixtures/game-object-fields-all.relo").as_slice(),
+            include_bytes!("fixtures/game-object-fields-all.imp").as_slice(),
+        ),
+        (
+            "smc.xml",
+            include_bytes!("fixtures/game-object-behavior-basic-smc.xml").as_slice(),
+            include_bytes!("fixtures/game-object-behavior-basic-smc.manifest").as_slice(),
+            include_bytes!("fixtures/game-object-behavior-basic-smc.bin").as_slice(),
+            include_bytes!("fixtures/game-object-behavior-basic-smc.relo").as_slice(),
+            include_bytes!("fixtures/game-object-behavior-basic-smc.imp").as_slice(),
         ),
     ] {
         let root = scratch_root();

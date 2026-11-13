@@ -1,0 +1,1 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="Probe"><Behaviors><DestroyDie id="ModuleTag_Test"><DieMuxData DeathTypes="ALL" DeathTypesForbidden="SUICIDED"/></DestroyDie></Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>

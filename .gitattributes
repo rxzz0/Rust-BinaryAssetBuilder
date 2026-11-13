@@ -1,0 +1,4 @@
+tests/fixtures/*.bin binary
+tests/fixtures/*.imp binary
+tests/fixtures/*.manifest binary
+tests/fixtures/*.relo binary

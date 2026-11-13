@@ -1,0 +1,1 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="StructureProbe"><Behaviors><StructureSellUpdate id="ModuleTag_StructureSellUpdate" SellTime="2s" ActiveModelCondition="SOLD" /></Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject></AssetDeclaration>

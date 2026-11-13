@@ -3,10 +3,11 @@
 //! The token layout is the fixed RA3 GameObject field table. Unsupported
 //! fields are rejected until their binary representation is verified.
 
-use super::super::{
-    Marshaled, asset_reference, fast_hash, hash_name, significant_children, validate_attributes,
-};
-use crate::compile::{SAGE_NS, has_content, invalid, required, windows_1252};
+use super::super::binary::BinaryData;
+use super::super::tokenized::{self, Entry, Table, Target};
+use super::super::{Marshaled, hash_name, significant_children, validate_attributes};
+use super::{active_body, behaviors_basic, children, fields, physics, structures};
+use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
 use std::path::Path;
@@ -67,32 +68,153 @@ pub(in crate::compile::static_assets) fn compile(
     node: Node<'_, '_>,
     path: &Path,
 ) -> io::Result<Marshaled> {
-    validate_attributes(
-        node,
-        &["id", "Side", "EditorName", "EditorSorting", "KindOf"],
-        path,
-    )?;
-    let mut children = significant_children(node);
-    let body = children
-        .next()
-        .ok_or_else(|| invalid(path, "GameObject requires Body"))?;
-    if !body.has_tag_name((SAGE_NS, "Body"))
-        || children.next().is_some()
-        || body.attributes().len() != 0
-    {
-        return Err(invalid(path, "only a single GameObject Body is supported"));
+    let mut body = None;
+    let mut behaviors = None;
+    for child in significant_children(node) {
+        let slot = match child.tag_name().name() {
+            "Body" => &mut body,
+            "Behaviors" => &mut behaviors,
+            "DisplayName"
+            | "GameDependency"
+            | "ObjectResourceInfo"
+            | "ArmorSet"
+            | "SkirmishAIInformation"
+            | "VisionInfo"
+            | "Geometry"
+                if child.tag_name().namespace() == Some(SAGE_NS) =>
+            {
+                continue;
+            }
+            kind => {
+                return Err(invalid(
+                    path,
+                    format!("unsupported GameObject child {kind}"),
+                ));
+            }
+        };
+        if child.tag_name().namespace() != Some(SAGE_NS)
+            || child.attributes().len() != 0
+            || slot.replace(child).is_some()
+        {
+            return Err(invalid(path, "invalid or repeated GameObject module group"));
+        }
     }
+    let body = body.ok_or_else(|| invalid(path, "GameObject requires Body"))?;
     let mut modules = significant_children(body);
     let module = modules
         .next()
         .ok_or_else(|| invalid(path, "Body requires ImmortalBody"))?;
-    if !module.has_tag_name((SAGE_NS, "ImmortalBody"))
-        || modules.next().is_some()
-        || has_content(module)
-    {
-        return Err(invalid(path, "only ImmortalBody is supported"));
+    if modules.next().is_some() || module.tag_name().namespace() != Some(SAGE_NS) {
+        return Err(invalid(path, "Body requires a single supported module"));
     }
+    let (tokens, body_bytes): (&[u8], [u8; BODY_SIZE]) = match module.tag_name().name() {
+        "ActiveBody" => (
+            active_body::TOKEN_LAYOUT,
+            active_body::encode(module, path)?,
+        ),
+        "ImmortalBody" => (TOKENS, immortal_body(module, path)?),
+        kind => return Err(invalid(path, format!("unsupported Body module {kind}"))),
+    };
+
+    let mut data = BinaryData {
+        payload: vec![0; ROOT_SIZE],
+        relocations: Vec::new(),
+        path,
+    };
+    for &(offset, value) in ROOT_DEFAULTS {
+        data.word(offset, value);
+    }
+    let mut template_data = data.payload.clone();
+    template_data.extend_from_slice(&body_bytes);
+    let mut table = Table::from_layout(tokens, &template_data, path)?;
+    let mut reference_types = Vec::new();
+    let mut references = Vec::new();
+    fields::encode(node, &mut data, &mut reference_types, &mut references)?;
+    let mut child_targets =
+        children::encode(node, &mut data, &mut references, &mut reference_types)?;
+    let behavior_tokens = if let Some(group) = behaviors {
+        let modules: Vec<_> = significant_children(group).collect();
+        let list = data.allocate(0x1d0, 8)?;
+        let pointers = data.list(list, modules.len(), 4)?;
+        let mut items = Vec::new();
+        for (index, module) in modules.into_iter().enumerate() {
+            if module.tag_name().namespace() != Some(SAGE_NS) {
+                return Err(invalid(path, "unexpected behavior namespace"));
+            }
+            let encoded = behaviors_basic::encode(
+                module,
+                pointers + index * 4,
+                &mut data,
+                &mut references,
+                &mut reference_types,
+            )?;
+            let (kind, fields) = match encoded {
+                Some(encoded) => encoded,
+                None if module.has_tag_name((SAGE_NS, "Physics")) => {
+                    physics::encode(module, pointers + index * 4, &mut data)?
+                }
+                None => structures::encode(module, pointers + index * 4, &mut data)?.ok_or_else(
+                    || {
+                        invalid(
+                            path,
+                            format!("unsupported behavior {}", module.tag_name().name()),
+                        )
+                    },
+                )?,
+            };
+            items.push((
+                0,
+                Target::Table(Table::sequence(vec![Entry::new(
+                    2,
+                    kind,
+                    Target::Table(fields),
+                )])),
+            ));
+        }
+        Some(Target::Table(Table::array(list, items)))
+    } else {
+        None
+    };
+    let body_shift = data.payload.len() - ROOT_SIZE;
+    table.shift_data_from(ROOT_SIZE, body_shift);
+    let body_start = data.allocate(0x1dc, BODY_SIZE)?;
+    data.payload[body_start..body_start + BODY_SIZE].copy_from_slice(&body_bytes);
+    if let Some(target) = children::encode_geometry(node, &mut data)? {
+        child_targets.push(("Geometry", target));
+    }
+    if let Some(target) = children::encode_vision(node, &mut data)? {
+        child_targets.push(("VisionInfo", target));
+    }
+    if let Some(target) = behavior_tokens
+        && !table.replace_target("Behaviors", target)
+    {
+        return Err(invalid(path, "GameObject layout is missing Behaviors"));
+    }
+    for (name, target) in child_targets {
+        if !table.replace_target(name, target) {
+            return Err(invalid(
+                path,
+                format!("GameObject layout is missing {name}"),
+            ));
+        }
+    }
+    data.relocations.sort_unstable();
+    tokenized::finish(
+        table,
+        data,
+        Marshaled {
+            reference_types,
+            references,
+            ..Marshaled::default()
+        },
+    )
+}
+
+fn immortal_body(module: Node<'_, '_>, path: &Path) -> io::Result<[u8; BODY_SIZE]> {
     validate_attributes(module, &["id", "MaxHealth"], path)?;
+    if has_content(module) {
+        return Err(invalid(path, "ImmortalBody cannot contain content"));
+    }
     let module_id = required(module, "id", path)?;
     let health = module
         .attribute("MaxHealth")
@@ -102,75 +224,11 @@ pub(in crate::compile::static_assets) fn compile(
     if !health.is_finite() {
         return Err(invalid(path, "invalid MaxHealth"));
     }
-
-    let mut payload = TOKENS.to_vec();
-    payload.resize(TOKENS.len() + ROOT_SIZE, 0);
-    for &(offset, value) in ROOT_DEFAULTS {
-        word(&mut payload, TOKENS.len() + offset, value);
-    }
-    let root = TOKENS.len();
-    let mut reference_types = Vec::new();
-    if let Some(kind) = node.attribute("KindOf") {
-        for flag in kind.split_ascii_whitespace() {
-            let (offset, bit) = match flag {
-                "IMMOBILE" => (0, 4),
-                "INERT" => (8, 25),
-                _ => return Err(invalid(path, format!("unsupported KindOf flag {flag}"))),
-            };
-            let at = root + offset;
-            let value = u32::from_le_bytes(payload[at..at + 4].try_into().unwrap());
-            word(&mut payload, at, value | (1 << bit));
-        }
-    }
-    if let Some(side) = node.attribute("Side") {
-        word(
-            &mut payload,
-            root + 0x70,
-            asset_reference(side, "PlayerTemplate", path)?.instance_id,
-        );
-        reference_types.push(fast_hash(b"PlayerTemplate"));
-    }
-    match node.attribute("EditorSorting").unwrap_or("NONE") {
-        "NONE" => {}
-        "AUDIO" => word(&mut payload, root + 0x7c, 8),
-        value => return Err(invalid(path, format!("unsupported EditorSorting {value}"))),
-    }
-    let mut relocations = Vec::new();
-    if let Some(name) = node.attribute("EditorName") {
-        let encoded = windows_1252(name)
-            .ok_or_else(|| invalid(path, "EditorName contains characters outside Windows-1252"))?;
-        let size = (encoded.len() + 1).next_multiple_of(4);
-        word(&mut payload, root + 0x74, encoded.len() as u32);
-        let start = payload.len() as u32;
-        word(&mut payload, root + 0x78, start);
-        relocations.push((root + 0x78) as u32);
-        payload.extend_from_slice(&encoded);
-        payload.resize(payload.len() + size - encoded.len(), 0);
-    }
-    let body_start = payload.len();
-    let body_shift = body_start - (TOKENS.len() + ROOT_SIZE);
-    if body_shift != 0 {
-        for entry in payload[..TOKENS.len() - 4].as_chunks_mut::<12>().0 {
-            let target = u32::from_le_bytes(entry[8..12].try_into().unwrap());
-            if target >= (TOKENS.len() + ROOT_SIZE) as u32 {
-                entry[8..12].copy_from_slice(&(target + body_shift as u32).to_le_bytes());
-            }
-        }
-    }
-    word(&mut payload, root + 0x1dc, body_start as u32);
-    relocations.push((root + 0x1dc) as u32);
-    payload.resize(body_start + BODY_SIZE, 0);
+    let mut body = [0; BODY_SIZE];
     for &(offset, value) in BODY_DEFAULTS {
-        word(&mut payload, body_start + offset, value);
+        word(&mut body, offset, value);
     }
-    word(&mut payload, body_start + 4, hash_name(module_id));
-    word(&mut payload, body_start + 8, health.to_bits());
-    relocations.push(u32::MAX);
-    Ok(Marshaled {
-        payload,
-        relocations,
-        reference_types,
-        tokenized: true,
-        ..Marshaled::default()
-    })
+    word(&mut body, 4, hash_name(module_id));
+    word(&mut body, 8, health.to_bits());
+    Ok(body)
 }
