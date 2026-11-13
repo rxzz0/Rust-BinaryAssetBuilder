@@ -17,6 +17,45 @@ pub(super) fn inherited(kind: u32, table: Table) -> Table {
     Table::record(vec![base(kind, table)])
 }
 
+pub(super) fn module_base(
+    node: Node<'_, '_>,
+    kind: u32,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    update: bool,
+) -> io::Result<Entry> {
+    data.word(start, kind);
+    data.word(start + 4, hash_name(required(node, "id", data.path)?));
+    let module = Table::record(vec![
+        Entry::new(0x19b0_42a0, 0x23e6_50b8, Target::Data(start)),
+        Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
+    ]);
+    let behavior = inherited(0xd75d_93a2, module);
+    Ok(if update {
+        base(
+            0xf100_2505,
+            inherited(0x2900_211d, inherited(0xa50d_729a, behavior)),
+        )
+    } else {
+        base(0xa50d_729a, behavior)
+    })
+}
+
+pub(super) fn weapon_slot(value: &str, path: &std::path::Path) -> io::Result<u32> {
+    super::super::global_ui::enum_value(
+        value,
+        &[
+            "PRIMARY_WEAPON",
+            "SECONDARY_WEAPON",
+            "TERTIARY_WEAPON",
+            "QUATERNARY_WEAPON",
+            "QUINARY_WEAPON",
+            "NO_WEAPON",
+        ],
+        path,
+    )
+}
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,
@@ -63,6 +102,10 @@ pub(super) fn encode(
     }
     if node.has_tag_name((SAGE_NS, "InfiltratorContain")) {
         return super::infiltrator::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "WeaponSetUpdate")) {
+        return super::weapon_set::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
     let (kind, size, extra) = match node.tag_name().name() {

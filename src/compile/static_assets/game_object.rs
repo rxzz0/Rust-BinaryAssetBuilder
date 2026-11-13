@@ -458,3 +458,4 @@ fn index_reference(value: &mut String, ordinal: &mut u32) {
         *ordinal += 1;
     }
 }
+mod weapon_set;

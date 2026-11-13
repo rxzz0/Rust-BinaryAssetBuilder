@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+ <GameObject id="HardpointProbe"><Behaviors>
+  <WeaponSetUpdate id="ModuleTag_Weapons">
+   <WeaponSlotHardpoint ID="7" AllowInterleavedFiring="true" InterleavedStyle="INTERLEAVE_FIRST_AVAILABLE" WeaponChoiceCriteria="PREFER_LONGEST_RANGE" AutoChooseWeapon="false">
+    <Weapon Ordering="SECONDARY_WEAPON" Template="Second" Upgrade="ProbeUpgrade" ObjectStatus="CAN_ATTACK" ForbiddenObjectStatus="SOLD" IsPlayerUpgradePermanent="true" ConquerMetricsAlwaysCount="true" />
+    <Weapon Ordering="PRIMARY_WEAPON" Template="First" />
+   </WeaponSlotHardpoint>
+   <WeaponSlotHardpoint />
+   <WeaponSlotContained ID="3"><Weapon /></WeaponSlotContained>
+  </WeaponSetUpdate>
+ </Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+</AssetDeclaration>
