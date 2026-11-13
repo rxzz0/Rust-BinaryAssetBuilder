@@ -35,6 +35,21 @@ pub(super) fn encode(
     Ok(Table::array(count, items))
 }
 
+pub(super) fn encode_particles(
+    nodes: Vec<Node<'_, '_>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Table> {
+    AnimationEncoder {
+        data,
+        references,
+        reference_types,
+    }
+    .particles(nodes, count)
+}
+
 struct AnimationEncoder<'a, 'path> {
     data: &'a mut BinaryData<'path>,
     references: &'a mut Vec<AssetReference>,

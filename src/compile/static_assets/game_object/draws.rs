@@ -236,11 +236,14 @@ fn model_state(
     }
     let mut models = Vec::new();
     let mut material = None;
+    let mut particles = Vec::new();
     for child in significant_children(node) {
         if child.has_tag_name((SAGE_NS, "Model")) {
             models.push(child);
         } else if child.has_tag_name((SAGE_NS, "Material")) && material.is_none() {
             material = Some(child);
+        } else if child.has_tag_name((SAGE_NS, "ParticleSysBone")) {
+            particles.push(child);
         } else {
             return Err(invalid(
                 data.path,
@@ -285,6 +288,13 @@ fn model_state(
         )?),
         None => Target::Null,
     };
+    let particle_table = super::animation::encode_particles(
+        particles,
+        start + 0x9c,
+        data,
+        references,
+        reference_types,
+    )?;
     let mut entries: Vec<_> = fields(
         start,
         &[
@@ -312,7 +322,11 @@ fn model_state(
         array("WeaponRecoilBone", 0xbd39_d1a1, start + 0x84),
         array("WeaponMuzzleFlash", 0xbd39_d1a1, start + 0x8c),
         array("WeaponLaunchBone", 0xbd39_d1a1, start + 0x94),
-        array("ParticleSysBone", 0x98c5_3fe6, start + 0x9c),
+        Entry::named(
+            "ParticleSysBone",
+            0x98c5_3fe6,
+            Target::Table(particle_table),
+        ),
         array("FXEvent", 0x7599_1ad3, start + 0xa4),
         Entry::named("ShadowInfo", 0x82fe_7e88, Target::Null),
         array("Turret", 0xf309_5903, start + 0xb0),
@@ -381,6 +395,45 @@ pub(super) fn write_model_conditions(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn model_condition_particles_match_ea() {
+        use crate::compile::static_assets::compile_asset;
+        use crate::manifest::Manifest;
+        use std::path::Path;
+
+        let document = roxmltree::Document::parse(include_str!(
+            "../../../../tests/fixtures/game-object-model-particles.xml"
+        ))
+        .unwrap();
+        let node = document.root_element().first_element_child().unwrap();
+        let actual = compile_asset(node, Path::new("game-object-model-particles.xml"), "").unwrap();
+        let bin = include_bytes!("../../../../tests/fixtures/game-object-model-particles.bin");
+        let relo = include_bytes!("../../../../tests/fixtures/game-object-model-particles.relo");
+        let expected = Manifest::parse(include_bytes!(
+            "../../../../tests/fixtures/game-object-model-particles.manifest"
+        ))
+        .unwrap();
+        assert_eq!(actual.payload.len(), bin.len() - 4);
+        assert_eq!(
+            actual
+                .payload
+                .iter()
+                .zip(&bin[4..])
+                .position(|(a, b)| a != b),
+            None
+        );
+        assert_eq!(actual.relocations, relo[4..]);
+        assert!(actual.imports.is_empty());
+        assert_eq!(actual.instance_hash, expected.assets[0].instance_hash);
+        assert!(
+            actual
+                .references
+                .iter()
+                .map(|reference| reference.id)
+                .eq(expected.assets[0].references.iter())
+        );
+    }
+
     use crate::compile::static_assets::compile_asset;
     use crate::manifest::Manifest;
     use std::path::Path;

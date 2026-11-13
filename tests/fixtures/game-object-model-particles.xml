@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ModelParticles">
+    <Draws><ScriptedModelDraw id="ModuleTag_Draw">
+      <ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name="ABAirfield" /></ModelConditionState>
+      <ModelConditionState ParseCondStateType="PARSE_NORMAL" ConditionsYes="OVER_WATER">
+        <Model Name="ABAirfield" />
+        <ParticleSysBone BoneName="None" FXParticleSystemTemplate="ABAirBaseWakeSplash" FollowBone="true" />
+        <ParticleSysBone BoneName="FX_BONE01" FXParticleSystemTemplate="GenericDStateSmoke" OnlyIfOnWater="true" />
+      </ModelConditionState>
+      <AnimationState ParseCondStateType="PARSE_DEFAULT" />
+    </ScriptedModelDraw></Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>
