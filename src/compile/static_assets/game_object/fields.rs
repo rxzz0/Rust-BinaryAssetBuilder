@@ -204,10 +204,14 @@ pub(super) fn encode(
         data.word(0x130, placement);
     }
     if let Some(value) = node.attribute("UnitCategory") {
-        if value != "STRUCTURE" {
-            return Err(invalid(data.path, format!("invalid UnitCategory {value}")));
-        }
-        data.word(0x158, 0);
+        let category = enum_value(
+            value,
+            &["NONE", "STRUCTURE", "INFANTRY", "VEHICLE", "AIRCRAFT"],
+            "UnitCategory",
+            data.path,
+        )?
+        .wrapping_sub(1);
+        data.word(0x158, category);
     }
     if let Some(value) = node.attribute("WeaponCategory") {
         let category = if value == "NONE" {

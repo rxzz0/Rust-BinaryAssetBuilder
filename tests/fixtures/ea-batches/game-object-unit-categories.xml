@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+<GameObject id="CategoryNONE" UnitCategory="NONE"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject>
+<GameObject id="CategorySTRUCTURE" UnitCategory="STRUCTURE"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject>
+<GameObject id="CategoryINFANTRY" UnitCategory="INFANTRY"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject>
+<GameObject id="CategoryVEHICLE" UnitCategory="VEHICLE"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject>
+<GameObject id="CategoryAIRCRAFT" UnitCategory="AIRCRAFT"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject>
+</AssetDeclaration>

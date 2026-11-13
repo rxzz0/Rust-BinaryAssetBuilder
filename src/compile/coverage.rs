@@ -464,6 +464,11 @@ mod tests {
         assert_ea_fixture("game-object-empty-references", 1);
     }
 
+    #[test]
+    fn unit_categories_match_ea_batch() {
+        assert_ea_fixture("game-object-unit-categories", 5);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
