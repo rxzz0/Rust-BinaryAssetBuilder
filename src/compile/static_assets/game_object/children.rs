@@ -257,7 +257,11 @@ fn dependency(
 }
 
 fn skirmish(node: Node<'_, '_>, data: &mut BinaryData<'_>) -> io::Result<Target> {
-    validate_attributes(node, &["BaseBuildingLocation"], data.path)?;
+    validate_attributes(
+        node,
+        &["BaseBuildingLocation", "NearResourceNodeType"],
+        data.path,
+    )?;
     let location = super::super::global_ui::enum_value(
         node.attribute("BaseBuildingLocation").unwrap_or("FRONT"),
         &[
@@ -269,6 +273,11 @@ fn skirmish(node: Node<'_, '_>, data: &mut BinaryData<'_>) -> io::Result<Target>
             "DEFENSE",
             "NEAR_RESOURCE_NODE",
         ],
+        data.path,
+    )?;
+    let resource_type = super::super::global_ui::enum_value(
+        node.attribute("NearResourceNodeType").unwrap_or("ORE"),
+        &["TIBERIUM", "ORE", "SIGMA", "ENERGY"],
         data.path,
     )?;
     let mut children = super::super::significant_children(node).peekable();
@@ -294,7 +303,7 @@ fn skirmish(node: Node<'_, '_>, data: &mut BinaryData<'_>) -> io::Result<Target>
         (0x18, 0xe),
         (0x1c, 3),
         (0x28, 0x3f80_0000),
-        (0x2c, 1),
+        (0x2c, resource_type),
         (0x30, 0x4396_0000),
         (0x50, 1),
     ] {
