@@ -161,6 +161,10 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "AttachUpdate")) {
         return super::attach::encode(node, pointer, data, references, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "TeleportStoredObjectsUpdate")) {
+        return super::teleport_stored::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "SlowDeath")) {
         return super::slow_death::encode(node, pointer, data, references, reference_types)
             .map(Some);

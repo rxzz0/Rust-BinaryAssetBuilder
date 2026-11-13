@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="TeleportStoredUpdateProbe"><Behaviors>
+<TeleportStoredObjectsUpdate id="ModuleTag_Default"/>
+<TeleportStoredObjectsUpdate id="ModuleTag_Teleport" TriggerFX="ProbeTrigger" TargetFX="ProbeTarget" FadeInTime="2s" InitialDelayTime="1s" DelayTime="250ms" ScaleFadeInTimeByDistance="0.25" GetObjectsCurrentlyAtStorePosition="true" Telefrag="INSTANT_DEATH_TELEPORTER_ONLY" SpecialPowerTemplate="ProbePower" Shader="ProbeShader" DisabledTypesToProcess="USER_PARALYZED EMP HELD"><InstaKillObjectFilter Rule="ANY" Include="INFANTRY"><ExcludeThing>ProbeScout</ExcludeThing></InstaKillObjectFilter><CollidesWithOnTeleport Rule="ANY" Include="STRUCTURE"/></TeleportStoredObjectsUpdate>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>

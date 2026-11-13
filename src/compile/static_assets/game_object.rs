@@ -35,6 +35,7 @@ mod spawn;
 mod structures;
 mod subobjects;
 mod tech_upgrade;
+mod teleport_stored;
 
 pub(super) use encoder::compile;
 

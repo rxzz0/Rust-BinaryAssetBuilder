@@ -45,6 +45,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "StructurePlacementBehavior",
             "TeleportStoredObjectsSpecialPower",
             "StoreObjectsSpecialPower",
+            "TeleportStoredObjectsUpdate",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -550,6 +551,11 @@ mod tests {
     #[test]
     fn stored_objects_powers_match_ea_batch() {
         assert_ea_fixture("stored-objects-powers", 1);
+    }
+
+    #[test]
+    fn teleport_stored_update_matches_ea_batch() {
+        assert_ea_fixture("teleport-stored-update", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {
