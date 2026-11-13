@@ -199,7 +199,7 @@ pub(in crate::compile::static_assets) fn compile(
                 Some(result)
             } else if matches!(
                 module.tag_name().name(),
-                "TechUpgrade" | "TechUpgradeReceiver"
+                "TechUpgrade" | "TechUpgradeReceiver" | "CommandSetUpgrade"
             ) {
                 let start = data.payload.len() as u32;
                 let result =

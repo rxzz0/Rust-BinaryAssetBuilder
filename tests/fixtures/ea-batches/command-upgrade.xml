@@ -1,0 +1,5 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="CommandUpgradeProbe"><Behaviors>
+<CommandSetUpgrade id="ModuleTag_Default" />
+<CommandSetUpgrade id="ModuleTag_Custom" CommandSet="AlliedConstructionYardCommandSetLevel2" Permanent="true">
+<CustomAnimAndDuration AnimState="SOLD" Frames="10"/><TriggeredBy>Upgrade_AlliedTech2</TriggeredBy><ConflictsWith>Upgrade_AlliedTech3</ConflictsWith>
+</CommandSetUpgrade></Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>

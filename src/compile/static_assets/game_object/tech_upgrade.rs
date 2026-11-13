@@ -1,7 +1,9 @@
 use super::super::binary::BinaryData;
 use super::super::global_ui::enum_value;
 use super::super::tokenized::{Entry, Table, Target};
-use super::super::{finite_number, hash_name, significant_children, validate_attributes};
+use super::super::{
+    asset_reference, finite_number, hash_name, significant_children, validate_attributes,
+};
 use super::behaviors_basic::{base, inherited};
 use super::draws::{boolean, fields, model_condition_index};
 use super::parking::encode_inline_filter;
@@ -24,14 +26,35 @@ pub(super) fn encode(
 ) -> io::Result<(u32, Table)> {
     let path = data.path;
     let receiver = node.has_tag_name((SAGE_NS, "TechUpgradeReceiver"));
-    let kind = if receiver { KIND } else { 0xff7b_cdb3 };
+    let command = node.has_tag_name((SAGE_NS, "CommandSetUpgrade"));
+    let kind = if command {
+        0x7eb7_f219
+    } else if receiver {
+        KIND
+    } else {
+        0xff7b_cdb3
+    };
     let radar = ["RadarDrawModule", "RadarRotateSpeed", "RadarRotateOffset"];
     let allowed: Vec<_> = ["id", "Radius", "RadiusY", "DistanceType", "FXLineBoneName"]
         .into_iter()
+        .filter(|&name| !command || name == "id")
+        .chain(command.then_some("CommandSet"))
         .chain(radar.into_iter().filter(|_| receiver))
         .chain(UPGRADE.iter().map(|&(name, _, _)| name))
         .collect();
     validate_attributes(node, &allowed, path)?;
+    let command_id = if let Some(value) = node
+        .attribute("CommandSet")
+        .filter(|value| !value.trim().is_empty())
+    {
+        let name = value.split_once('\\').map_or(value, |(name, _)| name);
+        let id = asset_reference(name, "LogicCommandSet", path)?;
+        reference_types.push(id.type_id);
+        id.instance_id
+    } else {
+        0
+    };
+
     let mut children = significant_children(node).peekable();
     let anim = children.next_if(|child| child.has_tag_name((SAGE_NS, "CustomAnimAndDuration")));
     let mut ids = [Vec::new(), Vec::new()];
@@ -45,59 +68,74 @@ pub(super) fn encode(
             )?);
         }
     }
-    let filter = children.next_if(|child| child.has_tag_name((SAGE_NS, "ObjectFilter")));
+    let filter =
+        children.next_if(|child| !command && child.has_tag_name((SAGE_NS, "ObjectFilter")));
     if children.next().is_some() {
         return Err(invalid(path, "unexpected tech upgrade child"));
     }
 
-    let start = data.allocate(pointer, if receiver { 0xb4 } else { 0xa8 })?;
+    let start = data.allocate(
+        pointer,
+        if command {
+            0x28
+        } else if receiver {
+            0xb4
+        } else {
+            0xa8
+        },
+    )?;
     data.word(start, kind);
     data.word(start + 4, hash_name(required(node, "id", path)?));
     for &(name, _, offset) in UPGRADE {
         data.payload[start + offset] = boolean(node, name, name == "WaypointModeTerminal", path)?;
     }
-    let radius = finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?;
-    data.word(start + 0x24, radius.to_bits());
-    let radius_y = if let Some(value) = node.attribute("RadiusY") {
-        let value = finite_number(value, "RadiusY", path)?;
-        let offset = data.allocate(start + 0x28, 4)?;
-        data.word(offset, value.to_bits());
-        Target::Data(offset)
+    let radius_y_and_filter = if command {
+        None
     } else {
-        Target::Null
-    };
-    let distance = enum_value(
-        node.attribute("DistanceType").unwrap_or("CIRCULAR"),
-        &["CIRCULAR", "RECTANGULAR"],
-        path,
-    )?;
-    data.word(start + 0x2c, distance);
-    if let Some(value) = node.attribute("FXLineBoneName") {
-        data.string(start + 0x30, value)?;
-    }
-    if receiver {
-        if let Some(value) = node.attribute("RadarDrawModule") {
-            data.word(start + 0x38, hash_name(value));
+        let radius = finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?;
+        data.word(start + 0x24, radius.to_bits());
+        let radius_y = if let Some(value) = node.attribute("RadiusY") {
+            let value = finite_number(value, "RadiusY", path)?;
+            let offset = data.allocate(start + 0x28, 4)?;
+            data.word(offset, value.to_bits());
+            Target::Data(offset)
+        } else {
+            Target::Null
+        };
+        let distance = enum_value(
+            node.attribute("DistanceType").unwrap_or("CIRCULAR"),
+            &["CIRCULAR", "RECTANGULAR"],
+            path,
+        )?;
+        data.word(start + 0x2c, distance);
+        if let Some(value) = node.attribute("FXLineBoneName") {
+            data.string(start + 0x30, value)?;
         }
-        for (name, default, offset) in [
-            ("RadarRotateSpeed", "0.1r", 0x3c),
-            ("RadarRotateOffset", "0r", 0x40),
-        ] {
-            let value = node.attribute(name).unwrap_or(default).trim();
-            let radians = if let Some(number) = value.strip_suffix('d') {
-                finite_number(number, name, path)?.to_radians()
-            } else if let Some(number) = value.strip_suffix('r') {
-                finite_number(number, name, path)?
-            } else {
-                return Err(invalid(path, format!("invalid {name}")));
-            };
-            data.word(start + offset, radians.to_bits());
+        if receiver {
+            if let Some(value) = node.attribute("RadarDrawModule") {
+                data.word(start + 0x38, hash_name(value));
+            }
+            for (name, default, offset) in [
+                ("RadarRotateSpeed", "0.1r", 0x3c),
+                ("RadarRotateOffset", "0r", 0x40),
+            ] {
+                let value = node.attribute(name).unwrap_or(default).trim();
+                let radians = if let Some(number) = value.strip_suffix('d') {
+                    finite_number(number, name, path)?.to_radians()
+                } else if let Some(number) = value.strip_suffix('r') {
+                    finite_number(number, name, path)?
+                } else {
+                    return Err(invalid(path, format!("invalid {name}")));
+                };
+                data.word(start + offset, radians.to_bits());
+            }
         }
-    }
-    let filter_start = start + if receiver { 0x44 } else { 0x38 };
-    let filter = match filter {
-        Some(node) => encode_inline_filter(node, filter_start, data, reference_types)?,
-        None => filter_table(filter_start, [Vec::new(), Vec::new()]),
+        let filter_start = start + if receiver { 0x44 } else { 0x38 };
+        let filter = match filter {
+            Some(node) => encode_inline_filter(node, filter_start, data, reference_types)?,
+            None => filter_table(filter_start, [Vec::new(), Vec::new()]),
+        };
+        Some((radius_y, filter))
     };
     let anim = match anim {
         Some(node) => Target::Table(encode_anim(node, start + 8, data)?),
@@ -118,11 +156,20 @@ pub(super) fn encode(
         Entry::named("TriggeredBy", 0x26fa_cfc7, Target::Table(triggers)),
         Entry::named("ConflictsWith", 0x26fa_cfc7, Target::Table(conflicts)),
     ]);
-    let mut entries = vec![
-        base(0xae60_ae98, Table::record(upgrade)),
+    let mut entries = vec![base(0xae60_ae98, Table::record(upgrade))];
+    let Some((radius_y, filter)) = radius_y_and_filter else {
+        data.word(start + 0x24, command_id);
+        entries.push(Entry::named(
+            "CommandSet",
+            0x85d4_4b5d,
+            Target::Data(start + 0x24),
+        ));
+        return Ok((kind, Table::record(entries)));
+    };
+    entries.extend([
         Entry::named("Radius", REAL, Target::Data(start + 0x24)),
         Entry::named("RadiusY", REAL, radius_y),
-    ];
+    ]);
     entries.extend(fields(
         start,
         &[
