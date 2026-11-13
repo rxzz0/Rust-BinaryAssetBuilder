@@ -154,6 +154,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut material_float_names = Vec::new();
     let mut create_object_modules = Vec::new();
     let mut spawn_modules = Vec::new();
+    let mut tech_modules = Vec::new();
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
     let mut child_targets =
         children::encode(node, &mut data, &mut references, &mut reference_types)?;
@@ -193,6 +194,12 @@ pub(in crate::compile::static_assets) fn compile(
                 let result =
                     super::spawn::encode(module, pointer, &mut data, &mut reference_types)?;
                 spawn_modules.push(start);
+                Some(result)
+            } else if module.has_tag_name((SAGE_NS, "TechUpgradeReceiver")) {
+                let start = data.payload.len() as u32;
+                let result =
+                    super::tech_upgrade::encode(module, pointer, &mut data, &mut reference_types)?;
+                tech_modules.push((start, data.payload.len() as u32));
                 Some(result)
             } else {
                 behaviors_basic::encode(
@@ -299,6 +306,17 @@ pub(in crate::compile::static_assets) fn compile(
             match pointer - start {
                 0x10 => return (start + 0x5c, 0),
                 0x18 => return (start + 0x5c, 1),
+                _ => {}
+            }
+        }
+        // The receiver's filter relocations precede pointers inherited from UpgradeModuleData.
+        let index = tech_modules.partition_point(|&(start, _)| start <= pointer);
+        if index > 0 {
+            let (start, end) = tech_modules[index - 1];
+            match pointer - start {
+                8 => return (end - 1, 0),
+                0x10 => return (end - 1, 1),
+                0x18 => return (end - 1, 2),
                 _ => {}
             }
         }

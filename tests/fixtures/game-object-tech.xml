@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+ <GameObject id="TechUpgradeProbe">
+  <Behaviors>
+   <TechUpgradeReceiver id="ModuleTag_Default" />
+   <TechUpgradeReceiver id="ModuleTag_Custom" Radius="600" RadiusY="250" DistanceType="RECTANGULAR" FXLineBoneName="fx_bone_upgrade_dish" RadarDrawModule="ModuleTag_Draw_UPGRADE" RadarRotateSpeed="0.1r" RadarRotateOffset="90d" RequiresAllTriggers="true" WaypointModeTerminal="false">
+    <CustomAnimAndDuration AnimState="SOLD" Frames="12" Trigger="3" />
+    <TriggeredBy>Upgrade_AlliedTech2</TriggeredBy>
+    <ConflictsWith>Upgrade_AlliedTech3</ConflictsWith>
+    <ObjectFilter Rule="ANY" Relationship="ALLIES" StatusBitFlags="CAN_ATTACK"><IncludeThing>AlliedConstructionYard</IncludeThing><IncludeThing>AlliedOutpost</IncludeThing></ObjectFilter>
+   </TechUpgradeReceiver>
+  </Behaviors>
+  <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+ </GameObject>
+</AssetDeclaration>

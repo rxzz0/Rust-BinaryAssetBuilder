@@ -15,7 +15,7 @@ const INT: u32 = 0x23e6_50b8;
 const TIME: u32 = 0x9986_69e8;
 const BOOL: u32 = 0x77e3_f4f7;
 const DAMAGE: u32 = 0x07fa_aea4;
-const UPGRADE: &[(&str, u32, usize)] = &[
+pub(super) const UPGRADE: &[(&str, u32, usize)] = &[
     ("RequiresAllTriggers", BOOL, 0x1c),
     ("RequiresAllConflictingTriggers", BOOL, 0x1d),
     ("Permanent", BOOL, 0x1e),
@@ -150,7 +150,7 @@ pub(super) fn encode(
     Ok((KIND, Table::record(entries)))
 }
 
-fn weak_reference(
+pub(super) fn weak_reference(
     node: Node<'_, '_>,
     kind: &str,
     data: &BinaryData<'_>,
@@ -176,7 +176,7 @@ fn weak_reference(
     Ok(id.instance_id)
 }
 
-fn id_list(data: &mut BinaryData<'_>, count: usize, ids: Vec<u32>) -> io::Result<Table> {
+pub(super) fn id_list(data: &mut BinaryData<'_>, count: usize, ids: Vec<u32>) -> io::Result<Table> {
     let start = data.list(count, ids.len(), 4)?;
     let mut entries = Vec::with_capacity(ids.len());
     for (index, id) in ids.into_iter().enumerate() {

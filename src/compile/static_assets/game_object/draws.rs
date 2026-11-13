@@ -380,6 +380,14 @@ pub(super) fn write_model_conditions(
     start: usize,
     data: &mut BinaryData<'_>,
 ) -> io::Result<()> {
+    for flag in value.split_ascii_whitespace() {
+        let index = model_condition_index(flag, data.path)?;
+        data.payload[start + index / 8] |= 1 << (index % 8);
+    }
+    Ok(())
+}
+
+pub(super) fn model_condition_index(flag: &str, path: &std::path::Path) -> io::Result<usize> {
     static FLAGS: OnceLock<Vec<String>> = OnceLock::new();
     let flags = FLAGS.get_or_init(|| {
         let document = roxmltree::Document::parse(include_str!(
@@ -395,15 +403,11 @@ pub(super) fn write_model_conditions(
             .filter(|name| name != "INVALID")
             .collect()
     });
-    for flag in value.split_ascii_whitespace() {
-        let index = flags
-            .iter()
-            .take(0x3c * 8)
-            .position(|name| name == flag)
-            .ok_or_else(|| invalid(data.path, format!("invalid model condition {flag}")))?;
-        data.payload[start + index / 8] |= 1 << (index % 8);
-    }
-    Ok(())
+    flags
+        .iter()
+        .take(0x3c * 8)
+        .position(|name| name == flag)
+        .ok_or_else(|| invalid(path, format!("invalid model condition {flag}")))
 }
 
 #[cfg(test)]

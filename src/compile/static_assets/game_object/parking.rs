@@ -123,6 +123,16 @@ pub(super) fn encode_filter(
     data: &mut BinaryData<'_>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Table> {
+    let start = data.allocate(pointer, 0x70)?;
+    encode_inline_filter(node, start, data, reference_types)
+}
+
+pub(super) fn encode_inline_filter(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Table> {
     let path = data.path;
     validate_attributes(
         node,
@@ -138,7 +148,6 @@ pub(super) fn encode_filter(
         ],
         path,
     )?;
-    let start = data.allocate(pointer, 0x70)?;
     if let Some(id) = node.attribute("id") {
         data.word(start, hash_name(id));
     }
