@@ -2,11 +2,11 @@ use super::super::binary::BinaryData;
 use super::super::global_ui::enum_value;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, asset_reference, finite_number, hash_name, significant_children,
+    AssetReference, asset_reference, finite_number, hash_name, sage_time, significant_children,
     validate_attributes,
 };
 use super::behaviors_basic::{base, inherited};
-use super::draws::{boolean, fields, model_condition_index};
+use super::draws::{boolean, fields, model_condition_index, write_model_conditions};
 use super::parking::encode_inline_filter;
 use super::recall::filter_table;
 use super::spawn::{UPGRADE, id_list, weak_reference};
@@ -19,6 +19,13 @@ const REAL: u32 = 0x6458_64f3;
 const UINT: u32 = 0x7631_77a4;
 const ANGLE: u32 = 0x4e16_ea4d;
 
+const MODEL_FIELDS: &[(&str, u32, usize)] = &[
+    ("AddConditionFlags", 0x67db_bfc9, 0x24),
+    ("RemoveConditionFlags", 0x67db_bfc9, 0x60),
+    ("AddTempConditionFlag", 0x1572_3e0b, 0x9c),
+    ("TempConditionTime", 0x9986_69e8, 0xa0),
+];
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,
@@ -30,8 +37,11 @@ pub(super) fn encode(
     let receiver = node.has_tag_name((SAGE_NS, "TechUpgradeReceiver"));
     let command = node.has_tag_name((SAGE_NS, "CommandSetUpgrade"));
     let modifier = node.has_tag_name((SAGE_NS, "AttributeModifierUpgrade"));
-    let basic = command || modifier;
-    let kind = if modifier {
+    let model = node.has_tag_name((SAGE_NS, "ModelConditionUpgrade"));
+    let basic = command || modifier || model;
+    let kind = if model {
+        0x4ddd_5c7f
+    } else if modifier {
         0x74a2_4c45
     } else if command {
         0x7eb7_f219
@@ -46,6 +56,12 @@ pub(super) fn encode(
         .filter(|&name| !basic || name == "id")
         .chain(command.then_some("CommandSet"))
         .chain(modifier.then_some("AttributeModifier"))
+        .chain(
+            MODEL_FIELDS
+                .iter()
+                .filter(|_| model)
+                .map(|&(name, _, _)| name),
+        )
         .chain(radar.into_iter().filter(|_| receiver))
         .chain(UPGRADE.iter().map(|&(name, _, _)| name))
         .collect();
@@ -95,7 +111,9 @@ pub(super) fn encode(
 
     let start = data.allocate(
         pointer,
-        if basic {
+        if model {
+            0xa4
+        } else if basic {
             0x28
         } else if receiver {
             0xb4
@@ -177,6 +195,27 @@ pub(super) fn encode(
     ]);
     let mut entries = vec![base(0xae60_ae98, Table::record(upgrade))];
     let Some((radius_y, filter)) = radius_y_and_filter else {
+        if model {
+            for &(name, _, offset) in &MODEL_FIELDS[..2] {
+                write_model_conditions(node.attribute(name).unwrap_or(""), start + offset, data)?;
+            }
+            if let Some(flag) = node.attribute("AddTempConditionFlag") {
+                let value = if flag == "INVALID" {
+                    u32::MAX
+                } else {
+                    model_condition_index(flag, path)? as u32
+                };
+                data.word(start + 0x9c, value);
+            }
+            let time = sage_time(
+                node.attribute("TempConditionTime").unwrap_or("0s"),
+                "TempConditionTime",
+                path,
+            )?;
+            data.word(start + 0xa0, time.to_bits());
+            entries.extend(fields(start, MODEL_FIELDS));
+            return Ok((kind, Table::record(entries)));
+        }
         let (name, _, token) = extra_field.expect("basic upgrade has one field");
         data.word(start + 0x24, extra_value);
         entries.push(Entry::named(name, token, Target::Data(start + 0x24)));

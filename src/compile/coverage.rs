@@ -36,6 +36,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "SubStructureBehavior",
             "AssignSlavesTargetObjectSpecialPower",
             "AttributeModifierUpgrade",
+            "ModelConditionUpgrade",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -426,6 +427,11 @@ mod tests {
     #[test]
     fn energy_bonus_matches_ea_batch() {
         assert_ea_fixture("game-object-energy-bonus", 1);
+    }
+
+    #[test]
+    fn model_condition_upgrade_matches_ea_batch() {
+        assert_ea_fixture("model-condition-upgrade", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

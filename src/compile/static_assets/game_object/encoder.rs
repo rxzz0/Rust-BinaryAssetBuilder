@@ -203,6 +203,7 @@ pub(in crate::compile::static_assets) fn compile(
                     | "TechUpgradeReceiver"
                     | "CommandSetUpgrade"
                     | "AttributeModifierUpgrade"
+                    | "ModelConditionUpgrade"
             ) {
                 let start = data.payload.len() as u32;
                 let result = super::tech_upgrade::encode(

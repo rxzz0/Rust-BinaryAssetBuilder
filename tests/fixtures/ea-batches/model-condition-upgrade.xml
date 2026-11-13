@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="ModelConditionUpgradeProbe"><Behaviors>
+<ModelConditionUpgrade id="ModuleTag_Default"/>
+<ModelConditionUpgrade id="ModuleTag_Glow" AddConditionFlags="USER_10" RemoveConditionFlags="USER_9" AddTempConditionFlag="DYING" TempConditionTime="1.5s"><TriggeredBy>Upgrade_AlliedPowerPlantTurbine</TriggeredBy></ModelConditionUpgrade>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>
