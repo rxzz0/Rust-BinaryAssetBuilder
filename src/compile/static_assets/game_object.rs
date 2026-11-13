@@ -9,6 +9,7 @@ mod encoder;
 mod fields;
 mod material;
 mod physics;
+mod recall;
 mod schema;
 mod secondary_damage;
 mod shadow;

@@ -31,6 +31,9 @@ pub(super) fn encode(
         return super::secondary_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "RecallUnitsSpecialPower")) {
+        return super::recall::encode(node, pointer, data, references, reference_types).map(Some);
+    }
     let (kind, size, extra) = match node.tag_name().name() {
         "ObjectSMCHelper" => (0x7f72_f242, 8, None),
         "ObjectDefectionHelper" => (0x18a4_208f, 8, None),

@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="RecallProbe">
+    <Behaviors>
+      <RecallUnitsSpecialPower id="ModuleTag_RecallUnitsSpecialPower" SpecialPowerTemplate="SpecialPower_RecallAllAircraft" />
+      <RecallUnitsSpecialPower id="ModuleTag_RecallCustom" SpecialPowerTemplate="SpecialPower_RecallAllAircraft" MaxAircraftToRecall="7" PlayReturnVoiceFromRecalledUnit="false" StartsPaused="true" AvailableAtStart="false" CanAffectObjectFilter="GenericSpecialPowerObjectFilter" />
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>
