@@ -1,0 +1,31 @@
+# Dependencies, lockfiles, and generated outputs
+.git/
+.agents/
+.codex/
+.omx/
+.scratch/
+graphify-out/
+target/
+node_modules/
+vendor/
+packages/
+bin/
+obj/
+build/
+dist/
+*.lock
+*-lock.json
+pnpm-lock.yaml
+*.dll
+*.exe
+*.pdb
+*.manifest
+*.asset
+*.bin
+*.relo
+*.imp
+
+# Reference data and binary parity fixtures are outside the code graph
+/CnC3Xml/
+/schemas/
+/tests/fixtures/
