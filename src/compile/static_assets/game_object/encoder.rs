@@ -152,6 +152,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut reference_types = Vec::new();
     let mut references = Vec::new();
     let mut material_float_names = Vec::new();
+    let mut create_object_modules = Vec::new();
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
     let mut child_targets =
         children::encode(node, &mut data, &mut references, &mut reference_types)?;
@@ -174,13 +175,27 @@ pub(in crate::compile::static_assets) fn compile(
             if module.tag_name().namespace() != Some(SAGE_NS) {
                 return Err(invalid(path, "unexpected behavior namespace"));
             }
-            let encoded = behaviors_basic::encode(
-                module,
-                pointers + index * 4,
-                &mut data,
-                &mut references,
-                &mut reference_types,
-            )?;
+            let pointer = pointers + index * 4;
+            let encoded = if module.has_tag_name((SAGE_NS, "CreateObjectDie")) {
+                let start = data.payload.len() as u32;
+                let result = super::create_object_die::encode(
+                    module,
+                    pointer,
+                    &mut data,
+                    &mut references,
+                    &mut reference_types,
+                )?;
+                create_object_modules.push(start);
+                Some(result)
+            } else {
+                behaviors_basic::encode(
+                    module,
+                    pointer,
+                    &mut data,
+                    &mut references,
+                    &mut reference_types,
+                )?
+            };
             let (kind, fields) = match encoded {
                 Some(encoded) => encoded,
                 None if module.has_tag_name((SAGE_NS, "Physics")) => {
@@ -259,12 +274,26 @@ pub(in crate::compile::static_assets) fn compile(
             ));
         }
     }
-    data.relocations.sort_unstable();
+    let relocation_key = |pointer| {
+        // EA emits the inherited status pointers after the two upgrade lists.
+        let index = create_object_modules.partition_point(|&start| start <= pointer);
+        if index > 0 {
+            let start = create_object_modules[index - 1];
+            match pointer - start {
+                0x10 => return (start + 0x48, 0),
+                0x14 => return (start + 0x48, 1),
+                _ => {}
+            }
+        }
+        (pointer, 2)
+    };
+    data.relocations
+        .sort_unstable_by_key(|&pointer| relocation_key(pointer));
     let float_relocations: Vec<_> = material_float_names
         .into_iter()
         .map(|name| {
             data.relocations
-                .binary_search(&name)
+                .binary_search_by_key(&relocation_key(name), |&pointer| relocation_key(pointer))
                 .expect("float name relocation")
         })
         .collect();

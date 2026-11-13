@@ -1,0 +1,15 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="CreateObjectDieProbe">
+    <Behaviors>
+      <CreateObjectDie id="ModuleTag_CreateObjectDie" CreationList="ABAirField_Die_OCL">
+        <DieMuxData DeathTypes="ALL" DeathTypesForbidden="SUICIDED" />
+      </CreateObjectDie>
+      <CreateObjectDie id="ModuleTag_CreateOccupiedDie" CreationList="OCL_GenericAlliedBuildingDestruction">
+        <DieMuxData ExemptStatus="OVER_WATER UNPACKING SOLD" RequiredStatus="CAN_ATTACK" DeathTypes="ALL" DeathTypesForbidden="DETONATED SUICIDED SHATTERED" />
+        <UpgradeRequired>Upgrade_TestRequired</UpgradeRequired>
+        <UpgradeForbidden>Upgrade_NoSpawnUponDestruction</UpgradeForbidden>
+      </CreateObjectDie>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

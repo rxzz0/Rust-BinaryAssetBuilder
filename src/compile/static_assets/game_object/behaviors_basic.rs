@@ -238,6 +238,8 @@ pub(super) fn encode_die_mux(
         node,
         &[
             "VeterancyLevels",
+            "ExemptStatus",
+            "RequiredStatus",
             "DamageAmountRequired",
             "MinKillerAngle",
             "MaxKillerAngle",
@@ -284,15 +286,21 @@ pub(super) fn encode_die_mux(
         data.word(start + offset, flags as u32);
         data.word(start + offset + 4, (flags >> 32) as u32);
     }
-    let mut entries = vec![
-        Entry::named(
-            "VeterancyLevels",
-            0x6d66_ae18,
-            Target::Table(Table::array(start, items)),
-        ),
-        Entry::named("ExemptStatus", 0xa7bd_811e, Target::Null),
-        Entry::named("RequiredStatus", 0xa7bd_811e, Target::Null),
-    ];
+    let mut entries = vec![Entry::named(
+        "VeterancyLevels",
+        0x6d66_ae18,
+        Target::Table(Table::array(start, items)),
+    )];
+    for (name, offset) in [("ExemptStatus", 8), ("RequiredStatus", 12)] {
+        let target = if let Some(value) = node.attribute(name) {
+            let offset = data.allocate(start + offset, super::secondary_damage::STATUS_BYTES)?;
+            super::secondary_damage::write_status_flags(value, offset, data)?;
+            Target::Data(offset)
+        } else {
+            Target::Null
+        };
+        entries.push(Entry::named(name, 0xa7bd_811e, target));
+    }
     entries.extend(fields(
         start,
         &[

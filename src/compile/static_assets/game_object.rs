@@ -5,6 +5,7 @@ mod behaviors_basic;
 mod building_destruction;
 mod children;
 mod client_behaviors;
+mod create_object_die;
 mod draws;
 mod encoder;
 mod fields;

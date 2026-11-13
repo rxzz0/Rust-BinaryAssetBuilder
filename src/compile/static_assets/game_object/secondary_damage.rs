@@ -15,7 +15,7 @@ const KIND: u32 = 0xb21c_7e67;
 const REAL: u32 = 0x6458_64f3;
 const BOOL: u32 = 0x77e3_f4f7;
 const STATUS: u32 = 0xa7bd_811e;
-const STATUS_BYTES: usize = 0x1c;
+pub(super) const STATUS_BYTES: usize = 0x1c;
 
 pub(super) fn encode(
     node: Node<'_, '_>,
@@ -226,6 +226,26 @@ fn encode_status(
 ) -> io::Result<Table> {
     check_leaf(node, &["ForbiddenStatus", "RequiredStatus"], data)?;
     let start = data.allocate(pointer, 2 * STATUS_BYTES)?;
+    for (name, offset) in [("ForbiddenStatus", 0), ("RequiredStatus", STATUS_BYTES)] {
+        write_status_flags(node.attribute(name).unwrap_or(""), start + offset, data)?;
+    }
+    Ok(Table::record(
+        fields(
+            start,
+            &[
+                ("ForbiddenStatus", STATUS, 0),
+                ("RequiredStatus", STATUS, STATUS_BYTES),
+            ],
+        )
+        .collect(),
+    ))
+}
+
+pub(super) fn write_status_flags(
+    value: &str,
+    start: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<()> {
     static FLAGS: OnceLock<Vec<String>> = OnceLock::new();
     let flags = FLAGS.get_or_init(|| {
         Document::parse(include_str!(
@@ -240,26 +260,15 @@ fn encode_status(
         .filter_map(|node| node.attribute("value").map(str::to_owned))
         .collect()
     });
-    for (name, offset) in [("ForbiddenStatus", 0), ("RequiredStatus", STATUS_BYTES)] {
-        for flag in node.attribute(name).unwrap_or("").split_ascii_whitespace() {
-            let index = flags
-                .iter()
-                .take(STATUS_BYTES * 8)
-                .position(|value| value == flag)
-                .ok_or_else(|| invalid(data.path, format!("unknown object status {flag}")))?;
-            data.payload[start + offset + index / 8] |= 1 << (index % 8);
-        }
+    for flag in value.split_ascii_whitespace() {
+        let index = flags
+            .iter()
+            .take(STATUS_BYTES * 8)
+            .position(|value| value == flag)
+            .ok_or_else(|| invalid(data.path, format!("unknown object status {flag}")))?;
+        data.payload[start + index / 8] |= 1 << (index % 8);
     }
-    Ok(Table::record(
-        fields(
-            start,
-            &[
-                ("ForbiddenStatus", STATUS, 0),
-                ("RequiredStatus", STATUS, STATUS_BYTES),
-            ],
-        )
-        .collect(),
-    ))
+    Ok(())
 }
 
 fn check_leaf(node: Node<'_, '_>, attributes: &[&str], data: &BinaryData<'_>) -> io::Result<()> {
