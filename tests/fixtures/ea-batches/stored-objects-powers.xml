@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="StoredObjectsProbe"><Behaviors>
+<StoreObjectsSpecialPower id="ModuleTag_Store" SpecialPowerTemplate="ProbeSelect" Radius="100" TeleportLinkID="1" OCL="ProbeStoreOcl" TargetMarkerObjectRef="ProbeMarker" AvailableAtStart="false"/>
+<TeleportStoredObjectsSpecialPower id="ModuleTag_Teleport" SpecialPowerTemplate="ProbeSpawn" StoreObjectsLinkID="1" GetObjectsCurrentlyAtStorePosition="true" OCL="ProbeTeleportOcl" AvailableAtStart="false"/>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>

@@ -43,6 +43,8 @@ const MODULES: &[(&str, &[&str])] = &[
             "QueueDockBehavior",
             "AssistedPlacementBehavior",
             "StructurePlacementBehavior",
+            "TeleportStoredObjectsSpecialPower",
+            "StoreObjectsSpecialPower",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -543,6 +545,11 @@ mod tests {
     #[test]
     fn client_update_eva_matches_ea_batch() {
         assert_ea_fixture("client-update-eva", 1);
+    }
+
+    #[test]
+    fn stored_objects_powers_match_ea_batch() {
+        assert_ea_fixture("stored-objects-powers", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

@@ -61,6 +61,18 @@ const RECALL_FIELDS: &[(&str, u32, usize)] = &[
     ("MaxAircraftToRecall", INT, 0x1c4),
 ];
 
+const STORE_FIELDS: &[(&str, u32, usize)] = &[
+    ("Radius", REAL, 0x1c4),
+    ("TeleportLinkID", INT, 0x1c8),
+    ("OCL", 0x42e4_e9d1, 0x1cc),
+    ("TargetMarkerObjectRef", 0x148e_d75d, 0x1d0),
+];
+const TELEPORT_FIELDS: &[(&str, u32, usize)] = &[
+    ("GetObjectsCurrentlyAtStorePosition", BOOL, 0x1cc),
+    ("StoreObjectsLinkID", INT, 0x1c4),
+    ("OCL", 0x42e4_e9d1, 0x1c8),
+];
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,
@@ -71,6 +83,8 @@ pub(super) fn encode(
     let path = data.path;
     const SPECIAL_POWER: u32 = 0xcefe_1113;
     let (kind, size, derived) = match node.tag_name().name() {
+        "StoreObjectsSpecialPower" => (0xa74a_234c, 0x1d4, STORE_FIELDS),
+        "TeleportStoredObjectsSpecialPower" => (0x318d_c4d6, 0x1d0, TELEPORT_FIELDS),
         "RecallUnitsSpecialPower" => (KIND, 0x1cc, RECALL_FIELDS),
         "AssignSlavesTargetObjectSpecialPower" => (0x9daf_d38c, 0x1c4, &[][..]),
         _ => (SPECIAL_POWER, 0x1c4, &[][..]),
@@ -195,6 +209,11 @@ pub(super) fn encode(
             "LeechRechargePercentPlayerTechTrigger" => ("PlayerTech", 0x4c),
             "LeechRechargePercentFromSpecialPower" => ("SpecialPowerTemplate", 0x50),
             FILTER => ("ObjectFilterAsset", 0x58),
+            "OCL" => (
+                "ObjectCreationList",
+                if kind == 0xa74a_234c { 0x1cc } else { 0x1c8 },
+            ),
+            "TargetMarkerObjectRef" => ("GameObject", 0x1d0),
             _ => continue,
         };
         if value.trim().is_empty() {
@@ -203,7 +222,10 @@ pub(super) fn encode(
         let plain = value.split_once('\\').map_or(value, |(name, _)| name);
         let id = asset_reference(plain, kind, path)?;
         reference_types.push(id.type_id);
-        let word = if offset == 0x40 {
+        let word = if matches!(
+            name,
+            "OnTriggerRechargeSpecialPower" | "TargetMarkerObjectRef"
+        ) {
             id.instance_id
         } else {
             references.push(id.into());
