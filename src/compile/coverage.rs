@@ -27,6 +27,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "BuildingBehavior",
             "BuildingDestructionBehavior",
             "CreateObjectDie",
+            "DefaultProductionExit",
             "DestroyDie",
             "EngineerContain",
             "FXListBehavior",
@@ -38,6 +39,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "ParkingPlaceBehavior",
             "Physics",
             "ProductionUpdate",
+            "QueueProductionExitUpdate",
             "RecallUnitsSpecialPower",
             "RepairUpdate",
             "SecondaryDamageTracker",
@@ -275,12 +277,21 @@ mod tests {
             .collect();
         assert_eq!(sdk_flags, rust_flags);
 
-        let fixtures = root.join("tests/fixtures/ea-batches");
+        assert_ea_fixture("scripted-model-draw");
+    }
+
+    #[test]
+    fn production_exit_family_matches_ea_batch() {
+        assert_ea_fixture("production-exit");
+    }
+
+    fn assert_ea_fixture(name: &str) {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
         verify_ea_batch(
-            &fixtures.join("scripted-model-draw.xml"),
-            &fixtures.join("scripted-model-draw.manifest"),
-            &fixtures.join("scripted-model-draw-assets"),
+            &fixtures.join(format!("{name}.xml")),
+            &fixtures.join(format!("{name}.manifest")),
+            &fixtures.join(format!("{name}-assets")),
             &mut report,
         )
         .unwrap_or_else(|error| panic!("{error}\n{}", String::from_utf8_lossy(&report)));

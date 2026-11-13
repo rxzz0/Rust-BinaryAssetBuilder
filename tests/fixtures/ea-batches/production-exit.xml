@@ -1,0 +1,18 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProductionExitDefaults">
+    <Behaviors>
+      <DefaultProductionExit id="ModuleTag_Default" />
+      <QueueProductionExitUpdate id="ModuleTag_Queue"><UnitCreatePoint /><NaturalRallyPoint /></QueueProductionExitUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="ProductionExitCustom">
+    <Behaviors>
+      <DefaultProductionExit id="ModuleTag_Default"><UnitCreatePoint x="-3" y="4" z="5" /><NaturalRallyPoint x="7" y="8" z="-9" /></DefaultProductionExit>
+      <QueueProductionExitUpdate id="ModuleTag_Queue" PlacementViewAngle="45d" ExitDelaySeconds="0.07s" AllowAirborneCreation="true" InitialBurst="3" NoExitPath="true" CanRallyToSlaughter="true" ClearAlliesFromDestination="false">
+        <UnitCreatePoint x="0" y="18" /><NaturalRallyPoint x="40" y="18" z="2" />
+      </QueueProductionExitUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>
