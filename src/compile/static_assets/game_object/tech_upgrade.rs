@@ -2,7 +2,8 @@ use super::super::binary::BinaryData;
 use super::super::global_ui::enum_value;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    asset_reference, finite_number, hash_name, significant_children, validate_attributes,
+    AssetReference, asset_reference, finite_number, hash_name, significant_children,
+    validate_attributes,
 };
 use super::behaviors_basic::{base, inherited};
 use super::draws::{boolean, fields, model_condition_index};
@@ -22,12 +23,17 @@ pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,
     data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
     let path = data.path;
     let receiver = node.has_tag_name((SAGE_NS, "TechUpgradeReceiver"));
     let command = node.has_tag_name((SAGE_NS, "CommandSetUpgrade"));
-    let kind = if command {
+    let modifier = node.has_tag_name((SAGE_NS, "AttributeModifierUpgrade"));
+    let basic = command || modifier;
+    let kind = if modifier {
+        0x74a2_4c45
+    } else if command {
         0x7eb7_f219
     } else if receiver {
         KIND
@@ -37,20 +43,34 @@ pub(super) fn encode(
     let radar = ["RadarDrawModule", "RadarRotateSpeed", "RadarRotateOffset"];
     let allowed: Vec<_> = ["id", "Radius", "RadiusY", "DistanceType", "FXLineBoneName"]
         .into_iter()
-        .filter(|&name| !command || name == "id")
+        .filter(|&name| !basic || name == "id")
         .chain(command.then_some("CommandSet"))
+        .chain(modifier.then_some("AttributeModifier"))
         .chain(radar.into_iter().filter(|_| receiver))
         .chain(UPGRADE.iter().map(|&(name, _, _)| name))
         .collect();
     validate_attributes(node, &allowed, path)?;
-    let command_id = if let Some(value) = node
-        .attribute("CommandSet")
-        .filter(|value| !value.trim().is_empty())
+    let extra_field = if modifier {
+        Some(("AttributeModifier", "AttributeModifier", 0x09dd_cff3))
+    } else if command {
+        Some(("CommandSet", "LogicCommandSet", 0x85d4_4b5d))
+    } else {
+        None
+    };
+    let extra_value = if let Some((name, target_type, _)) = extra_field
+        && let Some(value) = node
+            .attribute(name)
+            .filter(|value| !value.trim().is_empty())
     {
-        let name = value.split_once('\\').map_or(value, |(name, _)| name);
-        let id = asset_reference(name, "LogicCommandSet", path)?;
+        let value = value.split_once('\\').map_or(value, |(name, _)| name);
+        let id = asset_reference(value, target_type, path)?;
         reference_types.push(id.type_id);
-        id.instance_id
+        if modifier {
+            references.push(id.into());
+            references.len() as u32
+        } else {
+            id.instance_id
+        }
     } else {
         0
     };
@@ -68,15 +88,14 @@ pub(super) fn encode(
             )?);
         }
     }
-    let filter =
-        children.next_if(|child| !command && child.has_tag_name((SAGE_NS, "ObjectFilter")));
+    let filter = children.next_if(|child| !basic && child.has_tag_name((SAGE_NS, "ObjectFilter")));
     if children.next().is_some() {
         return Err(invalid(path, "unexpected tech upgrade child"));
     }
 
     let start = data.allocate(
         pointer,
-        if command {
+        if basic {
             0x28
         } else if receiver {
             0xb4
@@ -89,7 +108,7 @@ pub(super) fn encode(
     for &(name, _, offset) in UPGRADE {
         data.payload[start + offset] = boolean(node, name, name == "WaypointModeTerminal", path)?;
     }
-    let radius_y_and_filter = if command {
+    let radius_y_and_filter = if basic {
         None
     } else {
         let radius = finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?;
@@ -158,12 +177,9 @@ pub(super) fn encode(
     ]);
     let mut entries = vec![base(0xae60_ae98, Table::record(upgrade))];
     let Some((radius_y, filter)) = radius_y_and_filter else {
-        data.word(start + 0x24, command_id);
-        entries.push(Entry::named(
-            "CommandSet",
-            0x85d4_4b5d,
-            Target::Data(start + 0x24),
-        ));
+        let (name, _, token) = extra_field.expect("basic upgrade has one field");
+        data.word(start + 0x24, extra_value);
+        entries.push(Entry::named(name, token, Target::Data(start + 0x24)));
         return Ok((kind, Table::record(entries)));
     };
     entries.extend([

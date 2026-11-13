@@ -199,11 +199,19 @@ pub(in crate::compile::static_assets) fn compile(
                 Some(result)
             } else if matches!(
                 module.tag_name().name(),
-                "TechUpgrade" | "TechUpgradeReceiver" | "CommandSetUpgrade"
+                "TechUpgrade"
+                    | "TechUpgradeReceiver"
+                    | "CommandSetUpgrade"
+                    | "AttributeModifierUpgrade"
             ) {
                 let start = data.payload.len() as u32;
-                let result =
-                    super::tech_upgrade::encode(module, pointer, &mut data, &mut reference_types)?;
+                let result = super::tech_upgrade::encode(
+                    module,
+                    pointer,
+                    &mut data,
+                    &mut references,
+                    &mut reference_types,
+                )?;
                 tech_modules.push((start, data.payload.len() as u32));
                 Some(result)
             } else if module.has_tag_name((SAGE_NS, "SubObjectsUpgrade")) {

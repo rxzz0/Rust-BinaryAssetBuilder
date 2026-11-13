@@ -35,6 +35,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "SlowDeath",
             "SubStructureBehavior",
             "AssignSlavesTargetObjectSpecialPower",
+            "AttributeModifierUpgrade",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -405,6 +406,11 @@ mod tests {
     #[test]
     fn assign_slaves_target_matches_ea_batch() {
         assert_ea_fixture("assign-slaves-target", 1);
+    }
+
+    #[test]
+    fn attribute_modifier_upgrade_matches_ea_batch() {
+        assert_ea_fixture("attribute-modifier-upgrade", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

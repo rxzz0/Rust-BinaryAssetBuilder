@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="AttributeUpgradeProbe"><Behaviors>
+<AttributeModifierUpgrade id="ModuleTag_Default"/>
+<AttributeModifierUpgrade id="ModuleTag_Modifier" AttributeModifier="AttributeModifer_AlliedTech2_AlliedOutpost" RequiresAllTriggers="true"><TriggeredBy>Upgrade_AlliedTech2</TriggeredBy><ConflictsWith>Upgrade_AlliedTech3</ConflictsWith></AttributeModifierUpgrade>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>
