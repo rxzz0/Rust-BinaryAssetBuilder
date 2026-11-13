@@ -26,6 +26,7 @@ mod replace_self;
 mod schema;
 mod secondary_damage;
 mod shadow;
+mod slow_death;
 mod spawn;
 mod structures;
 mod subobjects;

@@ -32,6 +32,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "ProductionUpdateInfo",
             "SpecialPower",
             "ReplaceSelfSpecialAbility",
+            "SlowDeath",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -382,6 +383,11 @@ mod tests {
     #[test]
     fn object_limit_matches_ea_batch() {
         assert_ea_fixture("object-limit", 1);
+    }
+
+    #[test]
+    fn slow_death_matches_ea_batch() {
+        assert_ea_fixture("slow-death", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

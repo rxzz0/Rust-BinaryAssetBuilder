@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="SlowDeathProbe"><Behaviors>
+<SlowDeath id="ModuleTag_Default"/>
+<SlowDeath id="ModuleTag_Death" SinkDelay="3s" SinkRate="4" DestructionDelay="8s" Fade="true" FlingPitch="30d" DeathFlags="DYING" DeathTypes="DYING" DeathObjectStatusBits="UNDER_CONSTRUCTION"><FX Type="MIDPOINT"><FX>ProbeFx</FX></FX><OCL Type="FINAL"><OCL>ProbeOcl</OCL></OCL><Weapon Type="HIT_GROUND"><Weapon>ProbeWeapon</Weapon></Weapon><Sound Type="INITIAL" List="ProbeSound ProbeSound2"/><DieMuxData DeathTypes="ALL"/></SlowDeath>
+</Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject></AssetDeclaration>
