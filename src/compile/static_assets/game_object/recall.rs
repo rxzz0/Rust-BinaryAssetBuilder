@@ -1,8 +1,8 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, asset_reference, finite_number, hash_name, sage_time, significant_children,
-    validate_attributes,
+    AssetReference, asset_reference, finite_number, hash_name, percentage, sage_time,
+    significant_children, validate_attributes,
 };
 use super::behaviors_basic::{base, inherited};
 use super::draws::{boolean, fields, model_condition_index};
@@ -94,6 +94,15 @@ pub(super) fn encode(
 ) -> io::Result<(u32, Table)> {
     let path = data.path;
     const SPECIAL_POWER: u32 = 0xcefe_1113;
+    const PRODUCTION_BONUS: u32 = 0x8ed3_3e53;
+    const BONUS_FIELDS: &[(&str, u32, usize)] = &[
+        ("BuildCostBonus", REAL, 0x1c4),
+        ("BuildCostBonusAllies", REAL, 0x1c8),
+        ("BuildTimeBonus", REAL, 0x1cc),
+        ("BuildTimeBonusAllies", REAL, 0x1d0),
+        ("HarvesterBonus", REAL, 0x1d4),
+        ("HarvesterBonusAllies", REAL, 0x1d8),
+    ];
     let (kind, size, derived) = match node.tag_name().name() {
         "OCLSpecialPower" => (OCL_POWER, 0x1f4, OCL_FIELDS),
         "StoreObjectsSpecialPower" => (0xa74a_234c, 0x1d4, STORE_FIELDS),
@@ -101,6 +110,7 @@ pub(super) fn encode(
         "RecallUnitsSpecialPower" => (KIND, 0x1cc, RECALL_FIELDS),
         "AssignSlavesTargetObjectSpecialPower" => (0x9daf_d38c, 0x1c4, &[][..]),
         "PrematureDischargeSpecialPower" => (0x8e22_e8c8, 0x1c4, &[][..]),
+        "GiveProductionBonusSpecialPower" => (PRODUCTION_BONUS, 0x1dc, BONUS_FIELDS),
         _ => (SPECIAL_POWER, 0x1c4, &[][..]),
     };
     let allowed: Vec<_> = POWER_FIELDS
@@ -113,8 +123,8 @@ pub(super) fn encode(
     let start = data.allocate(pointer, size)?;
     data.word(start, kind);
     data.word(start + 4, hash_name(required(node, "id", path)?));
-    for &(name, kind, offset) in POWER_FIELDS.iter().chain(derived) {
-        match kind {
+    for &(name, field_type, offset) in POWER_FIELDS.iter().chain(derived) {
+        match field_type {
             BOOL => {
                 let default = matches!(
                     name,
@@ -122,6 +132,10 @@ pub(super) fn encode(
                 );
                 data.payload[start + offset] = boolean(node, name, default, path)?;
             }
+            REAL if kind == PRODUCTION_BONUS && offset >= 0x1c4 => data.word(
+                start + offset,
+                percentage(node.attribute(name).unwrap_or("0"), name, path)?.to_bits(),
+            ),
             REAL => data.word(
                 start + offset,
                 finite_number(node.attribute(name).unwrap_or("0"), name, path)?.to_bits(),

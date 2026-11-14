@@ -79,6 +79,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "RadarBehavior",
             "FireWeaponUpdate",
             "PlayerPowerManager",
+            "GiveProductionBonusSpecialPower",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -884,6 +885,11 @@ mod tests {
     #[test]
     fn player_power_manager_matches_ea() {
         assert_ea_fixture("player-power-manager", 1);
+    }
+
+    #[test]
+    fn production_bonus_power_matches_ea() {
+        assert_ea_fixture("production-bonus-power", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

@@ -746,6 +746,7 @@ pub(super) fn encode(
             | "AssignSlavesTargetObjectSpecialPower"
             | "OCLSpecialPower"
             | "PrematureDischargeSpecialPower"
+            | "GiveProductionBonusSpecialPower"
             | "StoreObjectsSpecialPower"
             | "TeleportStoredObjectsSpecialPower"
     ) {
