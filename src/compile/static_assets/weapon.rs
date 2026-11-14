@@ -289,23 +289,55 @@ fn fire_on_objects(
     let direct = node.has_tag_name((SAGE_NS, "DamageNugget"));
     let contained = node.has_tag_name((SAGE_NS, "DamageContainedNugget"));
     let is_damage = dot || direct || contained;
+    const DAMAGE_REALS: [(&str, usize); 8] = [
+        ("DamageTaperOff", 0x2c),
+        ("MinRadius", 0x30),
+        ("DamageMaxHeight", 0x38),
+        ("DamageMaxHeightAboveTerrain", 0x3c),
+        ("FlankingBonus", 0x40),
+        ("FlankedScalar", 0x44),
+        ("DrainLifeMultiplier", 0x5c),
+        ("DamageSpeed", 0x60),
+    ];
+    const DAMAGE_BOOLS: [(&str, usize); 8] = [
+        ("DamageArcInverted", 0x90),
+        ("AcceptDamageAdd", 0x91),
+        ("OnlyKillOwnerWhenTriggered", 0x92),
+        ("DrainLife", 0x93),
+        ("NotifyOwnerOnVictimDeath", 0x94),
+        ("NotifyObserversOnPreDamageEffectPosition", 0x95),
+        ("ForceFXPositionToVictim", 0x96),
+        ("RadiusAffectsBridges", 0x97),
+    ];
+    let extended: Vec<_> = [
+        "id",
+        "Radius",
+        "PartitionFilterTestType",
+        "Damage",
+        "DamageType",
+        "DamageFXType",
+        "DeathType",
+        "DelayTimeSeconds",
+    ]
+    .into_iter()
+    .chain(DAMAGE_REALS.map(|(name, _)| name))
+    .chain(DAMAGE_BOOLS.map(|(name, _)| name))
+    .chain(
+        dot.then_some(["DamageInterval", "DamageDuration", "RemoveIfHealed"])
+            .into_iter()
+            .flatten(),
+    )
+    .chain(
+        contained
+            .then_some(["MaxUnitsToDamage", "WindowBlastFX"])
+            .into_iter()
+            .flatten(),
+    )
+    .collect();
     validate_attributes(
         node,
         if is_damage {
-            &[
-                "id",
-                "Radius",
-                "PartitionFilterTestType",
-                "Damage",
-                "DamageInterval",
-                "DamageDuration",
-                "DamageType",
-                "DamageFXType",
-                "DeathType",
-                "RemoveIfHealed",
-                "MaxUnitsToDamage",
-                "WindowBlastFX",
-            ]
+            &extended
         } else {
             &[
                 "Radius",
@@ -356,6 +388,20 @@ fn fire_on_objects(
         finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?.to_bits(),
     );
     if is_damage {
+        for (name, offset) in DAMAGE_REALS {
+            if let Some(value) = node.attribute(name) {
+                data.word(start + offset, finite_number(value, name, path)?.to_bits());
+            }
+        }
+        for (name, offset) in DAMAGE_BOOLS {
+            data.payload[start + offset] = flag(node, name, name == "AcceptDamageAdd", path)?;
+        }
+        if let Some(value) = node.attribute("DelayTimeSeconds") {
+            data.word(
+                start + 0x48,
+                sage_time(value, "DelayTimeSeconds", path)?.to_bits(),
+            );
+        }
         data.word(
             start,
             if dot {
