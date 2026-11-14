@@ -117,7 +117,7 @@ pub(super) fn encode(
     Ok((KIND, Table::record(entries)))
 }
 
-pub(super) fn encode_filter(
+pub(in crate::compile::static_assets) fn encode_filter(
     node: Node<'_, '_>,
     pointer: usize,
     data: &mut BinaryData<'_>,

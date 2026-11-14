@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+ <WeaponTemplate id="FireOnObjectsProbe"><Nuggets>
+  <FireOnObjectsNugget />
+  <FireOnObjectsNugget Radius="100" FireOnVictimObject="true" VictimMustBeAlive="false" PartitionFilterTestType="CIRCLE" Weapon="NestedWeapon"><Filter Rule="ANY" Include="VEHICLE"><ExcludeThing>ProbeVictim</ExcludeThing></Filter></FireOnObjectsNugget>
+ </Nuggets></WeaponTemplate>
+</AssetDeclaration>

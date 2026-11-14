@@ -975,6 +975,11 @@ mod tests {
         assert_ea_fixture("weapon-timing", 1);
     }
 
+    #[test]
+    fn weapon_fire_on_objects_matches_ea() {
+        assert_ea_fixture("weapon-fire-on-objects", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

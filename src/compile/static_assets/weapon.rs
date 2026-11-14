@@ -1,6 +1,8 @@
 use super::binary::BinaryData;
 use super::tokenized::{self, Entry, Table, Target};
-use super::{Marshaled, finite_number, sage_time, significant_children, validate_attributes};
+use super::{
+    Marshaled, asset_reference, finite_number, sage_time, significant_children, validate_attributes,
+};
 use crate::compile::{SAGE_NS, has_content, invalid};
 use roxmltree::{Document, Node};
 use std::{io, path::Path, sync::OnceLock};
@@ -95,6 +97,13 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             }
         }
     }
+    let mut out = Marshaled::default();
+    if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, "Nuggets"))) {
+        let nuggets = encode_nuggets(child, &mut data, &mut out)?;
+        if !table.replace_target("Nuggets", Target::Table(nuggets)) {
+            return Err(invalid(path, "weapon layout missing Nuggets"));
+        }
+    }
     if let Some(child) = children.next() {
         return Err(invalid(
             path,
@@ -104,7 +113,195 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             ),
         ));
     }
-    tokenized::finish(table, data, Marshaled::default())
+    data.relocations.sort_unstable();
+    tokenized::finish(table, data, out)
+}
+
+fn encode_nuggets(
+    node: Node<'_, '_>,
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+) -> io::Result<Table> {
+    validate_attributes(node, &[], data.path)?;
+    let children: Vec<_> = significant_children(node).collect();
+    let first = data.list(0xfc, children.len(), 4)?;
+    let mut entries = Vec::with_capacity(children.len());
+    for (index, child) in children.into_iter().enumerate() {
+        if !child.has_tag_name((SAGE_NS, "FireOnObjectsNugget")) {
+            return Err(invalid(
+                data.path,
+                format!("unsupported weapon nugget {}", child.tag_name().name()),
+            ));
+        }
+        let target = fire_on_objects(child, first + index * 4, data, out)?;
+        entries.push((
+            0,
+            Target::Table(Table::sequence(vec![Entry::new(
+                2,
+                0x7814_daf0,
+                Target::Table(target),
+            )])),
+        ));
+    }
+    Ok(Table::array(0xfc, entries))
+}
+
+fn fire_on_objects(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+) -> io::Result<Table> {
+    const DAMAGE_FIELDS: &[(u32, u32, usize)] = &[
+        (0x7c33e4e9, 0x645864f3, 0x28),
+        (0x1182ea06, 0x645864f3, 0x2c),
+        (0xec392b69, 0x645864f3, 0x30),
+        (0x1ca750fc, 0x4e16ea4d, 0x34),
+        (0x0cfd3b28, 0x77e3f4f7, 0x90),
+        (0x06298750, 0x645864f3, 0x38),
+        (0x229b6ad7, 0x645864f3, 0x3c),
+        (0x792ea9b5, 0x77e3f4f7, 0x91),
+        (0x827ad6d4, 0x645864f3, 0x40),
+        (0x6ba7b51a, 0x645864f3, 0x44),
+        (0x8ac7e66a, 0x998669e8, 0x48),
+        (0x46486ff1, 0x46486ff1, 0x4c),
+        (0xc608ed36, 0xc608ed36, 0x50),
+        (0x2faa4e62, 0x2faa4e62, 0x54),
+        (0x62bb1ce7, 0x62bb1ce7, 0x58),
+        (0x6fbb66ba, 0x77e3f4f7, 0x92),
+        (0xf37c08fc, 0x645864f3, 0x5c),
+        (0x722223ed, 0x77e3f4f7, 0x93),
+        (0x31a847b4, 0x645864f3, 0x60),
+        (0xfa8dab3f, 0xc4ec43b1, 0x64),
+        (0x2dfa364c, 0xbfab9075, 0x68),
+        (0x53fc2b18, 0x77e3f4f7, 0x94),
+        (0x063c4040, 0x77e3f4f7, 0x95),
+        (0x45c3978c, 0x77e3f4f7, 0x96),
+        (0x21494542, 0x77e3f4f7, 0x97),
+        (0xde8679a4, 0xa7bd811e, 0x6c),
+    ];
+    let path = data.path;
+    validate_attributes(
+        node,
+        &[
+            "Radius",
+            "PartitionFilterTestType",
+            "Weapon",
+            "FireOnVictimObject",
+            "VictimMustBeAlive",
+        ],
+        path,
+    )?;
+    let start = data.allocate(pointer, 0xa4)?;
+    for (offset, value) in [
+        (0, 0x7814_daf0),
+        (0x2c, (-1f32).to_bits()),
+        (0x34, std::f32::consts::TAU.to_bits()),
+        (0x38, (-1f32).to_bits()),
+        (0x3c, (-1f32).to_bits()),
+        (0x44, 1.0f32.to_bits()),
+        (0x4c, 14),
+        (0x50, 1),
+        (0x54, 112),
+        (0x5c, 1.0f32.to_bits()),
+        (0x70, 0xa000_0000),
+        (0x84, 0x0001_0000),
+        (0x90, 0x100),
+    ] {
+        data.word(start + offset, value);
+    }
+    let partition = super::global_ui::enum_value(
+        node.attribute("PartitionFilterTestType")
+            .unwrap_or("EXTENTS_3D"),
+        &["CENTER_2D", "CIRCLE", "CENTER_3D", "SPHERE", "EXTENTS_3D"],
+        path,
+    )?;
+    data.word(start + 4, partition);
+    data.word(
+        start + 0x10,
+        finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?.to_bits(),
+    );
+    for (name, offset, default) in [
+        ("FireOnVictimObject", 0xa0, "false"),
+        ("VictimMustBeAlive", 0xa1, "true"),
+    ] {
+        data.payload[start + offset] = match node.attribute(name).unwrap_or(default).trim() {
+            "true" | "1" => 1,
+            "false" | "0" => 0,
+            _ => return Err(invalid(path, format!("invalid {name}"))),
+        };
+    }
+    if let Some(value) = node
+        .attribute("Weapon")
+        .filter(|value| !value.trim().is_empty())
+    {
+        let id = asset_reference(
+            value.split_once('\\').map_or(value, |(name, _)| name),
+            "WeaponTemplate",
+            path,
+        )?;
+        out.reference_types.push(id.type_id);
+        out.references.push(id.into());
+        data.word(start + 0x98, out.references.len() as u32);
+    }
+    let mut children = significant_children(node);
+    let filter = if let Some(filter) = children.next() {
+        if !filter.has_tag_name((SAGE_NS, "Filter")) || children.next().is_some() {
+            return Err(invalid(path, "unsupported FireOnObjectsNugget child"));
+        }
+        Target::Table(super::game_object::encode_object_filter(
+            filter,
+            start + 0x9c,
+            data,
+            &mut out.reference_types,
+        )?)
+    } else {
+        Target::Null
+    };
+    let effect = Table::record(vec![
+        Entry::new(0x19b0_42a0, 0x23e6_50b8, Target::Data(start)),
+        Entry::named(
+            "PartitionFilterTestType",
+            0x9f0d_a607,
+            Target::Data(start + 4),
+        ),
+        Entry::named("ForbiddenTargetObjectStatus", 0xa7bd_811e, Target::Null),
+        Entry::named("ForbiddenTargetModelCondition", 0x67db_bfc9, Target::Null),
+        Entry::named("Radius", 0x6458_64f3, Target::Data(start + 0x10)),
+        Entry::named("SpecialObjectFilter", 0xe46e_a3b2, Target::Null),
+        Entry::named(
+            "RequiredUpgrade",
+            0x26fa_cfc7,
+            Target::Table(Table::array(start + 0x18, [])),
+        ),
+        Entry::named(
+            "ForbiddenUpgrade",
+            0x26fa_cfc7,
+            Target::Table(Table::array(start + 0x20, [])),
+        ),
+    ]);
+    let mut damage = vec![Entry::new(1, 0xc7c2_cc04, Target::Table(effect))];
+    damage.extend(
+        DAMAGE_FIELDS
+            .iter()
+            .map(|&(name, kind, offset)| Entry::new(name, kind, Target::Data(start + offset))),
+    );
+    damage.push(Entry::new(
+        0x9197_20cd,
+        0xe4a6_e6e4,
+        Target::Table(Table::array(start + 0x88, [])),
+    ));
+    Ok(Table::record(vec![
+        Entry::new(1, 0xc0f5_3e99, Target::Table(Table::record(damage))),
+        Entry::named("Weapon", 0xd046_dd22, Target::Data(start + 0x98)),
+        Entry::named(
+            "FireOnVictimObject",
+            0x77e3_f4f7,
+            Target::Data(start + 0xa0),
+        ),
+        Entry::named("VictimMustBeAlive", 0x77e3_f4f7, Target::Data(start + 0xa1)),
+        Entry::named("Filter", 0xe46e_a3b2, filter),
+    ]))
 }
 
 fn weapon_flags(value: &str, kind: usize, path: &Path) -> io::Result<u32> {
