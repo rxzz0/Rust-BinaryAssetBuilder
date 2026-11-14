@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="LifetimeProbe"><Behaviors>
+ <LifetimeUpdate id="Defaults" />
+ <LifetimeUpdate id="Explicit" MinLifetime="10s" MaxLifetime="20s" WaitForWakeUp="true" ScoreKill="true" DeathType="IRRADIATED" IgnoreProjectileState="true" CountdownCompleteSound="CompleteProbe" CountdownSound="CountdownProbe" TimeBeforeDeathThatCountdownCompletes="3s" TimeBetweenCountdownSounds="0.5s" NumberOfCountdownSoundPlays="4"/>
+</Behaviors><Body><PropBody id="Body" /></Body></GameObject></AssetDeclaration>

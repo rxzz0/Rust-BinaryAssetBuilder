@@ -889,6 +889,9 @@ pub(super) fn encode(
         )
         .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "LifetimeUpdate")) {
+        return lifetime_update(node, pointer, data, references, reference_types).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "BezierProjectile")) {
         return super::bezier_projectile::encode(node, pointer, data, references, reference_types)
             .map(Some);
@@ -1130,6 +1133,96 @@ fn queue_dock(
         0x1572_3e0b,
         Target::Data(offset),
     ));
+    Ok((KIND, Table::record(entries)))
+}
+
+fn lifetime_update(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x6c28_3c72;
+    const TIME: u32 = 0x9986_69e8;
+    const BOOL: u32 = 0x77e3_f4f7;
+    const SOUND: u32 = 0x63d7_b468;
+    const COUNT: &str = "NumberOfCountdownSoundPlays";
+    const FIELDS: [(&str, u32, usize); 10] = [
+        ("MinLifetime", TIME, 8),
+        ("MaxLifetime", TIME, 0xc),
+        ("WaitForWakeUp", BOOL, 0x28),
+        ("ScoreKill", BOOL, 0x29),
+        ("DeathType", 0xc608_ed36, 0x10),
+        ("IgnoreProjectileState", BOOL, 0x2a),
+        ("CountdownSound", SOUND, 0x14),
+        ("CountdownCompleteSound", SOUND, 0x18),
+        ("TimeBeforeDeathThatCountdownCompletes", TIME, 0x1c),
+        ("TimeBetweenCountdownSounds", TIME, 0x20),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = ["id", COUNT]
+        .into_iter()
+        .chain(FIELDS.map(|(name, _, _)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected LifetimeUpdate content"));
+    }
+    let start = data.allocate(pointer, 0x2c)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    for attr in node.attributes() {
+        let Some(&(_, SOUND, offset)) = FIELDS.iter().find(|&&(name, ..)| name == attr.name())
+        else {
+            continue;
+        };
+        let ordinal = super::client_behaviors::audio_reference(
+            attr.value(),
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + offset, ordinal);
+    }
+    for (name, ty, offset) in FIELDS {
+        match ty {
+            TIME => {
+                let default = if offset == 0x20 { "1s" } else { "0s" };
+                let value = sage_time(node.attribute(name).unwrap_or(default), name, path)?;
+                data.word(start + offset, value.to_bits());
+            }
+            BOOL => data.payload[start + offset] = boolean(node, name, false, path)?,
+            _ => (),
+        }
+    }
+    if let Some(value) = node.attribute("DeathType") {
+        static DEATH: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+        let types = DEATH.get_or_init(|| {
+            super::ai_update::enum_values(
+                include_str!("../../../../schemas/ra3/xsd/Includes/Death.xsd"),
+                "DeathType",
+            )
+        });
+        let ordinal = types
+            .iter()
+            .position(|name| name == value)
+            .ok_or_else(|| invalid(path, "invalid LifetimeUpdate DeathType"))?;
+        data.word(start + 0x10, ordinal as u32);
+    }
+    entries.extend(fields(start, &FIELDS));
+    let count = match node.attribute(COUNT) {
+        Some(value) => {
+            let value = value
+                .trim()
+                .parse::<i32>()
+                .map_err(|_| invalid(path, format!("invalid {COUNT}")))?;
+            let offset = data.allocate(start + 0x24, 4)?;
+            data.word(offset, value as u32);
+            Target::Data(offset)
+        }
+        None => Target::Null,
+    };
+    entries.push(Entry::named(COUNT, 0x23e6_50b8, count));
     Ok((KIND, Table::record(entries)))
 }
 
