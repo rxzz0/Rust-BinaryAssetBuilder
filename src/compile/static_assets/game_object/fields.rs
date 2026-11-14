@@ -31,6 +31,7 @@ pub(super) fn encode(
         "EnergyProduction",
         "EnergyBonus",
         "VoicePriority",
+        "VoiceSelectUnderFireTimeout",
         "CommandPoints",
         "CommandSet",
         "SelectPortrait",
@@ -102,9 +103,14 @@ pub(super) fn encode(
         let radians = if degrees { parsed.to_radians() } else { parsed };
         data.word(0x60, (radians as f32).to_bits());
     }
-    if let Some(value) = node.attribute("JustBuiltTime") {
-        let time = super::super::sage_time(value, "JustBuiltTime", data.path)?;
-        data.word(0x64, time.to_bits());
+    for (name, offset) in [
+        ("JustBuiltTime", 0x64),
+        ("VoiceSelectUnderFireTimeout", 0xf4),
+    ] {
+        if let Some(value) = node.attribute(name) {
+            let time = super::super::sage_time(value, name, data.path)?;
+            data.word(offset, time.to_bits());
+        }
     }
     if let Some(value) = node.attribute("Side") {
         data.word(0x70, weak_id(value, "PlayerTemplate", data.path)?);
