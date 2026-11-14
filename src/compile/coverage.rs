@@ -694,6 +694,11 @@ mod tests {
         assert_ea_fixture("slaughter-contain", 1);
     }
 
+    #[test]
+    fn empty_object_sound_matches_ea_batch() {
+        assert_ea_fixture("empty-object-sound", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

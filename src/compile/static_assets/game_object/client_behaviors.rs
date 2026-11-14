@@ -353,7 +353,8 @@ impl AudioEncoder<'_, '_> {
         validate_attributes(node, &["Sound", "AudioType"], self.data.path)?;
         require_empty(node, self.data.path)?;
         let sound = self.reference(
-            required(node, "Sound", self.data.path)?,
+            node.attribute("Sound")
+                .ok_or_else(|| invalid(self.data.path, "expected Sound attribute"))?,
             "BaseAudioEventInfo",
         )?;
         self.data.word(start, sound);
