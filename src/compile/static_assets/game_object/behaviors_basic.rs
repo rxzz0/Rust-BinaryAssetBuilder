@@ -892,6 +892,9 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "LifetimeUpdate")) {
         return lifetime_update(node, pointer, data, references, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "SuckUpObjectsUpdate")) {
+        return suck_up_objects(node, pointer, data, reference_types).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "BezierProjectile")) {
         return super::bezier_projectile::encode(node, pointer, data, references, reference_types)
             .map(Some);
@@ -1132,6 +1135,57 @@ fn queue_dock(
         "DockingAnimation",
         0x1572_3e0b,
         Target::Data(offset),
+    ));
+    Ok((KIND, Table::record(entries)))
+}
+
+fn suck_up_objects(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x18c8_ffc4;
+    const TIME: u32 = 0x9986_69e8;
+    const REAL: u32 = 0x6458_64f3;
+    const FIELDS: [(&str, u32, usize, &str); 5] = [
+        ("InitialDelay", TIME, 8, "0.5s"),
+        ("LiftVelocity", REAL, 0xc, "1"),
+        ("DeathHeight", REAL, 0x10, "420"),
+        ("Radius", REAL, 0x14, "10"),
+        ("Duration", TIME, 0x18, "10s"),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = ["id"]
+        .into_iter()
+        .chain(FIELDS.map(|(name, ..)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let mut children = significant_children(node);
+    let filter = children
+        .next()
+        .filter(|child| child.has_tag_name((SAGE_NS, "ObjectFilter")))
+        .ok_or_else(|| invalid(path, "SuckUpObjectsUpdate requires an ObjectFilter"))?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected SuckUpObjectsUpdate content"));
+    }
+    let start = data.allocate(pointer, 0x8c)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    for (name, ty, offset, default) in FIELDS {
+        let value = node.attribute(name).unwrap_or(default);
+        let value = if ty == TIME {
+            sage_time(value, name, path)?
+        } else {
+            finite_number(value, name, path)?
+        };
+        data.word(start + offset, value.to_bits());
+        entries.push(Entry::named(name, ty, Target::Data(start + offset)));
+    }
+    let filter = super::parking::encode_inline_filter(filter, start + 0x1c, data, reference_types)?;
+    entries.push(Entry::named(
+        "ObjectFilter",
+        0xe46e_a3b2,
+        Target::Table(filter),
     ));
     Ok((KIND, Table::record(entries)))
 }

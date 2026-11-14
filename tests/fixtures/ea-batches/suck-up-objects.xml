@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="SuckUpObjectsProbe"><Behaviors>
+ <SuckUpObjectsUpdate id="Defaults"><ObjectFilter /></SuckUpObjectsUpdate>
+ <SuckUpObjectsUpdate id="Explicit" InitialDelay="2s" LiftVelocity="0.005" DeathHeight="450" Radius="30" Duration="8s"><ObjectFilter Rule="ANY" Include="VEHICLE" StatusBitFlagsExclude="SUBMERGED"><ExcludeThing>ProbeObject</ExcludeThing></ObjectFilter></SuckUpObjectsUpdate>
+</Behaviors><Body><PropBody id="Body" /></Body></GameObject></AssetDeclaration>
