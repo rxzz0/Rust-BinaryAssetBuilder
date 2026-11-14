@@ -1,0 +1,17 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DynamicsProbe">
+    <Behaviors>
+      <DynamicsUpdate id="ModuleTag_Default"/>
+      <DynamicsUpdate id="ModuleTag_Configured" Motion="SIMULATED" Collision="OMNICOLLIDING" IntuitiveCollision="COLLIDES_WITH_EVERYTHING" ContactTag="DEBRIS" DrawPriority="MUST_BE_DRAWN">
+        <Volume Mass="12" Bounciness="45%" Spinniness="3" StaticFriction=".2" KineticFriction=".3" AngularDrag=".4" LinearDrag=".5" ReportContacts="true" ContactTag="PROP">
+          <Sphere Radius="2"><Translation x="1" y="2" z="3"/><Rotation x="0.25" y="0.5" z="0.75" w="1"/></Sphere>
+          <Capsule Radius="3" HalfLength="4"/>
+          <Box HalfSizeX="5" HalfSizeY="6" HalfSizeZ="7" EdgeRadius="8"/>
+          <Cylinder Radius="9" HalfLength="10" EdgeRadius="11"/>
+          <Triangle X1="1" Y1="2" Z1="3" X2="4" Y2="5" Z2="6" X3="7" Y3="8" Z3="9" EdgeRadius="10"/>
+        </Volume>
+      </DynamicsUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
