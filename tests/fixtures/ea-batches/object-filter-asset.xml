@@ -1,0 +1,1 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><ObjectFilterAsset id="ObjectFilterProbe"><Filter Rule="ANY" Include="VEHICLE" StatusBitFlagsExclude="SUBMERGED"><IncludeThing>ProbeInclude</IncludeThing><ExcludeThing>ProbeExclude</ExcludeThing></Filter></ObjectFilterAsset></AssetDeclaration>

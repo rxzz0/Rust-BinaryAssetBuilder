@@ -47,6 +47,34 @@ mod teleport_stored;
 pub(super) use client_behaviors::audio_reference;
 pub(super) use encoder::compile;
 
+pub(super) fn object_filter_asset(node: Node<'_, '_>, path: &Path) -> io::Result<super::Marshaled> {
+    super::validate_attributes(node, &["id"], path)?;
+    let mut children = super::significant_children(node);
+    let filter = children
+        .next()
+        .filter(|child| child.has_tag_name((SAGE_NS, "Filter")))
+        .ok_or_else(|| invalid(path, "ObjectFilterAsset requires Filter"))?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected ObjectFilterAsset child"));
+    }
+    let mut data = super::binary::BinaryData {
+        payload: vec![0; 0x74],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut reference_types = Vec::new();
+    parking::encode_inline_filter(filter, 4, &mut data, &mut reference_types)?;
+    if !data.relocations.is_empty() {
+        data.relocations.push(u32::MAX);
+    }
+    Ok(super::Marshaled {
+        payload: data.payload,
+        relocations: data.relocations,
+        reference_types,
+        ..super::Marshaled::default()
+    })
+}
+
 use super::{asset_reference, compile_asset, declaration_id};
 use crate::compile::{
     CompiledAsset, Compiler, SAGE_NS, XML_NS, escape_xml, invalid, is_xml_whitespace,
