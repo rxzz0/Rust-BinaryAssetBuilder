@@ -180,6 +180,30 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "WallBuilderBehavior")) {
         return wall_builder(node, pointer, data, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "StreamState")) {
+        const KIND: u32 = 0xfef8_5f95;
+        let path = data.path;
+        validate_attributes(node, &["id", "StreamId"], path)?;
+        if has_content(node) {
+            return Err(invalid(path, "unexpected StreamState content"));
+        }
+        let stream_id = node
+            .attribute("StreamId")
+            .unwrap_or("0")
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| invalid(path, "invalid StreamId"))?;
+        let start = data.allocate(pointer, 12)?;
+        let parent = module_base(node, KIND, start, data, true)?;
+        data.word(start + 8, stream_id as u32);
+        return Ok(Some((
+            KIND,
+            Table::record(vec![
+                parent,
+                Entry::named("StreamId", 0x23e6_50b8, Target::Data(start + 8)),
+            ]),
+        )));
+    }
     if node.has_tag_name((SAGE_NS, "FireWeaponWhenDead")) {
         return fire_weapon_when_dead(node, pointer, data, references, reference_types).map(Some);
     }

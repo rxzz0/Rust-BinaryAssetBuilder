@@ -51,6 +51,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "OCLSpecialPower",
             "SquishCollide",
             "WallBuilderBehavior",
+            "StreamState",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -611,6 +612,11 @@ mod tests {
     #[test]
     fn stream_draw_matches_ea_batch() {
         assert_ea_fixture("stream-draw", 1);
+    }
+
+    #[test]
+    fn stream_state_matches_ea_batch() {
+        assert_ea_fixture("stream-state", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {
