@@ -158,7 +158,7 @@ fn status_bits_upgrade(
     data: &mut BinaryData<'_>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
-    use super::spawn::{UPGRADE, id_list, weak_reference};
+    use super::spawn::UPGRADE;
 
     const KIND: u32 = 0x786c_9458;
     const STATUSES: [(&str, u32, usize); 2] = [
@@ -171,10 +171,6 @@ fn status_bits_upgrade(
         .collect();
     validate_attributes(node, &allowed, path)?;
     let start = data.allocate(pointer, 0x5c)?;
-    let mut upgrade = vec![module_base(node, KIND, start, data, false)?];
-    for &(name, _, offset) in UPGRADE {
-        data.payload[start + offset] = boolean(node, name, name == "WaypointModeTerminal", path)?;
-    }
     for (name, _, offset) in STATUSES {
         super::secondary_damage::write_status_flags(
             node.attribute(name).unwrap_or(""),
@@ -182,8 +178,32 @@ fn status_bits_upgrade(
             data,
         )?;
     }
-    upgrade.extend(fields(start, UPGRADE));
     let mut children = significant_children(node).peekable();
+    let upgrade = upgrade_parent(node, KIND, start, data, reference_types, &mut children)?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected StatusBitsUpgrade child"));
+    }
+    let mut entries = vec![upgrade];
+    entries.extend(fields(start, &STATUSES));
+    Ok((KIND, Table::record(entries)))
+}
+
+fn upgrade_parent<'a, 'input: 'a>(
+    node: Node<'_, '_>,
+    kind: u32,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+    children: &mut std::iter::Peekable<impl Iterator<Item = Node<'a, 'input>>>,
+) -> io::Result<Entry> {
+    use super::spawn::{UPGRADE, id_list, weak_reference};
+
+    let mut upgrade = vec![module_base(node, kind, start, data, false)?];
+    for &(name, _, offset) in UPGRADE {
+        data.payload[start + offset] =
+            boolean(node, name, name == "WaypointModeTerminal", data.path)?;
+    }
+    upgrade.extend(fields(start, UPGRADE));
     let anim =
         match children.next_if(|child| child.has_tag_name((SAGE_NS, "CustomAnimAndDuration"))) {
             Some(child) => Target::Table(super::tech_upgrade::encode_anim(child, start + 8, data)?),
@@ -203,12 +223,7 @@ fn status_bits_upgrade(
         let list = id_list(data, start + offset, ids)?;
         upgrade.push(Entry::named(name, 0x26fa_cfc7, Target::Table(list)));
     }
-    if children.next().is_some() {
-        return Err(invalid(path, "unexpected StatusBitsUpgrade child"));
-    }
-    let mut entries = vec![base(0xae60_ae98, Table::record(upgrade))];
-    entries.extend(fields(start, &STATUSES));
-    Ok((KIND, Table::record(entries)))
+    Ok(base(0xae60_ae98, Table::record(upgrade)))
 }
 
 fn lift_object(
@@ -271,6 +286,125 @@ fn lift_object(
     Ok((KIND, Table::record(entries)))
 }
 
+fn attribute_modifier_aura(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x5e1c_afdb;
+    const BOOL: u32 = 0x77e3_f4f7;
+    const FIELDS: [(&str, u32, usize); 16] = [
+        ("AttributeModifierName", 0x09dd_cff3, 0x24),
+        ("RefreshDelay", 0x9986_69e8, 0x28),
+        ("Range", 0x6458_64f3, 0x2c),
+        ("AllowPowerWhenAttacking", BOOL, 0x60),
+        ("InitiallyActive", BOOL, 0x61),
+        ("RequiredConditions", 0x3d7e_e58a, 0x30),
+        ("AntiCategory", 0x45f1_59e8, 0x34),
+        ("AntiFX", 0x0d1c_8e83, 0x38),
+        ("RunWhileDead", BOOL, 0x62),
+        ("AllowSelf", BOOL, 0x63),
+        ("AffectContainedOnly", BOOL, 0x64),
+        ("AffectHordeMembersOnly", BOOL, 0x65),
+        ("AffectAttacheeOnly", BOOL, 0x66),
+        ("MaxActiveRank", 0x23e6_50b8, 0x3c),
+        ("RequiredObjectStatusFlags", 0xa7bd_811e, 0x40),
+        ("ShowDebugCircle", BOOL, 0x67),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(
+            super::spawn::UPGRADE
+                .iter()
+                .chain(&FIELDS)
+                .map(|&(name, _, _)| name),
+        )
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let mut children: Vec<_> = significant_children(node).collect();
+    let filter = children
+        .last()
+        .copied()
+        .filter(|child| child.has_tag_name((SAGE_NS, "ObjectFilter")));
+    if filter.is_some() {
+        children.pop();
+    }
+    let start = data.allocate(pointer, 0x68)?;
+    let mut filter_types = Vec::new();
+    let filter = match filter {
+        Some(child) => Target::Table(super::parking::encode_filter(
+            child,
+            start + 0x5c,
+            data,
+            &mut filter_types,
+        )?),
+        None => Target::Null,
+    };
+    let mut children = children.into_iter().peekable();
+    let inherited_type_start = reference_types.len();
+    let parent = upgrade_parent(node, KIND, start, data, reference_types, &mut children)?;
+    let inherited_types = reference_types.split_off(inherited_type_start);
+    if children.next().is_some() {
+        return Err(invalid(
+            path,
+            "unexpected AttributeModifierAuraUpdate child",
+        ));
+    }
+    for (name, token, offset) in FIELDS {
+        let value = node.attribute(name).unwrap_or("");
+        let offset = start + offset;
+        let word = match token {
+            BOOL => {
+                data.payload[offset] =
+                    boolean(node, name, name == "AllowPowerWhenAttacking", path)?;
+                continue;
+            }
+            0xa7bd_811e => {
+                super::secondary_damage::write_status_flags(value, offset, data)?;
+                continue;
+            }
+            0x09dd_cff3 | 0x0d1c_8e83 => super::passive_area::reference(
+                value,
+                if name == "AntiFX" {
+                    "FXList"
+                } else {
+                    "AttributeModifier"
+                },
+                path,
+                references,
+                reference_types,
+            )?,
+            0x9986_69e8 => sage_time(node.attribute(name).unwrap_or("0s"), name, path)?.to_bits(),
+            0x6458_64f3 => {
+                finite_number(node.attribute(name).unwrap_or("0"), name, path)?.to_bits()
+            }
+            0x23e6_50b8 => {
+                node.attribute(name)
+                    .unwrap_or("0")
+                    .trim()
+                    .parse::<i32>()
+                    .map_err(|_| invalid(path, format!("invalid {name}")))? as u32
+            }
+            0x3d7e_e58a => value.split_ascii_whitespace().try_fold(0, |bits, flag| {
+                Ok::<_, io::Error>(
+                    bits | (1 << super::super::global_ui::enum_value(flag, &["MOUNTED"], path)?),
+                )
+            })?,
+            0x45f1_59e8 => super::passive_area::category_flags(value, name, path)?,
+            _ => unreachable!("AttributeModifierAuraUpdate field type"),
+        };
+        data.word(offset, word);
+    }
+    let mut entries = vec![parent];
+    reference_types.extend(inherited_types);
+    reference_types.extend(filter_types);
+    entries.extend(fields(start, &FIELDS));
+    entries.push(Entry::named("ObjectFilter", 0xe46e_a3b2, filter));
+    Ok((KIND, Table::record(entries)))
+}
+
 pub(super) fn weapon_slot(value: &str, path: &std::path::Path) -> io::Result<u32> {
     super::super::global_ui::enum_value(
         value,
@@ -301,6 +435,9 @@ pub(super) fn encode(
     }
     if node.has_tag_name((SAGE_NS, "StatusBitsUpgrade")) {
         return status_bits_upgrade(node, pointer, data, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "AttributeModifierAuraUpdate")) {
+        return attribute_modifier_aura(node, pointer, data, references, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "LiftObjectUpdate")) {
         return lift_object(node, pointer, data, references, reference_types).map(Some);

@@ -76,24 +76,7 @@ pub(super) fn encode(
                 };
                 reference(value.unwrap_or(""), kind, path, references, reference_types)?
             }
-            CATEGORY => {
-                static CATEGORIES: OnceLock<Vec<String>> = OnceLock::new();
-                let values = CATEGORIES.get_or_init(|| {
-                    super::ai_update::enum_values(
-                        include_str!("../../../../schemas/ra3/xsd/AssetTypeAttributeModifier.xsd"),
-                        "AttributeModifierCategoryType",
-                    )
-                });
-                let mut bits = 0;
-                for flag in value.unwrap_or("").split_ascii_whitespace() {
-                    let index = values
-                        .iter()
-                        .position(|candidate| candidate == flag)
-                        .ok_or_else(|| invalid(path, format!("invalid {name} {flag}")))?;
-                    bits |= 1 << index;
-                }
-                bits
-            }
+            CATEGORY => category_flags(value.unwrap_or(""), name, path)?,
             DISABLED => {
                 let mut bits = 0;
                 for flag in value.unwrap_or("").split_ascii_whitespace() {
@@ -179,6 +162,23 @@ pub(super) fn encode(
         return Err(invalid(path, "unexpected PassiveAreaEffectBehavior child"));
     }
     Ok((KIND, Table::record(entries)))
+}
+
+pub(super) fn category_flags(value: &str, name: &str, path: &std::path::Path) -> io::Result<u32> {
+    static CATEGORIES: OnceLock<Vec<String>> = OnceLock::new();
+    let values = CATEGORIES.get_or_init(|| {
+        super::ai_update::enum_values(
+            include_str!("../../../../schemas/ra3/xsd/AssetTypeAttributeModifier.xsd"),
+            "AttributeModifierCategoryType",
+        )
+    });
+    value.split_ascii_whitespace().try_fold(0, |bits, flag| {
+        let index = values
+            .iter()
+            .position(|candidate| candidate == flag)
+            .ok_or_else(|| invalid(path, format!("invalid {name} {flag}")))?;
+        Ok(bits | (1 << index))
+    })
 }
 
 pub(super) fn reference(

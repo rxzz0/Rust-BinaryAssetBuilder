@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="AuraProbe">
+    <Behaviors>
+      <AttributeModifierAuraUpdate id="ModuleTag_Default"/>
+      <AttributeModifierAuraUpdate id="ModuleTag_Configured" AttributeModifierName="ProbeModifier" RefreshDelay="125ms" Range="20" AllowPowerWhenAttacking="false" InitiallyActive="true" RequiredConditions="MOUNTED" AntiCategory="BUFF DEBUFF" AntiFX="ProbeFx" RunWhileDead="true" AllowSelf="true" AffectContainedOnly="true" AffectHordeMembersOnly="true" AffectAttacheeOnly="true" MaxActiveRank="3" RequiredObjectStatusFlags="WALL_SEGMENT" ShowDebugCircle="true">
+        <TriggeredBy>ProbeUpgrade</TriggeredBy>
+        <ObjectFilter Rule="NONE"><IncludeThing>AuraProbe</IncludeThing></ObjectFilter>
+      </AttributeModifierAuraUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

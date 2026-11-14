@@ -162,6 +162,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut tech_modules = Vec::new();
     let mut chooser_relocations = Vec::new();
     let mut subobject_modules = Vec::new();
+    let mut aura_modules = Vec::new();
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
     let mut child_targets =
         children::encode(node, &mut data, &mut references, &mut reference_types)?;
@@ -241,6 +242,9 @@ pub(in crate::compile::static_assets) fn compile(
                 subobject_modules.push(start);
                 Some(result)
             } else {
+                if module.has_tag_name((SAGE_NS, "AttributeModifierAuraUpdate")) {
+                    aura_modules.push(data.payload.len() as u32);
+                }
                 behaviors_basic::encode(
                     module,
                     pointer,
@@ -389,6 +393,17 @@ pub(in crate::compile::static_assets) fn compile(
                 8 => return (start + 0x2c, 0),
                 0x10 => return (start + 0x2c, 1),
                 0x18 => return (start + 0x2c, 2),
+                _ => {}
+            }
+        }
+        // Aura modules list the filter pointer before inherited upgrade pointers.
+        let index = aura_modules.partition_point(|&start| start <= pointer);
+        if index > 0 {
+            let start = aura_modules[index - 1];
+            match pointer - start {
+                8 => return (start + 0x5c, 3),
+                0x10 => return (start + 0x5c, 4),
+                0x18 => return (start + 0x5c, 5),
                 _ => {}
             }
         }
