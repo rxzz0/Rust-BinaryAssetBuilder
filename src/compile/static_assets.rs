@@ -67,6 +67,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "OnDemandTextureImage" => (0x13db_2fbc, 41, on_demand_image),
         "DamageFX" => (0x0b2e_b0ab, 42, damage_fx::compile),
         "ObjectFilterAsset" => (0x4352_195e, 43, game_object::object_filter_asset),
+        "PlayerTech" => (0x35dd_9987, 44, player_tech),
         "GameObject" => (0xcb8d_0980, 10, game_object::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),
@@ -722,6 +723,17 @@ fn video_events(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
         references,
         ..Marshaled::default()
     })
+}
+
+fn player_tech(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "TechPointsRequired"], path)?;
+    let points = node
+        .attribute("TechPointsRequired")
+        .unwrap_or("0")
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| invalid(path, "invalid TechPointsRequired"))?;
+    reference_list(node, path, "TechDependency", "PlayerTech", vec![0, points])
 }
 
 fn player_tech_rank(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
