@@ -437,6 +437,7 @@ impl Compiler<'_> {
     ) -> io::Result<CompiledAsset> {
         match node.tag_name().name() {
             "AudioFile" => self.compile_audio_file(node, path, source),
+            "OnDemandTexture" => self.compile_on_demand_texture(node, path, source),
             "PathMusicEvent" | "PathMusicMap" | "PathMusicTrack" => {
                 self.compile_music(node, path, source)
             }

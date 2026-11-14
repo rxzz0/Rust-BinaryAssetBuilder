@@ -18,6 +18,38 @@ fn scratch_root() -> PathBuf {
 }
 
 #[test]
+fn on_demand_texture_sidecar_matches_ea_dds() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/on-demand-texture");
+    let stream = compile_static(&root.join("on-demand-convert.xml"), &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    assert_eq!(manifest.assets.len(), 2);
+    assert_eq!(&stream.files.bin[4..], &[0; 16]);
+    for asset in &manifest.assets {
+        let oracle: &[u8] = if asset.name == b"OnDemandTexture:ProbeToDxt" {
+            include_bytes!("fixtures/on-demand-texture/dxt.cdata")
+        } else {
+            assert_eq!(asset.name, b"OnDemandTexture:ProbeToRgba");
+            include_bytes!("fixtures/on-demand-texture/rgba.cdata")
+        };
+        let prefix = format!(
+            "{:08x}.{:08x}.{:08x}.",
+            asset.id.type_id, asset.type_hash, asset.id.instance_id
+        );
+        let (_, custom) = stream
+            .custom_data
+            .iter()
+            .find(|(name, _)| name.starts_with(&prefix))
+            .unwrap();
+        let CustomData::Bytes(data) = custom else {
+            panic!("expected DDS sidecar")
+        };
+        assert_eq!(&data[..12], &oracle[..12]);
+        assert_eq!(&data[16..], &oracle[16..]);
+        assert_eq!(&data[12..16], &asset.instance_hash.to_le_bytes());
+    }
+}
+
+#[test]
 fn audio_file_pcm_payload_and_cdata_match_ea() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio-pcm");
     let stream = compile_static(&root.join("audio-file-pcm.xml"), &root, &root).unwrap();

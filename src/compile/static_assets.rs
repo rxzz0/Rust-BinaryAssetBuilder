@@ -78,7 +78,7 @@ pub(super) fn has_encoder(type_name: &str) -> bool {
     encoder(type_name).is_some()
         || matches!(
             type_name,
-            "PathMusicEvent" | "PathMusicMap" | "PathMusicTrack" | "AudioFile"
+            "PathMusicEvent" | "PathMusicMap" | "PathMusicTrack" | "AudioFile" | "OnDemandTexture"
         )
 }
 
@@ -160,7 +160,11 @@ struct Marshaled {
     tokenized: bool,
 }
 
-fn validate_attributes(node: Node<'_, '_>, allowed: &[&str], path: &Path) -> io::Result<()> {
+pub(super) fn validate_attributes(
+    node: Node<'_, '_>,
+    allowed: &[&str],
+    path: &Path,
+) -> io::Result<()> {
     for attribute in node.attributes() {
         if attribute.namespace() == Some(super::XML_NS) && attribute.name() == "base" {
             continue;
