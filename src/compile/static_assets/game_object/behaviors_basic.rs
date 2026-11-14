@@ -535,20 +535,52 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "StatusBitsUpgrade")) {
         return status_bits_upgrade(node, pointer, data, reference_types).map(Some);
     }
-    if node.has_tag_name((SAGE_NS, "PowerUpgrade")) {
-        const KIND: u32 = 0xc3a6_2c68;
+    if matches!(node.tag_name().name(), "PowerUpgrade" | "LevelUpUpgrade") {
+        const LEVEL_FIELDS: [(&str, u32, usize); 3] = [
+            ("LevelsToGain", 0x23e6_50b8, 0x24),
+            ("LevelCap", 0x23e6_50b8, 0x28),
+            ("DoFlash", 0x77e3_f4f7, 0x2c),
+        ];
+        let level = node.has_tag_name((SAGE_NS, "LevelUpUpgrade"));
+        let (kind, size, extra) = if level {
+            (0x977d_25a1, 0x30, &LEVEL_FIELDS[..])
+        } else {
+            (0xc3a6_2c68, 0x24, &[][..])
+        };
         let path = data.path;
         let allowed: Vec<_> = std::iter::once("id")
-            .chain(super::spawn::UPGRADE.iter().map(|&(name, _, _)| name))
+            .chain(
+                super::spawn::UPGRADE
+                    .iter()
+                    .chain(extra)
+                    .map(|&(name, _, _)| name),
+            )
             .collect();
         validate_attributes(node, &allowed, path)?;
-        let start = data.allocate(pointer, 0x24)?;
+        let start = data.allocate(pointer, size)?;
         let mut children = significant_children(node).peekable();
-        let parent = upgrade_parent(node, KIND, start, data, reference_types, &mut children)?;
+        let parent = upgrade_parent(node, kind, start, data, reference_types, &mut children)?;
         if children.next().is_some() {
-            return Err(invalid(path, "unexpected PowerUpgrade child"));
+            return Err(invalid(
+                path,
+                format!("unexpected {} child", node.tag_name().name()),
+            ));
         }
-        return Ok(Some((KIND, Table::record(vec![parent]))));
+        if level {
+            for &(name, _, offset) in &LEVEL_FIELDS[..2] {
+                let value = node
+                    .attribute(name)
+                    .unwrap_or("0")
+                    .trim()
+                    .parse::<i32>()
+                    .map_err(|_| invalid(path, format!("invalid {name}")))?;
+                data.word(start + offset, value as u32);
+            }
+            data.payload[start + 0x2c] = boolean(node, "DoFlash", true, path)?;
+        }
+        let mut entries = vec![parent];
+        entries.extend(fields(start, extra));
+        return Ok(Some((kind, Table::record(entries))));
     }
     if node.has_tag_name((SAGE_NS, "AttributeModifierAuraUpdate")) {
         return attribute_modifier_aura(node, pointer, data, references, reference_types).map(Some);

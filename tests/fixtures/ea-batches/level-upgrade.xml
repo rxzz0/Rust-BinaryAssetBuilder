@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="LevelUpgradeProbe">
+    <Behaviors>
+      <LevelUpUpgrade id="ModuleTag_Default"/>
+      <LevelUpUpgrade id="ModuleTag_Configured" LevelsToGain="2" LevelCap="3" DoFlash="false"><TriggeredBy>ProbeUpgrade</TriggeredBy></LevelUpUpgrade>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
