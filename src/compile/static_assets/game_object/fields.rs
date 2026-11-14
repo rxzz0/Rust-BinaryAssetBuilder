@@ -33,6 +33,7 @@ pub(super) fn encode(
         "VoicePriority",
         "VoiceSelectUnderFireTimeout",
         "CommandPoints",
+        "PathPriority",
         "CommandSet",
         "SelectPortrait",
         "ButtonImage",
@@ -164,6 +165,7 @@ pub(super) fn encode(
         ("EnergyBonus", 0x8c),
         ("VoicePriority", 0xa4),
         ("CommandPoints", 0xe0),
+        ("PathPriority", 0x128),
     ] {
         if let Some(value) = node.attribute(name) {
             let number = value

@@ -720,6 +720,11 @@ mod tests {
         assert_ea_fixture("voice-under-fire", 1);
     }
 
+    #[test]
+    fn path_priority_matches_ea_batch() {
+        assert_ea_fixture("path-priority", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
