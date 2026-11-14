@@ -85,7 +85,12 @@ pub(super) fn has_encoder(type_name: &str) -> bool {
     encoder(type_name).is_some()
         || matches!(
             type_name,
-            "PathMusicEvent" | "PathMusicMap" | "PathMusicTrack" | "AudioFile" | "OnDemandTexture"
+            "PathMusicEvent"
+                | "PathMusicMap"
+                | "PathMusicTrack"
+                | "AudioFile"
+                | "OnDemandTexture"
+                | "Texture"
         )
 }
 

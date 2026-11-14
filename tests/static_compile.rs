@@ -85,6 +85,19 @@ fn ai_inheritance_applies_remove_and_replace_to_named_states() {
 }
 
 #[test]
+fn embedded_dds_texture_matches_ea_payload_and_relocations() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/on-demand-texture");
+    let stream = compile_static(&root.join("texture-probe.xml"), &root, &root).unwrap();
+    let oracle = include_bytes!("fixtures/on-demand-texture/texture-probe.asset");
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    assert_eq!(manifest.assets.len(), 1);
+    assert_eq!(manifest.assets[0].type_hash, 0x9f5f_f8da);
+    let split = oracle.len() - 8;
+    assert_eq!(&stream.files.bin[4..], &oracle[32..split]);
+    assert_eq!(&stream.files.relo[4..], &oracle[split..]);
+}
+
+#[test]
 fn on_demand_texture_sidecar_matches_ea_dds() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/on-demand-texture");
     let stream = compile_static(&root.join("on-demand-convert.xml"), &root, &root).unwrap();

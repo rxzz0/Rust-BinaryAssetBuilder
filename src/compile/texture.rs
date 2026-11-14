@@ -7,13 +7,14 @@ use roxmltree::Node;
 use std::{io, path::Path};
 
 impl Compiler<'_> {
-    pub(super) fn compile_on_demand_texture(
+    pub(super) fn compile_texture(
         &self,
         node: Node<'_, '_>,
         path: &Path,
         source: &str,
     ) -> io::Result<CompiledAsset> {
-        const TYPE_HASH: u32 = 0xf848_8ede;
+        let on_demand = node.tag_name().name() == "OnDemandTexture";
+        let type_hash = if on_demand { 0xf848_8ede } else { 0x9f5f_f8da };
         let (name, id) = declaration_id(node, path)?;
         validate_attributes(
             node,
@@ -51,14 +52,39 @@ impl Compiler<'_> {
         }
         // EA preserves the DDS bytes even when the XML requests another format.
         prepare_dds(&bytes, mipmaps, resizing).map_err(|error| invalid(&input, error))?;
-        let instance_hash = hash_xml(node, TYPE_HASH ^ 4, path)?
+        let instance_hash = hash_xml(node, type_hash ^ 4, path)?
             ^ memory_stream_hash(file_hash.to_le_bytes().to_vec());
         let size =
             u32::try_from(bytes.len()).map_err(|_| invalid(&input, "DDS sidecar is too large"))?;
+        if !on_demand {
+            let mut payload: Vec<_> = [0u32, 12, size]
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect();
+            payload.extend(bytes);
+            payload.resize(payload.len().next_multiple_of(4), 0);
+            return Ok(CompiledAsset {
+                id,
+                type_hash,
+                instance_hash,
+                name: format!("Texture:{name}"),
+                source: source.to_owned(),
+                payload,
+                relocations: [4u32, u32::MAX]
+                    .into_iter()
+                    .flat_map(u32::to_le_bytes)
+                    .collect(),
+                imports: Vec::new(),
+                references: Vec::new(),
+                custom_data: None,
+                tokenized: false,
+                sort_order: 47,
+            });
+        }
         let words = [
             id.type_id,
             id.instance_id,
-            TYPE_HASH,
+            type_hash,
             instance_hash,
             size.checked_add(8)
                 .ok_or_else(|| invalid(&input, "DDS sidecar is too large"))?,
@@ -74,7 +100,7 @@ impl Compiler<'_> {
         cdata.extend(u32::MAX.to_le_bytes());
         Ok(CompiledAsset {
             id,
-            type_hash: TYPE_HASH,
+            type_hash,
             instance_hash,
             name: format!("OnDemandTexture:{name}"),
             source: source.to_owned(),
