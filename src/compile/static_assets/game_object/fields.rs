@@ -34,6 +34,8 @@ pub(super) fn encode(
         "VoiceSelectUnderFireTimeout",
         "CommandPoints",
         "PathPriority",
+        "EvaEventSecondDamageFarFromFirstScanRange",
+        "EvaEventSecondDamageFarFromFirstTimeoutMS",
         "CommandSet",
         "SelectPortrait",
         "ButtonImage",
@@ -200,10 +202,20 @@ pub(super) fn encode(
         ("CampnessValueRadius", 0xb4),
         ("HealthBoxHeightOffset", 0xbc),
         ("ShockwaveResistance", 0xdc),
+        ("EvaEventSecondDamageFarFromFirstScanRange", 0x17c),
     ] {
         if let Some(value) = node.attribute(name) {
             data.word(offset, finite_float(value, name, data.path)?.to_bits());
         }
+    }
+    if let Some(value) = node.attribute("EvaEventSecondDamageFarFromFirstTimeoutMS") {
+        let milliseconds = value.trim().parse::<u32>().map_err(|_| {
+            invalid(
+                data.path,
+                "invalid EvaEventSecondDamageFarFromFirstTimeoutMS",
+            )
+        })?;
+        data.word(0x180, milliseconds.div_ceil(200));
     }
     if let Some(value) = node.attribute("ProductionQueueType") {
         data.word(
