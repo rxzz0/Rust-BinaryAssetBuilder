@@ -1,7 +1,7 @@
 use super::binary::BinaryData;
 use super::global_ui::enum_value;
 use super::{
-    Marshaled, finite_number, required_element, significant_children, text_value,
+    Marshaled, asset_reference, finite_number, required_element, significant_children, text_value,
     validate_attributes,
 };
 use crate::compile::{SAGE_NS, has_content, invalid, required};
@@ -92,6 +92,87 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
     }
     result.payload = binary.payload;
     result.relocations = binary.relocations;
+    Ok(result)
+}
+
+pub(super) fn container(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "Hierarchy"], path)?;
+    let mut data = BinaryData {
+        payload: vec![0; 16],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    if let Some(hierarchy) = node.attribute("Hierarchy") {
+        render_reference(hierarchy, "W3DHierarchy", 4, &mut data, &mut result)?;
+    }
+    let children: Vec<_> = significant_children(node).collect();
+    let start = data.list(8, children.len(), 16)?;
+    for (index, child) in children.into_iter().enumerate() {
+        if !child.has_tag_name((SAGE_NS, "SubObject")) {
+            return Err(invalid(path, "expected W3DContainer SubObject"));
+        }
+        validate_attributes(child, &["BoneIndex", "SubObjectID"], path)?;
+        let offset = start + 16 * index;
+        data.word(
+            offset,
+            uint(required(child, "BoneIndex", path)?, "BoneIndex", path)?,
+        );
+        data.string(offset + 4, child.attribute("SubObjectID").unwrap_or(""))?;
+        let mut children = significant_children(child);
+        let render = required_element(&mut children, "RenderObject", path)?;
+        end(children, path)?;
+        let mut children = significant_children(render);
+        let reference = children
+            .next()
+            .ok_or_else(|| invalid(path, "RenderObject requires Mesh or CollisionBox"))?;
+        let kind = match (
+            reference.tag_name().namespace(),
+            reference.tag_name().name(),
+        ) {
+            (Some(SAGE_NS), "Mesh") => "W3DMesh",
+            (Some(SAGE_NS), "CollisionBox") => "W3DCollisionBox",
+            _ => return Err(invalid(path, "RenderObject requires Mesh or CollisionBox")),
+        };
+        end(children, path)?;
+        render_reference(
+            text_value(reference, path)?,
+            kind,
+            offset + 12,
+            &mut data,
+            &mut result,
+        )?;
+    }
+    finish(data, result)
+}
+
+fn render_reference(
+    value: &str,
+    kind: &str,
+    offset: usize,
+    data: &mut BinaryData<'_>,
+    result: &mut Marshaled,
+) -> io::Result<()> {
+    let value = value.split_once('\\').map_or(value, |(name, _)| name);
+    if !value.trim().is_empty() {
+        let id = asset_reference(value, kind, data.path)?;
+        result.references.push(id.into());
+        result.reference_types.push(id.type_id);
+        result.imports.push(offset as u32);
+        data.word(offset, result.references.len() as u32);
+    }
+    Ok(())
+}
+
+fn finish(mut data: BinaryData<'_>, mut result: Marshaled) -> io::Result<Marshaled> {
+    if !data.relocations.is_empty() {
+        data.relocations.push(u32::MAX);
+    }
+    if !result.imports.is_empty() {
+        result.imports.push(u32::MAX);
+    }
+    result.payload = data.payload;
+    result.relocations = data.relocations;
     Ok(result)
 }
 
@@ -438,13 +519,11 @@ fn append_skin(
         return Err(invalid(path, "too many W3DMesh bones or influence streams"));
     }
     let used = groups.len().min(position_count);
-    let mut packed = Vec::with_capacity(count * 4);
-    for vertex in 0..count {
-        let mut indexes = [0; 4];
-        for index in 0..used {
-            indexes[index] = bones.binary_search(&groups[index][vertex].0).unwrap() as u8;
+    let mut packed = vec![0; count * 4];
+    for (index, group) in groups[..used].iter().enumerate() {
+        for (vertex, &(bone, _)) in group.iter().enumerate() {
+            packed[vertex * 4 + index] = bones.binary_search(&bone).unwrap() as u8;
         }
-        packed.extend(indexes);
     }
     streams.push(VertexStream {
         usage: 'i',

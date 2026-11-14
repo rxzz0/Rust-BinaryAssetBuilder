@@ -58,6 +58,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "ArmorTemplate" => (0x641a_d32e, 33, armor::compile),
         "UpgradeTemplate" => (0x4f8d_2969, 34, upgrade::compile),
         "W3DMesh" => (0xcd8a_089c, 35, w3d_mesh::compile),
+        "W3DContainer" => (0x619d_a33f, 36, w3d_mesh::container),
         "GameObject" => (0xcb8d_0980, 10, game_object::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),

@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <W3DContainer id="ContainerProbe" Hierarchy="ProbeHierarchy">
+    <SubObject BoneIndex="1" SubObjectID="Main"><RenderObject><Mesh>ProbeMesh</Mesh></RenderObject></SubObject>
+    <SubObject BoneIndex="2"><RenderObject><CollisionBox>ProbeBox</CollisionBox></RenderObject></SubObject>
+  </W3DContainer>
+</AssetDeclaration>

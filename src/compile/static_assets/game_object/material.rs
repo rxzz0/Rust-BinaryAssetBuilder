@@ -102,16 +102,16 @@ fn encode_material(
                 reference_types,
                 float_names,
             )?;
-            if let Some(imports) = imports.as_deref_mut() {
-                if kind == 0xa590_96a6 {
-                    let start = u32::from_le_bytes(
-                        data.payload[pointers + index * 4..pointers + index * 4 + 4]
-                            .try_into()
-                            .unwrap(),
-                    );
-                    if data.payload[start as usize + 12..start as usize + 16] != [0; 4] {
-                        imports.push(start + 12);
-                    }
+            if let Some(imports) = imports.as_deref_mut()
+                && kind == 0xa590_96a6
+            {
+                let start = u32::from_le_bytes(
+                    data.payload[pointers + index * 4..pointers + index * 4 + 4]
+                        .try_into()
+                        .unwrap(),
+                );
+                if data.payload[start as usize + 12..start as usize + 16] != [0; 4] {
+                    imports.push(start + 12);
                 }
             }
             items.push((
