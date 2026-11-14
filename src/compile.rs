@@ -439,8 +439,8 @@ impl Compiler<'_> {
             {
                 self.compile_inherited_ai(node, path, source)
             }
-            "GameObject" if node.attribute("inheritFrom").is_some() => {
-                self.compile_inherited_game_object(node, path, source)
+            "GameObject" | "AmbientStream" if node.attribute("inheritFrom").is_some() => {
+                self.compile_schema_inherited_asset(node, path, source)
             }
             _ => static_assets::compile_asset(node, path, source),
         }

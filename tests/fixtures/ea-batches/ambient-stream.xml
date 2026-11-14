@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <AmbientStream id="AmbientDefaults" />
+    <AmbientStream id="AmbientProbe" Volume="60" Control="RANDOMSTART ALLOW_KILL_MID_FILE" Priority="CRITICAL" Type="EVERYONE" MinRange="4400" MaxRange="5000" DryLevel="100" ReverbEffectLevel="0" SubmixSlider="AMBIENT">
+        <Filename>AmbientAudioProbe</Filename>
+    </AmbientStream>
+</AssetDeclaration>

@@ -57,7 +57,7 @@ use std::path::{Path, PathBuf};
 const XAI_NS: &str = "uri:ea.com:eala:asset:instance";
 
 impl Compiler<'_> {
-    pub(in crate::compile) fn compile_inherited_game_object(
+    pub(in crate::compile) fn compile_schema_inherited_asset(
         &mut self,
         node: Node<'_, '_>,
         path: &Path,
@@ -70,14 +70,14 @@ impl Compiler<'_> {
             .game_object_schema
             .as_ref()
             .expect("loaded GameObject schema");
-        let result = self.game_object_xml(node, path, schema, &mut Vec::new())?;
+        let result = self.schema_inherited_xml(node, path, schema, &mut Vec::new())?;
         let mut xml = String::new();
         result.write_xml(&mut xml, true);
         let document = Document::parse(&xml).map_err(|error| invalid(path, error))?;
         compile_asset(document.root_element(), path, source)
     }
 
-    fn game_object_xml(
+    fn schema_inherited_xml(
         &self,
         node: Node<'_, '_>,
         path: &Path,
@@ -96,18 +96,24 @@ impl Compiler<'_> {
         {
             return Err(invalid(
                 path,
-                format!("cyclic or excessively deep GameObject inheritance from {inherit_from}"),
+                format!(
+                    "cyclic or excessively deep {} inheritance from {inherit_from}",
+                    node.tag_name().name()
+                ),
             ));
         }
         if overlay.action == Some(Join::Remove) {
-            return Err(invalid(path, "cannot remove a top-level GameObject"));
+            return Err(invalid(
+                path,
+                format!("cannot remove a top-level {}", node.tag_name().name()),
+            ));
         }
         chain.push((path.to_path_buf(), id));
         let kind = node.tag_name().name();
         let mut result = Element::new(kind);
         self.with_xml_base(node, path, inherit_from, |parent, parent_path, included| {
             if overlay.action != Some(Join::Replace) {
-                let mut base = self.game_object_xml(parent, parent_path, schema, chain)?;
+                let mut base = self.schema_inherited_xml(parent, parent_path, schema, chain)?;
                 if included {
                     base.materialize(schema, kind, &mut 0, parent_path)?;
                 }
