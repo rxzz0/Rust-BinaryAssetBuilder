@@ -997,6 +997,11 @@ mod tests {
         assert_ea_fixture("weapon-damage", 1);
     }
 
+    #[test]
+    fn weapon_contained_matches_ea() {
+        assert_ea_fixture("weapon-contained", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

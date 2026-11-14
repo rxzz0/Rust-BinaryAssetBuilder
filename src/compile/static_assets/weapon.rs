@@ -141,6 +141,9 @@ fn encode_nuggets(
             (Some(SAGE_NS), "DamageNugget") => {
                 (0xc0f5_3e99, fire_on_objects(child, pointer, data, out)?)
             }
+            (Some(SAGE_NS), "DamageContainedNugget") => {
+                (0x929b_5398, fire_on_objects(child, pointer, data, out)?)
+            }
             (Some(SAGE_NS), "ProjectileNugget") => (
                 0x87c7_bdcc,
                 simple_reference_nugget(child, pointer, data, out, true)?,
@@ -284,7 +287,8 @@ fn fire_on_objects(
     let path = data.path;
     let dot = node.has_tag_name((SAGE_NS, "DOTNugget"));
     let direct = node.has_tag_name((SAGE_NS, "DamageNugget"));
-    let is_damage = dot || direct;
+    let contained = node.has_tag_name((SAGE_NS, "DamageContainedNugget"));
+    let is_damage = dot || direct || contained;
     validate_attributes(
         node,
         if is_damage {
@@ -299,6 +303,8 @@ fn fire_on_objects(
                 "DamageFXType",
                 "DeathType",
                 "RemoveIfHealed",
+                "MaxUnitsToDamage",
+                "WindowBlastFX",
             ]
         } else {
             &[
@@ -311,7 +317,16 @@ fn fire_on_objects(
         },
         path,
     )?;
-    let start = data.allocate(pointer, if direct { 0x98 } else { 0xa4 })?;
+    let start = data.allocate(
+        pointer,
+        if contained {
+            0x110
+        } else if direct {
+            0x98
+        } else {
+            0xa4
+        },
+    )?;
     for (offset, value) in [
         (0, 0x7814_daf0),
         (0x2c, (-1f32).to_bits()),
@@ -341,7 +356,16 @@ fn fire_on_objects(
         finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?.to_bits(),
     );
     if is_damage {
-        data.word(start, if dot { 0xefbb_5226 } else { 0xc0f5_3e99 });
+        data.word(
+            start,
+            if dot {
+                0xefbb_5226
+            } else if contained {
+                0x929b_5398
+            } else {
+                0xc0f5_3e99
+            },
+        );
         data.word(
             start + 0x28,
             finite_number(node.attribute("Damage").unwrap_or("0"), "Damage", path)?.to_bits(),
@@ -410,16 +434,28 @@ fn fire_on_objects(
         out.references.push(id.into());
         data.word(start + 0x98, out.references.len() as u32);
     }
-    let mut children = significant_children(node);
-    let filter = if let Some(filter) = children.next() {
-        let name = if is_damage {
-            "SpecialObjectFilter"
-        } else {
-            "Filter"
-        };
-        if !filter.has_tag_name((SAGE_NS, name)) || children.next().is_some() {
-            return Err(invalid(path, "unsupported FireOnObjectsNugget child"));
-        }
+    if contained
+        && let Some(value) = node
+            .attribute("WindowBlastFX")
+            .filter(|v| !v.trim().is_empty())
+    {
+        let id = asset_reference(
+            value.split_once('\\').map_or(value, |(name, _)| name),
+            "FXList",
+            path,
+        )?;
+        out.reference_types.push(id.type_id);
+        out.references.push(id.into());
+        data.word(start + 0x9c, out.references.len() as u32);
+    }
+    let mut children = significant_children(node).peekable();
+    let name = if is_damage {
+        "SpecialObjectFilter"
+    } else {
+        "Filter"
+    };
+    let filter = if let Some(filter) = children.next_if(|child| child.has_tag_name((SAGE_NS, name)))
+    {
         Target::Table(super::game_object::encode_object_filter(
             filter,
             start + if is_damage { 0x14 } else { 0x9c },
@@ -429,6 +465,22 @@ fn fire_on_objects(
     } else {
         Target::Null
     };
+    let contained_filter = if contained {
+        let child = children
+            .next_if(|child| child.has_tag_name((SAGE_NS, "DamageObjectFilter")))
+            .ok_or_else(|| invalid(path, "DamageContainedNugget requires DamageObjectFilter"))?;
+        Some(super::game_object::encode_inline_object_filter(
+            child,
+            start + 0xa0,
+            data,
+            &mut out.reference_types,
+        )?)
+    } else {
+        None
+    };
+    if children.next().is_some() {
+        return Err(invalid(path, "unsupported damage nugget child"));
+    }
     let mut effect = effect_table(start);
     let filter = if is_damage {
         effect.replace_target("SpecialObjectFilter", filter);
@@ -449,6 +501,21 @@ fn fire_on_objects(
     ));
     if direct {
         return Ok(Table::record(damage));
+    }
+    if let Some(filter) = contained_filter {
+        let max = node
+            .attribute("MaxUnitsToDamage")
+            .unwrap_or("100")
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| invalid(path, "invalid MaxUnitsToDamage"))?;
+        data.word(start + 0x98, max as u32);
+        return Ok(Table::record(vec![
+            Entry::new(1, 0xc0f5_3e99, Target::Table(Table::record(damage))),
+            Entry::named("MaxUnitsToDamage", 0x23e6_50b8, Target::Data(start + 0x98)),
+            Entry::named("WindowBlastFX", 0x0d1c_8e83, Target::Data(start + 0x9c)),
+            Entry::named("DamageObjectFilter", 0xe46e_a3b2, Target::Table(filter)),
+        ]));
     }
     if dot {
         let mut entries = vec![Entry::new(

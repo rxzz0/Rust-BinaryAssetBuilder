@@ -127,7 +127,7 @@ pub(in crate::compile::static_assets) fn encode_filter(
     encode_inline_filter(node, start, data, reference_types)
 }
 
-pub(super) fn encode_inline_filter(
+pub(in crate::compile::static_assets) fn encode_inline_filter(
     node: Node<'_, '_>,
     start: usize,
     data: &mut BinaryData<'_>,

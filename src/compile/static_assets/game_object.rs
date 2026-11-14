@@ -25,6 +25,7 @@ mod line_segment_damage;
 pub(super) mod material;
 mod parking;
 pub(super) use parking::encode_filter as encode_object_filter;
+pub(super) use parking::encode_inline_filter as encode_inline_object_filter;
 mod passive_area;
 mod physics;
 mod production;
