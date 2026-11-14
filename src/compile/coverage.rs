@@ -55,6 +55,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "StatusBitsUpgrade",
             "SecondaryObjectListenerModule",
             "LiftObjectUpdate",
+            "GarrisonContain",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -635,6 +636,11 @@ mod tests {
     #[test]
     fn lift_object_matches_ea_batch() {
         assert_ea_fixture("lift-object", 1);
+    }
+
+    #[test]
+    fn garrison_contain_matches_ea_batch() {
+        assert_ea_fixture("garrison-contain", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

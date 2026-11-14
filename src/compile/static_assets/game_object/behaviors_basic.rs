@@ -305,6 +305,9 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "LiftObjectUpdate")) {
         return lift_object(node, pointer, data, references, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "GarrisonContain")) {
+        return super::garrison::encode(node, pointer, data, references, reference_types).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "SecondaryObjectListenerModule")) {
         return super::secondary_listener::encode(node, pointer, data, references, reference_types)
             .map(Some);

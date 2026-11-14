@@ -246,6 +246,14 @@ pub(super) fn write_status_flags(
     start: usize,
     data: &mut BinaryData<'_>,
 ) -> io::Result<()> {
+    for flag in value.split_ascii_whitespace() {
+        let index = status_index(flag, data.path)?;
+        data.payload[start + index / 8] |= 1 << (index % 8);
+    }
+    Ok(())
+}
+
+pub(super) fn status_index(flag: &str, path: &std::path::Path) -> io::Result<usize> {
     static FLAGS: OnceLock<Vec<String>> = OnceLock::new();
     let flags = FLAGS.get_or_init(|| {
         Document::parse(include_str!(
@@ -260,15 +268,11 @@ pub(super) fn write_status_flags(
         .filter_map(|node| node.attribute("value").map(str::to_owned))
         .collect()
     });
-    for flag in value.split_ascii_whitespace() {
-        let index = flags
-            .iter()
-            .take(STATUS_BYTES * 8)
-            .position(|value| value == flag)
-            .ok_or_else(|| invalid(data.path, format!("unknown object status {flag}")))?;
-        data.payload[start + index / 8] |= 1 << (index % 8);
-    }
-    Ok(())
+    flags
+        .iter()
+        .take(STATUS_BYTES * 8)
+        .position(|value| value == flag)
+        .ok_or_else(|| invalid(path, format!("unknown object status {flag}")))
 }
 
 fn check_leaf(node: Node<'_, '_>, attributes: &[&str], data: &BinaryData<'_>) -> io::Result<()> {

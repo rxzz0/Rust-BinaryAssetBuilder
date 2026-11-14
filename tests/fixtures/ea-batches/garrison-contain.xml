@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="GarrisonContainProbe">
+    <Behaviors>
+      <GarrisonContain id="ModuleTag_Default"/>
+      <GarrisonContain id="ModuleTag_Configured" ContainMax="3" EnterSound="ProbeEnter" ExitSound="ProbeExit" DamagePercentToUnits="25%" PassengersTestCollisionHeight="5" PassengersInTurret="true" NumberOfExitPaths="2" DoorOpenTime="3" AllowOwnPlayerInsideOverride="true" AllowAlliesInside="false" AllowEnemiesInside="false" AllowNeutralInside="false" PassDisabilityToRiders="true" IgnoreDisabledBitsForRiders="EMP" ShowPips="false" CollidePickup="false" EjectPassengersOnDeath="false" KillPassengersOnDeath="true" HasObjectStatusOfContainedEntry="false" Enabled="false" ObjectStatusOfContained="ENCLOSED" ObjectStatusWhileContaining="WALL_SEGMENT" ModifierRequiredTime="5" KillIfEmptyTime="2s" MobileGarrison="true" ImmuneToClearBuildingAttacks="true" ResetInitialTeamOnCapture="true">
+        <PassengerFilter Rule="ANY" Include="INFANTRY"/>
+        <DieMuxData DeathTypes="ALL" DeathTypesForbidden="SUICIDED"/>
+        <PassengerData BonePrefix="BONE" MaxPassengers="4" SlingUnderBone="true"><Filter Rule="ANY"/></PassengerData>
+        <ModifierToGiveOnExit>ProbeModifier</ModifierToGiveOnExit>
+        <MemberTemplateStatusInfo ThingTemplate="GarrisonContainProbe" ObjectStatus="WALL_SEGMENT"/>
+        <InitialRoster TemplateId="GarrisonContainProbe" Count="2"/>
+      </GarrisonContain>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

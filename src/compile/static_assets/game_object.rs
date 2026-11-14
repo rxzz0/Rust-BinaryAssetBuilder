@@ -15,6 +15,7 @@ mod encoder;
 mod engineer;
 mod fields;
 mod fx_list_behavior;
+mod garrison;
 mod infiltrator;
 mod laser_draw;
 mod laser_state;
