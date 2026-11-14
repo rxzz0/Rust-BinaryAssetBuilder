@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <AIPersonalityDefinition id="OpeningChoiceProbe" PersonalityType="Probe">
+        <OpeningMove Name="ProbeOpening" Weight="60%" Difficulty="HARD">
+            <Heuristic><PathToTargetHeuristic PathExists="false" ObjectTypeToUseForTest="ProbeInfantry" LocomotorConditionToUseForTest="NORMAL" /></Heuristic>
+        </OpeningMove>
+        <OpeningMove Name="DefaultOpening" />
+        <CountAsStructureForBuildPurposesFilter />
+    </AIPersonalityDefinition>
+</AssetDeclaration>

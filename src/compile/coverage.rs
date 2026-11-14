@@ -865,6 +865,11 @@ mod tests {
         assert_ea_fixture("ai-unit-modifiers", 1);
     }
 
+    #[test]
+    fn ai_opening_choice_matches_ea() {
+        assert_ea_fixture("ai-opening-choice", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

@@ -174,6 +174,7 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             }
             "BudgetState" => Some((required(item, "State", path)?, "AIBudgetStateDefinition")),
             "BuildState" => Some((required(item, "State", path)?, "AIBuildStateDefinition")),
+            "OpeningMove" => Some((required(item, "Name", path)?, "SkirmishOpeningMove")),
             IN_TROUBLE => Some((
                 required(item, "ObjectLostFilter", path)?,
                 "ObjectFilterAsset",
@@ -197,38 +198,46 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
         if name == FILTER {
             data.reference_types.extend(filter_reference_types(item));
         }
-        children[index].push((item, ordinal));
+        children[index].push((item, ordinal, data.reference_types.len()));
     }
 
+    let mut nested_types = Vec::new();
     for ((name, field, size), items) in CHILDREN.into_iter().zip(children) {
         match name {
             CRITERIA => match items.as_slice() {
                 [] => (),
-                [(item, _)] => write_base_criteria(*item, field, &mut binary)?,
+                [(item, _, _)] => write_base_criteria(*item, field, &mut binary)?,
                 _ => return Err(invalid(path, "multiple AI base selection criteria")),
             },
             IN_TROUBLE => match items.as_slice() {
                 [] => (),
-                [(item, ordinal)] => {
+                [(item, ordinal, _)] => {
                     let offset = binary.allocate(field, size)?;
                     write_item(*item, name, offset, *ordinal, &mut binary, &mut data)?;
                 }
                 _ => return Err(invalid(path, "multiple in-trouble feedback controls")),
             },
             FILTER => {
-                let [(item, _)] = items.as_slice() else {
+                let [(item, _, _)] = items.as_slice() else {
                     return Err(invalid(path, "expected one AI structure filter"));
                 };
                 object_filter(*item, field, &mut binary)?;
             }
             _ => {
                 let first = binary.list(field, items.len(), size)?;
-                for (index, (item, ordinal)) in items.into_iter().enumerate() {
+                for (index, (item, ordinal, type_index)) in items.into_iter().enumerate() {
                     let offset = first + index * size;
+                    let before = data.reference_types.len();
                     write_item(item, name, offset, ordinal, &mut binary, &mut data)?;
+                    if before != data.reference_types.len() {
+                        nested_types.push((type_index, data.reference_types.split_off(before)));
+                    }
                 }
             }
         }
+    }
+    for (index, types) in nested_types.into_iter().rev() {
+        data.reference_types.splice(index..index, types);
     }
     binary.relocations.sort_unstable();
     binary.relocations.push(u32::MAX);
@@ -247,13 +256,14 @@ pub(super) const IN_TROUBLE: &str = "InTroubleSkirmishFeedbackControl";
 const ALL_DIFFICULTIES: &str = "EASY MEDIUM HARD BRUTAL";
 
 // Schema order also determines the allocation order of the trailing data.
-pub(super) const CHILDREN: [(&str, usize, usize); 14] = [
+pub(super) const CHILDREN: [(&str, usize, usize); 15] = [
     ("Side", 236, 4),
     ("UnitCap", 252, 8),
     ("ResourceMultiplierCheat", 300, 8),
     ("StrategicDirectiveFeedback", 308, 12),
     ("SkirmishGameEventFeedback", 316, 8),
     ("PowerChoice", 324, 8),
+    ("OpeningMove", 332, 16),
     ("StrategicState", 340, 12),
     ("BudgetState", 348, 12),
     ("BuildState", 356, 12),
@@ -292,7 +302,7 @@ fn write_item(
     data: &mut Marshaled,
 ) -> io::Result<()> {
     let path = binary.path;
-    if name != "Side" && has_content(node) {
+    if !matches!(name, "Side" | "OpeningMove") && has_content(node) {
         return Err(invalid(path, format!("unexpected content in {name}")));
     }
     let value = |field, default, kind: FieldKind| {
@@ -376,6 +386,24 @@ fn write_item(
             binary.word(offset + 4, ordinal);
             binary.word(offset + 8, difficulty()?);
             data.imports.push((offset + 4) as u32);
+        }
+        "OpeningMove" => {
+            validate_attributes(node, &["Name", "Weight", "Difficulty"], path)?;
+            binary.word(offset, ordinal);
+            binary.word(offset + 4, value("Weight", "100%", Percent)?);
+            binary.word(offset + 8, difficulty()?);
+            data.imports.push(offset as u32);
+            let mut children = significant_children(node);
+            if let Some(heuristic) = children.next() {
+                if !heuristic.has_tag_name((SAGE_NS, "Heuristic")) || children.next().is_some() {
+                    return Err(invalid(path, "unsupported OpeningMove child"));
+                }
+                let count = binary.allocate(offset + 12, 8)?;
+                data.reference_types
+                    .extend(super::ai_heuristics::write_heuristics(
+                        heuristic, count, binary,
+                    )?);
+            }
         }
         "SpecificUnitCap" => {
             validate_attributes(node, &["Unit", "Cap", "Difficulty"], path)?;
