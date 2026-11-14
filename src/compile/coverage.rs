@@ -87,6 +87,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "LifetimeUpdate",
             "SuckUpObjectsUpdate",
             "SqueezeFlingUpdate",
+            "GatherEjectUpdate",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -937,6 +938,11 @@ mod tests {
     #[test]
     fn squeeze_fling_matches_ea() {
         assert_ea_fixture("squeeze-fling", 1);
+    }
+
+    #[test]
+    fn gather_eject_matches_ea() {
+        assert_ea_fixture("gather-eject", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

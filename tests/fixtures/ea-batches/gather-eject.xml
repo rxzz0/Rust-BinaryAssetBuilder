@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="GatherEjectProbe"><Behaviors>
+ <GatherEjectUpdate id="Default"><RotationSpeed/><UnitSpacing/><Filter/></GatherEjectUpdate>
+ <GatherEjectUpdate id="Explicit" Lifetime="8s" Slots="3" ScanTime="0.4s" HeightOffGround="75" EffectDistance="200" LiftOffGroundDistance="55" GatherAcceleration="0.05"><RotationSpeed x="0.05" z="0.1"/><UnitSpacing x="20" y="30" z="40"/><Filter Rule="ANY" Include="VEHICLE" StatusBitFlagsExclude="UNATTACKABLE"/></GatherEjectUpdate>
+</Behaviors><Body><PropBody id="Body" /></Body></GameObject></AssetDeclaration>

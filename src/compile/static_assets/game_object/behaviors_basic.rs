@@ -895,6 +895,9 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "SuckUpObjectsUpdate")) {
         return suck_up_objects(node, pointer, data, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "GatherEjectUpdate")) {
+        return gather_eject(node, pointer, data, reference_types).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "SqueezeFlingUpdate")) {
         return super::squeeze_fling::encode(node, pointer, data, references, reference_types)
             .map(Some);
@@ -1140,6 +1143,76 @@ fn queue_dock(
         0x1572_3e0b,
         Target::Data(offset),
     ));
+    Ok((KIND, Table::record(entries)))
+}
+
+fn gather_eject(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xe611_c8ee;
+    const TIME: u32 = 0x9986_69e8;
+    const REAL: u32 = 0x6458_64f3;
+    const INT: u32 = 0x23e6_50b8;
+    let fields = [
+        ("Lifetime", TIME, 8, "10s"),
+        ("Slots", INT, 0xc, "5"),
+        ("ScanTime", TIME, 0x10, "0.2s"),
+        ("HeightOffGround", REAL, 0x14, "50"),
+        ("EffectDistance", REAL, 0x18, "125"),
+        ("LiftOffGroundDistance", REAL, 0x1c, "75"),
+        ("GatherAcceleration", REAL, 0x20, "0.01"),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = ["id"]
+        .into_iter()
+        .chain(fields.map(|(name, ..)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let start = data.allocate(pointer, 0xac)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    for (name, ty, offset, default) in fields {
+        let value = node.attribute(name).unwrap_or(default);
+        let word = match ty {
+            INT => value
+                .trim()
+                .parse::<i32>()
+                .map_err(|_| invalid(path, "invalid GatherEjectUpdate Slots"))?
+                as u32,
+            TIME => sage_time(value, name, path)?.to_bits(),
+            _ => finite_number(value, name, path)?.to_bits(),
+        };
+        data.word(start + offset, word);
+        entries.push(Entry::named(name, ty, Target::Data(start + offset)));
+    }
+    let mut children = significant_children(node);
+    for (name, offset) in [("RotationSpeed", 0x24), ("UnitSpacing", 0x30)] {
+        let vector = children
+            .next()
+            .filter(|child| child.has_tag_name((SAGE_NS, name)) && !has_content(*child))
+            .ok_or_else(|| invalid(path, format!("GatherEjectUpdate requires {name}")))?;
+        validate_attributes(vector, &["x", "y", "z"], path)?;
+        for (axis, component) in ["x", "y", "z"].into_iter().zip([0, 4, 8]) {
+            let value = finite_number(vector.attribute(axis).unwrap_or("0"), axis, path)?;
+            data.word(start + offset + component, value.to_bits());
+        }
+        entries.push(Entry::named(
+            name,
+            0x2936_8077,
+            Target::Data(start + offset),
+        ));
+    }
+    let filter = children
+        .next()
+        .filter(|child| child.has_tag_name((SAGE_NS, "Filter")))
+        .ok_or_else(|| invalid(path, "GatherEjectUpdate requires Filter"))?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected GatherEjectUpdate content"));
+    }
+    let filter = super::parking::encode_inline_filter(filter, start + 0x3c, data, reference_types)?;
+    entries.push(Entry::named("Filter", 0xe46e_a3b2, Target::Table(filter)));
     Ok((KIND, Table::record(entries)))
 }
 
