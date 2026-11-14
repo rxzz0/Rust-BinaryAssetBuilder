@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><WeaponTemplate id="WeaponTimingProbe" Flags="NOT_ATTRACTED_BY_MAGNETS" RequiredAntiMask="ANTI_GROUND ANTI_WATER" RadiusDamageAffects="ALLIES">
+  <PreAttackDelay MinSeconds="1s" MaxSeconds="2s" />
+  <FiringDuration MinSeconds="3s" MaxSeconds="4s" />
+  <CoolDownDelayBetweenShots MinSeconds="5s" MaxSeconds="6s" />
+  <ClipReloadTime MinSeconds="7s" MaxSeconds="8s" />
+</WeaponTemplate></AssetDeclaration>
