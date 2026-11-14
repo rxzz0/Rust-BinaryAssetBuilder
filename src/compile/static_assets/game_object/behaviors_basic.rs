@@ -933,6 +933,7 @@ pub(super) fn encode(
         "ObjectSMCHelper" => (0x7f72_f242, 8, None),
         "ObjectDefectionHelper" => (0x18a4_208f, 8, None),
         "RadarBehavior" => (0x2e54_6f8e, 8, None),
+        "StoreTemplateIDBehavior" => (0x50b8_001c, 8, None),
         "AttributeModifierPoolUpdate" => (0xe622_f055, 8, None),
         "StancesBehavior" => (0xc0a1_e43d, 12, Some("StanceTemplate")),
         "LUAEventList" => (0xfa6a_c8b6, 16, Some("EventListName")),
@@ -978,7 +979,7 @@ pub(super) fn encode(
             inherited(0x30a3_6b8d, inherited(0xa50d_729a, behavior)),
         )));
     }
-    if matches!(kind, 0x1b33_7783 | 0x331e_6db8) {
+    if matches!(kind, 0x1b33_7783 | 0x331e_6db8 | 0x50b8_001c) {
         return Ok(Some((kind, inherited(0xa50d_729a, behavior))));
     }
     if kind == 0xfa6a_c8b6 {
