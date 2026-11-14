@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <OnDemandTextureImage id="DemandImageProbe" Texture="DemandTextureProbe" Rotated="true">
+        <Dimensions x="41" y="29" />
+        <Coords x="-5" y="7" />
+        <TextureDimensions x="128" y="64" />
+    </OnDemandTextureImage>
+</AssetDeclaration>

@@ -63,6 +63,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "W3DContainer" => (0x619d_a33f, 36, w3d_mesh::container),
         "AmbientStream" => (0x6d16_24fb, 37, audio::single_sound),
         "AudioEvent" => (0x560c_2e45, 38, audio::single_sound),
+        "OnDemandTextureImage" => (0x13db_2fbc, 41, on_demand_image),
         "GameObject" => (0xcb8d_0980, 10, game_object::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),
@@ -586,6 +587,53 @@ fn text_value<'a>(node: Node<'a, '_>, path: &Path) -> io::Result<&'a str> {
             format!("expected ASCII text in {}", node.tag_name().name()),
         )),
     }
+}
+
+fn on_demand_image(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "Texture", "Rotated"], path)?;
+    let mut words = [0; 9];
+    let mut result = Marshaled::default();
+    if let Some(texture) = node
+        .attribute("Texture")
+        .filter(|value| !value.trim().is_empty())
+    {
+        let texture = texture.split_once('\\').map_or(texture, |(name, _)| name);
+        let id = asset_reference(texture, "OnDemandTexture", path)?;
+        result.references.push(id.into());
+        result.reference_types.push(id.type_id);
+        result.imports.extend([4, u32::MAX]);
+        words[1] = 1;
+    }
+    words[8] = match node.attribute("Rotated").unwrap_or("false").trim() {
+        "true" | "1" => 1,
+        "false" | "0" => 0,
+        _ => return Err(invalid(path, "invalid Rotated")),
+    };
+    let mut children = significant_children(node);
+    for (index, name) in ["Dimensions", "Coords", "TextureDimensions"]
+        .into_iter()
+        .enumerate()
+    {
+        let child = children
+            .next()
+            .filter(|child| child.has_tag_name((SAGE_NS, name)) && !has_content(*child))
+            .ok_or_else(|| invalid(path, format!("expected {name}")))?;
+        validate_attributes(child, &["x", "y"], path)?;
+        for (axis, name) in ["x", "y"].into_iter().enumerate() {
+            words[2 + index * 2 + axis] = child
+                .attribute(name)
+                .unwrap_or("0")
+                .trim()
+                .parse::<i32>()
+                .map_err(|_| invalid(path, format!("invalid image coordinate {name}")))?
+                as u32;
+        }
+    }
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected OnDemandTextureImage child"));
+    }
+    result.payload = encode_words(words);
+    Ok(result)
 }
 
 fn unit_intro(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
