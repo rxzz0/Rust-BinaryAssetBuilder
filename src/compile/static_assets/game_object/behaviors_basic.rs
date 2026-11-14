@@ -895,6 +895,10 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "SuckUpObjectsUpdate")) {
         return suck_up_objects(node, pointer, data, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "SqueezeFlingUpdate")) {
+        return super::squeeze_fling::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "BezierProjectile")) {
         return super::bezier_projectile::encode(node, pointer, data, references, reference_types)
             .map(Some);

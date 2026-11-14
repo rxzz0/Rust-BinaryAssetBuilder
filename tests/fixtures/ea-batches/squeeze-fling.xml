@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="SqueezeFlingProbe"><Behaviors>
+ <SqueezeFlingUpdate id="Default"><Filter /></SqueezeFlingUpdate>
+ <SqueezeFlingUpdate id="Explicit" ScanTime="0.5s" DelayBetweenVictimsTime="0.6s" EffectDistance="200" GatherAcceleration="0.2" ModelLength="190" ArmTemplate="ArmProbe" VictimShader="ShaderProbe" HeightOffGround="40">
+  <Filter Rule="ANY" Include="VEHICLE"><ExcludeThing>UnitProbe</ExcludeThing></Filter><KillFilter Rule="ANY" Include="INFANTRY" />
+  <ParticleData SourceBone="Source" DestinationBone="Destination" ParticleSystem="ParticleProbe"/><ParticleData />
+ </SqueezeFlingUpdate>
+</Behaviors><Body><PropBody id="Body" /></Body></GameObject></AssetDeclaration>

@@ -37,6 +37,7 @@ mod shadow;
 mod slaved;
 mod slow_death;
 mod spawn;
+mod squeeze_fling;
 mod stream_draw;
 mod structures;
 mod subobjects;
