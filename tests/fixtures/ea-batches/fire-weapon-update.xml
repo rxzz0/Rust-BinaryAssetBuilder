@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="FireWeaponUpdateProbe">
+    <Behaviors>
+      <FireWeaponUpdate id="DefaultFire" />
+      <FireWeaponUpdate id="RepeatFire" FireInterval="0.25s" AliveOnly="true" ActiveWhenDisabled="EMP">
+        <FireWeaponNugget WeaponName="ProbeWeapon" FireDelay="0.5s" OneShot="true"><Offset x="1" y="2" z="3" /></FireWeaponNugget>
+        <FireWeaponNugget WeaponName="SecondWeapon" />
+        <ObjectStatusValidation ForbiddenStatus="IS_FIRING_WEAPON" />
+      </FireWeaponUpdate>
+    </Behaviors>
+    <Body><PropBody id="Body" /></Body>
+  </GameObject>
+</AssetDeclaration>

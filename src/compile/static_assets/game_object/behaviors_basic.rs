@@ -877,6 +877,9 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "ChargeWeaponUpdate")) {
         return charge_weapon(node, pointer, data).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "FireWeaponUpdate")) {
+        return fire_weapon_update(node, pointer, data, references, reference_types).map(Some);
+    }
     if matches!(
         node.tag_name().name(),
         "ReplaceSelfSpecialAbility"
@@ -1074,6 +1077,134 @@ fn queue_dock(
         0x1572_3e0b,
         Target::Data(offset),
     ));
+    Ok((KIND, Table::record(entries)))
+}
+
+fn fire_weapon_update(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xb28c_3d52;
+    let path = data.path;
+    validate_attributes(
+        node,
+        &["id", "FireInterval", "AliveOnly", "ActiveWhenDisabled"],
+        path,
+    )?;
+    let mut nuggets = Vec::new();
+    let mut status = None;
+    for child in significant_children(node) {
+        if child.has_tag_name((SAGE_NS, "FireWeaponNugget")) && status.is_none() {
+            nuggets.push(child);
+        } else if child.has_tag_name((SAGE_NS, "ObjectStatusValidation")) && status.is_none() {
+            status = Some(child);
+        } else {
+            return Err(invalid(path, "unsupported FireWeaponUpdate child"));
+        }
+    }
+    let start = data.allocate(pointer, 0x20)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    data.word(
+        start + 8,
+        sage_time(
+            node.attribute("FireInterval").unwrap_or("0s"),
+            "FireInterval",
+            path,
+        )?
+        .to_bits(),
+    );
+    data.payload[start + 0x1c] = boolean(node, "AliveOnly", false, path)?;
+    let mut disabled = 0;
+    for value in node
+        .attribute("ActiveWhenDisabled")
+        .unwrap_or("")
+        .split_ascii_whitespace()
+    {
+        disabled |=
+            1 << super::super::global_ui::enum_value(value, super::production::DISABLED, path)?;
+    }
+    data.word(start + 0xc, disabled);
+    entries.extend(fields(
+        start,
+        &[
+            ("FireInterval", 0x9986_69e8, 8),
+            ("AliveOnly", 0x77e3_f4f7, 0x1c),
+            ("ActiveWhenDisabled", 0x1965_70c9, 0xc),
+        ],
+    ));
+    let count = start + 0x10;
+    let first = data.list(count, nuggets.len(), 0x10)?;
+    let mut items = Vec::with_capacity(nuggets.len());
+    for (index, nugget) in nuggets.into_iter().enumerate() {
+        let offset = first + index * 0x10;
+        validate_attributes(nugget, &["WeaponName", "FireDelay", "OneShot"], path)?;
+        let weapon = super::passive_area::reference(
+            nugget.attribute("WeaponName").unwrap_or(""),
+            "WeaponTemplate",
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(offset, weapon);
+        data.word(
+            offset + 4,
+            sage_time(
+                nugget.attribute("FireDelay").unwrap_or("0s"),
+                "FireDelay",
+                path,
+            )?
+            .to_bits(),
+        );
+        data.payload[offset + 0xc] = boolean(nugget, "OneShot", false, path)?;
+        let mut children = significant_children(nugget);
+        let position = if let Some(position) = children.next() {
+            if !position.has_tag_name((SAGE_NS, "Offset"))
+                || has_content(position)
+                || children.next().is_some()
+            {
+                return Err(invalid(path, "unsupported FireWeaponNugget child"));
+            }
+            validate_attributes(position, &["x", "y", "z"], path)?;
+            let vector = data.allocate(offset + 8, 12)?;
+            for (axis, component) in ["x", "y", "z"].into_iter().zip([0, 4, 8]) {
+                data.word(
+                    vector + component,
+                    finite_number(position.attribute(axis).unwrap_or("0"), axis, path)?.to_bits(),
+                );
+            }
+            Target::Data(vector)
+        } else {
+            Target::Null
+        };
+        let mut nugget: Vec<_> = fields(
+            offset,
+            &[
+                ("WeaponName", 0xd046_dd22, 0),
+                ("FireDelay", 0x9986_69e8, 4),
+                ("OneShot", 0x77e3_f4f7, 0xc),
+            ],
+        )
+        .collect();
+        nugget.push(Entry::named("Offset", 0x2936_8077, position));
+        items.push((0, Target::Table(Table::record(nugget))));
+    }
+    entries.push(Entry::named(
+        "FireWeaponNugget",
+        0x8d65_067a,
+        Target::Table(Table::array(count, items)),
+    ));
+    let status = match status {
+        Some(child) => Target::Table(super::secondary_damage::encode_status(
+            child,
+            start + 0x18,
+            data,
+        )?),
+        None => Target::Null,
+    };
+    entries.push(Entry::named("ObjectStatusValidation", 0x3e8f_938c, status));
     Ok((KIND, Table::record(entries)))
 }
 

@@ -77,6 +77,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "ChargeWeaponUpdate",
             "PrematureDischargeSpecialPower",
             "RadarBehavior",
+            "FireWeaponUpdate",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -832,6 +833,11 @@ mod tests {
     #[test]
     fn prop_body_matches_ea() {
         assert_ea_fixture("prop-body", 1);
+    }
+
+    #[test]
+    fn fire_weapon_update_matches_ea() {
+        assert_ea_fixture("fire-weapon-update", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {
