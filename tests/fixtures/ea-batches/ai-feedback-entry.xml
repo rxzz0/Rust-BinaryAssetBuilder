@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <AIPersonalityDefinition id="AiFeedbackEntryProbe" PersonalityType="Probe">
+        <CountAsStructureForBuildPurposesFilter />
+        <FeedbackEntry FeedbackKey="MixedCaseVoice" EvaEvent="EvaProbe" Sound="VoiceProbe" Text="UI:Probe" Video="MovieProbe" FeedbackTo="ALLIES SAME_PLAYER" Timeout="5s" />
+        <FeedbackEntry FeedbackKey="DefaultFeedback" />
+    </AIPersonalityDefinition>
+</AssetDeclaration>

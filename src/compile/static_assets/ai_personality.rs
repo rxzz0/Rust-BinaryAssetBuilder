@@ -188,6 +188,31 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             data.references.push(id.into());
             ordinal = data.references.len() as u32;
         }
+        let mut sound = 0;
+        if name == "FeedbackEntry" {
+            for attr in item.attributes() {
+                if attr.value().trim().is_empty() {
+                    continue;
+                }
+                match attr.name() {
+                    "EvaEvent" => {
+                        let id = asset_reference(reference_name(attr.value()), "EvaEvent", path)?;
+                        data.reference_types.push(id.type_id);
+                        data.references.push(id.into());
+                        ordinal = data.references.len() as u32;
+                    }
+                    "Sound" => {
+                        sound = super::game_object::audio_reference(
+                            attr.value(),
+                            path,
+                            &mut data.references,
+                            &mut data.reference_types,
+                        )?
+                    }
+                    _ => (),
+                }
+            }
+        }
         if matches!(name, "SpecificUnitCap" | "UnitModifier")
             && item
                 .attribute("Unit")
@@ -198,7 +223,7 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
         if name == FILTER {
             data.reference_types.extend(filter_reference_types(item));
         }
-        children[index].push((item, ordinal, data.reference_types.len()));
+        children[index].push((item, [ordinal, sound], data.reference_types.len()));
     }
 
     let mut nested_types = Vec::new();
@@ -256,7 +281,7 @@ pub(super) const IN_TROUBLE: &str = "InTroubleSkirmishFeedbackControl";
 const ALL_DIFFICULTIES: &str = "EASY MEDIUM HARD BRUTAL";
 
 // Schema order also determines the allocation order of the trailing data.
-pub(super) const CHILDREN: [(&str, usize, usize); 15] = [
+pub(super) const CHILDREN: [(&str, usize, usize); 16] = [
     ("Side", 236, 4),
     ("UnitCap", 252, 8),
     ("ResourceMultiplierCheat", 300, 8),
@@ -272,6 +297,7 @@ pub(super) const CHILDREN: [(&str, usize, usize); 15] = [
     (CRITERIA, 380, 20),
     (FILTER, 384, 112),
     (IN_TROUBLE, 496, 32),
+    ("FeedbackEntry", 500, 36),
 ];
 
 pub(super) fn child_index(node: Node<'_, '_>, path: &Path) -> io::Result<usize> {
@@ -297,7 +323,7 @@ fn write_item(
     node: Node<'_, '_>,
     name: &str,
     offset: usize,
-    ordinal: u32,
+    [ordinal, sound]: [u32; 2],
     binary: &mut BinaryData<'_>,
     data: &mut Marshaled,
 ) -> io::Result<()> {
@@ -442,6 +468,51 @@ fn write_item(
             binary.word(offset + 4, value("OffensiveModifier", "1", Float)?);
             binary.word(offset + 8, value("DefensiveModifier", "1", Float)?);
             binary.word(offset + 12, difficulty()?);
+        }
+        "FeedbackEntry" => {
+            validate_attributes(
+                node,
+                &[
+                    "FeedbackKey",
+                    "EvaEvent",
+                    "Sound",
+                    "Text",
+                    "Video",
+                    "FeedbackTo",
+                    "Timeout",
+                ],
+                path,
+            )?;
+            binary.word(
+                offset,
+                fast_hash(required(node, "FeedbackKey", path)?.as_bytes()),
+            );
+            for (index, ordinal) in [(4, ordinal), (8, sound)] {
+                if ordinal != 0 {
+                    binary.word(offset + index, ordinal);
+                    data.imports.push((offset + index) as u32);
+                }
+            }
+            binary.string(offset + 12, node.attribute("Text").unwrap_or(""))?;
+            binary.string(offset + 20, node.attribute("Video").unwrap_or(""))?;
+            let mut relationships = 0;
+            for name in node
+                .attribute("FeedbackTo")
+                .unwrap_or("ALLIES ENEMIES NEUTRAL")
+                .split_ascii_whitespace()
+            {
+                relationships |= 1
+                    << super::global_ui::enum_value(
+                        name,
+                        &["ALLIES", "ENEMIES", "NEUTRAL", "SAME_PLAYER"],
+                        path,
+                    )?;
+            }
+            binary.word(offset + 28, relationships);
+            if let Some(timeout) = node.attribute("Timeout") {
+                binary
+                    .optional_word(offset + 32, sage_time(timeout, "Timeout", path)?.to_bits())?;
+            }
         }
         IN_TROUBLE => {
             const FIELDS: [&str; 8] = [

@@ -41,6 +41,7 @@ mod subobjects;
 mod tech_upgrade;
 mod teleport_stored;
 
+pub(super) use client_behaviors::audio_reference;
 pub(super) use encoder::compile;
 
 use super::{asset_reference, compile_asset, declaration_id};

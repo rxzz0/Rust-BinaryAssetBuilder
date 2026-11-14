@@ -438,7 +438,7 @@ impl AudioEncoder<'_, '_> {
     }
 }
 
-pub(super) fn audio_reference(
+pub(in crate::compile::static_assets) fn audio_reference(
     value: &str,
     path: &Path,
     references: &mut Vec<AssetReference>,
