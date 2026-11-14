@@ -46,6 +46,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "UnitIntro" => (0x5708_06d2, 8, unit_intro),
         "VideoEventList" => (0x96da_1c03, 9, video_events),
         "LogicCommandSet" => (0x8ae8_b68c, 11, logic_commands),
+        "LogicCommand" => (0x5687_00a8, 49, logic_command),
         "W3DCollisionBox" => (0x6e26_f699, 12, w3d_collision_box),
         "W3DHierarchy" => (0xed94_de61, 13, w3d_hierarchy),
         "MultiplayerColor" => (0x131c_20a0, 14, multiplayer_color),
@@ -833,6 +834,86 @@ fn campaign_enumerator(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled>
             "CampaignEnumerator requires at least one Campaign",
         ));
     }
+    Ok(result)
+}
+
+fn logic_command(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    use std::sync::OnceLock;
+    static ENUMS: OnceLock<[Vec<String>; 2]> = OnceLock::new();
+    let enums = ENUMS.get_or_init(|| {
+        let schema = roxmltree::Document::parse(include_str!(
+            "../../schemas/ra3/xsd/AssetTypeLogicCommand.xsd"
+        ))
+        .unwrap();
+        ["LogicCommandType", "LogicCommandOptions"].map(|name| {
+            schema
+                .descendants()
+                .find(|node| node.attribute("name") == Some(name))
+                .unwrap()
+                .descendants()
+                .filter_map(|node| node.attribute("value").map(str::to_owned))
+                .collect()
+        })
+    });
+    validate_attributes(node, &["id", "Type", "Options"], path)?;
+    let kind = node.attribute("Type").unwrap_or("NONE");
+    let ordinal = enums[0]
+        .iter()
+        .position(|v| v == kind)
+        .ok_or_else(|| invalid(path, "invalid LogicCommand Type"))?;
+    let mut flags = 0;
+    for option in node
+        .attribute("Options")
+        .unwrap_or("")
+        .split_ascii_whitespace()
+    {
+        let bit = enums[1]
+            .iter()
+            .position(|v| v == option)
+            .filter(|&i| i < 32)
+            .ok_or_else(|| invalid(path, format!("invalid LogicCommand option {option}")))?;
+        flags |= 1 << bit;
+    }
+    let mut data = binary::BinaryData {
+        payload: vec![0; 28],
+        relocations: Vec::new(),
+        path,
+    };
+    data.word(4, ordinal as u32);
+    data.word(8, flags);
+    let mut result = Marshaled::default();
+    let mut children = significant_children(node).peekable();
+    for (name, ty, field) in [
+        ("SpecialPower", "SpecialPowerTemplate", 12),
+        ("Upgrade", "UpgradeTemplate", 16),
+        ("Object", "GameObject", 20),
+    ] {
+        if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, name))) {
+            let value = text_value(child, path)?;
+            let id = asset_reference(
+                value.split_once('\\').map_or(value, |(name, _)| name),
+                ty,
+                path,
+            )?;
+            result.reference_types.push(id.type_id);
+            result.references.push(id.into());
+            let offset = data.allocate(field, 4)?;
+            data.word(offset, result.references.len() as u32);
+            result.imports.push(offset as u32);
+        }
+    }
+    if let Some(child) = children.next() {
+        return Err(invalid(
+            path,
+            format!("unsupported LogicCommand child {}", child.tag_name().name()),
+        ));
+    }
+    if !data.relocations.is_empty() {
+        data.relocations.push(u32::MAX);
+        result.imports.push(u32::MAX);
+    }
+    result.payload = data.payload;
+    result.relocations = data.relocations;
     Ok(result)
 }
 

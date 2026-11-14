@@ -1007,6 +1007,11 @@ mod tests {
         assert_ea_fixture("weapon-damage-scalars", 1);
     }
 
+    #[test]
+    fn logic_command_matches_ea() {
+        assert_ea_fixture("logic-command", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

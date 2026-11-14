@@ -450,6 +450,7 @@ impl Compiler<'_> {
             | "AmbientStream"
             | "AudioEvent"
             | "LogicCommandSet"
+            | "LogicCommand"
             | "ObjectFilterAsset"
             | "PlayerTech"
             | "SpecialPowerTemplate"

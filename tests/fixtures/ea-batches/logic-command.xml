@@ -1,0 +1,1 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><LogicCommand id="CommandProbe" Type="ATTACK_MOVE" Options="NEED_TARGET_POS OPTION_ONE"><SpecialPower>ProbePower</SpecialPower><Upgrade>ProbeUpgrade</Upgrade><Object>ProbeObject</Object></LogicCommand></AssetDeclaration>
