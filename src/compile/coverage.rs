@@ -82,6 +82,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "GiveProductionBonusSpecialPower",
             "PlayerUpgradeSpecialPower",
             "StoreTemplateIDBehavior",
+            "BezierProjectile",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -902,6 +903,11 @@ mod tests {
     #[test]
     fn store_template_id_matches_ea() {
         assert_ea_fixture("store-template-id", 1);
+    }
+
+    #[test]
+    fn bezier_projectile_matches_ea() {
+        assert_ea_fixture("bezier-projectile", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <GameObject id="BezierProbe"><Behaviors>
+        <BezierProjectile id="Default" />
+        <BezierProjectile id="Explicit" Flags="DETONATE_CALLS_KILL ORIENT_TO_FLIGHT_PATH" Type="TORPEDO" FireStraightDistance="11" FirstHeight="12" SecondHeight="13" FirstHeightMin="14" FirstHeightMax="15" SecondHeightMin="16" SecondHeightMax="17" FirstPercentIndent="18%" SecondPercentIndent="19%" FinalStuckTime="20s" PreLandingStateTime="21s" BounceCount="22" BounceDistance="23" BounceFirstHeight="24" BounceSecondHeight="25" BounceFirstPercentIndent="26%" BounceSecondPercentIndent="27%" GarrisonHitKillRequiredKindOf="STRUCTURE" GarrisonHitKillForbiddenKindOf="AIRCRAFT" GarrisonHitKillCount="28" GarrisonHitKillFX="ProbeGarrisonFX" GroundHitFX="ProbeGroundFX" MaxDistanceReachedFX="ProbeMaxFX" GroundBounceFX="ProbeBounceFX" GroundHitWeapon="ProbeGroundWeapon" GroundBounceWeapon="ProbeBounceWeapon" FlightPathAdjustDistPerSecond="29" FirstPercentHeight="30%" SecondPercentHeight="31%" CurveFlattenMinDist="32" PreLandingEmotionRadius="33" InvisibleTime="34s" FadeInTime="35s" PostLandingStateTime="36s" PostLandingEmotionRadius="37" SidewaysDrift="38" MaxDistanceToTravel="39" TargetVectorOffset="40" Acceleration="41" />
+    </Behaviors><Body><PropBody id="Body" /></Body></GameObject>
+</AssetDeclaration>

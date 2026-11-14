@@ -3,6 +3,7 @@ mod ai_update;
 mod animation;
 mod attack_assist;
 mod behaviors_basic;
+mod bezier_projectile;
 mod building_destruction;
 pub(super) mod children;
 mod client_behaviors;
