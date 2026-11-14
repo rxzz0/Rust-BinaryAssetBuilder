@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="WallBuilderProbe">
+    <Behaviors>
+      <WallBuilderBehavior id="ModuleTag_Default">
+        <ConnectingObjectFilter Rule="ANY"/>
+      </WallBuilderBehavior>
+      <WallBuilderBehavior id="ModuleTag_Configured" MaxNumSegments="10" SecondaryModelConditions="WALL_SEGMENT DAMAGED" SecondaryObjectStatus="WALL_SEGMENT" StartInSecondaryModel="true">
+        <ConnectingObjectFilter Rule="NONE"><IncludeThing>WallBuilderProbe</IncludeThing></ConnectingObjectFilter>
+      </WallBuilderBehavior>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

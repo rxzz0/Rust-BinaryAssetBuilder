@@ -89,6 +89,69 @@ fn squish_collide(
     Ok((KIND, Table::record(entries)))
 }
 
+fn wall_builder(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x9590_538a;
+    const FIELDS: [(&str, u32, usize); 4] = [
+        ("MaxNumSegments", 0x23e6_50b8, 8),
+        ("SecondaryModelConditions", 0x67db_bfc9, 0xc),
+        ("SecondaryObjectStatus", 0xa7bd_811e, 0x48),
+        ("StartInSecondaryModel", 0x77e3_f4f7, 0xd4),
+    ];
+    let path = data.path;
+    validate_attributes(
+        node,
+        &[
+            "id",
+            "MaxNumSegments",
+            "SecondaryModelConditions",
+            "SecondaryObjectStatus",
+            "StartInSecondaryModel",
+        ],
+        path,
+    )?;
+    let mut children = significant_children(node);
+    let filter = super::super::required_element(&mut children, "ConnectingObjectFilter", path)?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected WallBuilderBehavior child"));
+    }
+    let start = data.allocate(pointer, 0xd8)?;
+    let parent = module_base(node, KIND, start, data, false)?;
+    let count = node
+        .attribute("MaxNumSegments")
+        .unwrap_or("5")
+        .trim()
+        .parse::<i32>()
+        .map_err(|_| invalid(path, "invalid MaxNumSegments"))?;
+    data.word(start + 8, count as u32);
+    super::draws::write_model_conditions(
+        node.attribute("SecondaryModelConditions")
+            .unwrap_or("WALL_SEGMENT"),
+        start + 0xc,
+        data,
+    )?;
+    super::secondary_damage::write_status_flags(
+        node.attribute("SecondaryObjectStatus")
+            .unwrap_or("WALL_SEGMENT"),
+        start + 0x48,
+        data,
+    )?;
+    data.payload[start + 0xd4] = boolean(node, "StartInSecondaryModel", false, path)?;
+    let filter = super::parking::encode_inline_filter(filter, start + 0x64, data, reference_types)?;
+    let mut entries = vec![parent];
+    entries.extend(fields(start, &FIELDS));
+    entries.push(Entry::named(
+        "ConnectingObjectFilter",
+        0xe46e_a3b2,
+        Target::Table(filter),
+    ));
+    Ok((KIND, Table::record(entries)))
+}
+
 pub(super) fn weapon_slot(value: &str, path: &std::path::Path) -> io::Result<u32> {
     super::super::global_ui::enum_value(
         value,
@@ -113,6 +176,9 @@ pub(super) fn encode(
 ) -> io::Result<Option<(u32, Table)>> {
     if node.has_tag_name((SAGE_NS, "SquishCollide")) {
         return squish_collide(node, pointer, data).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "WallBuilderBehavior")) {
+        return wall_builder(node, pointer, data, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "FireWeaponWhenDead")) {
         return fire_weapon_when_dead(node, pointer, data, references, reference_types).map(Some);

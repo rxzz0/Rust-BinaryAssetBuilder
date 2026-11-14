@@ -50,6 +50,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "WeaponFireSpecialAbilityUpdate",
             "OCLSpecialPower",
             "SquishCollide",
+            "WallBuilderBehavior",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -600,6 +601,11 @@ mod tests {
     #[test]
     fn squish_collide_matches_ea_batch() {
         assert_ea_fixture("squish-collide", 1);
+    }
+
+    #[test]
+    fn wall_builder_matches_ea_batch() {
+        assert_ea_fixture("wall-builder", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {
