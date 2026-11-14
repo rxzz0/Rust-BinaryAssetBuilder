@@ -21,6 +21,7 @@ mod garrison;
 mod infiltrator;
 mod laser_draw;
 mod laser_state;
+mod line_segment_damage;
 pub(super) mod material;
 mod parking;
 mod passive_area;

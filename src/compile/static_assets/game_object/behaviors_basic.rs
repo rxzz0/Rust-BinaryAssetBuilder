@@ -879,6 +879,16 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "ChargeWeaponUpdate")) {
         return charge_weapon(node, pointer, data).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "LineSegmentDamageUpdate")) {
+        return super::line_segment_damage::encode(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "BezierProjectile")) {
         return super::bezier_projectile::encode(node, pointer, data, references, reference_types)
             .map(Some);

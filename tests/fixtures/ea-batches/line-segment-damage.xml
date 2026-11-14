@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+ <GameObject id="LineSegmentProbe"><Behaviors>
+  <LineSegmentDamageUpdate id="Defaults" NodeLifetime="10s" DamageInterval="100ms" Distance="25" />
+  <LineSegmentDamageUpdate id="Explicit" NodeLifetime="12s" DamageInterval="250ms" Distance="30" Damage="10" DamageType="RADIATION" DeathType="IRRADIATED" DamageFXType="RADIATION" ObjectStatusForbiddenForDamage="BOOKENDING" MinDistanceTolerance="3" MaxValidHeightOffGround="5" FXParticleSystemTemplate="ProbeParticle" NodeFXList="ProbeFx">
+   <ObjectFilter Rule="ANY" Include="VEHICLE"><ExcludeThing>ProbeUnit</ExcludeThing></ObjectFilter>
+   <ObjectStatusValidation ForbiddenStatus="AIRBORNE_TARGET" />
+  </LineSegmentDamageUpdate>
+ </Behaviors><Body><PropBody id="Body" /></Body></GameObject>
+</AssetDeclaration>

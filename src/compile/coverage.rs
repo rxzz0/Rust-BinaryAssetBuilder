@@ -83,6 +83,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "PlayerUpgradeSpecialPower",
             "StoreTemplateIDBehavior",
             "BezierProjectile",
+            "LineSegmentDamageUpdate",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -913,6 +914,11 @@ mod tests {
     #[test]
     fn skirmish_dodge_matches_ea() {
         assert_ea_fixture("skirmish-dodge", 1);
+    }
+
+    #[test]
+    fn line_segment_damage_matches_ea() {
+        assert_ea_fixture("line-segment-damage", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {
