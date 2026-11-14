@@ -138,6 +138,9 @@ fn encode_nuggets(
             (Some(SAGE_NS), "DOTNugget") => {
                 (0xefbb_5226, fire_on_objects(child, pointer, data, out)?)
             }
+            (Some(SAGE_NS), "DamageNugget") => {
+                (0xc0f5_3e99, fire_on_objects(child, pointer, data, out)?)
+            }
             (Some(SAGE_NS), "ProjectileNugget") => (
                 0x87c7_bdcc,
                 simple_reference_nugget(child, pointer, data, out, true)?,
@@ -280,9 +283,11 @@ fn fire_on_objects(
     ];
     let path = data.path;
     let dot = node.has_tag_name((SAGE_NS, "DOTNugget"));
+    let direct = node.has_tag_name((SAGE_NS, "DamageNugget"));
+    let is_damage = dot || direct;
     validate_attributes(
         node,
-        if dot {
+        if is_damage {
             &[
                 "id",
                 "Radius",
@@ -306,7 +311,7 @@ fn fire_on_objects(
         },
         path,
     )?;
-    let start = data.allocate(pointer, 0xa4)?;
+    let start = data.allocate(pointer, if direct { 0x98 } else { 0xa4 })?;
     for (offset, value) in [
         (0, 0x7814_daf0),
         (0x2c, (-1f32).to_bits()),
@@ -335,8 +340,8 @@ fn fire_on_objects(
         start + 0x10,
         finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?.to_bits(),
     );
-    if dot {
-        data.word(start, 0xefbb_5226);
+    if is_damage {
+        data.word(start, if dot { 0xefbb_5226 } else { 0xc0f5_3e99 });
         data.word(
             start + 0x28,
             finite_number(node.attribute("Damage").unwrap_or("0"), "Damage", path)?.to_bits(),
@@ -383,7 +388,7 @@ fn fire_on_objects(
         ("FireOnVictimObject", 0xa0, "false"),
         ("VictimMustBeAlive", 0xa1, "true"),
     ] {
-        if dot {
+        if is_damage {
             break;
         }
         data.payload[start + offset] = match node.attribute(name).unwrap_or(default).trim() {
@@ -407,13 +412,17 @@ fn fire_on_objects(
     }
     let mut children = significant_children(node);
     let filter = if let Some(filter) = children.next() {
-        let name = if dot { "SpecialObjectFilter" } else { "Filter" };
+        let name = if is_damage {
+            "SpecialObjectFilter"
+        } else {
+            "Filter"
+        };
         if !filter.has_tag_name((SAGE_NS, name)) || children.next().is_some() {
             return Err(invalid(path, "unsupported FireOnObjectsNugget child"));
         }
         Target::Table(super::game_object::encode_object_filter(
             filter,
-            start + if dot { 0x14 } else { 0x9c },
+            start + if is_damage { 0x14 } else { 0x9c },
             data,
             &mut out.reference_types,
         )?)
@@ -421,7 +430,7 @@ fn fire_on_objects(
         Target::Null
     };
     let mut effect = effect_table(start);
-    let filter = if dot {
+    let filter = if is_damage {
         effect.replace_target("SpecialObjectFilter", filter);
         Target::Null
     } else {
@@ -438,6 +447,9 @@ fn fire_on_objects(
         0xe4a6_e6e4,
         Target::Table(Table::array(start + 0x88, [])),
     ));
+    if direct {
+        return Ok(Table::record(damage));
+    }
     if dot {
         let mut entries = vec![Entry::new(
             1,

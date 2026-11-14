@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><WeaponTemplate id="DamageNuggetProbe"><Nuggets>
+ <DamageNugget Damage="25" Radius="10" DamageType="EXPLOSIVE" DamageFXType="RADIATION" DeathType="IRRADIATED" />
+ <DamageNugget />
+</Nuggets></WeaponTemplate></AssetDeclaration>
