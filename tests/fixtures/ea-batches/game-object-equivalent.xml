@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <GameObject id="EquivalentToProbe">
+        <EquivalentTo>LocalEquivalent</EquivalentTo>
+        <EquivalentTo>ExternalEquivalent</EquivalentTo>
+        <Body><ImmortalBody id="Body" MaxHealth="1" /></Body>
+    </GameObject>
+</AssetDeclaration>

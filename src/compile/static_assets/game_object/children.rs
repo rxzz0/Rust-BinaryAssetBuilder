@@ -186,6 +186,15 @@ pub(super) fn encode(
     if let Some(child) = find(node, "SkirmishAIInformation")? {
         targets.push(("SkirmishAIInformation", skirmish(child, data)?));
     }
+    let equivalents = node
+        .children()
+        .filter(|child| child.has_tag_name((SAGE_NS, "EquivalentTo")))
+        .map(|child| super::spawn::weak_reference(child, "GameObject", data, reference_types))
+        .collect::<io::Result<Vec<_>>>()?;
+    if !equivalents.is_empty() {
+        let table = super::spawn::id_list(data, 0x1b8, equivalents)?;
+        targets.push(("EquivalentTo", Target::Table(table)));
+    }
     Ok(targets)
 }
 

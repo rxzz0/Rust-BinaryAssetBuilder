@@ -104,6 +104,7 @@ pub(in crate::compile::static_assets) fn compile(
             | "ObjectResourceInfo"
             | "ArmorSet"
             | "LocomotorSet"
+            | "EquivalentTo"
             | "SkirmishAIInformation"
             | "VisionInfo"
             | "CrusherInfo"
