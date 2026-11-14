@@ -891,6 +891,7 @@ pub(super) fn encode(
         "ProductionUpdateInfo" => (0x1b33_7783, 8, None),
         "ObjectSMCHelper" => (0x7f72_f242, 8, None),
         "ObjectDefectionHelper" => (0x18a4_208f, 8, None),
+        "RadarBehavior" => (0x2e54_6f8e, 8, None),
         "AttributeModifierPoolUpdate" => (0xe622_f055, 8, None),
         "StancesBehavior" => (0xc0a1_e43d, 12, Some("StanceTemplate")),
         "LUAEventList" => (0xfa6a_c8b6, 16, Some("EventListName")),
@@ -929,6 +930,12 @@ pub(super) fn encode(
             Entry::new(0x33d7_093c, 0x0084_001b, Target::Table(mux)),
         ]);
         return Ok(Some((kind, inherited(0x9e4f_2b72, die))));
+    }
+    if kind == 0x2e54_6f8e {
+        return Ok(Some((
+            kind,
+            inherited(0x30a3_6b8d, inherited(0xa50d_729a, behavior)),
+        )));
     }
     if matches!(kind, 0x1b33_7783 | 0x331e_6db8) {
         return Ok(Some((kind, inherited(0xa50d_729a, behavior))));
