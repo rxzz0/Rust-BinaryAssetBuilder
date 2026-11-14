@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><PlayerTechStoreTemplate id="TechStoreProbe" Faction="Allies">
+ <Row><Button>Probe0A</Button><Button>Probe0B</Button><Button>Probe0C</Button></Row>
+ <Row><Button>Probe1A</Button><Button>Probe1B</Button><Button>Probe1C</Button></Row>
+ <Row><Button>Probe2A</Button><Button>Probe2B</Button><Button>Probe2C</Button></Row>
+ <Row><Button>Probe3A</Button><Button>Probe3B</Button><Button>Probe3C</Button></Row>
+ <Row><Button>Probe4A</Button><Button>Probe4B</Button><Button>Probe4C</Button></Row>
+</PlayerTechStoreTemplate></AssetDeclaration>

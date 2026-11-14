@@ -68,6 +68,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "DamageFX" => (0x0b2e_b0ab, 42, damage_fx::compile),
         "ObjectFilterAsset" => (0x4352_195e, 43, game_object::object_filter_asset),
         "PlayerTech" => (0x35dd_9987, 44, player_tech),
+        "PlayerTechStoreTemplate" => (0x3a84_e115, 45, player_tech_store),
         "GameObject" => (0xcb8d_0980, 10, game_object::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),
@@ -723,6 +724,59 @@ fn video_events(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
         references,
         ..Marshaled::default()
     })
+}
+
+fn player_tech_store(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "Faction"], path)?;
+    let faction = global_ui::enum_value(
+        required(node, "Faction", path)?,
+        &["RANDOM", "Allies", "Soviet", "Japan", "Neutral"],
+        path,
+    )?
+    .wrapping_sub(1);
+    let rows: Vec<_> = significant_children(node).collect();
+    if rows.len() != 5 {
+        return Err(invalid(path, "expected five tech store rows"));
+    }
+    let mut data = binary::BinaryData {
+        payload: vec![0; 16],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    data.word(4, faction);
+    let first = data.list(8, rows.len(), 8)?;
+    for (index, row) in rows.into_iter().enumerate() {
+        validate_attributes(row, &[], path)?;
+        let buttons: Vec<_> = significant_children(row).collect();
+        if !row.has_tag_name((SAGE_NS, "Row")) || buttons.len() != 3 {
+            return Err(invalid(
+                path,
+                "expected three buttons in each tech store row",
+            ));
+        }
+        let start = data.list(first + index * 8, buttons.len(), 4)?;
+        for (index, button) in buttons.into_iter().enumerate() {
+            if !button.has_tag_name((SAGE_NS, "Button")) {
+                return Err(invalid(path, "expected tech store Button"));
+            }
+            let id = asset_reference(
+                text_value(button, path)?,
+                "PurchasePlayerTechButtonTemplate",
+                path,
+            )?;
+            result.reference_types.push(id.type_id);
+            result.references.push(id.into());
+            let offset = start + index * 4;
+            data.word(offset, result.references.len() as u32);
+            result.imports.push(offset as u32);
+        }
+    }
+    data.relocations.push(u32::MAX);
+    result.imports.push(u32::MAX);
+    result.payload = data.payload;
+    result.relocations = data.relocations;
+    Ok(result)
 }
 
 fn player_tech(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
