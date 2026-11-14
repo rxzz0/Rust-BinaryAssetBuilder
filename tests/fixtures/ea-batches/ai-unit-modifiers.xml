@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <AIPersonalityDefinition id="UnitModifierProbe" PersonalityType="Probe">
+        <UnitModifier Unit="ProbeUnit" OffensiveModifier="0.75" DefensiveModifier="1.25" Difficulty="HARD" />
+        <UnitModifier />
+        <CountAsStructureForBuildPurposesFilter />
+    </AIPersonalityDefinition>
+</AssetDeclaration>

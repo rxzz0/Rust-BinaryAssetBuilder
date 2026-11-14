@@ -187,7 +187,7 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             data.references.push(id.into());
             ordinal = data.references.len() as u32;
         }
-        if name == "SpecificUnitCap"
+        if matches!(name, "SpecificUnitCap" | "UnitModifier")
             && item
                 .attribute("Unit")
                 .is_some_and(|value| !value.trim().is_empty())
@@ -247,7 +247,7 @@ pub(super) const IN_TROUBLE: &str = "InTroubleSkirmishFeedbackControl";
 const ALL_DIFFICULTIES: &str = "EASY MEDIUM HARD BRUTAL";
 
 // Schema order also determines the allocation order of the trailing data.
-pub(super) const CHILDREN: [(&str, usize, usize); 13] = [
+pub(super) const CHILDREN: [(&str, usize, usize); 14] = [
     ("Side", 236, 4),
     ("UnitCap", 252, 8),
     ("ResourceMultiplierCheat", 300, 8),
@@ -258,6 +258,7 @@ pub(super) const CHILDREN: [(&str, usize, usize); 13] = [
     ("BudgetState", 348, 12),
     ("BuildState", 356, 12),
     ("SpecificUnitCap", 364, 12),
+    ("UnitModifier", 372, 16),
     (CRITERIA, 380, 20),
     (FILTER, 384, 112),
     (IN_TROUBLE, 496, 32),
@@ -389,6 +390,30 @@ fn write_item(
             }
             binary.word(offset + 4, value("Cap", "1", Signed)?);
             binary.word(offset + 8, difficulty()?);
+        }
+        "UnitModifier" => {
+            validate_attributes(
+                node,
+                &[
+                    "Unit",
+                    "OffensiveModifier",
+                    "DefensiveModifier",
+                    "Difficulty",
+                ],
+                path,
+            )?;
+            if let Some(unit) = node
+                .attribute("Unit")
+                .filter(|unit| !unit.trim().is_empty())
+            {
+                binary.word(
+                    offset,
+                    asset_reference(reference_name(unit), "GameObject", path)?.instance_id,
+                );
+            }
+            binary.word(offset + 4, value("OffensiveModifier", "1", Float)?);
+            binary.word(offset + 8, value("DefensiveModifier", "1", Float)?);
+            binary.word(offset + 12, difficulty()?);
         }
         IN_TROUBLE => {
             const FIELDS: [&str; 8] = [
