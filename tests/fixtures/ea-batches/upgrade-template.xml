@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UpgradeTemplate id="UpgradeTemplateDefault" Type="OBJECT"/>
+  <UpgradeTemplate id="UpgradeTemplateProbe" DisplayName="Upgrade:Name" Description="Upgrade:Description" TypeDescription="Upgrade:Type" AcquireHint="Upgrade:Hint" Type="OBJECT" BuildTime="2s" BuildCost="125" ResearchSound="ProbeResearch" ResearchCompleteEvaEvent="ProbeComplete" UnitSpecificSound="ProbeUnit" UpgradeFX="ProbeFX" LocalPlayerGainsUpgradeEvaEvent="ProbeLocalGain" AlliedPlayerGainsUpgradeEvaEvent="ProbeAllyGain" EnemyPlayerGainsUpgradeEvaEvent="ProbeEnemyGain" LocalPlayerLosesUpgradeEvaEvent="ProbeLocalLoss" AlliedPlayerLosesUpgradeEvaEvent="ProbeAllyLoss" EnemyPlayerLosesUpgradeEvaEvent="ProbeEnemyLoss" LocalPlayerProductionStartedEvaEvent="ProbeStarted" LocalPlayerBuildOnHoldEvaEvent="ProbeHold" LocalPlayerBuildCancelledEvaEvent="ProbeCancel" UseObjectTemplateForCostDiscount="ProbeObject" GroupName="ProbeGroup" GroupOrder="2" SkirmishAIHeuristic="IGNORE" Options="OBJECT_UPGRADE_PROJECTED" IconImage="ProbeIcon" WaypointQueueable="true">
+    <GameDependency><RequiredObject>ProbePrerequisite</RequiredObject><NeededUpgrade>ProbeUpgrade</NeededUpgrade></GameDependency>
+  </UpgradeTemplate>
+</AssetDeclaration>

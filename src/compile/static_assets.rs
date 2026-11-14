@@ -24,6 +24,7 @@ mod global_ui;
 mod hotkeys;
 pub(super) mod music;
 mod tokenized;
+mod upgrade;
 
 type Marshal = fn(Node<'_, '_>, &Path) -> io::Result<Marshaled>;
 
@@ -54,6 +55,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "AIMicroManagerData" => (0x52ff_0fd3, 31, ai_settings::micro),
         "AITargetingHeuristic" => (0x92a7_8f51, 32, ai_targeting::compile),
         "ArmorTemplate" => (0x641a_d32e, 33, armor::compile),
+        "UpgradeTemplate" => (0x4f8d_2969, 34, upgrade::compile),
         "GameObject" => (0xcb8d_0980, 10, game_object::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),

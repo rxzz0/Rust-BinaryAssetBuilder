@@ -23,7 +23,10 @@ pub(super) fn encode(
         targets.push(("DisplayName", Target::Data(header)));
     }
     if let Some(child) = find(node, "GameDependency")? {
-        targets.push(("GameDependency", dependency(child, data, reference_types)?));
+        targets.push((
+            "GameDependency",
+            dependency(child, 0x190, data, reference_types)?,
+        ));
     }
     if let Some(child) = find(node, "ObjectResourceInfo")? {
         validate_attributes(child, &[], data.path)?;
@@ -184,8 +187,9 @@ pub(super) fn encode(
     Ok(targets)
 }
 
-fn dependency(
+pub(in crate::compile::static_assets) fn dependency(
     node: Node<'_, '_>,
+    pointer: usize,
     data: &mut BinaryData<'_>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Target> {
@@ -205,7 +209,7 @@ fn dependency(
         ],
         path,
     )?;
-    let start = data.allocate(0x190, 0x28)?;
+    let start = data.allocate(pointer, 0x28)?;
     let mut entries = Vec::new();
     for (name, kind, offset, size) in [
         ("RequiredModelConditionsAny", 0x67db_bfc9, 0, 0x3c),
