@@ -102,19 +102,21 @@ pub(super) fn encode(
                 }
             }
             if let Some(conditions) = armor.attribute("Conditions") {
+                static CONDITIONS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+                let names = CONDITIONS.get_or_init(|| {
+                    super::ai_update::enum_values(
+                        include_str!("../../../../schemas/ra3/xsd/AssetTypeArmorTemplate.xsd"),
+                        "ArmorSetType",
+                    )
+                });
+                let mut bits = 0;
                 for flag in conditions.split_ascii_whitespace() {
-                    match flag {
-                        "SECONDARY_DAMAGE" => {
-                            data.word(offset + 8, data.payload[offset + 8] as u32 | (1 << 13))
-                        }
-                        _ => {
-                            return Err(invalid(
-                                data.path,
-                                format!("unsupported ArmorSet condition {flag}"),
-                            ));
-                        }
-                    }
+                    let index = names.iter().position(|name| name == flag).ok_or_else(|| {
+                        invalid(data.path, format!("unsupported ArmorSet condition {flag}"))
+                    })?;
+                    bits |= 1 << index;
                 }
+                data.word(offset + 8, bits);
             }
             entries.push((
                 0,

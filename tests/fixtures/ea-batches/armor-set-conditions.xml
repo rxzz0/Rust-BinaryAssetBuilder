@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ArmorConditionProbe">
+    <ArmorSet Armor="ProbeArmor" Conditions="VETERAN SECONDARY_DAMAGE SHRINK_EFFECT SHIELDBODY_ENABLED"/>
+    <ArmorSet Armor="ProbeAlternate" Conditions="AIRBORNE IN_SPIDER_HOLE"/>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
