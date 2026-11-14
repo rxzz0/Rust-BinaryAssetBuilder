@@ -405,6 +405,105 @@ fn attribute_modifier_aura(
     Ok((KIND, Table::record(entries)))
 }
 
+fn auto_heal(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xfbf6_592d;
+    const BOOL: u32 = 0x77e3_f4f7;
+    const INT: u32 = 0x23e6_50b8;
+    const TIME: u32 = 0x9986_69e8;
+    const FX: u32 = 0x0d1c_8e83;
+    const KIND_OF: u32 = 0x9afc_9193;
+    const FIELDS: [(&str, u32, usize); 16] = [
+        ("InitiallyActive", BOOL, 0x68),
+        ("HealingAmount", INT, 0x24),
+        ("HealingDelay", TIME, 0x28),
+        ("StartHealingDelay", TIME, 0x2c),
+        ("Radius", INT, 0x30),
+        ("AffectsWholePlayer", BOOL, 0x69),
+        ("AffectsContained", BOOL, 0x6a),
+        ("HealOnlyIfNotUnderAttack", BOOL, 0x6b),
+        ("HealOnlyIfNotInCombat", BOOL, 0x6c),
+        ("KindOf", KIND_OF, 0x34),
+        ("HealOnlyOthers", BOOL, 0x6d),
+        ("HealFXList", FX, 0x58),
+        ("SpawnFXList", FX, 0x5c),
+        ("NonStackable", BOOL, 0x6e),
+        ("RespawnNearbyHordeMembers", BOOL, 0x6f),
+        ("RespawnMinimumDelay", TIME, 0x60),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(
+            super::spawn::UPGRADE
+                .iter()
+                .chain(&FIELDS)
+                .map(|&(name, _, _)| name),
+        )
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let start = data.allocate(pointer, 0x70)?;
+    let mut children: Vec<_> = significant_children(node).collect();
+    let status = if children
+        .last()
+        .is_some_and(|child| child.has_tag_name((SAGE_NS, "ObjectStatusValidation")))
+    {
+        Target::Table(super::secondary_damage::encode_status(
+            children.pop().unwrap(),
+            start + 0x64,
+            data,
+        )?)
+    } else {
+        Target::Null
+    };
+    for (name, kind, offset) in FIELDS {
+        let offset = start + offset;
+        match kind {
+            BOOL => data.payload[offset] = boolean(node, name, false, path)?,
+            INT => {
+                let number = node
+                    .attribute(name)
+                    .unwrap_or("0")
+                    .trim()
+                    .parse::<i32>()
+                    .map_err(|_| invalid(path, format!("invalid {name}")))?;
+                data.word(offset, number as u32);
+            }
+            TIME => data.word(
+                offset,
+                sage_time(node.attribute(name).unwrap_or("0s"), name, path)?.to_bits(),
+            ),
+            KIND_OF => {
+                super::fields::write_kind_of(node.attribute(name).unwrap_or(""), offset, data)?
+            }
+            FX => {
+                let ordinal = super::passive_area::reference(
+                    node.attribute(name).unwrap_or(""),
+                    "FXList",
+                    path,
+                    references,
+                    reference_types,
+                )?;
+                data.word(offset, ordinal);
+            }
+            _ => unreachable!("AutoHealBehavior field type"),
+        }
+    }
+    let mut children = children.into_iter().peekable();
+    let parent = upgrade_parent(node, KIND, start, data, reference_types, &mut children)?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected AutoHealBehavior child"));
+    }
+    let mut entries = vec![parent];
+    entries.extend(fields(start, &FIELDS));
+    entries.push(Entry::named("ObjectStatusValidation", 0x3e8f_938c, status));
+    Ok((KIND, Table::record(entries)))
+}
+
 pub(super) fn weapon_slot(value: &str, path: &std::path::Path) -> io::Result<u32> {
     super::super::global_ui::enum_value(
         value,
@@ -453,6 +552,9 @@ pub(super) fn encode(
     }
     if node.has_tag_name((SAGE_NS, "AttributeModifierAuraUpdate")) {
         return attribute_modifier_aura(node, pointer, data, references, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "AutoHealBehavior")) {
+        return auto_heal(node, pointer, data, references, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "LiftObjectUpdate")) {
         return lift_object(node, pointer, data, references, reference_types).map(Some);

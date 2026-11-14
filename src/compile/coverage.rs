@@ -69,6 +69,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "SlaughterHordeContain",
             "PowerUpgrade",
             "DynamicsUpdate",
+            "AutoHealBehavior",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -739,6 +740,11 @@ mod tests {
     #[test]
     fn dynamics_update_matches_ea_batch() {
         assert_ea_fixture("dynamics-update", 1);
+    }
+
+    #[test]
+    fn auto_heal_matches_ea_batch() {
+        assert_ea_fixture("auto-heal", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

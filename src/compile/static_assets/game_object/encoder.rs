@@ -163,6 +163,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut chooser_relocations = Vec::new();
     let mut subobject_modules = Vec::new();
     let mut aura_modules = Vec::new();
+    let mut auto_heal_modules = Vec::new();
     let mut slaughter_modules = Vec::new();
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
     let mut child_targets =
@@ -245,6 +246,9 @@ pub(in crate::compile::static_assets) fn compile(
             } else {
                 if module.has_tag_name((SAGE_NS, "AttributeModifierAuraUpdate")) {
                     aura_modules.push(data.payload.len() as u32);
+                }
+                if module.has_tag_name((SAGE_NS, "AutoHealBehavior")) {
+                    auto_heal_modules.push(data.payload.len() as u32);
                 }
                 if module.has_tag_name((SAGE_NS, "SlaughterHordeContain")) {
                     slaughter_modules.push(data.payload.len() as u32);
@@ -408,6 +412,16 @@ pub(in crate::compile::static_assets) fn compile(
                 8 => return (start + 0x5c, 3),
                 0x10 => return (start + 0x5c, 4),
                 0x18 => return (start + 0x5c, 5),
+                _ => {}
+            }
+        }
+        let index = auto_heal_modules.partition_point(|&start| start <= pointer);
+        if index > 0 {
+            let start = auto_heal_modules[index - 1];
+            match pointer - start {
+                8 => return (start + 0x64, 3),
+                0x10 => return (start + 0x64, 4),
+                0x18 => return (start + 0x64, 5),
                 _ => {}
             }
         }

@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="AutoHealProbe">
+    <Behaviors>
+      <AutoHealBehavior id="ModuleTag_Default"/>
+      <AutoHealBehavior id="ModuleTag_Configured" InitiallyActive="true" HealingAmount="5" HealingDelay="2s" StartHealingDelay="3s" Radius="20" AffectsWholePlayer="true" AffectsContained="true" HealOnlyIfNotUnderAttack="true" HealOnlyIfNotInCombat="true" KindOf="INFANTRY VEHICLE" HealOnlyOthers="true" HealFXList="HealFx" SpawnFXList="SpawnFx" NonStackable="true" RespawnNearbyHordeMembers="true" RespawnMinimumDelay="4s">
+        <TriggeredBy>ProbeUpgrade</TriggeredBy>
+        <ObjectStatusValidation RequiredStatus="WALL_SEGMENT"/>
+      </AutoHealBehavior>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
