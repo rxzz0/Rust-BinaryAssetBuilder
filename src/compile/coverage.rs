@@ -64,6 +64,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "SecondaryObjectListenerModule",
             "LiftObjectUpdate",
             "GarrisonContain",
+            "InvisibilityBehavior",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -674,6 +675,11 @@ mod tests {
     #[test]
     fn tracer_model_draw_matches_ea_batch() {
         assert_ea_fixture("tracer-model-draw", 1);
+    }
+
+    #[test]
+    fn invisibility_behavior_matches_ea_batch() {
+        assert_ea_fixture("invisibility-behavior", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

@@ -308,6 +308,31 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "GarrisonContain")) {
         return super::garrison::encode(node, pointer, data, references, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "InvisibilityBehavior")) {
+        const KIND: u32 = 0x054b_09c4;
+        let path = data.path;
+        validate_attributes(node, &["id", "InvisibilityTemplate"], path)?;
+        if has_content(node) {
+            return Err(invalid(path, "unexpected InvisibilityBehavior content"));
+        }
+        let start = data.allocate(pointer, 12)?;
+        let parent = module_base(node, KIND, start, data, false)?;
+        let template = super::passive_area::reference(
+            required(node, "InvisibilityTemplate", path)?,
+            "InvisibilityTemplate",
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + 8, template);
+        return Ok(Some((
+            KIND,
+            Table::record(vec![
+                parent,
+                Entry::named("InvisibilityTemplate", 0x914c_a765, Target::Data(start + 8)),
+            ]),
+        )));
+    }
     if node.has_tag_name((SAGE_NS, "SecondaryObjectListenerModule")) {
         return super::secondary_listener::encode(node, pointer, data, references, reference_types)
             .map(Some);
