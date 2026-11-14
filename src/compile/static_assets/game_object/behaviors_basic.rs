@@ -825,7 +825,9 @@ pub(super) fn encode(
     }
     if matches!(
         node.tag_name().name(),
-        "ReplaceSelfSpecialAbility" | "WeaponFireSpecialAbilityUpdate"
+        "ReplaceSelfSpecialAbility"
+            | "WeaponFireSpecialAbilityUpdate"
+            | "ToggleStatusSpecialAbilityUpdate"
     ) {
         return super::replace_self::encode(node, pointer, data, references, reference_types)
             .map(Some);

@@ -73,6 +73,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "AutoHealBehavior",
             "LevelUpUpgrade",
             "RunOffMapBehavior",
+            "ToggleStatusSpecialAbilityUpdate",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -788,6 +789,11 @@ mod tests {
     #[test]
     fn target_vision_ranges_match_ea() {
         assert_ea_fixture("target-vision-range", 1);
+    }
+
+    #[test]
+    fn toggle_status_ability_matches_ea() {
+        assert_ea_fixture("toggle-status-ability", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

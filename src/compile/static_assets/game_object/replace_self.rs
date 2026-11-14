@@ -9,11 +9,19 @@ use super::draws::{boolean, model_condition_index};
 use super::secondary_damage::write_status_flags;
 use super::spawn::{id_list, weak_reference};
 use super::tech_upgrade::encode_anim;
-use crate::compile::{SAGE_NS, invalid};
+use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::{Document, Node};
 use std::{io, sync::OnceLock};
 
 const KIND: u32 = 0x9122_2181;
+const TOGGLE: u32 = 0xed1a_e55c;
+const TOGGLE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[(
+    "ReloadAllWeaponsOnToggle",
+    0x77e3_f4f7,
+    0xf8,
+    "bool",
+    "true",
+)];
 const FIELDS: &[(&str, u32, usize, &str, &str)] = &[
     (
         "SpecialPowerTemplate",
@@ -200,6 +208,8 @@ pub(super) fn encode(
     let weapon = node.has_tag_name((SAGE_NS, "WeaponFireSpecialAbilityUpdate"));
     let (kind, size, variant) = if weapon {
         (0x1e45_a393, 0x110, WEAPON_FIELDS)
+    } else if node.has_tag_name((SAGE_NS, "ToggleStatusSpecialAbilityUpdate")) {
+        (TOGGLE, 0xfc, TOGGLE_FIELDS)
     } else {
         (KIND, 0x104, REPLACE_FIELDS)
     };
@@ -309,6 +319,35 @@ pub(super) fn encode(
     ));
     let mut entries = vec![base(0xac59_8f82, Table::record(ability))];
     entries.extend(derived);
+    if kind == TOGGLE {
+        let states: Vec<_> = children.collect();
+        if states.is_empty() {
+            return Err(invalid(path, "expected ToggleState"));
+        }
+        let first = data.list(start + 0xf0, states.len(), 0x118)?;
+        let mut items = Vec::with_capacity(states.len());
+        for (index, state) in states.into_iter().enumerate() {
+            if !state.has_tag_name((SAGE_NS, "ToggleState")) {
+                return Err(invalid(path, "expected ToggleState"));
+            }
+            items.push((
+                0,
+                Target::Table(toggle_state(
+                    state,
+                    first + index * 0x118,
+                    data,
+                    references,
+                    reference_types,
+                )?),
+            ));
+        }
+        entries.push(Entry::named(
+            "ToggleState",
+            0xfc29_4b1d,
+            Target::Table(Table::array(start + 0xf0, items)),
+        ));
+        return Ok((kind, Table::record(entries)));
+    }
     if weapon {
         if children.next().is_some() {
             return Err(invalid(
@@ -332,4 +371,274 @@ pub(super) fn encode(
         Target::Table(replacements),
     ));
     Ok((kind, Table::record(entries)))
+}
+
+fn toggle_state(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Table> {
+    let path = data.path;
+    let fields = [
+        ("AttributeModifier", 0x09dd_cff3, 0),
+        ("ModelConditions", 0x67db_bfc9, 4),
+        ("ObjectStatus", 0xa7bd_811e, 0x40),
+        ("Upgrade", 0x4aba_1f29, 0x5c),
+        ("ArmorSet", 0x2037_048f, 0x60),
+        ("LocomotorSet", 0x845d_12b2, 0x64),
+        ("AIUpdateModuleId", 0xbdf0_7965, 0x68),
+        ("GenericLuaEventParameter", 0x1a29_33aa, 0x6c),
+        ("EnterStateSound", 0x63d7_b468, 0x74),
+        ("DisabledType", 0xbde9_5b5a, 0x78),
+    ];
+    validate_attributes(node, &fields.map(|(name, _, _)| name), path)?;
+    for attr in node.attributes() {
+        let value = attr.value();
+        let (offset, kind) = match attr.name() {
+            "AttributeModifier" => (0, "AttributeModifier"),
+            "Upgrade" => (0x5c, "UpgradeTemplate"),
+            "EnterStateSound" => {
+                let ordinal = super::client_behaviors::audio_reference(
+                    value,
+                    path,
+                    references,
+                    reference_types,
+                )?;
+                data.word(start + 0x74, ordinal);
+                continue;
+            }
+            _ => continue,
+        };
+        write_reference(
+            value,
+            kind,
+            start + offset,
+            data,
+            references,
+            reference_types,
+        )?;
+    }
+    super::draws::write_model_conditions(
+        node.attribute("ModelConditions").unwrap_or(""),
+        start + 4,
+        data,
+    )?;
+    write_status_flags(
+        node.attribute("ObjectStatus").unwrap_or(""),
+        start + 0x40,
+        data,
+    )?;
+    let armor = node.attribute("ArmorSet").unwrap_or("INVALID");
+    static ARMOR_TYPES: OnceLock<Vec<String>> = OnceLock::new();
+    let armor_types = ARMOR_TYPES.get_or_init(|| {
+        super::ai_update::enum_values(
+            include_str!("../../../../schemas/ra3/xsd/AssetTypeArmorTemplate.xsd"),
+            "ArmorSetType",
+        )
+    });
+    let armor = armor_types
+        .iter()
+        .position(|v| v == armor)
+        .ok_or_else(|| invalid(path, "invalid ArmorSet"))?;
+    data.word(start + 0x60, armor as u32);
+    data.word(
+        start + 0x64,
+        super::ai_update::locomotor_condition(
+            node.attribute("LocomotorSet").unwrap_or("INVALID"),
+            "LocomotorSet",
+            path,
+        )?,
+    );
+    if let Some(id) = node.attribute("AIUpdateModuleId") {
+        data.word(start + 0x68, super::super::hash_name(id));
+    }
+    data.string(
+        start + 0x6c,
+        node.attribute("GenericLuaEventParameter").unwrap_or(""),
+    )?;
+    if let Some(value) = node.attribute("DisabledType") {
+        data.word(
+            start + 0x78,
+            super::super::global_ui::enum_value(value, super::production::DISABLED, path)?,
+        );
+    }
+    let mut children = significant_children(node);
+    let Some(ai) = children
+        .next()
+        .filter(|child| child.has_tag_name((SAGE_NS, "SkirmishAiInfo")))
+    else {
+        return Err(invalid(path, "ToggleState requires SkirmishAiInfo"));
+    };
+    if children.next().is_some() {
+        return Err(invalid(path, "unsupported additional ToggleState child"));
+    }
+    let mut entries: Vec<_> = super::draws::fields(start, &fields).collect();
+    entries.push(Entry::named(
+        "SkirmishAiInfo",
+        0xfe37_4ccd,
+        Target::Table(toggle_ai(
+            ai,
+            start + 0x7c,
+            data,
+            references,
+            reference_types,
+        )?),
+    ));
+    entries.push(Entry::named(
+        "Module",
+        0xada5_4d29,
+        Target::Table(Table::array(start + 0x110, [])),
+    ));
+    Ok(Table::record(entries))
+}
+
+fn write_reference(
+    value: &str,
+    kind: &str,
+    offset: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<()> {
+    if !value.trim().is_empty() {
+        let id = asset_reference(
+            value.split_once('\\').map_or(value, |(name, _)| name),
+            kind,
+            data.path,
+        )?;
+        references.push(id.into());
+        reference_types.push(id.type_id);
+        data.word(offset, references.len() as u32);
+    }
+    Ok(())
+}
+
+fn toggle_ai(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Table> {
+    const OPTIONAL: &[(&str, u32, usize)] = &[
+        ("UseOnlyWhenPowerAdvantageIsAbove", 0x6458_64f3, 4),
+        ("UseOnlyWhenPowerAdvantageIsBelow", 0x6458_64f3, 8),
+        ("UseOnlyWhenCostAdvantageIsAbove", 0x6458_64f3, 0xc),
+        ("UseOnlyWhenCostAdvantageIsBelow", 0x6458_64f3, 0x10),
+        ("NeverUseWhenFurtherThanNUnitsFromTarget", 0x6458_64f3, 0x14),
+        ("NeverUseWhenCloserThanNUnitsFromTarget", 0x6458_64f3, 0x18),
+        ("NeverUseWhenHealthIsBelow", 0x6458_64f3, 0x1c),
+    ];
+    let path = data.path;
+    validate_attributes(node, &["ToggleHint"], path)?;
+    const AI_SCHEMA: &str =
+        include_str!("../../../../schemas/ra3/xsd/SkirmishAI/AssetTypeAISpecialPower.xsd");
+    static HINTS: OnceLock<Vec<String>> = OnceLock::new();
+    let hints =
+        HINTS.get_or_init(|| super::ai_update::enum_values(AI_SCHEMA, "ToggleStatusAiHint"));
+    let hint = required(node, "ToggleHint", path)?;
+    let index = hints
+        .iter()
+        .position(|v| v == hint)
+        .ok_or_else(|| invalid(path, "invalid ToggleHint"))?;
+    data.word(start, index as u32);
+    for (offset, value) in [
+        (0x38, 1),
+        (0x40, 0.1f32.to_bits()),
+        (0x48, 1.7f32.to_bits()),
+        (0x4c, 1.2f32.to_bits()),
+        (0x58, 1000.0f32.to_bits()),
+        (0x5c, 0.5f32.to_bits()),
+        (0x88, 3),
+    ] {
+        data.word(start + offset, value);
+    }
+    let mut entries = vec![Entry::named("ToggleHint", 0x018d_d8b9, Target::Data(start))];
+    entries.extend(
+        OPTIONAL
+            .iter()
+            .map(|&(name, kind, _)| Entry::named(name, kind, Target::Null)),
+    );
+    for (name, kind, offset) in [
+        ("OnlyUseWhenHaveTarget", 0x77e3_f4f7, 0x90),
+        ("MaxZDifferenceFromTarget", 0x6458_64f3, usize::MAX),
+        ("NeverUseInState", 0xd762_0aaa, 0x24),
+        ("NeverUseDuringTask", 0x74ba_c2ed, 0x28),
+        ("NeverUseWhenClear", 0x77e3_f4f7, 0x91),
+        ("SelfDefenseDamageLookAheadTime", 0x9986_69e8, usize::MAX),
+        ("SelfDefenseDamageLookBehindTime", 0x9986_69e8, usize::MAX),
+        ("SelfDefenseDamageFraction", 0x6458_64f3, usize::MAX),
+        ("DontUseIfInRange", 0x77e3_f4f7, 0x92),
+        ("NumOtherAttackersOnTarget", 0x23e6_50b8, 0x38),
+        ("LeechWeaponUpgrade", 0x4aba_1f29, 0x3c),
+        ("LeechWeaponTargetHealthFraction", 0x6458_64f3, 0x40),
+        ("LeechWeaponSOLModuleId", 0xbdf0_7965, usize::MAX),
+        ("LeechHealthActivatePowerAdvantage", 0x6458_64f3, 0x48),
+        ("LeechHealthDeactivatePowerAdvantage", 0x6458_64f3, 0x4c),
+        ("StealthOthersInvisibilityModuleId", 0xbdf0_7965, usize::MAX),
+        ("ShieldMinCostProtected", 0x23e6_50b8, 0x54),
+        ("ShieldMinEnemyDPS", 0x6458_64f3, 0x58),
+        ("ShieldCostAdjustPastDistanceFraction", 0x6458_64f3, 0x5c),
+        ("ShieldCostAdjustMultiplierAtEdge", 0x6458_64f3, 0x60),
+        ("EnemyMustBeInVisionRange", 0x77e3_f4f7, 0x93),
+        ("NeverUseWhenTargetIsAnyKindOf", 0x9afc_9193, 0x64),
+        ("Location", 0x73b8_b420, 0x88),
+    ] {
+        entries.push(Entry::named(
+            name,
+            kind,
+            if offset == usize::MAX {
+                Target::Null
+            } else {
+                Target::Data(start + offset)
+            },
+        ));
+    }
+    let mut children = significant_children(node);
+    let weapon = if let Some(weapon) = children.next() {
+        if !weapon.has_tag_name((SAGE_NS, "StateWeapon"))
+            || has_content(weapon)
+            || children.next().is_some()
+        {
+            return Err(invalid(path, "unsupported SkirmishAiInfo child"));
+        }
+        validate_attributes(weapon, &["Weapon"], path)?;
+        let weapon_start = data.allocate(start + 0x8c, 0x1c)?;
+        write_reference(
+            required(weapon, "Weapon", path)?,
+            "WeaponTemplate",
+            weapon_start,
+            data,
+            references,
+            reference_types,
+        )?;
+        Target::Table(Table::record(
+            super::draws::fields(
+                weapon_start,
+                &[
+                    ("Weapon", 0xd046_dd22, 0),
+                    ("IsDisablingAttack", 0x77e3_f4f7, 0x18),
+                    ("AffectsFriendlies", 0x77e3_f4f7, 0x19),
+                    ("AffectsSelf", 0x77e3_f4f7, 0x1a),
+                    ("TotalValueGreaterThan", 0x23e6_50b8, 4),
+                    ("AoeAttackPowerLocationPreference", 0x0b3b_cae4, 8),
+                    (
+                        "AoeAttackPowerBlockAreaAfterActivationTime",
+                        0x9986_69e8,
+                        0xc,
+                    ),
+                    ("AoeAttackEmanationLocation", 0x3343_3965, 0x10),
+                    ("ToggleRangeHysteresis", 0x6458_64f3, 0x14),
+                    ("ToggleShortRangeTargetForcesTarget", 0x77e3_f4f7, 0x1b),
+                ],
+            )
+            .collect::<Vec<_>>(),
+        ))
+    } else {
+        Target::Null
+    };
+    entries.push(Entry::named("StateWeapon", 0x43db_a49d, weapon));
+    Ok(Table::record(entries))
 }

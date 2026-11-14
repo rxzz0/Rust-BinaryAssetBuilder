@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <GameObject id="ToggleStatusProbe">
+        <Behaviors><ToggleStatusSpecialAbilityUpdate id="ToggleProbe" SpecialPowerTemplate="TogglePower" PackTime="2s" ReloadAllWeaponsOnToggle="false">
+            <ToggleState EnterStateSound="ToggleSound">
+                <SkirmishAiInfo ToggleHint="TOGGLE_DEFAULT"><StateWeapon Weapon="ToggleWeapon" /></SkirmishAiInfo>
+            </ToggleState>
+            <ToggleState ObjectStatus="GENERIC_TOGGLE_STATE" ModelConditions="WEAPONSET_TOGGLE_1">
+                <SkirmishAiInfo ToggleHint="TOGGLE_WEAPON" />
+            </ToggleState>
+        </ToggleStatusSpecialAbilityUpdate></Behaviors>
+        <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    </GameObject>
+</AssetDeclaration>
