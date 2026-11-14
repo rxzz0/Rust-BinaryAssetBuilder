@@ -785,6 +785,11 @@ mod tests {
         assert_ea_fixture("voice-named-entry", 1);
     }
 
+    #[test]
+    fn target_vision_ranges_match_ea() {
+        assert_ea_fixture("target-vision-range", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

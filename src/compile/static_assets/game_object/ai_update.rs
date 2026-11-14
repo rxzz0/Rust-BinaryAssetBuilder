@@ -1,10 +1,11 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, asset_reference, finite_number, hash_name, sage_time, significant_children,
-    validate_attributes,
+    AssetReference, asset_reference, finite_number, hash_name, percentage, sage_time,
+    significant_children, validate_attributes,
 };
-use crate::compile::{SAGE_NS, has_content, invalid, required};
+use super::parking::encode_inline_filter;
+use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::{Document, Node};
 use std::io;
 use std::path::Path;
@@ -232,12 +233,6 @@ pub(super) fn encode_chooser(
         )
         .collect();
     validate_fields(node, FIELDS, &extra, data.path)?;
-    if has_content(node) {
-        return Err(invalid(
-            data.path,
-            "unsupported UnitAITargetChooserData child",
-        ));
-    }
     let start = data.allocate(pointer, if turret { 0x2c } else { 0x28 })?;
     for (name, default, offset) in [
         ("IdleScanDelay", "0.8s", 0),
@@ -285,7 +280,12 @@ pub(super) fn encode_chooser(
     fields.push(Entry::named(
         "ObjectVisionRange",
         0x2e11_fc54,
-        Target::Table(Table::array(start + 0x14, [])),
+        Target::Table(encode_vision_ranges(
+            node,
+            start + 0x14,
+            data,
+            reference_types,
+        )?),
     ));
     let mut entries = vec![
         base(0xaa42_eb9c, Table::record(fields)),
@@ -302,6 +302,54 @@ pub(super) fn encode_chooser(
         }
     }
     Ok(Table::record(entries))
+}
+
+fn encode_vision_ranges(
+    node: Node<'_, '_>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Table> {
+    const STRIDE: usize = 0x78;
+    let ranges: Vec<_> = significant_children(node).collect();
+    let first = data.list(count, ranges.len(), STRIDE)?;
+    let mut items = Vec::with_capacity(ranges.len());
+    for (index, range) in ranges.into_iter().enumerate() {
+        if !range.has_tag_name((SAGE_NS, "ObjectVisionRange")) {
+            return Err(invalid(
+                data.path,
+                format!(
+                    "unsupported target chooser child {}",
+                    range.tag_name().name()
+                ),
+            ));
+        }
+        validate_attributes(range, &["id", "Range"], data.path)?;
+        let mut children = significant_children(range);
+        let filter = children
+            .next()
+            .filter(|child| child.has_tag_name((SAGE_NS, "Filter")));
+        let Some(filter) = filter.filter(|_| children.next().is_none()) else {
+            return Err(invalid(data.path, "ObjectVisionRange requires one Filter"));
+        };
+        let start = first + index * STRIDE;
+        // Its XML id identifies the entry for inheritance. EA leaves the binary id zero.
+        let value = percentage(
+            range.attribute("Range").unwrap_or("100"),
+            "Range",
+            data.path,
+        )?;
+        data.word(start + 4, value.to_bits());
+        let filter = encode_inline_filter(filter, start + 8, data, reference_types)?;
+        items.push((
+            0,
+            Target::Table(Table::record(vec![
+                Entry::named("Range", REAL, Target::Data(start + 4)),
+                Entry::named("Filter", 0xe46e_a3b2, Target::Table(filter)),
+            ])),
+        ));
+    }
+    Ok(Table::array(count, items))
 }
 
 fn base(kind: u32, table: Table) -> Entry {
