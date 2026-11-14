@@ -13,7 +13,8 @@ use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
 
-const KIND: u32 = 0xbae3_bc7d;
+const GARRISON: u32 = 0xbae3_bc7d;
+const SLAUGHTER: u32 = 0xc194_7edc;
 const BOOL: u32 = 0x77e3_f4f7;
 const UINT: u32 = 0x7631_77a4;
 const INT: u32 = 0x23e6_50b8;
@@ -72,13 +73,36 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
     let path = data.path;
-    let allowed: Vec<_> = std::iter::once("id")
+    let slaughter = node.has_tag_name((SAGE_NS, "SlaughterHordeContain"));
+    let kind = if slaughter { SLAUGHTER } else { GARRISON };
+    let mut allowed: Vec<_> = std::iter::once("id")
         .chain(OPEN_FIELDS.iter().map(|&(name, _, _, _)| name))
         .chain(GARRISON_FLAGS.map(|(name, _, _)| name))
         .collect();
+    if slaughter {
+        allowed.extend([
+            "ExitDelay",
+            "CashBackPercent",
+            "CanAlwaysEnterStatus",
+            "SlaughterFX",
+        ]);
+    }
     validate_attributes(node, &allowed, path)?;
-    let start = data.allocate(pointer, 0xa0)?;
-    let mut open = vec![module_base(node, KIND, start, data, true)?];
+    let start = data.allocate(pointer, if slaughter { 0x144 } else { 0xa0 })?;
+    let mut children: Vec<_> = significant_children(node).collect();
+    let derived = if slaughter {
+        Some(slaughter_fields(
+            node,
+            &mut children,
+            start,
+            data,
+            references,
+            reference_types,
+        )?)
+    } else {
+        None
+    };
+    let mut open = vec![module_base(node, kind, start, data, true)?];
     for &(name, kind, offset, default) in OPEN_FIELDS {
         let value = node.attribute(name).unwrap_or(default);
         let field = start + offset;
@@ -113,7 +137,7 @@ pub(super) fn encode(
         open.push(Entry::named(name, kind, Target::Data(field)));
     }
 
-    let mut children = significant_children(node).peekable();
+    let mut children = children.into_iter().peekable();
     let filter = match children.next_if(|child| child.has_tag_name((SAGE_NS, "PassengerFilter"))) {
         Some(child) => Target::Table(encode_filter(child, start + 0x68, data, reference_types)?),
         None => Target::Null,
@@ -238,7 +262,114 @@ pub(super) fn encode(
         0x201c_212b,
         Target::Table(roster),
     ));
-    Ok((KIND, Table::record(entries)))
+    let garrison = Table::record(entries);
+    Ok((
+        kind,
+        match derived {
+            Some((mut horde, mut slaughter)) => {
+                horde.insert(0, base(GARRISON, garrison));
+                slaughter.insert(0, base(0x1d7f_c977, Table::record(horde)));
+                Table::record(slaughter)
+            }
+            None => garrison,
+        },
+    ))
+}
+
+fn slaughter_fields(
+    node: Node<'_, '_>,
+    children: &mut Vec<Node<'_, '_>>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(Vec<Entry>, Vec<Entry>)> {
+    let path = data.path;
+    let filter = children
+        .pop()
+        .filter(|child| child.has_tag_name((SAGE_NS, "CanAlwaysEnterObjectFilter")))
+        .ok_or_else(|| {
+            invalid(
+                path,
+                "SlaughterHordeContain requires CanAlwaysEnterObjectFilter",
+            )
+        })?;
+    let ordinal = super::passive_area::reference(
+        node.attribute("SlaughterFX").unwrap_or(""),
+        "FXList",
+        path,
+        references,
+        reference_types,
+    )?;
+    data.word(start + 0xd0, ordinal);
+    let filter = encode_inline_filter(filter, start + 0xd4, data, reference_types)?;
+    data.word(
+        start + 0xb0,
+        percentage(
+            node.attribute("CashBackPercent").unwrap_or("0"),
+            "CashBackPercent",
+            path,
+        )?
+        .to_bits(),
+    );
+    write_status_flags(
+        node.attribute("CanAlwaysEnterStatus").unwrap_or(""),
+        start + 0xb4,
+        data,
+    )?;
+    let mut slaughter: Vec<_> = fields(
+        start,
+        &[
+            ("CashBackPercent", FLOAT, 0xb0),
+            ("CanAlwaysEnterStatus", STATUS, 0xb4),
+            ("SlaughterFX", 0x0d1c_8e83, 0xd0),
+        ],
+    )
+    .collect();
+    slaughter.push(Entry::named(
+        "CanAlwaysEnterObjectFilter",
+        0xe46e_a3b2,
+        Target::Table(filter),
+    ));
+
+    let delay = node
+        .attribute("ExitDelay")
+        .unwrap_or("0")
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| invalid(path, "invalid ExitDelay"))?;
+    data.word(start + 0xa0, delay);
+    let mut horde = vec![Entry::named("ExitDelay", UINT, Target::Data(start + 0xa0))];
+    let coords = [
+        ("EntryOffset", 0xa4),
+        ("EntryPosition", 0xa8),
+        ("ExitOffset", 0xac),
+    ];
+    let mut nodes = [None; 3];
+    for (index, (name, _)) in coords.into_iter().enumerate().rev() {
+        if children
+            .last()
+            .is_some_and(|child| child.has_tag_name((SAGE_NS, name)))
+        {
+            nodes[index] = children.pop();
+        }
+    }
+    for ((name, pointer), node) in coords.into_iter().zip(nodes) {
+        let target = if let Some(node) = node {
+            let axes = ["x", "y", "z"];
+            named_leaf(node, &axes, path)?;
+            let offset = data.allocate(start + pointer, 12)?;
+            for (index, axis) in axes.into_iter().enumerate() {
+                let value = finite_number(node.attribute(axis).unwrap_or("0"), axis, path)?;
+                data.word(offset + 4 * index, value.to_bits());
+            }
+            Target::Data(offset)
+        } else {
+            Target::Null
+        };
+        horde.push(Entry::named(name, 0x2936_8077, target));
+    }
+    Ok((horde, slaughter))
 }
 
 fn passenger_data(

@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="SlaughterContainProbe">
+    <Behaviors>
+      <SlaughterHordeContain id="ModuleTag_Default"><CanAlwaysEnterObjectFilter Rule="ANY"/></SlaughterHordeContain>
+      <SlaughterHordeContain id="ModuleTag_Configured" CashBackPercent="75%" CanAlwaysEnterStatus="WALL_SEGMENT" SlaughterFX="ProbeSlaughterFx" ExitDelay="5" ResetInitialTeamOnCapture="true">
+        <PassengerFilter Rule="ANY"/>
+        <EntryOffset x="1" y="2" z="3"/><EntryPosition x="4" y="5" z="6"/><ExitOffset x="7" y="8" z="9"/>
+        <CanAlwaysEnterObjectFilter Rule="ANY" Include="VEHICLE" StatusBitFlagsExclude="AIRBORNE_TARGET"><IncludeThing>SlaughterContainProbe</IncludeThing></CanAlwaysEnterObjectFilter>
+      </SlaughterHordeContain>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

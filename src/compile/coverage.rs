@@ -66,6 +66,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "GarrisonContain",
             "InvisibilityBehavior",
             "AttributeModifierAuraUpdate",
+            "SlaughterHordeContain",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -686,6 +687,11 @@ mod tests {
     #[test]
     fn attribute_modifier_aura_matches_ea_batch() {
         assert_ea_fixture("attribute-modifier-aura", 1);
+    }
+
+    #[test]
+    fn slaughter_contain_matches_ea_batch() {
+        assert_ea_fixture("slaughter-contain", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

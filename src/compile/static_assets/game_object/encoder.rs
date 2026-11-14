@@ -163,6 +163,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut chooser_relocations = Vec::new();
     let mut subobject_modules = Vec::new();
     let mut aura_modules = Vec::new();
+    let mut slaughter_modules = Vec::new();
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
     let mut child_targets =
         children::encode(node, &mut data, &mut references, &mut reference_types)?;
@@ -244,6 +245,9 @@ pub(in crate::compile::static_assets) fn compile(
             } else {
                 if module.has_tag_name((SAGE_NS, "AttributeModifierAuraUpdate")) {
                     aura_modules.push(data.payload.len() as u32);
+                }
+                if module.has_tag_name((SAGE_NS, "SlaughterHordeContain")) {
+                    slaughter_modules.push(data.payload.len() as u32);
                 }
                 behaviors_basic::encode(
                     module,
@@ -406,6 +410,25 @@ pub(in crate::compile::static_assets) fn compile(
                 0x18 => return (start + 0x5c, 5),
                 _ => {}
             }
+        }
+        let index = slaughter_modules.partition_point(|&start| start <= pointer);
+        if index > 0 {
+            let start = slaughter_modules[index - 1];
+            let rank = match pointer - start {
+                0x130 => 0,
+                0x138 => 1,
+                0x13c => 2,
+                0xa4 => 3,
+                0xa8 => 4,
+                0xac => 5,
+                0x68 => 6,
+                0x6c => 7,
+                0x74 => 8,
+                0x7c => 9,
+                0x84 => 10,
+                _ => return (pointer, 2),
+            };
+            return (start, rank);
         }
         (pointer, 2)
     };
