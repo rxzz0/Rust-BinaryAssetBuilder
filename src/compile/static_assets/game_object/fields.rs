@@ -31,6 +31,7 @@ pub(super) fn encode(
         "EnergyProduction",
         "EnergyBonus",
         "VoicePriority",
+        "CommandPoints",
         "CommandSet",
         "SelectPortrait",
         "ButtonImage",
@@ -156,6 +157,7 @@ pub(super) fn encode(
         ("EnergyProduction", 0x88),
         ("EnergyBonus", 0x8c),
         ("VoicePriority", 0xa4),
+        ("CommandPoints", 0xe0),
     ] {
         if let Some(value) = node.attribute(name) {
             let number = value
