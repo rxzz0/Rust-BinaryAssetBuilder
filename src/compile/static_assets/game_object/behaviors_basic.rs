@@ -436,6 +436,21 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "StatusBitsUpgrade")) {
         return status_bits_upgrade(node, pointer, data, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "PowerUpgrade")) {
+        const KIND: u32 = 0xc3a6_2c68;
+        let path = data.path;
+        let allowed: Vec<_> = std::iter::once("id")
+            .chain(super::spawn::UPGRADE.iter().map(|&(name, _, _)| name))
+            .collect();
+        validate_attributes(node, &allowed, path)?;
+        let start = data.allocate(pointer, 0x24)?;
+        let mut children = significant_children(node).peekable();
+        let parent = upgrade_parent(node, KIND, start, data, reference_types, &mut children)?;
+        if children.next().is_some() {
+            return Err(invalid(path, "unexpected PowerUpgrade child"));
+        }
+        return Ok(Some((KIND, Table::record(vec![parent]))));
+    }
     if node.has_tag_name((SAGE_NS, "AttributeModifierAuraUpdate")) {
         return attribute_modifier_aura(node, pointer, data, references, reference_types).map(Some);
     }

@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="PowerUpgradeProbe">
+    <Behaviors>
+      <PowerUpgrade id="ModuleTag_Default"/>
+      <PowerUpgrade id="ModuleTag_Configured" Permanent="true"><TriggeredBy>ProbeRequirement</TriggeredBy><ConflictsWith>ProbeConflict</ConflictsWith></PowerUpgrade>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

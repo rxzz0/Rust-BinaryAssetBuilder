@@ -67,6 +67,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "InvisibilityBehavior",
             "AttributeModifierAuraUpdate",
             "SlaughterHordeContain",
+            "PowerUpgrade",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -697,6 +698,11 @@ mod tests {
     #[test]
     fn empty_object_sound_matches_ea_batch() {
         assert_ea_fixture("empty-object-sound", 1);
+    }
+
+    #[test]
+    fn power_upgrade_matches_ea_batch() {
+        assert_ea_fixture("power-upgrade", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {
