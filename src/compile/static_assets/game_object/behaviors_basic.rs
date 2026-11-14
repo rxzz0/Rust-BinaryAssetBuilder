@@ -211,6 +211,66 @@ fn status_bits_upgrade(
     Ok((KIND, Table::record(entries)))
 }
 
+fn lift_object(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xbf91_bfcd;
+    const REAL: u32 = 0x6458_64f3;
+    const TIME: u32 = 0x9986_69e8;
+    const WEAPON: u32 = 0xd046_dd22;
+    const FIELDS: [(&str, u32, usize, &str); 7] = [
+        ("LiftVelocity", REAL, 8, "0"),
+        ("MaxElevationFromGround", REAL, 0xc, "0"),
+        ("TimeIncrement", TIME, 0x10, "0s"),
+        ("MaxTimeLifted", TIME, 0x14, "1s"),
+        ("MaxStructureShakeVelocity", REAL, 0x18, "0"),
+        ("AirplaneCrashWeapon", WEAPON, 0x1c, ""),
+        ("SoftLandingWeapon", WEAPON, 0x20, ""),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = ["id", "CrusherModifiesVelocity"]
+        .into_iter()
+        .chain(FIELDS.map(|(name, _, _, _)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected LiftObjectUpdate content"));
+    }
+    let start = data.allocate(pointer, 0x28)?;
+    let parent = module_base(node, KIND, start, data, true)?;
+    data.payload[start + 0x24] = boolean(node, "CrusherModifiesVelocity", false, path)?;
+    let mut entries = vec![
+        parent,
+        Entry::named(
+            "CrusherModifiesVelocity",
+            0x77e3_f4f7,
+            Target::Data(start + 0x24),
+        ),
+    ];
+    for (name, kind, offset, default) in FIELDS {
+        let value = node.attribute(name).unwrap_or(default);
+        let word = match kind {
+            REAL => finite_number(value, name, path)?.to_bits(),
+            TIME => sage_time(value, name, path)?.to_bits(),
+            WEAPON => super::passive_area::reference(
+                value,
+                "WeaponTemplate",
+                path,
+                references,
+                reference_types,
+            )?,
+            _ => unreachable!("LiftObjectUpdate field type"),
+        };
+        data.word(start + offset, word);
+        entries.push(Entry::named(name, kind, Target::Data(start + offset)));
+    }
+    Ok((KIND, Table::record(entries)))
+}
+
 pub(super) fn weapon_slot(value: &str, path: &std::path::Path) -> io::Result<u32> {
     super::super::global_ui::enum_value(
         value,
@@ -241,6 +301,9 @@ pub(super) fn encode(
     }
     if node.has_tag_name((SAGE_NS, "StatusBitsUpgrade")) {
         return status_bits_upgrade(node, pointer, data, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "LiftObjectUpdate")) {
+        return lift_object(node, pointer, data, references, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "SecondaryObjectListenerModule")) {
         return super::secondary_listener::encode(node, pointer, data, references, reference_types)

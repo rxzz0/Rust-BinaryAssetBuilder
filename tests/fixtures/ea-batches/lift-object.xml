@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="LiftObjectProbe">
+    <Behaviors>
+      <LiftObjectUpdate id="ModuleTag_Default"/>
+      <LiftObjectUpdate id="ModuleTag_Configured" CrusherModifiesVelocity="true" LiftVelocity="4" MaxElevationFromGround="200" TimeIncrement=".5s" MaxTimeLifted="8s" MaxStructureShakeVelocity=".25" AirplaneCrashWeapon="ProbeCrash" SoftLandingWeapon="ProbeSoft"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
