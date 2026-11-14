@@ -131,12 +131,15 @@ impl AnimationEncoder<'_, '_> {
 
         let mut animations = Vec::new();
         let mut particles = Vec::new();
+        let mut fx_events = Vec::new();
         let mut script = None;
         for child in significant_children(node) {
             if child.has_tag_name((SAGE_NS, "Animation")) {
                 animations.push(child);
             } else if child.has_tag_name((SAGE_NS, "ParticleSysBone")) {
                 particles.push(child);
+            } else if child.has_tag_name((SAGE_NS, "FXEvent")) {
+                fx_events.push(child);
             } else if child.has_tag_name((SAGE_NS, "Script")) && script.is_none() {
                 script = Some(child);
             } else {
@@ -173,6 +176,7 @@ impl AnimationEncoder<'_, '_> {
         } else {
             Target::Null
         };
+        let fx = self.fx_events(fx_events, start + 0x70)?;
         let particle_table = self.particles(particles, start + 0x80)?;
         let mut entries: Vec<_> = fields(start, FIELDS).collect();
         entries.extend([
@@ -182,7 +186,7 @@ impl AnimationEncoder<'_, '_> {
                 Target::Table(Table::array(start + 0x64, items)),
             ),
             Entry::named("Script", 0x1847_c490, script),
-            array("FXEvent", 0x7599_1ad3, start + 0x70),
+            Entry::named("FXEvent", 0x7599_1ad3, Target::Table(fx)),
             array("LuaEvent", 0xda05_eb72, start + 0x78),
             Entry::named(
                 "ParticleSysBone",
@@ -191,6 +195,40 @@ impl AnimationEncoder<'_, '_> {
             ),
         ]);
         Ok(Table::record(entries))
+    }
+
+    fn fx_events(&mut self, events: Vec<Node<'_, '_>>, count: usize) -> io::Result<Table> {
+        const FIELDS: &[(&str, u32, usize)] = &[
+            ("Frame", INT, 0),
+            ("FrameStep", INT, 4),
+            ("FrameStop", INT, 8),
+            ("FireWhenSkipped", BOOL, 0x18),
+            ("Effect", 0x0d1c_8e83, 0xc),
+            ("Bone", STRING, 0x10),
+        ];
+        let path = self.data.path;
+        let first = self.data.list(count, events.len(), 0x1c)?;
+        let mut items = Vec::with_capacity(events.len());
+        for (index, node) in events.into_iter().enumerate() {
+            check_attributes(node, FIELDS, path)?;
+            if has_content(node) {
+                return Err(invalid(path, "FXEvent cannot contain content"));
+            }
+            let start = first + index * 0x1c;
+            for &(name, _, offset) in &FIELDS[..3] {
+                self.integer(node, name, "0", start + offset)?;
+            }
+            self.data.payload[start + 0x18] = boolean(node, "FireWhenSkipped", false, path)?;
+            self.reference(node, "Effect", "FXList", start + 0xc)?;
+            if let Some(bone) = node.attribute("Bone") {
+                self.data.string(start + 0x10, bone)?;
+            }
+            items.push((
+                0,
+                Target::Table(Table::record(fields(start, FIELDS).collect())),
+            ));
+        }
+        Ok(Table::array(count, items))
     }
 
     fn animation(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {

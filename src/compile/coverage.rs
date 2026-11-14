@@ -705,6 +705,11 @@ mod tests {
         assert_ea_fixture("power-upgrade", 1);
     }
 
+    #[test]
+    fn animation_fx_events_match_ea_batch() {
+        assert_ea_fixture("animation-fx-events", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

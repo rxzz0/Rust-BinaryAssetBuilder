@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="AnimationFxProbe">
+    <Draws><ScriptedModelDraw id="ModuleTag_Draw">
+      <ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name=""/></ModelConditionState>
+      <AnimationState ParseCondStateType="PARSE_DEFAULT">
+        <Animation AnimationName="ProbeAnimation" AnimationMode="LOOP"/>
+        <FXEvent/>
+        <FXEvent Frame="5" FrameStep="2" FrameStop="10" FireWhenSkipped="true" Effect="ProbeFx" Bone="BONE"/>
+      </AnimationState>
+    </ScriptedModelDraw></Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
