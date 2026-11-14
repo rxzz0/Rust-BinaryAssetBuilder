@@ -49,6 +49,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "MonitorSpecialPowerTimerUpdate",
             "WeaponFireSpecialAbilityUpdate",
             "OCLSpecialPower",
+            "SquishCollide",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -594,6 +595,11 @@ mod tests {
     #[test]
     fn crusher_info_matches_ea_batch() {
         assert_ea_fixture("crusher-info", 1);
+    }
+
+    #[test]
+    fn squish_collide_matches_ea_batch() {
+        assert_ea_fixture("squish-collide", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

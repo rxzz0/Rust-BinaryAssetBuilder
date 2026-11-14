@@ -41,6 +41,54 @@ pub(super) fn module_base(
     })
 }
 
+fn squish_collide(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xb5eb_41ed;
+    const TIMES: [(&str, &str, usize); 2] =
+        [("CrushAnimTime", "1s", 8), ("CrushKillDelay", ".5s", 12)];
+    const FLAGS: [(&str, u32, usize); 3] = [
+        ("UseDirectionCheck", 0x77e3_f4f7, 16),
+        ("UseVehicleStyleCrush", 0x77e3_f4f7, 17),
+        ("AllowAllyCrush", 0x77e3_f4f7, 18),
+    ];
+    let path = data.path;
+    validate_attributes(
+        node,
+        &[
+            "id",
+            "CrushAnimTime",
+            "CrushKillDelay",
+            "UseDirectionCheck",
+            "UseVehicleStyleCrush",
+            "AllowAllyCrush",
+        ],
+        path,
+    )?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected SquishCollide content"));
+    }
+    let start = data.allocate(pointer, 20)?;
+    let behavior = module_base(node, KIND, start, data, false)?;
+    let mut entries = vec![base(0x70e5_c103, Table::record(vec![behavior]))];
+    for (name, default, offset) in TIMES {
+        let value = sage_time(node.attribute(name).unwrap_or(default), name, path)?;
+        data.word(start + offset, value.to_bits());
+        entries.push(Entry::named(
+            name,
+            0x9986_69e8,
+            Target::Data(start + offset),
+        ));
+    }
+    for (name, _, offset) in FLAGS {
+        data.payload[start + offset] = boolean(node, name, name == "UseDirectionCheck", path)?;
+    }
+    entries.extend(fields(start, &FLAGS));
+    Ok((KIND, Table::record(entries)))
+}
+
 pub(super) fn weapon_slot(value: &str, path: &std::path::Path) -> io::Result<u32> {
     super::super::global_ui::enum_value(
         value,
@@ -63,6 +111,9 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
+    if node.has_tag_name((SAGE_NS, "SquishCollide")) {
+        return squish_collide(node, pointer, data).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "FireWeaponWhenDead")) {
         return fire_weapon_when_dead(node, pointer, data, references, reference_types).map(Some);
     }

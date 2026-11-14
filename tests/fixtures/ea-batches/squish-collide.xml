@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="SquishCollideProbe">
+    <Behaviors>
+      <SquishCollide id="ModuleTag_Default"/>
+      <SquishCollide id="ModuleTag_Configured" CrushAnimTime="1.25s" CrushKillDelay="375ms" UseDirectionCheck="false" UseVehicleStyleCrush="true" AllowAllyCrush="true"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
