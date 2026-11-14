@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <SpecialPowerTemplate id="PowerDefaults" TargetType="NONE" />
+    <SpecialPowerTemplate id="PowerLayout" TargetType="OBJECT" DisplayName="Name:Probe" Description="Desc:Probe" NumTargets="3" Flags="IS_PLAYER_POWER WATER_OK" ReloadTime="2s" InitiateSound="ProbeSound" InitiateAtLocationSound="ProbeLocation" ViewObjectDuration="3s" ViewObjectRange="40" RadiusCursorRadius="55" PreventConditions="AIRBORNE_TARGET" RequiredConditions="SUBMERGED" DisallowedTargetModelStates="DEPLOYED" RequiredTargetObjectStatus="SUBMERGED" DisallowedTargetObjectStatus="AIRBORNE_TARGET" MaxCastRange="750" MinCastRange="75" ForbiddenObjectRange="70" EvaEventToPlayOnSuccess="ProbeEva" EvaEventToPlayWhenSelectingTarget="ProbeSelect" EvaEventToPlayOnInitiateOwner="ProbeOwner" EvaEventToPlayOnInitiateAlly="ProbeAlly" EvaEventToPlayOnInitiateEnemy="ProbeEnemy" NameOfVoiceNameToUseAsInitiateIntendToDoVoice="ProbeVoice" RestrictionType="2" Money="-300" WaypointModeTerminal="false" TimerImage="ProbeImage" ReachableTargetsCircleDisplayRadius="150" RequiredPlayerTech="ProbeTech">
+        <ObjectFilter Rule="ANY" Include="VEHICLE" />
+        <ForbiddenObjectFilter Rule="ALL" Include="INFANTRY" />
+        <GameDependency id="ProbeDependency"><RequiredObject>ProbeBuilding</RequiredObject></GameDependency>
+        <ForbiddenPlayerTech>ProbeForbidden</ForbiddenPlayerTech>
+    </SpecialPowerTemplate>
+</AssetDeclaration>

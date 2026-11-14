@@ -37,6 +37,7 @@ mod shadow;
 mod slaved;
 mod slow_death;
 mod spawn;
+pub(super) mod special_power;
 mod squeeze_fling;
 mod stream_draw;
 mod structures;

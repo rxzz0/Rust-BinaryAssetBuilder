@@ -960,6 +960,11 @@ mod tests {
         assert_ea_fixture("player-tech-store", 1);
     }
 
+    #[test]
+    fn special_power_layout_matches_ea() {
+        assert_ea_fixture("special-power-layout-probe", 2);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
