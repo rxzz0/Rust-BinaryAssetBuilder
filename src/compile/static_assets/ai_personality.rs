@@ -234,10 +234,11 @@ pub(super) const FILTER: &str = "CountAsStructureForBuildPurposesFilter";
 const ALL_DIFFICULTIES: &str = "EASY MEDIUM HARD BRUTAL";
 
 // Schema order also determines the allocation order of the trailing data.
-pub(super) const CHILDREN: [(&str, usize, usize); 10] = [
+pub(super) const CHILDREN: [(&str, usize, usize); 11] = [
     ("Side", 236, 4),
     ("UnitCap", 252, 8),
     ("ResourceMultiplierCheat", 300, 8),
+    ("StrategicDirectiveFeedback", 308, 12),
     ("PowerChoice", 324, 8),
     ("StrategicState", 340, 12),
     ("BudgetState", 348, 12),
@@ -296,6 +297,34 @@ fn write_item(
             validate_attributes(node, &["Percentage", "Difficulty"], path)?;
             binary.word(offset, value("Percentage", "100%", Percent)?);
             binary.word(offset + 4, difficulty()?);
+        }
+        "StrategicDirectiveFeedback" => {
+            use super::global_ui::enum_value;
+            validate_attributes(node, &["StrategicDirective", "Event", "FeedbackKey"], path)?;
+            let directive = enum_value(
+                required(node, "StrategicDirective", path)?,
+                &[
+                    "Invalid",
+                    "Normal",
+                    "Assault",
+                    "HoldPosition",
+                    "HoldObject",
+                    "Help",
+                ],
+                path,
+            )?
+            .wrapping_sub(1);
+            let event = enum_value(
+                required(node, "Event", path)?,
+                &["Begin", "Complete", "Cancel"],
+                path,
+            )?;
+            binary.word(offset, directive);
+            binary.word(offset + 4, event);
+            binary.word(
+                offset + 8,
+                fast_hash(required(node, "FeedbackKey", path)?.as_bytes()),
+            );
         }
         "PowerChoice" => {
             validate_attributes(node, &["PlayerPower", "Weight"], path)?;

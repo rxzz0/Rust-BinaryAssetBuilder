@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <AIPersonalityDefinition id="DirectiveFeedbackProbe" PersonalityType="Probe">
+        <StrategicDirectiveFeedback StrategicDirective="Assault" Event="Complete" FeedbackKey="MixedCaseFeedback" />
+        <StrategicDirectiveFeedback StrategicDirective="HoldObject" Event="Cancel" FeedbackKey="OtherFeedback" />
+        <CountAsStructureForBuildPurposesFilter />
+    </AIPersonalityDefinition>
+</AssetDeclaration>
