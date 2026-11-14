@@ -8,6 +8,8 @@ use roxmltree::Node;
 use std::io;
 use std::path::Path;
 
+mod xas;
+
 impl Compiler<'_> {
     pub(in crate::compile) fn compile_audio_file(
         &self,
@@ -53,12 +55,16 @@ impl Compiler<'_> {
                 "NONE"
             }
         });
-        if compression != "NONE" {
-            return Err(invalid(
-                path,
-                format!("unsupported PC audio compression {compression}"),
-            ));
-        }
+        let codec = match compression {
+            "NONE" => 2,
+            "XAS" => 4,
+            _ => {
+                return Err(invalid(
+                    path,
+                    format!("unsupported PC audio compression {compression}"),
+                ));
+            }
+        };
         let streamed = match node.attribute("IsStreamedOnPC").unwrap_or("false").trim() {
             "true" | "1" => true,
             "false" | "0" => false,
@@ -72,14 +78,18 @@ impl Compiler<'_> {
         {
             return Err(invalid(path, "AudioFile resampling is unsupported"));
         }
-        let frames = (wave.samples.len() / (2 * usize::from(wave.channels))) as u32;
-        if frames > 0x1fff_ffff {
+        let frames = wave.frames();
+        if frames == 0 || frames > 0x1fff_ffff {
             return Err(invalid(&file, "AudioFile is too long"));
         }
-        let mut header = vec![2, (wave.channels - 1) << 2];
+        let mut header = vec![codec, (wave.channels - 1) << 2];
         header.extend(wave.rate.to_be_bytes());
         header.extend((frames | if streamed { 0x4000_0000 } else { 0 }).to_be_bytes());
-        let cdata = pcm_data(&wave, streamed, &header);
+        let cdata = if codec == 4 {
+            xas::encode(&wave, streamed, &header)
+        } else {
+            pcm_data(&wave, streamed, &header)
+        };
         let mut data = BinaryData {
             payload: vec![0; 0x20],
             relocations: Vec::new(),
@@ -126,6 +136,7 @@ impl Compiler<'_> {
 struct Wave<'a> {
     rate: u16,
     channels: u8,
+    sample_bytes: usize,
     samples: &'a [u8],
 }
 
@@ -159,24 +170,44 @@ impl<'a> Wave<'a> {
             || (word(0) == 0xfffe
                 && format.get(24..40)
                     == Some(b"\x01\x00\x00\x00\x00\x00\x10\x00\x80\x00\x00\xaa\x00\x38\x9b\x71"));
+        let bits = word(14);
+        let sample_bytes = usize::from(bits / 8);
         if !supported_format
             || !matches!(channels, 1 | 2 | 4 | 6)
-            || word(14) != 16
-            || word(12) != channels * 2
+            || !matches!(bits, 8 | 16)
+            || usize::from(word(12)) != usize::from(channels) * sample_bytes
             || rate == 0
             || rate > u16::MAX as u32
-            || !samples.len().is_multiple_of(usize::from(channels) * 2)
+            || !samples
+                .len()
+                .is_multiple_of(usize::from(channels) * sample_bytes)
         {
             return Err(invalid(
                 path,
-                "expected 16-bit PCM WAV with 1, 2, 4 or 6 channels",
+                "expected 8- or 16-bit PCM WAV with 1, 2, 4 or 6 channels",
             ));
         }
         Ok(Self {
             rate: rate as u16,
             channels: channels as u8,
+            sample_bytes,
             samples,
         })
+    }
+
+    fn frames(&self) -> u32 {
+        (self.samples.len() / (self.sample_bytes * usize::from(self.channels))) as u32
+    }
+
+    fn sample(&self, index: usize) -> i16 {
+        let Some(&low) = self.samples.get(index * self.sample_bytes) else {
+            return 0;
+        };
+        if self.sample_bytes == 1 {
+            (i16::from(low) - 128) << 8
+        } else {
+            i16::from_le_bytes([low, self.samples[index * 2 + 1]])
+        }
     }
 }
 
@@ -189,26 +220,32 @@ fn pcm_data(wave: &Wave<'_>, streamed: bool, header: &[u8]) -> Vec<u8> {
     let block_bytes = if streamed {
         ((2044 - 8) / frame_bytes) * frame_bytes
     } else {
-        wave.samples.len().max(frame_bytes)
+        (wave.frames() as usize * frame_bytes).max(frame_bytes)
     };
-    let mut blocks = wave.samples.chunks(block_bytes).peekable();
-    while let Some(block) = blocks.next() {
-        let last = streamed && blocks.peek().is_none();
-        let size = if last {
-            (output.len() + block.len() + 8).next_multiple_of(64) - output.len()
-        } else {
-            block.len() + 8
-        };
-        let tag = if last { 0x8000_0000 } else { 0 };
-        let end = output.len() + size;
-        output.extend((tag | size as u32).to_be_bytes());
-        output.extend(((block.len() / frame_bytes) as u32).to_be_bytes());
-        for &pair in block.as_chunks::<2>().0 {
-            let sample = i16::from_le_bytes(pair);
+    let frames = wave.frames() as usize;
+    let block_frames = block_bytes / frame_bytes;
+    for start in (0..frames).step_by(block_frames) {
+        let count = (frames - start).min(block_frames);
+        let last = streamed && start + count == frames;
+        let end = block_header(&mut output, count * frame_bytes, count, last);
+        for index in
+            start * usize::from(wave.channels)..(start + count) * usize::from(wave.channels)
+        {
+            let sample = wave.sample(index);
             // The SDK's PCM encoder scales signed 16-bit samples toward zero.
             output.extend((sample - sample.signum()).to_be_bytes());
         }
         output.resize(end, 0);
     }
     output
+}
+
+fn block_header(out: &mut Vec<u8>, payload: usize, frames: usize, last: bool) -> usize {
+    let end = out.len() + 8 + payload;
+    let end = if last { end.next_multiple_of(64) } else { end };
+    let size = (end - out.len()) as u32;
+    let tag = if last { 0x8000_0000 } else { 0 };
+    out.extend((size | tag).to_be_bytes());
+    out.extend((frames as u32).to_be_bytes());
+    end
 }
