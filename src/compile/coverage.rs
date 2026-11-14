@@ -985,6 +985,13 @@ mod tests {
         assert_ea_fixture("weapon-tint-objects", 1);
     }
 
+    #[test]
+    fn damage_and_reference_weapon_nuggets_match_ea() {
+        for name in ["weapon-dot", "weapon-projectile", "weapon-ocl"] {
+            assert_ea_fixture(name, 1);
+        }
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
