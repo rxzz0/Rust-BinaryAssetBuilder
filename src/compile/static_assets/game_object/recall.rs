@@ -100,6 +100,7 @@ pub(super) fn encode(
         "TeleportStoredObjectsSpecialPower" => (0x318d_c4d6, 0x1d0, TELEPORT_FIELDS),
         "RecallUnitsSpecialPower" => (KIND, 0x1cc, RECALL_FIELDS),
         "AssignSlavesTargetObjectSpecialPower" => (0x9daf_d38c, 0x1c4, &[][..]),
+        "PrematureDischargeSpecialPower" => (0x8e22_e8c8, 0x1c4, &[][..]),
         _ => (SPECIAL_POWER, 0x1c4, &[][..]),
     };
     let allowed: Vec<_> = POWER_FIELDS

@@ -75,6 +75,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "RunOffMapBehavior",
             "ToggleStatusSpecialAbilityUpdate",
             "ChargeWeaponUpdate",
+            "PrematureDischargeSpecialPower",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -800,6 +801,11 @@ mod tests {
     #[test]
     fn charge_weapon_matches_ea() {
         assert_ea_fixture("charge-weapon-update", 1);
+    }
+
+    #[test]
+    fn premature_discharge_matches_ea() {
+        assert_ea_fixture("premature-discharge", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {
