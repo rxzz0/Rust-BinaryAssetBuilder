@@ -32,6 +32,7 @@ mod shadow;
 mod slaved;
 mod slow_death;
 mod spawn;
+mod stream_draw;
 mod structures;
 mod subobjects;
 mod tech_upgrade;

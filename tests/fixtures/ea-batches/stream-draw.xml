@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="StreamDrawProbe">
+    <Draws>
+      <StreamDraw id="ModuleTag_Default">
+        <FXShader ShaderName="Stream.fx"/>
+      </StreamDraw>
+      <StreamDraw id="ModuleTag_Configured" Velocity="300" ArcHeightFactor=".0625" UVWorldSize="100" NumTubeSides="4" TubeRadius="1.5" HitFx="ProbeHit" WeaponSlotID="1" StreamStateID="2" UseDistortionShader="true">
+        <FXShader ShaderName="Stream.fx"><Constants><Texture Name="Texture1"><Value>ProbeTexture</Value></Texture></Constants></FXShader>
+        <ParticleSystems><ParticleSys>ProbeDrip</ParticleSys><ParticleSys>ProbeCloud</ParticleSys></ParticleSystems>
+      </StreamDraw>
+    </Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

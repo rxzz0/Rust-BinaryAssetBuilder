@@ -79,6 +79,17 @@ pub(super) fn encode(
                     material_float_names,
                 )?,
             ),
+            "StreamDraw" if node.has_tag_name((SAGE_NS, "StreamDraw")) => (
+                super::stream_draw::KIND,
+                super::stream_draw::encode(
+                    node,
+                    pointer,
+                    data,
+                    references,
+                    reference_types,
+                    material_float_names,
+                )?,
+            ),
             name => {
                 return Err(invalid(
                     data.path,
