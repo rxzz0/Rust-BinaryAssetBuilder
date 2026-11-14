@@ -446,7 +446,7 @@ impl Compiler<'_> {
             {
                 self.compile_inherited_ai(node, path, source)
             }
-            "GameObject" | "AmbientStream" | "AudioEvent"
+            "GameObject" | "AmbientStream" | "AudioEvent" | "LogicCommandSet"
                 if node.attribute("inheritFrom").is_some() =>
             {
                 self.compile_schema_inherited_asset(node, path, source)

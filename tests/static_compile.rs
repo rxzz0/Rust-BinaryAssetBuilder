@@ -18,6 +18,39 @@ fn scratch_root() -> PathBuf {
 }
 
 #[test]
+fn inherited_logic_command_sets_reach_reference_validation() {
+    let root = scratch_root();
+    fs::create_dir_all(root.join("Schemas/xsd")).unwrap();
+    fs::write(
+        root.join("Schemas/xsd/CnC3Types.xsd"),
+        r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:complexType name="BaseInheritableAsset"/>
+          <xs:complexType name="LogicCommandSet"><xs:complexContent><xs:extension base="BaseInheritableAsset">
+            <xs:sequence><xs:element name="Cmd" type="xs:string" maxOccurs="unbounded"/></xs:sequence>
+          </xs:extension></xs:complexContent></xs:complexType>
+        </xs:schema>"#,
+    )
+    .unwrap();
+    let xml = root.join("commands.xml");
+    fs::write(
+        &xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+      <LogicCommandSet id="Base"><Cmd>First</Cmd></LogicCommandSet>
+      <LogicCommandSet id="Child" inheritFrom="Base"><Cmd>Second</Cmd></LogicCommandSet>
+    </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let error = compile_static(&xml, &root, &root)
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(
+        error.contains("unresolved reference") && error.contains("LogicCommandSet"),
+        "{error}"
+    );
+}
+
+#[test]
 fn ai_inheritance_applies_remove_and_replace_to_named_states() {
     let root = scratch_root();
     let input = root.join("ai.xml");

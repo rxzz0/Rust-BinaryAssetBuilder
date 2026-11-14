@@ -787,6 +787,7 @@ fn reference_list(
         let value = child
             .text()
             .ok_or_else(|| invalid(path, format!("missing {element} value")))?;
+        let value = value.split_once('\\').map_or(value, |(name, _)| name);
         references.push(asset_reference(value, target_type, path)?.into());
     }
     let count = references.len() as u32;
