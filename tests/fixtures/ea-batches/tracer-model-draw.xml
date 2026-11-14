@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="TracerDrawProbe">
+    <Draws>
+      <TracerModelDraw id="ModuleTag_Default"><HeadColor/><TailColor/></TracerModelDraw>
+      <TracerModelDraw id="ModuleTag_Configured" MinLength="1" MaxLength="2" Width="3" MinSpeed="4" MaxSpeed="5" SweepSpeed="6" SpreadAngle="7" MinTracersPerFrame=".5" MaxTracersPerFrame=".75" FrameLifeTime="8" WeaponSlotType="SECONDARY_WEAPON" WeaponSlotID="2" Texture="ProbeTexture" UseAdditiveBlending="true" TracerHitFx="ProbeHit" TracerEmitFx="ProbeEmit" TextureIndex="3">
+        <HeadColor r=".1" g=".2" b=".3" a=".4"/><TailColor r=".5" g=".6" b=".7" a=".8"/>
+        <ObjectStatusValidation RequiredStatus="WALL_SEGMENT"/>
+      </TracerModelDraw>
+    </Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

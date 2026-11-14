@@ -10,7 +10,15 @@ use std::path::Path;
 // Dispatch coverage, not a claim of complete field support. Draw field coverage
 // comes from the same flag table used by the encoder.
 const MODULES: &[(&str, &[&str])] = &[
-    ("Draws", &["LaserDraw", "ScriptedModelDraw", "StreamDraw"]),
+    (
+        "Draws",
+        &[
+            "LaserDraw",
+            "ScriptedModelDraw",
+            "StreamDraw",
+            "TracerModelDraw",
+        ],
+    ),
     ("AI", &["AIUpdate"]),
     ("Body", &["ActiveBody", "ImmortalBody"]),
     (
@@ -661,6 +669,11 @@ mod tests {
     #[test]
     fn transport_slot_count_matches_ea_batch() {
         assert_ea_fixture("transport-slot-count", 1);
+    }
+
+    #[test]
+    fn tracer_model_draw_matches_ea_batch() {
+        assert_ea_fixture("tracer-model-draw", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

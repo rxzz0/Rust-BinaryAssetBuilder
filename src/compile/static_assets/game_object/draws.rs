@@ -1,7 +1,8 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, asset_reference, hash_name, significant_children, validate_attributes,
+    AssetReference, asset_reference, finite_number, hash_name, required_element,
+    significant_children, validate_attributes,
 };
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
@@ -90,6 +91,10 @@ pub(super) fn encode(
                     material_float_names,
                 )?,
             ),
+            "TracerModelDraw" if node.has_tag_name((SAGE_NS, "TracerModelDraw")) => (
+                0x5401_8e60,
+                encode_tracer(node, pointer, data, references, reference_types)?,
+            ),
             name => {
                 return Err(invalid(
                     data.path,
@@ -107,6 +112,135 @@ pub(super) fn encode(
         ));
     }
     Ok(Target::Table(Table::array(list, items)))
+}
+
+fn encode_tracer(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Table> {
+    use super::behaviors_basic::{base, inherited, weapon_slot};
+
+    const REALS: [&str; 10] = [
+        "MinLength",
+        "MaxLength",
+        "Width",
+        "MinSpeed",
+        "MaxSpeed",
+        "SweepSpeed",
+        "SpreadAngle",
+        "MinTracersPerFrame",
+        "MaxTracersPerFrame",
+        "FrameLifeTime",
+    ];
+    const EXTRA: [(&str, u32, usize); 7] = [
+        ("WeaponSlotType", 0x1848_c549, 0x30),
+        ("WeaponSlotID", 0x23e6_50b8, 0x34),
+        ("Texture", 0xbdb6_3f16, 0x38),
+        ("UseAdditiveBlending", BOOL, 0x6c),
+        ("TracerHitFx", 0x0d1c_8e83, 0x3c),
+        ("TracerEmitFx", 0x0d1c_8e83, 0x40),
+        ("TextureIndex", 0x23e6_50b8, 0x44),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(REALS)
+        .chain(EXTRA.map(|(name, _, _)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let start = data.allocate(pointer, 0x70)?;
+    data.word(start, 0x5401_8e60);
+    data.word(start + 4, hash_name(required(node, "id", path)?));
+    let mut entries = vec![base(
+        0x17f6_1728,
+        inherited(
+            0xd75d_93a2,
+            Table::record(vec![
+                Entry::new(0x19b0_42a0, 0x23e6_50b8, Target::Data(start)),
+                Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
+            ]),
+        ),
+    )];
+    for (index, name) in REALS.into_iter().enumerate() {
+        let default = if name == "SweepSpeed" { "1" } else { "0" };
+        let field = start + 8 + 4 * index;
+        data.word(
+            field,
+            finite_number(node.attribute(name).unwrap_or(default), name, path)?.to_bits(),
+        );
+        entries.push(Entry::named(name, FLOAT, Target::Data(field)));
+    }
+    data.word(
+        start + 0x30,
+        weapon_slot(
+            node.attribute("WeaponSlotType").unwrap_or("PRIMARY_WEAPON"),
+            path,
+        )?,
+    );
+    data.payload[start + 0x6c] = boolean(node, "UseAdditiveBlending", false, path)?;
+    for (name, default, offset) in [("WeaponSlotID", "1", 0x34), ("TextureIndex", "0", 0x44)] {
+        let word = node
+            .attribute(name)
+            .unwrap_or(default)
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| invalid(path, format!("invalid {name}")))?;
+        data.word(start + offset, word as u32);
+    }
+    for (name, kind, offset) in [
+        ("Texture", "Texture", 0x38),
+        ("TracerHitFx", "FXList", 0x3c),
+        ("TracerEmitFx", "FXList", 0x40),
+    ] {
+        let ordinal = super::passive_area::reference(
+            node.attribute(name).unwrap_or(""),
+            kind,
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + offset, ordinal);
+    }
+    entries.extend(fields(start, &EXTRA));
+    let mut children = significant_children(node).peekable();
+    for (name, offset) in [("HeadColor", 0x48), ("TailColor", 0x58)] {
+        let color = required_element(&mut children, name, path)?;
+        let axes = ["r", "g", "b", "a"];
+        validate_attributes(color, &axes, path)?;
+        if has_content(color) {
+            return Err(invalid(path, format!("unexpected {name} content")));
+        }
+        let mut channels = Vec::new();
+        for (index, axis) in axes.into_iter().enumerate() {
+            let field = start + offset + index * 4;
+            data.word(
+                field,
+                finite_number(color.attribute(axis).unwrap_or("0"), axis, path)?.to_bits(),
+            );
+            channels.push(Entry::named(axis, FLOAT, Target::Data(field)));
+        }
+        entries.push(Entry::named(
+            name,
+            0x16ad_f350,
+            Target::Table(Table::record(channels)),
+        ));
+    }
+    let status =
+        match children.next_if(|child| child.has_tag_name((SAGE_NS, "ObjectStatusValidation"))) {
+            Some(child) => Target::Table(super::secondary_damage::encode_status(
+                child,
+                start + 0x68,
+                data,
+            )?),
+            None => Target::Null,
+        };
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected TracerModelDraw child"));
+    }
+    entries.push(Entry::named("ObjectStatusValidation", 0x3e8f_938c, status));
+    Ok(Table::record(entries))
 }
 
 const SCRIPTED_STRINGS: [(&str, usize); 4] = [
