@@ -184,7 +184,10 @@ pub(super) fn encode(
         targets.push(("LocomotorSet", Target::Table(Table::array(count, entries))));
     }
     if let Some(child) = find(node, "SkirmishAIInformation")? {
-        targets.push(("SkirmishAIInformation", skirmish(child, data)?));
+        targets.push((
+            "SkirmishAIInformation",
+            skirmish(child, data, reference_types)?,
+        ));
     }
     let equivalents = node
         .children()
@@ -271,10 +274,18 @@ pub(in crate::compile::static_assets) fn dependency(
     Ok(Target::Table(Table::record(entries)))
 }
 
-fn skirmish(node: Node<'_, '_>, data: &mut BinaryData<'_>) -> io::Result<Target> {
+fn skirmish(
+    node: Node<'_, '_>,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Target> {
     validate_attributes(
         node,
-        &["BaseBuildingLocation", "NearResourceNodeType"],
+        &[
+            "BaseBuildingLocation",
+            "NearResourceNodeType",
+            "DodgeSafetyDistance",
+        ],
         data.path,
     )?;
     let location = super::super::global_ui::enum_value(
@@ -301,6 +312,7 @@ fn skirmish(node: Node<'_, '_>, data: &mut BinaryData<'_>) -> io::Result<Target>
     let resource = children.next_if(|child| {
         child.has_tag_name((SAGE_NS, "ResourceNodeBaseClosenessTestSelectionCriteria"))
     });
+    let dodge = children.next_if(|child| child.has_tag_name((SAGE_NS, "DodgeWithUnits")));
     if let Some(child) = children.next() {
         return Err(invalid(
             data.path,
@@ -319,7 +331,15 @@ fn skirmish(node: Node<'_, '_>, data: &mut BinaryData<'_>) -> io::Result<Target>
         (0x1c, 3),
         (0x28, 0x3f80_0000),
         (0x2c, resource_type),
-        (0x30, 0x4396_0000),
+        (
+            0x30,
+            super::super::finite_number(
+                node.attribute("DodgeSafetyDistance").unwrap_or("300"),
+                "DodgeSafetyDistance",
+                data.path,
+            )?
+            .to_bits(),
+        ),
         (0x50, 1),
     ] {
         data.word(start + offset, value);
@@ -388,7 +408,16 @@ fn skirmish(node: Node<'_, '_>, data: &mut BinaryData<'_>) -> io::Result<Target>
         };
         entries.push(Entry::named(name, 0xc153_d5e0, target));
     }
-    entries.push(Entry::named("DodgeWithUnits", 0xe46e_a3b2, Target::Null));
+    let dodge = match dodge {
+        Some(child) => Target::Table(super::parking::encode_filter(
+            child,
+            start + 0x4c,
+            data,
+            reference_types,
+        )?),
+        None => Target::Null,
+    };
+    entries.push(Entry::named("DodgeWithUnits", 0xe46e_a3b2, dodge));
     Ok(Target::Table(Table::record(entries)))
 }
 

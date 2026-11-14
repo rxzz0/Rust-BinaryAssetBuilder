@@ -910,6 +910,11 @@ mod tests {
         assert_ea_fixture("bezier-projectile", 1);
     }
 
+    #[test]
+    fn skirmish_dodge_matches_ea() {
+        assert_ea_fixture("skirmish-dodge", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

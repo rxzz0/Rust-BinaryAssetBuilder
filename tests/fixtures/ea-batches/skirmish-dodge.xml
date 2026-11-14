@@ -1,0 +1,1 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="SkirmishDodgeProbe"><SkirmishAIInformation DodgeSafetyDistance="200"><DodgeWithUnits Rule="ALL" Include="VEHICLE" StatusBitFlagsExclude="AIRBORNE_TARGET"><ExcludeThing>ProbeUnit</ExcludeThing></DodgeWithUnits></SkirmishAIInformation><Body><PropBody id="Body" /></Body></GameObject></AssetDeclaration>
