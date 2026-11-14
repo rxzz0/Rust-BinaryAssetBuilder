@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <W3DMesh id="MeshProbe" CastShadow="true" GeometryType="Normal">
+    <BoundingBox><Min X="0" Y="0" Z="0"/><Max X="1" Y="1" Z="0"/></BoundingBox>
+    <BoundingSphere Radius="1"><Center X=".5" Y=".5" Z="0"/></BoundingSphere>
+    <Vertices><V X="0" Y="0" Z="0"/><V X="1" Y="0" Z="0"/><V X="0" Y="1" Z="0"/></Vertices>
+    <Normals><N X="0" Y="0" Z="1"/><N X="0" Y="0" Z="1"/><N X="0" Y="0" Z="1"/></Normals>
+    <TexCoords><T X="0" Y="0"/><T X="1" Y="0"/><T X="0" Y="1"/></TexCoords>
+    <Triangles><T><V>0</V><V>1</V><V>2</V><Nrm X="0" Y="0" Z="1"/><Dist>0</Dist></T></Triangles>
+    <FXShader ShaderName="Infantry.fx"><Constants><Texture Name="DiffuseTexture"><Value>MeshProbeTexture</Value></Texture><Float Name="ProbeFloat"><Value>0.25</Value></Float></Constants></FXShader>
+  </W3DMesh>
+</AssetDeclaration>

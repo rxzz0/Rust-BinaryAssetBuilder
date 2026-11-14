@@ -28,6 +28,44 @@ pub(super) fn encode_inline(
     reference_types: &mut Vec<u32>,
     float_names: &mut Vec<u32>,
 ) -> io::Result<Table> {
+    encode_material(
+        node,
+        start,
+        data,
+        references,
+        reference_types,
+        float_names,
+        None,
+    )
+}
+
+pub(in crate::compile::static_assets) fn encode_render_material(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    result: &mut super::super::Marshaled,
+) -> io::Result<()> {
+    encode_material(
+        node,
+        start,
+        data,
+        &mut result.references,
+        &mut result.reference_types,
+        &mut Vec::new(),
+        Some(&mut result.imports),
+    )?;
+    Ok(())
+}
+
+fn encode_material(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+    float_names: &mut Vec<u32>,
+    mut imports: Option<&mut Vec<u32>>,
+) -> io::Result<Table> {
     let path = data.path;
     validate_attributes(
         node,
@@ -53,6 +91,7 @@ pub(super) fn encode_inline(
         validate_attributes(constants, &[], path)?;
         let constants: Vec<_> = significant_children(constants).collect();
         let pointers = data.list(count, constants.len(), 4)?;
+        let relocation_start = data.relocations.len();
         items.reserve(constants.len());
         for (index, node) in constants.into_iter().enumerate() {
             let (kind, table) = constant(
@@ -63,6 +102,18 @@ pub(super) fn encode_inline(
                 reference_types,
                 float_names,
             )?;
+            if let Some(imports) = imports.as_deref_mut() {
+                if kind == 0xa590_96a6 {
+                    let start = u32::from_le_bytes(
+                        data.payload[pointers + index * 4..pointers + index * 4 + 4]
+                            .try_into()
+                            .unwrap(),
+                    );
+                    if data.payload[start as usize + 12..start as usize + 16] != [0; 4] {
+                        imports.push(start + 12);
+                    }
+                }
+            }
             items.push((
                 0,
                 Target::Table(Table::sequence(vec![Entry::new(
@@ -71,6 +122,11 @@ pub(super) fn encode_inline(
                     Target::Table(table),
                 )])),
             ));
+        }
+        if imports.is_some() {
+            let end = (pointers + items.len() * 4) as u32;
+            data.relocations[relocation_start..]
+                .sort_by_key(|&pointer| if pointer < end { pointer } else { end });
         }
     }
     let mut entries: Vec<_> = fields(

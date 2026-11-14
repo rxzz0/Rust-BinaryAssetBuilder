@@ -25,6 +25,7 @@ mod hotkeys;
 pub(super) mod music;
 mod tokenized;
 mod upgrade;
+mod w3d_mesh;
 
 type Marshal = fn(Node<'_, '_>, &Path) -> io::Result<Marshaled>;
 
@@ -56,6 +57,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "AITargetingHeuristic" => (0x92a7_8f51, 32, ai_targeting::compile),
         "ArmorTemplate" => (0x641a_d32e, 33, armor::compile),
         "UpgradeTemplate" => (0x4f8d_2969, 34, upgrade::compile),
+        "W3DMesh" => (0xcd8a_089c, 35, w3d_mesh::compile),
         "GameObject" => (0xcb8d_0980, 10, game_object::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),
@@ -91,7 +93,10 @@ pub(super) fn compile_asset(
     let (type_hash, sort_order, marshal) = encoder(type_name)
         .ok_or_else(|| invalid(path, format!("unsupported static asset type {type_name}")))?;
     let data = marshal(node, path)?;
-    let processing_hash = if data.tokenized {
+    let processing_hash = if type_name == "W3DMesh" {
+        // RA3's render plugin uses its compiler version XOR the runtime type hash.
+        type_hash ^ 8
+    } else if data.tokenized {
         type_hash + 0x1004
     } else {
         type_hash ^ 4
