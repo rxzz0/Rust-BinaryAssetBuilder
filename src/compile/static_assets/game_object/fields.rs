@@ -26,6 +26,7 @@ pub(super) fn encode(
         "BuildTime",
         "MaxSimultaneousOfType",
         "RefundValue",
+        "TransportSlotCount",
         "IsTrainable",
         "EnergyProduction",
         "EnergyBonus",
@@ -143,6 +144,12 @@ pub(super) fn encode(
                 .map_err(|_| invalid(data.path, format!("invalid {name}")))?;
             data.payload[offset..offset + 2].copy_from_slice(&number.to_le_bytes());
         }
+    }
+    if let Some(value) = node.attribute("TransportSlotCount") {
+        data.payload[0x240] = value
+            .trim()
+            .parse::<u8>()
+            .map_err(|_| invalid(data.path, "invalid TransportSlotCount"))?;
     }
     data.payload[0x241] = super::draws::boolean(node, "IsTrainable", true, data.path)?;
     for (name, offset) in [
@@ -414,7 +421,8 @@ mod tests {
                 "TransportSlotCount=\"0\" IsTrainable=\"true\" FenceWidth=\"0\"",
                 true,
             ),
-            ("TransportSlotCount=\"1\"", false),
+            ("TransportSlotCount=\"1\"", true),
+            ("TransportSlotCount=\"256\"", false),
             ("FenceWidth=\"1\"", false),
         ] {
             let xml =
