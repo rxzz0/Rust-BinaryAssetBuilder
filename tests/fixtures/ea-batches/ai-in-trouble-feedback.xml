@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <AIPersonalityDefinition id="InTroubleFeedbackProbe" PersonalityType="Probe">
+        <CountAsStructureForBuildPurposesFilter />
+        <InTroubleSkirmishFeedbackControl OnlyIfLocalPlayerIs="ALLIES NEUTRAL" TimeoutAfterPlaying="600s" TimeBetweenScans="5s" TimeThatConditionsMustBeMet="10s" NumberOfObjectsRecentlyLost="3" TimeForNumberOfObjectLost="120s" ObjectLostFilter="ProbeFilter" MinPowerAdvantageEnemiesInMyBaseVsAllMyUnits="0.25" />
+    </AIPersonalityDefinition>
+</AssetDeclaration>

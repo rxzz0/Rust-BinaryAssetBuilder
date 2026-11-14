@@ -174,6 +174,10 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             }
             "BudgetState" => Some((required(item, "State", path)?, "AIBudgetStateDefinition")),
             "BuildState" => Some((required(item, "State", path)?, "AIBuildStateDefinition")),
+            IN_TROUBLE => Some((
+                required(item, "ObjectLostFilter", path)?,
+                "ObjectFilterAsset",
+            )),
             _ => None,
         };
         let mut ordinal = 0;
@@ -203,6 +207,14 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
                 [(item, _)] => write_base_criteria(*item, field, &mut binary)?,
                 _ => return Err(invalid(path, "multiple AI base selection criteria")),
             },
+            IN_TROUBLE => match items.as_slice() {
+                [] => (),
+                [(item, ordinal)] => {
+                    let offset = binary.allocate(field, size)?;
+                    write_item(*item, name, offset, *ordinal, &mut binary, &mut data)?;
+                }
+                _ => return Err(invalid(path, "multiple in-trouble feedback controls")),
+            },
             FILTER => {
                 let [(item, _)] = items.as_slice() else {
                     return Err(invalid(path, "expected one AI structure filter"));
@@ -231,10 +243,11 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
 
 pub(super) const CRITERIA: &str = "DefaultTacticHomeBaseCriteria";
 pub(super) const FILTER: &str = "CountAsStructureForBuildPurposesFilter";
+pub(super) const IN_TROUBLE: &str = "InTroubleSkirmishFeedbackControl";
 const ALL_DIFFICULTIES: &str = "EASY MEDIUM HARD BRUTAL";
 
 // Schema order also determines the allocation order of the trailing data.
-pub(super) const CHILDREN: [(&str, usize, usize); 12] = [
+pub(super) const CHILDREN: [(&str, usize, usize); 13] = [
     ("Side", 236, 4),
     ("UnitCap", 252, 8),
     ("ResourceMultiplierCheat", 300, 8),
@@ -247,6 +260,7 @@ pub(super) const CHILDREN: [(&str, usize, usize); 12] = [
     ("SpecificUnitCap", 364, 12),
     (CRITERIA, 380, 20),
     (FILTER, 384, 112),
+    (IN_TROUBLE, 496, 32),
 ];
 
 pub(super) fn child_index(node: Node<'_, '_>, path: &Path) -> io::Result<usize> {
@@ -375,6 +389,45 @@ fn write_item(
             }
             binary.word(offset + 4, value("Cap", "1", Signed)?);
             binary.word(offset + 8, difficulty()?);
+        }
+        IN_TROUBLE => {
+            const FIELDS: [&str; 8] = [
+                "OnlyIfLocalPlayerIs",
+                "TimeoutAfterPlaying",
+                "TimeBetweenScans",
+                "TimeThatConditionsMustBeMet",
+                "NumberOfObjectsRecentlyLost",
+                "TimeForNumberOfObjectLost",
+                "ObjectLostFilter",
+                "MinPowerAdvantageEnemiesInMyBaseVsAllMyUnits",
+            ];
+            validate_attributes(node, &FIELDS, path)?;
+            let mut relationships = 0;
+            for name in required(node, FIELDS[0], path)?.split_ascii_whitespace() {
+                relationships |= 1
+                    << super::global_ui::enum_value(
+                        name,
+                        &["ALLIES", "ENEMIES", "NEUTRAL", "SAME_PLAYER"],
+                        path,
+                    )?;
+            }
+            binary.word(offset, relationships);
+            for (index, kind) in [
+                (1, Time),
+                (2, Time),
+                (3, Time),
+                (4, Signed),
+                (5, Time),
+                (7, Float),
+            ] {
+                let name = FIELDS[index];
+                binary.word(
+                    offset + 4 * index,
+                    kind.encode(required(node, name, path)?, name, path)?,
+                );
+            }
+            binary.word(offset + 24, ordinal);
+            data.imports.push((offset + 24) as u32);
         }
         _ => unreachable!("unsupported AI personality record"),
     }

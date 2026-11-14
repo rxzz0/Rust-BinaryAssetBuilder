@@ -1,4 +1,4 @@
-use super::ai_personality::{CHILDREN, CRITERIA, FILTER, child_index, reference_name};
+use super::ai_personality::{CHILDREN, CRITERIA, FILTER, IN_TROUBLE, child_index, reference_name};
 use super::ai_settings::MICRO_SCHEMA;
 use super::{compile_asset, declaration_id, significant_children};
 use crate::compile::{CompiledAsset, Compiler, SAGE_NS, escape_xml, invalid, is_xml_whitespace};
@@ -160,7 +160,10 @@ impl Element {
         };
         let position = rank(&child.name)
             .ok_or_else(|| invalid(path, format!("unexpected {} in {}", child.name, self.name)))?;
-        let singleton = matches!(child.name.as_str(), CRITERIA | FILTER | RETREAT | IGNORE);
+        let singleton = matches!(
+            child.name.as_str(),
+            CRITERIA | FILTER | IN_TROUBLE | RETREAT | IGNORE
+        );
         let id = child.attribute("id");
         if let Some(existing) = self.children.iter_mut().find(|item| {
             item.name == child.name && (singleton || id.is_some() && item.attribute("id") == id)
