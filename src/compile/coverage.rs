@@ -764,6 +764,11 @@ mod tests {
         assert_ea_fixture("subgroup-priority", 1);
     }
 
+    #[test]
+    fn game_object_unit_intro_matches_ea_batch() {
+        assert_ea_fixture("game-object-unit-intro", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

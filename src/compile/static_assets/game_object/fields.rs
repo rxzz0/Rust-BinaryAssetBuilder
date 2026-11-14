@@ -10,7 +10,7 @@ pub(super) fn encode(
     node: Node<'_, '_>,
     data: &mut BinaryData<'_>,
     reference_types: &mut Vec<u32>,
-    _references: &mut Vec<AssetReference>,
+    references: &mut Vec<AssetReference>,
 ) -> io::Result<()> {
     const ENCODED: &[&str] = &[
         "id",
@@ -37,6 +37,7 @@ pub(super) fn encode(
         "SubGroupPriority",
         "EvaEventSecondDamageFarFromFirstScanRange",
         "EvaEventSecondDamageFarFromFirstTimeoutMS",
+        "UnitIntro",
         "CommandSet",
         "SelectPortrait",
         "ButtonImage",
@@ -218,6 +219,16 @@ pub(super) fn encode(
             )
         })?;
         data.word(0x180, milliseconds.div_ceil(200));
+    }
+    if let Some(value) = node.attribute("UnitIntro") {
+        let ordinal = super::passive_area::reference(
+            value,
+            "UnitIntro",
+            data.path,
+            references,
+            reference_types,
+        )?;
+        data.word(0x184, ordinal);
     }
     if let Some(value) = node.attribute("ProductionQueueType") {
         data.word(
