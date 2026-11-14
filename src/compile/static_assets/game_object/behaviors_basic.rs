@@ -747,6 +747,7 @@ pub(super) fn encode(
             | "OCLSpecialPower"
             | "PrematureDischargeSpecialPower"
             | "GiveProductionBonusSpecialPower"
+            | "PlayerUpgradeSpecialPower"
             | "StoreObjectsSpecialPower"
             | "TeleportStoredObjectsSpecialPower"
     ) {

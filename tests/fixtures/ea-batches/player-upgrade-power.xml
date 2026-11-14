@@ -1,0 +1,1 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="PlayerUpgradePowerProbe"><Behaviors><PlayerUpgradeSpecialPower id="UpgradePower" SpecialPowerTemplate="ProbePower"><Upgrade>ProbeUpgrade</Upgrade><Upgrade>ProbeUpgradeTwo</Upgrade></PlayerUpgradeSpecialPower></Behaviors><Body><PropBody id="Body" /></Body></GameObject></AssetDeclaration>

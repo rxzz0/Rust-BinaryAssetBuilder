@@ -95,6 +95,7 @@ pub(super) fn encode(
     let path = data.path;
     const SPECIAL_POWER: u32 = 0xcefe_1113;
     const PRODUCTION_BONUS: u32 = 0x8ed3_3e53;
+    const PLAYER_UPGRADE: u32 = 0x005b_408e;
     const BONUS_FIELDS: &[(&str, u32, usize)] = &[
         ("BuildCostBonus", REAL, 0x1c4),
         ("BuildCostBonusAllies", REAL, 0x1c8),
@@ -111,6 +112,7 @@ pub(super) fn encode(
         "AssignSlavesTargetObjectSpecialPower" => (0x9daf_d38c, 0x1c4, &[][..]),
         "PrematureDischargeSpecialPower" => (0x8e22_e8c8, 0x1c4, &[][..]),
         "GiveProductionBonusSpecialPower" => (PRODUCTION_BONUS, 0x1dc, BONUS_FIELDS),
+        "PlayerUpgradeSpecialPower" => (PLAYER_UPGRADE, 0x1cc, &[][..]),
         _ => (SPECIAL_POWER, 0x1c4, &[][..]),
     };
     let allowed: Vec<_> = POWER_FIELDS
@@ -344,7 +346,7 @@ pub(super) fn encode(
         ));
     }
     power.push(Entry::named("InitiateSound", 0x1ae6_b6b7, Target::Null));
-    if kind != OCL_POWER
+    if !matches!(kind, OCL_POWER | PLAYER_UPGRADE)
         && let Some(child) = children.next()
     {
         return Err(invalid(
@@ -360,6 +362,24 @@ pub(super) fn encode(
     }
     let mut entries = vec![base(SPECIAL_POWER, Table::record(power))];
     entries.extend(fields(start, derived));
+    if kind == PLAYER_UPGRADE {
+        let mut upgrades = Vec::new();
+        for child in children.by_ref() {
+            if !child.has_tag_name((SAGE_NS, "Upgrade")) {
+                return Err(invalid(path, "expected PlayerUpgradeSpecialPower Upgrade"));
+            }
+            let value = super::super::text_value(child, path)?;
+            upgrades.push(super::passive_area::reference(
+                value,
+                "UpgradeTemplate",
+                path,
+                references,
+                reference_types,
+            )?);
+        }
+        let table = super::spawn::id_list(data, start + 0x1c4, upgrades)?;
+        entries.push(Entry::named("Upgrade", 0x4aba_1f29, Target::Table(table)));
+    }
     if kind == OCL_POWER {
         entries.extend(ocl_children(
             &mut children,
