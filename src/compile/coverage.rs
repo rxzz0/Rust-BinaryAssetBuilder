@@ -2,7 +2,7 @@ use super::static_assets::game_object::{SCRIPTED_FLAGS, Schema};
 use super::{SAGE_NS, invalid, static_assets};
 use crate::manifest::Manifest;
 use roxmltree::Document;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
@@ -193,6 +193,11 @@ pub fn verify_ea_batch(
     if manifest.is_linked || manifest.version != 6 {
         return Err(invalid(oracle, "expected a loose RA3 SDK manifest"));
     }
+    let local_ids = manifest
+        .assets
+        .iter()
+        .map(|asset| asset.id)
+        .collect::<HashSet<_>>();
     let mut expected = manifest
         .assets
         .iter()
@@ -275,7 +280,7 @@ pub fn verify_ea_batch(
             if !actual
                 .references
                 .iter()
-                .map(|item| item.id)
+                .map(|item| item.output_id(&local_ids))
                 .eq(reference.references.iter())
             {
                 return Err(invalid(input, "asset references differ"));
@@ -773,6 +778,11 @@ mod tests {
     #[test]
     fn truck_draw_matches_ea_batch() {
         assert_ea_fixture("truck-draw", 1);
+    }
+
+    #[test]
+    fn named_voice_entries_match_ea() {
+        assert_ea_fixture("voice-named-entry", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

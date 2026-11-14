@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <GameObject id="NamedVoiceProbe">
+        <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+        <AudioArrayVoice>
+            <AudioEntry Sound="VoiceNormal" AudioType="voiceMove" />
+            <NamedEntry Sound="VoiceProbe" Name="VoiceDeploy" />
+            <NamedEntry EvaEvent="EvaProbe" Name="MixedCaseVoice" />
+        </AudioArrayVoice>
+    </GameObject>
+</AssetDeclaration>

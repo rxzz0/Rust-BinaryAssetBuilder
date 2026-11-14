@@ -1,7 +1,8 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, asset_reference, hash_name, significant_children, validate_attributes,
+    AssetReference, asset_reference, fast_hash, hash_name, significant_children,
+    validate_attributes,
 };
 use super::draws::write_model_conditions;
 use crate::compile::{SAGE_NS, has_content, invalid, required};
@@ -303,7 +304,24 @@ impl AudioEncoder<'_, '_> {
             return Ok(Target::Null);
         };
         validate_attributes(node, &[], self.data.path)?;
-        let children = elements(node, "AudioEntry", self.data.path)?;
+        let mut children = Vec::new();
+        let mut named = Vec::new();
+        for child in significant_children(node) {
+            if child.has_tag_name((SAGE_NS, "AudioEntry")) {
+                children.push(child);
+            } else if voice && child.has_tag_name((SAGE_NS, "NamedEntry")) {
+                named.push(child);
+            } else {
+                return Err(invalid(
+                    self.data.path,
+                    format!(
+                        "unsupported {} child {}",
+                        node.tag_name().name(),
+                        child.tag_name().name()
+                    ),
+                ));
+            }
+        }
         let start = self.data.allocate(pointer, if voice { 24 } else { 8 })?;
         let size = if voice { 12 } else { 8 };
         let first = self.data.list(start, children.len(), size)?;
@@ -324,9 +342,26 @@ impl AudioEncoder<'_, '_> {
             items,
         )];
         if voice {
+            let first = self.data.list(start + 16, named.len(), 12)?;
+            let mut items = Vec::with_capacity(named.len());
+            for (index, child) in named.into_iter().enumerate() {
+                let offset = first + index * 12;
+                validate_attributes(child, &["Sound", "EvaEvent", "Name"], self.data.path)?;
+                require_empty(child, self.data.path)?;
+                let name = required(child, "Name", self.data.path)?;
+                let parent = self.sound_or_eva(child, offset)?;
+                self.data.word(offset + 8, fast_hash(name.as_bytes()));
+                items.push((
+                    0,
+                    Target::Table(Table::record(vec![
+                        base(0x1ae6_b6b7, parent),
+                        field("Name", 0x58be_c727, offset + 8),
+                    ])),
+                ));
+            }
             fields.extend([
                 list("ObjectSpecificEntry", 0xaedf_c4cd, start + 8, []),
-                list("NamedEntry", 0xf8ed_487b, start + 16, []),
+                list("NamedEntry", 0xf8ed_487b, start + 16, items),
             ]);
         }
         Ok(Target::Table(Table::record(fields)))
@@ -335,17 +370,24 @@ impl AudioEncoder<'_, '_> {
     fn voice_entry(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
         validate_attributes(node, &["Sound", "EvaEvent", "AudioType"], self.data.path)?;
         require_empty(node, self.data.path)?;
-        let sound = self.optional_sound(node, start)?;
-        let event = self.reference(node.attribute("EvaEvent").unwrap_or(""), "EvaEvent")?;
-        self.data.word(start + 4, event);
+        let parent = self.sound_or_eva(node, start)?;
         self.data.word(
             start + 8,
             audio_type(node, AudioType::Voice, self.data.path)?,
         );
-        let parent = Table::record(vec![sound, field("EvaEvent", 0xc4ec_43b1, start + 4)]);
         Ok(Table::record(vec![
             base(0x1ae6_b6b7, parent),
             field("AudioType", 0x4da7_08b0, start + 8),
+        ]))
+    }
+
+    fn sound_or_eva(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
+        let sound = self.optional_sound(node, start)?;
+        let event = self.reference(node.attribute("EvaEvent").unwrap_or(""), "EvaEvent")?;
+        self.data.word(start + 4, event);
+        Ok(Table::record(vec![
+            sound,
+            field("EvaEvent", 0xc4ec_43b1, start + 4),
         ]))
     }
 
