@@ -3,7 +3,7 @@ use super::tokenized::{self, Entry, Table, Target};
 use super::{
     Marshaled, asset_reference, finite_number, sage_time, significant_children, validate_attributes,
 };
-use crate::compile::{SAGE_NS, has_content, invalid};
+use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::{Document, Node};
 use std::{io, path::Path, sync::OnceLock};
 
@@ -127,23 +127,110 @@ fn encode_nuggets(
     let first = data.list(0xfc, children.len(), 4)?;
     let mut entries = Vec::with_capacity(children.len());
     for (index, child) in children.into_iter().enumerate() {
-        if !child.has_tag_name((SAGE_NS, "FireOnObjectsNugget")) {
-            return Err(invalid(
-                data.path,
-                format!("unsupported weapon nugget {}", child.tag_name().name()),
-            ));
-        }
-        let target = fire_on_objects(child, first + index * 4, data, out)?;
+        let pointer = first + index * 4;
+        let (kind, target) = match (child.tag_name().namespace(), child.tag_name().name()) {
+            (Some(SAGE_NS), "FireOnObjectsNugget") => {
+                (0x7814_daf0, fire_on_objects(child, pointer, data, out)?)
+            }
+            (Some(SAGE_NS), "TintObjectsNugget") => {
+                (0xda74_d739, tint_objects(child, pointer, data)?)
+            }
+            _ => {
+                return Err(invalid(
+                    data.path,
+                    format!("unsupported weapon nugget {}", child.tag_name().name()),
+                ));
+            }
+        };
         entries.push((
             0,
             Target::Table(Table::sequence(vec![Entry::new(
                 2,
-                0x7814_daf0,
+                kind,
                 Target::Table(target),
             )])),
         ));
     }
     Ok(Table::array(0xfc, entries))
+}
+
+fn tint_objects(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Table> {
+    const FLOAT: u32 = 0x6458_64f3;
+    const TIME: u32 = 0x9986_69e8;
+    let path = data.path;
+    validate_attributes(
+        node,
+        &[
+            "Radius",
+            "PreColorTime",
+            "PostColorTime",
+            "SustainedColorTime",
+            "Frequency",
+            "Amplitude",
+        ],
+        path,
+    )?;
+    let start = data.allocate(pointer, 0x48)?;
+    data.word(start, 0xda74_d739);
+    data.word(start + 4, 4);
+    data.word(
+        start + 0x10,
+        finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?.to_bits(),
+    );
+    let mut entries = vec![Entry::new(
+        1,
+        0xc7c2_cc04,
+        Target::Table(effect_table(start)),
+    )];
+    for (index, (name, kind, default)) in [
+        ("PreColorTime", TIME, "2s"),
+        ("PostColorTime", TIME, "2s"),
+        ("SustainedColorTime", TIME, "1s"),
+        ("Frequency", FLOAT, "1"),
+        ("Amplitude", FLOAT, "1"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let value = node.attribute(name).unwrap_or(default);
+        let value = if kind == TIME {
+            sage_time(value, name, path)?
+        } else {
+            finite_number(value, name, path)?
+        };
+        let offset = start + 0x28 + index * 4;
+        data.word(offset, value.to_bits());
+        entries.push(Entry::named(name, kind, Target::Data(offset)));
+    }
+    let mut children = significant_children(node);
+    let color = children.next();
+    if color.is_some_and(|child| !child.has_tag_name((SAGE_NS, "Color")) || has_content(child))
+        || children.next().is_some()
+    {
+        return Err(invalid(path, "unexpected TintObjectsNugget child"));
+    }
+    let mut rgb = Vec::new();
+    for (index, name) in ["R", "G", "B"].into_iter().enumerate() {
+        let offset = start + 0x3c + index * 4;
+        if let Some(color) = color {
+            validate_attributes(color, &["R", "G", "B"], path)?;
+            data.word(
+                offset,
+                finite_number(required(color, name, path)?, name, path)?.to_bits(),
+            );
+        }
+        rgb.push(Entry::named(name, FLOAT, Target::Data(offset)));
+    }
+    entries.push(Entry::named(
+        "Color",
+        0xaee7_62a5,
+        Target::Table(Table::record(rgb)),
+    ));
+    Ok(Table::record(entries))
 }
 
 fn fire_on_objects(
@@ -258,28 +345,7 @@ fn fire_on_objects(
     } else {
         Target::Null
     };
-    let effect = Table::record(vec![
-        Entry::new(0x19b0_42a0, 0x23e6_50b8, Target::Data(start)),
-        Entry::named(
-            "PartitionFilterTestType",
-            0x9f0d_a607,
-            Target::Data(start + 4),
-        ),
-        Entry::named("ForbiddenTargetObjectStatus", 0xa7bd_811e, Target::Null),
-        Entry::named("ForbiddenTargetModelCondition", 0x67db_bfc9, Target::Null),
-        Entry::named("Radius", 0x6458_64f3, Target::Data(start + 0x10)),
-        Entry::named("SpecialObjectFilter", 0xe46e_a3b2, Target::Null),
-        Entry::named(
-            "RequiredUpgrade",
-            0x26fa_cfc7,
-            Target::Table(Table::array(start + 0x18, [])),
-        ),
-        Entry::named(
-            "ForbiddenUpgrade",
-            0x26fa_cfc7,
-            Target::Table(Table::array(start + 0x20, [])),
-        ),
-    ]);
+    let effect = effect_table(start);
     let mut damage = vec![Entry::new(1, 0xc7c2_cc04, Target::Table(effect))];
     damage.extend(
         DAMAGE_FIELDS
@@ -302,6 +368,31 @@ fn fire_on_objects(
         Entry::named("VictimMustBeAlive", 0x77e3_f4f7, Target::Data(start + 0xa1)),
         Entry::named("Filter", 0xe46e_a3b2, filter),
     ]))
+}
+
+fn effect_table(start: usize) -> Table {
+    Table::record(vec![
+        Entry::new(0x19b0_42a0, 0x23e6_50b8, Target::Data(start)),
+        Entry::named(
+            "PartitionFilterTestType",
+            0x9f0d_a607,
+            Target::Data(start + 4),
+        ),
+        Entry::named("ForbiddenTargetObjectStatus", 0xa7bd_811e, Target::Null),
+        Entry::named("ForbiddenTargetModelCondition", 0x67db_bfc9, Target::Null),
+        Entry::named("Radius", 0x6458_64f3, Target::Data(start + 0x10)),
+        Entry::named("SpecialObjectFilter", 0xe46e_a3b2, Target::Null),
+        Entry::named(
+            "RequiredUpgrade",
+            0x26fa_cfc7,
+            Target::Table(Table::array(start + 0x18, [])),
+        ),
+        Entry::named(
+            "ForbiddenUpgrade",
+            0x26fa_cfc7,
+            Target::Table(Table::array(start + 0x20, [])),
+        ),
+    ])
 }
 
 fn weapon_flags(value: &str, kind: usize, path: &Path) -> io::Result<u32> {

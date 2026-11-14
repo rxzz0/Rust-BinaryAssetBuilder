@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><WeaponTemplate id="TintProbe"><Nuggets>
+ <TintObjectsNugget />
+ <TintObjectsNugget Radius="80" PreColorTime="3s" PostColorTime="4s" SustainedColorTime="5s" Frequency="6" Amplitude="7"><Color R="1.58" G="1.98" B="1.19" /></TintObjectsNugget>
+</Nuggets></WeaponTemplate></AssetDeclaration>
