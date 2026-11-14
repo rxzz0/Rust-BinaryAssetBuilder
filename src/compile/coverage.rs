@@ -824,6 +824,11 @@ mod tests {
         assert_ea_fixture("ambient-stream", 2);
     }
 
+    #[test]
+    fn audio_event_matches_ea() {
+        assert_ea_fixture("audio-event", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

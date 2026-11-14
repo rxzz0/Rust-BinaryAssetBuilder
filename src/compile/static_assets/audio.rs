@@ -4,7 +4,7 @@ use super::{
     Marshaled, asset_reference, finite_number, percentage, significant_children,
     validate_attributes,
 };
-use crate::compile::{SAGE_NS, invalid};
+use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
 use std::path::Path;
@@ -26,7 +26,7 @@ const CONTROL: &[&str] = &[
 ];
 const SLIDER: &[&str] = &["SOUNDFX", "VOICE", "MUSIC", "AMBIENT", "MOVIE", "NONE"];
 
-pub(super) fn ambient_stream(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+pub(super) fn single_sound(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     const PERCENTAGES: &[(&str, &str, usize)] = &[
         ("Volume", "100", 4),
         ("VolumeShift", "0", 8),
@@ -51,8 +51,9 @@ pub(super) fn ambient_stream(node: Node<'_, '_>, path: &Path) -> io::Result<Mars
         .chain(PERCENTAGES.iter().chain(REALS).map(|&(name, _, _)| name))
         .collect();
     validate_attributes(node, &allowed, path)?;
+    let event = node.has_tag_name((SAGE_NS, "AudioEvent"));
     let mut data = BinaryData {
-        payload: vec![0; 0x84],
+        payload: vec![0; if event { 0x98 } else { 0x84 }],
         relocations: Vec::new(),
         path,
     };
@@ -90,29 +91,118 @@ pub(super) fn ambient_stream(node: Node<'_, '_>, path: &Path) -> io::Result<Mars
         }
         data.word(offset, flags);
     }
-    let mut children = significant_children(node);
     let mut result = Marshaled::default();
-    if let Some(filename) = children.next() {
-        if !filename.has_tag_name((SAGE_NS, "Filename")) || children.next().is_some() {
-            return Err(invalid(path, "unsupported AmbientStream child"));
+    let mut ranges = [None; 4];
+    let range_names = ["PitchShift", "PerFilePitchShift", "Delay", "InitialDelay"];
+    let mut filename = None;
+    let mut lists = [Vec::new(), Vec::new(), Vec::new()];
+    for child in significant_children(node) {
+        let name = child.tag_name().name();
+        if child.tag_name().namespace() == Some(SAGE_NS) {
+            if let Some(i) = range_names.iter().position(|&candidate| candidate == name) {
+                if ranges[i].replace(child).is_none() {
+                    continue;
+                }
+            } else if event {
+                if let Some(i) = ["Attack", "Sound", "Decay"]
+                    .iter()
+                    .position(|&candidate| candidate == name)
+                {
+                    lists[i].push(child);
+                    continue;
+                }
+            } else if name == "Filename" && filename.replace(child).is_none() {
+                continue;
+            }
         }
+        return Err(invalid(
+            path,
+            format!("unsupported {} child {name}", node.tag_name().name()),
+        ));
+    }
+    if let Some(filename) = filename {
         let filename = super::text_value(filename, path)?;
-        let id = asset_reference(filename, "AudioFile", path)?;
         let offset = data.allocate(0x80, 4)?;
-        data.word(offset, 1);
-        result.imports.extend([offset as u32, u32::MAX]);
-        result.reference_types.push(id.type_id);
-        result.references.push(id.into());
+        audio_file(filename, offset, &mut data, &mut result)?;
+    }
+    for (index, list) in lists.into_iter().enumerate() {
+        if list.is_empty() {
+            continue;
+        }
+        let first = data.list(0x80 + index * 8, list.len(), 12)?;
+        for (index, item) in list.into_iter().enumerate() {
+            validate_attributes(item, &["Weight", "Volume"], path)?;
+            let mut text = significant_children(item);
+            let filename = text
+                .next()
+                .filter(Node::is_text)
+                .and_then(|child| child.text());
+            let Some(filename) = filename.filter(|_| text.next().is_none()) else {
+                return Err(invalid(path, "expected audio file reference text"));
+            };
+            let offset = first + index * 12;
+            audio_file(filename, offset, &mut data, &mut result)?;
+            let weight = item
+                .attribute("Weight")
+                .unwrap_or("1000")
+                .trim()
+                .parse()
+                .map_err(|_| invalid(path, "invalid audio Weight"))?;
+            data.word(offset + 4, weight);
+            data.word(
+                offset + 8,
+                percentage(item.attribute("Volume").unwrap_or("100"), "Volume", path)?.to_bits(),
+            );
+        }
     }
     if let Some(slider) = node.attribute("SubmixSlider") {
         let index = enum_value(slider, SLIDER, path)?;
         let offset = data.allocate(0x50, 4)?;
         data.word(offset, index);
     }
+    for (index, range) in ranges.into_iter().enumerate() {
+        let Some(range) = range else { continue };
+        validate_attributes(range, &["Low", "High"], path)?;
+        if has_content(range) {
+            return Err(invalid(path, "unexpected audio range content"));
+        }
+        let start = data.allocate(0x54 + index * 4, 8)?;
+        for (name, offset) in [("Low", start), ("High", start + 4)] {
+            let value = required(range, name, path)?;
+            let word = if index < 2 {
+                finite_number(value, name, path)?.to_bits()
+            } else {
+                value
+                    .trim()
+                    .parse::<i32>()
+                    .map_err(|_| invalid(path, "invalid integer audio delay"))?
+                    as u32
+            };
+            data.word(offset, word);
+        }
+    }
     if !data.relocations.is_empty() {
         data.relocations.push(u32::MAX);
     }
     result.payload = data.payload;
     result.relocations = data.relocations;
+    if !result.imports.is_empty() {
+        result.imports.push(u32::MAX);
+    }
     Ok(result)
+}
+
+fn audio_file(
+    value: &str,
+    offset: usize,
+    data: &mut BinaryData<'_>,
+    result: &mut Marshaled,
+) -> io::Result<()> {
+    let value = value.split_once('\\').map_or(value, |(name, _)| name);
+    let id = asset_reference(value, "AudioFile", data.path)?;
+    result.imports.push(offset as u32);
+    result.reference_types.push(id.type_id);
+    result.references.push(id.into());
+    data.word(offset, result.references.len() as u32);
+    Ok(())
 }

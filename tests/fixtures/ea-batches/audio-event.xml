@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <AudioEvent id="AudioEventProbe" VolumeShift="-2" Type="WORLD SHROUDED EVERYONE" Control="LOOP" SubmixSlider="AMBIENT">
+        <PitchShift Low="-5" High="5" />
+        <Attack>ProbeAttack</Attack>
+        <Sound Weight="415" Volume="75%">ProbeSound</Sound>
+        <Sound>ProbeSoundTwo</Sound>
+        <Decay>ProbeDecay</Decay>
+    </AudioEvent>
+</AssetDeclaration>
