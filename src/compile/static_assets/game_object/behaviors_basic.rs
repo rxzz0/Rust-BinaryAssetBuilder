@@ -880,6 +880,42 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "FireWeaponUpdate")) {
         return fire_weapon_update(node, pointer, data, references, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "PlayerPowerManager")) {
+        const KIND: u32 = 0x2e02_1907;
+        const FIELDS: [(&str, u32, usize); 2] = [
+            ("SpecialPowerTemplate", 0xaee8_3888, 8),
+            ("OnAvailableEvaEvent", 0xc4ec_43b1, 12),
+        ];
+        let path = data.path;
+        validate_attributes(
+            node,
+            &["id", "SpecialPowerTemplate", "OnAvailableEvaEvent"],
+            path,
+        )?;
+        required(node, "SpecialPowerTemplate", path)?;
+        if has_content(node) {
+            return Err(invalid(path, "unexpected PlayerPowerManager content"));
+        }
+        let start = data.allocate(pointer, 16)?;
+        let mut entries = vec![module_base(node, KIND, start, data, true)?];
+        for attr in node.attributes() {
+            let (kind, offset) = match attr.name() {
+                "SpecialPowerTemplate" => ("SpecialPowerTemplate", 8),
+                "OnAvailableEvaEvent" => ("EvaEvent", 12),
+                _ => continue,
+            };
+            let ordinal = super::passive_area::reference(
+                attr.value(),
+                kind,
+                path,
+                references,
+                reference_types,
+            )?;
+            data.word(start + offset, ordinal);
+        }
+        entries.extend(fields(start, &FIELDS));
+        return Ok(Some((KIND, Table::record(entries))));
+    }
     if matches!(
         node.tag_name().name(),
         "ReplaceSelfSpecialAbility"

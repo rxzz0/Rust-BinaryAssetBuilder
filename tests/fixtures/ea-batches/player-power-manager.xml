@@ -1,0 +1,1 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="PlayerPowerManagerProbe"><Behaviors><PlayerPowerManager id="ModuleTag_Power" SpecialPowerTemplate="ProbePower" /></Behaviors><Body><PropBody id="Body" /></Body></GameObject></AssetDeclaration>
