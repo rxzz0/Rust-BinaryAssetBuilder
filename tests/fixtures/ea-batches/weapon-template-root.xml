@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <WeaponTemplate id="WeaponRootDefaults" />
+    <WeaponTemplate id="WeaponRootScalars" AttackRange="150" MinimumAttackRange="25" WeaponSpeed="120" ClipSize="8" CanFireWhileMoving="true" />
+</AssetDeclaration>

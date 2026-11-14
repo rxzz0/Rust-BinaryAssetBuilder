@@ -29,6 +29,7 @@ pub(super) mod music;
 mod tokenized;
 mod upgrade;
 mod w3d_mesh;
+mod weapon;
 
 type Marshal = fn(Node<'_, '_>, &Path) -> io::Result<Marshaled>;
 
@@ -70,6 +71,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "PlayerTech" => (0x35dd_9987, 44, player_tech),
         "PlayerTechStoreTemplate" => (0x3a84_e115, 45, player_tech_store),
         "SpecialPowerTemplate" => (0x3aab_481c, 46, game_object::special_power::compile),
+        "WeaponTemplate" => (0x0ce6_168e, 48, weapon::compile),
         "GameObject" => (0xcb8d_0980, 10, game_object::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),
