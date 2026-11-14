@@ -21,6 +21,7 @@ mod audio_file;
 mod binary;
 mod campaign;
 mod credits;
+mod damage_fx;
 pub(super) mod game_object;
 mod global_ui;
 mod hotkeys;
@@ -64,6 +65,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "AmbientStream" => (0x6d16_24fb, 37, audio::single_sound),
         "AudioEvent" => (0x560c_2e45, 38, audio::single_sound),
         "OnDemandTextureImage" => (0x13db_2fbc, 41, on_demand_image),
+        "DamageFX" => (0x0b2e_b0ab, 42, damage_fx::compile),
         "GameObject" => (0xcb8d_0980, 10, game_object::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),

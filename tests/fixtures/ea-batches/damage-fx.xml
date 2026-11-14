@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <DamageFX id="DamageFxProbe">
+        <FXGroup MajorFX="ProbeMajor" RearFX="ProbeRear" />
+        <FXGroup Type="SOVIET_CANNON" Amount="10" ThrottleTime="50ms" VeteranTopFX="ProbeVeteranTop" MinorFX="ProbeMinor" SideFX="ProbeSide" />
+    </DamageFX>
+</AssetDeclaration>
