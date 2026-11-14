@@ -34,6 +34,7 @@ pub(super) fn encode(
         "VoiceSelectUnderFireTimeout",
         "CommandPoints",
         "PathPriority",
+        "SubGroupPriority",
         "EvaEventSecondDamageFarFromFirstScanRange",
         "EvaEventSecondDamageFarFromFirstTimeoutMS",
         "CommandSet",
@@ -168,6 +169,7 @@ pub(super) fn encode(
         ("VoicePriority", 0xa4),
         ("CommandPoints", 0xe0),
         ("PathPriority", 0x128),
+        ("SubGroupPriority", 0x178),
     ] {
         if let Some(value) = node.attribute(name) {
             let number = value
