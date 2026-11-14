@@ -28,6 +28,7 @@ mod repair;
 mod replace_self;
 mod schema;
 mod secondary_damage;
+mod secondary_listener;
 mod shadow;
 mod slaved;
 mod slow_death;

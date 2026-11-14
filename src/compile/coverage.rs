@@ -53,6 +53,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "WallBuilderBehavior",
             "StreamState",
             "StatusBitsUpgrade",
+            "SecondaryObjectListenerModule",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -623,6 +624,11 @@ mod tests {
     #[test]
     fn status_bits_upgrade_matches_ea_batch() {
         assert_ea_fixture("status-bits-upgrade", 1);
+    }
+
+    #[test]
+    fn secondary_object_listener_matches_ea_batch() {
+        assert_ea_fixture("secondary-object-listener", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

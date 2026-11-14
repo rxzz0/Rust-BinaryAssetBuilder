@@ -242,6 +242,10 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "StatusBitsUpgrade")) {
         return status_bits_upgrade(node, pointer, data, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "SecondaryObjectListenerModule")) {
+        return super::secondary_listener::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "StreamState")) {
         const KIND: u32 = 0xfef8_5f95;
         let path = data.path;
