@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <GameObject id="ChargeWeaponProbe">
+        <Behaviors>
+            <ChargeWeaponUpdate id="ChargeDefault" />
+            <ChargeWeaponUpdate id="ChargeExplicit" ChargeTime="5s" OverChargeTime="2s" OverChargePercent="40%">
+                <ObjectStatusValidation ForbiddenStatus="IS_FIRING_WEAPON IS_RELOADING_WEAPON" />
+            </ChargeWeaponUpdate>
+        </Behaviors>
+        <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    </GameObject>
+</AssetDeclaration>

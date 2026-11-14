@@ -74,6 +74,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "LevelUpUpgrade",
             "RunOffMapBehavior",
             "ToggleStatusSpecialAbilityUpdate",
+            "ChargeWeaponUpdate",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -794,6 +795,11 @@ mod tests {
     #[test]
     fn toggle_status_ability_matches_ea() {
         assert_ea_fixture("toggle-status-ability", 1);
+    }
+
+    #[test]
+    fn charge_weapon_matches_ea() {
+        assert_ea_fixture("charge-weapon-update", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

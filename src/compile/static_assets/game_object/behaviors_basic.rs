@@ -1,7 +1,7 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, asset_reference, fast_hash, finite_number, hash_name, sage_time,
+    AssetReference, asset_reference, fast_hash, finite_number, hash_name, percentage, sage_time,
     significant_children, validate_attributes,
 };
 use super::draws::{array, boolean, fields};
@@ -504,6 +504,56 @@ fn auto_heal(
     Ok((KIND, Table::record(entries)))
 }
 
+fn charge_weapon(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x23e5_e3be;
+    let path = data.path;
+    validate_attributes(
+        node,
+        &["id", "ChargeTime", "OverChargeTime", "OverChargePercent"],
+        path,
+    )?;
+    let mut children = significant_children(node);
+    let status = children.next();
+    if status.is_some_and(|child| !child.has_tag_name((SAGE_NS, "ObjectStatusValidation")))
+        || children.next().is_some()
+    {
+        return Err(invalid(path, "unsupported ChargeWeaponUpdate child"));
+    }
+    let start = data.allocate(pointer, 0x18)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    for (name, default, offset) in [("ChargeTime", "1s", 8), ("OverChargeTime", "0s", 0xc)] {
+        data.word(
+            start + offset,
+            sage_time(node.attribute(name).unwrap_or(default), name, path)?.to_bits(),
+        );
+        entries.push(Entry::named(
+            name,
+            0x9986_69e8,
+            Target::Data(start + offset),
+        ));
+    }
+    let name = "OverChargePercent";
+    data.word(
+        start + 0x10,
+        percentage(node.attribute(name).unwrap_or("0%"), name, path)?.to_bits(),
+    );
+    entries.push(Entry::named(name, 0x6458_64f3, Target::Data(start + 0x10)));
+    let status = match status {
+        Some(child) => Target::Table(super::secondary_damage::encode_status(
+            child,
+            start + 0x14,
+            data,
+        )?),
+        None => Target::Null,
+    };
+    entries.push(Entry::named("ObjectStatusValidation", 0x3e8f_938c, status));
+    Ok((KIND, Table::record(entries)))
+}
+
 pub(super) fn weapon_slot(value: &str, path: &std::path::Path) -> io::Result<u32> {
     super::super::global_ui::enum_value(
         value,
@@ -822,6 +872,9 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "SlowDeath")) {
         return super::slow_death::encode(node, pointer, data, references, reference_types)
             .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "ChargeWeaponUpdate")) {
+        return charge_weapon(node, pointer, data).map(Some);
     }
     if matches!(
         node.tag_name().name(),
