@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <AIPersonalityDefinition id="SkirmishFeedbackProbe" PersonalityType="Probe">
+        <SkirmishGameEventFeedback Event="InTrouble" FeedbackKey="MixedCaseFeedback" />
+        <SkirmishGameEventFeedback Event="Lost" FeedbackKey="OtherFeedback" />
+        <CountAsStructureForBuildPurposesFilter />
+    </AIPersonalityDefinition>
+</AssetDeclaration>

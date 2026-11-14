@@ -234,11 +234,12 @@ pub(super) const FILTER: &str = "CountAsStructureForBuildPurposesFilter";
 const ALL_DIFFICULTIES: &str = "EASY MEDIUM HARD BRUTAL";
 
 // Schema order also determines the allocation order of the trailing data.
-pub(super) const CHILDREN: [(&str, usize, usize); 11] = [
+pub(super) const CHILDREN: [(&str, usize, usize); 12] = [
     ("Side", 236, 4),
     ("UnitCap", 252, 8),
     ("ResourceMultiplierCheat", 300, 8),
     ("StrategicDirectiveFeedback", 308, 12),
+    ("SkirmishGameEventFeedback", 316, 8),
     ("PowerChoice", 324, 8),
     ("StrategicState", 340, 12),
     ("BudgetState", 348, 12),
@@ -323,6 +324,26 @@ fn write_item(
             binary.word(offset + 4, event);
             binary.word(
                 offset + 8,
+                fast_hash(required(node, "FeedbackKey", path)?.as_bytes()),
+            );
+        }
+        "SkirmishGameEventFeedback" => {
+            validate_attributes(node, &["Event", "FeedbackKey"], path)?;
+            let event = super::global_ui::enum_value(
+                required(node, "Event", path)?,
+                &[
+                    "StartGame",
+                    "InTrouble",
+                    "FirstSeen",
+                    "DefeatedLocalPlayer",
+                    "DefeatedByLocalPlayer",
+                    "Lost",
+                ],
+                path,
+            )?;
+            binary.word(offset, event);
+            binary.word(
+                offset + 4,
                 fast_hash(required(node, "FeedbackKey", path)?.as_bytes()),
             );
         }

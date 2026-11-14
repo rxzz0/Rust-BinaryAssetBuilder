@@ -850,6 +850,11 @@ mod tests {
         assert_ea_fixture("ai-directive-feedback", 1);
     }
 
+    #[test]
+    fn ai_skirmish_feedback_matches_ea() {
+        assert_ea_fixture("ai-skirmish-feedback", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
