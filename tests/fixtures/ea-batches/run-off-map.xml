@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="RunOffMapProbe">
+    <Behaviors>
+      <RunOffMapBehavior id="ModuleTag_Default"/>
+      <RunOffMapBehavior id="ModuleTag_Configured" RequiresSpecificTrigger="false" RunOffMapWaypointName="ProbeWaypoint" DieOnMap="true" FlyingOffMap="true"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

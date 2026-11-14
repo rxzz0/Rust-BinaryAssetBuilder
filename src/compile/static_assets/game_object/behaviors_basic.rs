@@ -588,6 +588,35 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "AutoHealBehavior")) {
         return auto_heal(node, pointer, data, references, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "RunOffMapBehavior")) {
+        const KIND: u32 = 0x877a_cead;
+        const FIELDS: [(&str, u32, usize); 4] = [
+            ("RequiresSpecificTrigger", 0x77e3_f4f7, 0x10),
+            ("RunOffMapWaypointName", 0x805d_25f4, 8),
+            ("DieOnMap", 0x77e3_f4f7, 0x11),
+            ("FlyingOffMap", 0x77e3_f4f7, 0x12),
+        ];
+        let path = data.path;
+        let allowed: Vec<_> = std::iter::once("id")
+            .chain(FIELDS.map(|(name, _, _)| name))
+            .collect();
+        validate_attributes(node, &allowed, path)?;
+        if has_content(node) {
+            return Err(invalid(path, "unexpected RunOffMapBehavior content"));
+        }
+        let start = data.allocate(pointer, 20)?;
+        let mut entries = vec![module_base(node, KIND, start, data, false)?];
+        for (name, token, offset) in FIELDS {
+            if token == 0x77e3_f4f7 {
+                data.payload[start + offset] =
+                    boolean(node, name, name == "RequiresSpecificTrigger", path)?;
+            } else if let Some(waypoint) = node.attribute(name) {
+                data.string(start + offset, waypoint)?;
+            }
+        }
+        entries.extend(fields(start, &FIELDS));
+        return Ok(Some((KIND, Table::record(entries))));
+    }
     if node.has_tag_name((SAGE_NS, "LiftObjectUpdate")) {
         return lift_object(node, pointer, data, references, reference_types).map(Some);
     }

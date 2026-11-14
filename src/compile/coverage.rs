@@ -71,6 +71,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "DynamicsUpdate",
             "AutoHealBehavior",
             "LevelUpUpgrade",
+            "RunOffMapBehavior",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -751,6 +752,11 @@ mod tests {
     #[test]
     fn level_upgrade_matches_ea_batch() {
         assert_ea_fixture("level-upgrade", 1);
+    }
+
+    #[test]
+    fn run_off_map_matches_ea_batch() {
+        assert_ea_fixture("run-off-map", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {
