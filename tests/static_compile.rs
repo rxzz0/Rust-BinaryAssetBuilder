@@ -1,5 +1,5 @@
 use binary_asset_builder::{
-    compile::{compile_sdk_global, compile_sdk_static, compile_static},
+    compile::{CustomData, compile_sdk_global, compile_sdk_static, compile_static},
     manifest::{AssetEntry, AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest},
 };
 use std::fs;
@@ -15,6 +15,55 @@ fn scratch_root() -> PathBuf {
         .join(format!("bab-static-{}-{nonce}", std::process::id()));
     fs::create_dir_all(&root).unwrap();
     root
+}
+
+#[test]
+fn audio_file_pcm_payload_and_cdata_match_ea() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio-pcm");
+    let stream = compile_static(&root.join("audio-file-pcm.xml"), &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    assert_eq!(manifest.assets.len(), 2);
+    let mut offset = 4;
+    let mut relocation = 4;
+    for entry in &manifest.assets {
+        let (asset, cdata): (&[u8], &[u8]) = if entry.name == b"AudioFile:PcmRamProbe" {
+            (
+                include_bytes!("fixtures/audio-pcm/ram.asset"),
+                include_bytes!("fixtures/audio-pcm/ram.cdata"),
+            )
+        } else {
+            assert_eq!(entry.name, b"AudioFile:PcmStreamProbe");
+            (
+                include_bytes!("fixtures/audio-pcm/streamed.asset"),
+                include_bytes!("fixtures/audio-pcm/streamed.cdata"),
+            )
+        };
+        let payload_len = entry.chunk_sizes.instance as usize;
+        let relo_len = entry.chunk_sizes.relocations as usize;
+        assert_eq!(
+            &stream.files.bin[offset..offset + payload_len],
+            &asset[32..32 + payload_len]
+        );
+        assert_eq!(
+            &stream.files.relo[relocation..relocation + relo_len],
+            &asset[32 + payload_len..]
+        );
+        let prefix = format!(
+            "{:08x}.{:08x}.{:08x}.",
+            entry.id.type_id, entry.type_hash, entry.id.instance_id
+        );
+        let (_, custom) = stream
+            .custom_data
+            .iter()
+            .find(|(name, _)| name.starts_with(&prefix))
+            .unwrap();
+        let CustomData::Bytes(bytes) = custom else {
+            panic!("expected generated PCM")
+        };
+        assert_eq!(bytes, cdata);
+        offset += payload_len;
+        relocation += relo_len;
+    }
 }
 
 #[test]

@@ -1,4 +1,4 @@
-use crate::compile::{CompiledStream, compile_apt_ui, hash_source_file};
+use crate::compile::{CompiledStream, CustomData, compile_apt_ui, hash_source_file};
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fs;
@@ -9,7 +9,7 @@ const GENERATED: [&str; 5] = ["manifest", "bin", "relo", "imp", "version"];
 
 pub(crate) enum Contents {
     Bytes(Vec<u8>),
-    CustomData(Vec<(String, PathBuf, u32)>),
+    CustomData(Vec<(String, CustomData)>),
 }
 
 type Output = (OsString, Contents);
@@ -154,19 +154,25 @@ pub(crate) fn publish_prepared(
                 Contents::Bytes(bytes) => fs::write(destination, bytes)?,
                 Contents::CustomData(files) => {
                     fs::create_dir_all(&destination)?;
-                    for (file, source, hash) in files {
+                    for (file, data) in files {
                         if Path::new(file).file_name() != Some(file.as_ref()) {
                             return Err(io::Error::new(
                                 io::ErrorKind::InvalidInput,
                                 "invalid custom-data file name",
                             ));
                         }
-                        let staged = fs::File::create(destination.join(file))?;
-                        if hash_source_file(source, staged)? != *hash {
-                            return Err(io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                format!("{} changed during compilation", source.display()),
-                            ));
+                        let path = destination.join(file);
+                        match data {
+                            CustomData::Bytes(bytes) => fs::write(path, bytes)?,
+                            CustomData::Source(source, hash) => {
+                                let staged = fs::File::create(path)?;
+                                if hash_source_file(source, staged)? != *hash {
+                                    return Err(io::Error::new(
+                                        io::ErrorKind::InvalidData,
+                                        format!("{} changed during compilation", source.display()),
+                                    ));
+                                }
+                            }
                         }
                     }
                 }

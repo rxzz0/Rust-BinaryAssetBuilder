@@ -35,7 +35,12 @@ const RELOCATIONS: [u8; 8] = [4, 0, 0, 0, 255, 255, 255, 255];
 pub struct CompiledStream {
     pub manifest: Vec<u8>,
     pub files: LinkedFiles,
-    pub custom_data: Vec<(String, PathBuf, u32)>,
+    pub custom_data: Vec<(String, CustomData)>,
+}
+
+pub enum CustomData {
+    Source(PathBuf, u32),
+    Bytes(Vec<u8>),
 }
 
 /// Compiles a linked RA3 PC stream from AptUI declarations and their includes.
@@ -147,7 +152,7 @@ struct CompiledAsset {
     relocations: Vec<u8>,
     imports: Vec<u8>,
     references: Vec<AssetReference>,
-    custom_data: Option<(PathBuf, u32)>,
+    custom_data: Option<CustomData>,
     tokenized: bool,
     sort_order: u8,
 }
@@ -431,6 +436,7 @@ impl Compiler<'_> {
         source: &str,
     ) -> io::Result<CompiledAsset> {
         match node.tag_name().name() {
+            "AudioFile" => self.compile_audio_file(node, path, source),
             "PathMusicEvent" | "PathMusicMap" | "PathMusicTrack" => {
                 self.compile_music(node, path, source)
             }
@@ -762,7 +768,7 @@ impl Compiler<'_> {
             .assets
             .into_iter()
             .filter_map(|asset| {
-                let (path, hash) = asset.custom_data?;
+                let data = asset.custom_data?;
                 Some((
                     format!(
                         "{:08x}.{:08x}.{:08x}.{:08x}.cdata",
@@ -771,8 +777,7 @@ impl Compiler<'_> {
                         asset.id.instance_id,
                         asset.instance_hash
                     ),
-                    path,
-                    hash,
+                    data,
                 ))
             })
             .collect();

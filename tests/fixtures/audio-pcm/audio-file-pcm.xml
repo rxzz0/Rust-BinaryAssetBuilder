@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <AudioFile id="PcmRamProbe" File="audio-file-probe.wav" PCCompression="NONE" IsStreamedOnPC="false" />
+    <AudioFile id="PcmStreamProbe" File="audio-file-probe.wav" PCCompression="NONE" IsStreamedOnPC="true" />
+</AssetDeclaration>

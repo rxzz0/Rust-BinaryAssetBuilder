@@ -119,7 +119,7 @@ impl Compiler<'_> {
                 let mut payload = encode_words([0, 0, 0, track_type, 0, 0, handle]);
                 append_path(&mut payload, 4, &file)?;
                 append_path(&mut payload, 16, &header_path)?;
-                custom_data = Some((file, track_hash));
+                custom_data = Some(crate::compile::CustomData::Source(file, track_hash));
                 relocations.extend([8, 20]);
                 (payload, 0x9f12_cf33, 0x9f12_cf3a, 22, None)
             }
