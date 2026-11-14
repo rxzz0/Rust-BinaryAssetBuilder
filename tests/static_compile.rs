@@ -18,6 +18,40 @@ fn scratch_root() -> PathBuf {
 }
 
 #[test]
+fn ai_inheritance_applies_remove_and_replace_to_named_states() {
+    let root = scratch_root();
+    let input = root.join("ai.xml");
+    fs::write(root.join("base.xml"), r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"><AIPersonalityDefinition id="Base" PersonalityType="Base"><StrategicState id="RemoveMe" State="NoSuchState"/><StrategicState id="ReplaceMe" State="OtherMissingState" Difficulty="EASY"/><CountAsStructureForBuildPurposesFilter/></AIPersonalityDefinition></AssetDeclaration>"#).unwrap();
+    fs::write(&input, r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset" xmlns:xai="uri:ea.com:eala:asset:instance"><Includes><Include type="instance" source="base.xml"/></Includes><AIPersonalityDefinition id="Derived" PersonalityType="Derived" inheritFrom="Base"><StrategicState id="RemoveMe" xai:joinAction="Remove"/><StrategicState id="ReplaceMe" xai:joinAction="Replace" State="Valid"/></AIPersonalityDefinition><AIStrategicStateDefinition id="Valid"><Heuristic><ConstantHeuristic Weight="1"/></Heuristic></AIStrategicStateDefinition></AssetDeclaration>"#).unwrap();
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let asset = manifest
+        .assets
+        .iter()
+        .find(|asset| asset.name == b"AIPersonalityDefinition:Derived")
+        .unwrap();
+    assert_eq!(asset.references.iter().len(), 1);
+    let offset = 4 + manifest
+        .assets
+        .iter()
+        .take_while(|other| other.id != asset.id)
+        .map(|other| other.chunk_sizes.instance as usize)
+        .sum::<usize>();
+    let word = |i: usize| {
+        u32::from_le_bytes(
+            stream.files.bin[offset + i..offset + i + 4]
+                .try_into()
+                .unwrap(),
+        )
+    };
+    assert_eq!(word(340), 1);
+    assert_eq!(word(word(344) as usize + 8), 15);
+    fs::remove_file(input).unwrap();
+    fs::remove_file(root.join("base.xml")).unwrap();
+    fs::remove_dir(root).unwrap();
+}
+
+#[test]
 fn on_demand_texture_sidecar_matches_ea_dds() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/on-demand-texture");
     let stream = compile_static(&root.join("on-demand-convert.xml"), &root, &root).unwrap();

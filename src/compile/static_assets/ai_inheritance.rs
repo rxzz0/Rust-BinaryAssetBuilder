@@ -13,6 +13,14 @@ const MICRO: &str = "AIMicroManagerData";
 const RETREAT: &str = "RetreatBaseCriteria";
 const IGNORE: &str = "IgnoreTargets";
 const XSD: &str = "http://www.w3.org/2001/XMLSchema";
+const XAI: &str = "uri:ea.com:eala:asset:instance";
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Join {
+    Append,
+    Replace,
+    Remove,
+}
 
 impl Compiler<'_> {
     pub(in crate::compile) fn compile_inherited_ai(
@@ -63,7 +71,12 @@ impl Compiler<'_> {
         // The SDK merges declarations in schema order and strips comments and
         // pipeline inheritance attributes when constructing the effective XML.
         let mut result = Element::new(kind);
-        for mut input in [base, Element::read(node, path)?] {
+        let overlay = Element::read(node, path)?;
+        if overlay.join == Join::Remove {
+            return Err(invalid(path, "cannot remove a top-level AI asset"));
+        }
+        let base = (overlay.join != Join::Replace).then_some(base);
+        for mut input in base.into_iter().chain([overlay]) {
             input.attributes.retain(|(name, _)| name != "inheritFrom");
             result.merge_attributes(input.attributes);
             for child in input.children {
@@ -79,6 +92,7 @@ struct Element {
     attributes: Vec<(String, String)>,
     children: Vec<Element>,
     text: String,
+    join: Join,
 }
 
 impl Element {
@@ -88,6 +102,7 @@ impl Element {
             attributes: Vec::new(),
             children: Vec::new(),
             text: String::new(),
+            join: Join::Append,
         }
     }
 
@@ -100,6 +115,15 @@ impl Element {
             ));
         }
         for attr in node.attributes() {
+            if attr.namespace() == Some(XAI) && attr.name() == "joinAction" {
+                element.join = match attr.value() {
+                    "Append" => Join::Append,
+                    "Replace" => Join::Replace,
+                    "Remove" => Join::Remove,
+                    _ => return Err(invalid(path, "invalid AI joinAction")),
+                };
+                continue;
+            }
             if attr.namespace().is_some() {
                 return Err(invalid(
                     path,
@@ -149,7 +173,7 @@ impl Element {
         }
     }
 
-    fn merge_child(&mut self, child: Self, path: &Path) -> io::Result<()> {
+    fn merge_child(&mut self, mut child: Self, path: &Path) -> io::Result<()> {
         let rank = |name: &str| match self.name.as_str() {
             PERSONALITY => CHILDREN.iter().position(|(tag, _, _)| *tag == name),
             MICRO => [RETREAT, IGNORE].iter().position(|tag| *tag == name),
@@ -165,9 +189,26 @@ impl Element {
             CRITERIA | FILTER | IN_TROUBLE | RETREAT | IGNORE
         );
         let id = child.attribute("id");
-        if let Some(existing) = self.children.iter_mut().find(|item| {
+        let existing = self.children.iter().position(|item| {
             item.name == child.name && (singleton || id.is_some() && item.attribute("id") == id)
-        }) {
+        });
+        if child.join == Join::Remove {
+            if !singleton && id.is_none() {
+                return Err(invalid(
+                    path,
+                    format!("AI removal requires an id for {}", child.name),
+                ));
+            }
+            if let Some(index) = existing {
+                self.children.remove(index);
+            }
+        } else if let Some(index) = existing {
+            if child.join == Join::Replace {
+                child.join = Join::Append;
+                self.children[index] = child;
+                return Ok(());
+            }
+            let existing = &mut self.children[index];
             existing.merge_attributes(child.attributes);
             for nested in child.children {
                 existing.merge_child(nested, path)?;
