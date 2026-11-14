@@ -52,6 +52,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "SquishCollide",
             "WallBuilderBehavior",
             "StreamState",
+            "StatusBitsUpgrade",
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
@@ -617,6 +618,11 @@ mod tests {
     #[test]
     fn stream_state_matches_ea_batch() {
         assert_ea_fixture("stream-state", 1);
+    }
+
+    #[test]
+    fn status_bits_upgrade_matches_ea_batch() {
+        assert_ea_fixture("status-bits-upgrade", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

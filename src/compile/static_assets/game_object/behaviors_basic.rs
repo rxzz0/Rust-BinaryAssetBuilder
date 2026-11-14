@@ -152,6 +152,65 @@ fn wall_builder(
     Ok((KIND, Table::record(entries)))
 }
 
+fn status_bits_upgrade(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    use super::spawn::{UPGRADE, id_list, weak_reference};
+
+    const KIND: u32 = 0x786c_9458;
+    const STATUSES: [(&str, u32, usize); 2] = [
+        ("StatusToSet", 0xa7bd_811e, 0x24),
+        ("StatusToClear", 0xa7bd_811e, 0x40),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(UPGRADE.iter().chain(&STATUSES).map(|&(name, _, _)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let start = data.allocate(pointer, 0x5c)?;
+    let mut upgrade = vec![module_base(node, KIND, start, data, false)?];
+    for &(name, _, offset) in UPGRADE {
+        data.payload[start + offset] = boolean(node, name, name == "WaypointModeTerminal", path)?;
+    }
+    for (name, _, offset) in STATUSES {
+        super::secondary_damage::write_status_flags(
+            node.attribute(name).unwrap_or(""),
+            start + offset,
+            data,
+        )?;
+    }
+    upgrade.extend(fields(start, UPGRADE));
+    let mut children = significant_children(node).peekable();
+    let anim =
+        match children.next_if(|child| child.has_tag_name((SAGE_NS, "CustomAnimAndDuration"))) {
+            Some(child) => Target::Table(super::tech_upgrade::encode_anim(child, start + 8, data)?),
+            None => Target::Null,
+        };
+    upgrade.push(Entry::named("CustomAnimAndDuration", 0x6b74_6af6, anim));
+    for (name, offset) in [("TriggeredBy", 0xc), ("ConflictsWith", 0x14)] {
+        let mut ids = Vec::new();
+        while let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, name))) {
+            ids.push(weak_reference(
+                child,
+                "UpgradeTemplate",
+                data,
+                reference_types,
+            )?);
+        }
+        let list = id_list(data, start + offset, ids)?;
+        upgrade.push(Entry::named(name, 0x26fa_cfc7, Target::Table(list)));
+    }
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected StatusBitsUpgrade child"));
+    }
+    let mut entries = vec![base(0xae60_ae98, Table::record(upgrade))];
+    entries.extend(fields(start, &STATUSES));
+    Ok((KIND, Table::record(entries)))
+}
+
 pub(super) fn weapon_slot(value: &str, path: &std::path::Path) -> io::Result<u32> {
     super::super::global_ui::enum_value(
         value,
@@ -179,6 +238,9 @@ pub(super) fn encode(
     }
     if node.has_tag_name((SAGE_NS, "WallBuilderBehavior")) {
         return wall_builder(node, pointer, data, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "StatusBitsUpgrade")) {
+        return status_bits_upgrade(node, pointer, data, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "StreamState")) {
         const KIND: u32 = 0xfef8_5f95;

@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="StatusBitsUpgradeProbe">
+    <Behaviors>
+      <StatusBitsUpgrade id="ModuleTag_Default"/>
+      <StatusBitsUpgrade id="ModuleTag_Configured" StatusToSet="ENABLE_TRACER_DRAW WALL_SEGMENT" StatusToClear="WALL_SEGMENT">
+        <TriggeredBy>ProbeTrigger</TriggeredBy>
+        <ConflictsWith>ProbeConflict</ConflictsWith>
+      </StatusBitsUpgrade>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
