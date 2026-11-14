@@ -165,6 +165,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut aura_modules = Vec::new();
     let mut auto_heal_modules = Vec::new();
     let mut slaughter_modules = Vec::new();
+    let mut truck_relocations = Vec::new();
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
     let mut child_targets =
         children::encode(node, &mut data, &mut references, &mut reference_types)?;
@@ -175,6 +176,7 @@ pub(in crate::compile::static_assets) fn compile(
             &mut references,
             &mut reference_types,
             &mut material_float_names,
+            &mut truck_relocations,
         )?;
         child_targets.push(("Draws", target));
     }
@@ -362,6 +364,17 @@ pub(in crate::compile::static_assets) fn compile(
         }
     }
     let relocation_key = |pointer| {
+        // TruckDraw emits its derived pointers before the inherited draw pointers.
+        let index = truck_relocations.partition_point(|&(start, _)| start <= pointer);
+        if index > 0 {
+            let (start, end) = truck_relocations[index - 1];
+            if (0xd8..0x18c).contains(&(pointer - start)) {
+                return (start, pointer - start);
+            }
+            if (start + 0x18c..end).contains(&pointer) {
+                return (end, pointer - start);
+            }
+        }
         // EA emits the inherited status pointers after the two upgrade lists.
         let index = create_object_modules.partition_point(|&start| start <= pointer);
         if index > 0 {

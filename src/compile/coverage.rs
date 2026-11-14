@@ -17,6 +17,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "ScriptedModelDraw",
             "StreamDraw",
             "TracerModelDraw",
+            "TruckDraw",
         ],
     ),
     ("AI", &["AIUpdate"]),
@@ -767,6 +768,11 @@ mod tests {
     #[test]
     fn game_object_unit_intro_matches_ea_batch() {
         assert_ea_fixture("game-object-unit-intro", 1);
+    }
+
+    #[test]
+    fn truck_draw_matches_ea_batch() {
+        assert_ea_fixture("truck-draw", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

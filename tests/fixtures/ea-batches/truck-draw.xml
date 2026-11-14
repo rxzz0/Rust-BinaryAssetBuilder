@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="TruckDrawProbe">
+    <Draws>
+      <TruckDraw id="ModuleTag_Default"/>
+      <TruckDraw id="ModuleTag_Configured" Name="Truck" OkToChangeModelColor="true" LeftFrontTireBone="LF" RightFrontTireBone="RF" LeftRearTireBone="LR" RightRearTireBone="RR" MidLeftFrontTireBone="MLF" MidRightFrontTireBone="MRF" MidLeftRearTireBone="MLR" MidRightRearTireBone="MRR" MidLeftMidTireBone="MLM" MidRightMidTireBone="MRM" LeftFrontTireBone2="LF2" RightFrontTireBone2="RF2" LeftRearTireBone2="LR2" RightRearTireBone2="RR2" MidLeftMidTireBone2="MLM2" MidRightMidTireBone2="MRM2" TireRotationMultiplier=".5" TireRotationMultiplierFront="2" PowerslideRotationAddition="3" CabBone="Cab" TrailerBone="Trailer" CabRotationMultiplier="4" TrailerRotationMultiplier="5" RotationDamping=".25">
+        <ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name="ProbeModel"/></ModelConditionState>
+        <TreadTerrainParticles>ProbeTerrain</TreadTerrainParticles>
+        <TreadScrollingMap/>
+        <TreadScrollingMap LeftTrack="Left" RightTrack="Right" SpeedMultiplier="2" TreadPivotSpeedFraction="50%" TreadDriveSpeedFraction="30%"/>
+      </TruckDraw>
+    </Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

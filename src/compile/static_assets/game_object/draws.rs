@@ -10,6 +10,7 @@ use std::io;
 use std::sync::OnceLock;
 
 const SCRIPTED_MODEL_DRAW: u32 = 0x4ecf_2a4b;
+const TRUCK_DRAW: u32 = 0xa44c_2999;
 const MODEL_STATE: u32 = 0x953c_f093;
 const STRING: u32 = 0x1a29_33aa;
 const FLOAT: u32 = 0x6458_64f3;
@@ -50,6 +51,7 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
     material_float_names: &mut Vec<u32>,
+    truck_relocations: &mut Vec<(u32, u32)>,
 ) -> io::Result<Target> {
     let modules: Vec<_> = significant_children(group).collect();
     let list = data.allocate(0x1cc, 8)?;
@@ -58,8 +60,12 @@ pub(super) fn encode(
     for (index, node) in modules.into_iter().enumerate() {
         let pointer = pointers + index * 4;
         let (kind, module) = match node.tag_name().name() {
-            "ScriptedModelDraw" if node.has_tag_name((SAGE_NS, "ScriptedModelDraw")) => (
-                SCRIPTED_MODEL_DRAW,
+            name @ ("ScriptedModelDraw" | "TruckDraw") if node.has_tag_name((SAGE_NS, name)) => (
+                if name == "TruckDraw" {
+                    TRUCK_DRAW
+                } else {
+                    SCRIPTED_MODEL_DRAW
+                },
                 scripted_model(
                     node,
                     pointer,
@@ -67,6 +73,7 @@ pub(super) fn encode(
                     references,
                     reference_types,
                     material_float_names,
+                    truck_relocations,
                 )?,
             ),
             "LaserDraw" if node.has_tag_name((SAGE_NS, "LaserDraw")) => (
@@ -261,6 +268,104 @@ const SCRIPTED_REALS: [(&str, usize); 9] = [
     ("AlphaCameraAtInnerRadius", 0x9c),
 ];
 
+const TRUCK_FIELDS: [(&str, u32, usize, &str); 24] = [
+    ("LeftFrontTireBone", STRING, 0xd8, ""),
+    ("RightFrontTireBone", STRING, 0xe0, ""),
+    ("LeftRearTireBone", STRING, 0xe8, ""),
+    ("RightRearTireBone", STRING, 0xf0, ""),
+    ("MidLeftFrontTireBone", STRING, 0xf8, ""),
+    ("MidRightFrontTireBone", STRING, 0x100, ""),
+    ("MidLeftRearTireBone", STRING, 0x108, ""),
+    ("MidRightRearTireBone", STRING, 0x110, ""),
+    ("MidLeftMidTireBone", STRING, 0x118, ""),
+    ("MidRightMidTireBone", STRING, 0x120, ""),
+    ("LeftFrontTireBone2", STRING, 0x128, ""),
+    ("RightFrontTireBone2", STRING, 0x130, ""),
+    ("LeftRearTireBone2", STRING, 0x138, ""),
+    ("RightRearTireBone2", STRING, 0x140, ""),
+    ("MidLeftMidTireBone2", STRING, 0x148, ""),
+    ("MidRightMidTireBone2", STRING, 0x150, ""),
+    ("TireRotationMultiplier", FLOAT, 0x158, "1"),
+    ("TireRotationMultiplierFront", FLOAT, 0x15c, "1"),
+    ("PowerslideRotationAddition", FLOAT, 0x160, "0"),
+    ("CabBone", STRING, 0x164, ""),
+    ("TrailerBone", STRING, 0x16c, ""),
+    ("CabRotationMultiplier", FLOAT, 0x174, "1"),
+    ("TrailerRotationMultiplier", FLOAT, 0x178, "1"),
+    ("RotationDamping", FLOAT, 0x17c, "1"),
+];
+
+fn truck_fields(
+    node: Node<'_, '_>,
+    start: usize,
+    particles: bool,
+    maps: &[Node<'_, '_>],
+    data: &mut BinaryData<'_>,
+) -> io::Result<(Vec<Entry>, Option<usize>)> {
+    const TREAD_FIELDS: [(&str, u32, usize, &str); 5] = [
+        ("LeftTrack", STRING, 0, ""),
+        ("RightTrack", STRING, 8, ""),
+        ("SpeedMultiplier", FLOAT, 0x10, "1"),
+        ("TreadPivotSpeedFraction", FLOAT, 0x14, "60%"),
+        ("TreadDriveSpeedFraction", FLOAT, 0x18, "20%"),
+    ];
+    let path = data.path;
+    let mut entries = Vec::with_capacity(TRUCK_FIELDS.len() + 2);
+    for (name, token, offset, default) in TRUCK_FIELDS {
+        let value = node.attribute(name);
+        let offset = start + offset;
+        if token == STRING {
+            if let Some(value) = value {
+                data.string(offset, value)?;
+            }
+        } else {
+            data.word(
+                offset,
+                finite_number(value.unwrap_or(default), name, path)?.to_bits(),
+            );
+        }
+        entries.push(Entry::named(name, token, Target::Data(offset)));
+    }
+    let particle_offset = particles
+        .then(|| data.allocate(start + 0x180, 4))
+        .transpose()?;
+    let count = start + 0x184;
+    let first = data.list(count, maps.len(), 0x1c)?;
+    let mut items = Vec::with_capacity(maps.len());
+    for (index, &map) in maps.iter().enumerate() {
+        validate_attributes(map, &TREAD_FIELDS.map(|(name, _, _, _)| name), path)?;
+        if has_content(map) {
+            return Err(invalid(path, "unexpected TreadScrollingMap content"));
+        }
+        let start = first + 0x1c * index;
+        let mut entries = Vec::with_capacity(TREAD_FIELDS.len());
+        for (name, kind, offset, default) in TREAD_FIELDS {
+            let field = start + offset;
+            if kind == STRING {
+                if let Some(value) = map.attribute(name) {
+                    data.string(field, value)?;
+                }
+            } else {
+                let value = map.attribute(name).unwrap_or(default);
+                let number = if offset == 0x10 {
+                    finite_number(value, name, path)?
+                } else {
+                    super::super::percentage(value, name, path)?
+                };
+                data.word(field, number.to_bits());
+            }
+            entries.push(Entry::named(name, kind, Target::Data(field)));
+        }
+        items.push((0, Target::Table(Table::record(entries))));
+    }
+    entries.push(Entry::named(
+        "TreadScrollingMap",
+        0xd1d3_e8e0,
+        Target::Table(Table::array(count, items)),
+    ));
+    Ok((entries, particle_offset))
+}
+
 fn scripted_model(
     node: Node<'_, '_>,
     pointer: usize,
@@ -268,7 +373,9 @@ fn scripted_model(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
     material_float_names: &mut Vec<u32>,
+    truck_relocations: &mut Vec<(u32, u32)>,
 ) -> io::Result<Table> {
+    let truck = node.has_tag_name((SAGE_NS, "TruckDraw"));
     let allowed: Vec<_> = [
         "id",
         "ExtraPublicBone",
@@ -283,15 +390,30 @@ fn scripted_model(
             .chain(SCRIPTED_REALS)
             .map(|(name, _)| name),
     )
+    .chain(
+        TRUCK_FIELDS
+            .iter()
+            .filter(|_| truck)
+            .map(|&(name, _, _, _)| name),
+    )
     .collect();
     validate_attributes(node, &allowed, data.path)?;
     let mut states = Vec::new();
     let mut animations = Vec::new();
+    let mut tread_particles = None;
+    let mut tread_maps = Vec::new();
     for child in significant_children(node) {
         if child.has_tag_name((SAGE_NS, "ModelConditionState")) {
             states.push(child);
         } else if child.has_tag_name((SAGE_NS, "AnimationState")) {
             animations.push(child);
+        } else if truck
+            && child.has_tag_name((SAGE_NS, "TreadTerrainParticles"))
+            && tread_particles.is_none()
+        {
+            tread_particles = Some(child);
+        } else if truck && child.has_tag_name((SAGE_NS, "TreadScrollingMap")) {
+            tread_maps.push(child);
         } else {
             return Err(invalid(
                 data.path,
@@ -303,9 +425,23 @@ fn scripted_model(
         }
     }
 
-    let start = data.allocate(pointer, 0xd8)?;
-    data.word(start, SCRIPTED_MODEL_DRAW);
+    let start = data.allocate(pointer, if truck { 0x18c } else { 0xd8 })?;
+    data.word(
+        start,
+        if truck {
+            TRUCK_DRAW
+        } else {
+            SCRIPTED_MODEL_DRAW
+        },
+    );
     data.word(start + 4, hash_name(required(node, "id", data.path)?));
+    let derived = if truck {
+        let entries = truck_fields(node, start, tread_particles.is_some(), &tread_maps, data)?;
+        truck_relocations.push((start as u32, data.payload.len() as u32));
+        Some(entries)
+    } else {
+        None
+    };
     for (offset, bits) in [
         (0x10, 0x3ecc_cccd),
         (0x14, 0x4040_0000),
@@ -448,7 +584,31 @@ fn scripted_model(
         array("AttachModel", 0xb4e5_23bf, start + 0xb4),
         array("EmbedPortal", 0xafc5_e3e3, start + 0xbc),
     ]);
-    Ok(Table::record(entries))
+    let table = Table::record(entries);
+    if let Some((mut entries, particle_offset)) = derived {
+        let particles = if let Some((particles, offset)) = tread_particles.zip(particle_offset) {
+            let value = super::super::text_value(particles, data.path)?;
+            let ordinal = super::passive_area::reference(
+                value,
+                "TerrainParticleMapping",
+                data.path,
+                references,
+                reference_types,
+            )?;
+            data.word(offset, ordinal);
+            Target::Data(offset)
+        } else {
+            Target::Null
+        };
+        entries.insert(
+            TRUCK_FIELDS.len(),
+            Entry::named("TreadTerrainParticles", 0xa6ff_4551, particles),
+        );
+        entries.insert(0, super::behaviors_basic::base(SCRIPTED_MODEL_DRAW, table));
+        Ok(Table::record(entries))
+    } else {
+        Ok(table)
+    }
 }
 
 const WEAPON_BONE_LISTS: [(&str, usize); 4] = [
