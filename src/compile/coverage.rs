@@ -21,7 +21,7 @@ const MODULES: &[(&str, &[&str])] = &[
         ],
     ),
     ("AI", &["AIUpdate"]),
-    ("Body", &["ActiveBody", "ImmortalBody"]),
+    ("Body", &["ActiveBody", "ImmortalBody", "PropBody"]),
     (
         "ClientBehaviors",
         &[
@@ -827,6 +827,11 @@ mod tests {
     #[test]
     fn audio_event_matches_ea() {
         assert_ea_fixture("audio-event", 1);
+    }
+
+    #[test]
+    fn prop_body_matches_ea() {
+        assert_ea_fixture("prop-body", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

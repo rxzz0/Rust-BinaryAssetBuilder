@@ -141,6 +141,7 @@ pub(in crate::compile::static_assets) fn compile(
             active_body::encode(module, path)?,
         ),
         "ImmortalBody" => (TOKENS, immortal_body(module, path)?),
+        "PropBody" => (TOKENS, [0; BODY_SIZE]),
         kind => return Err(invalid(path, format!("unsupported Body module {kind}"))),
     };
 
@@ -306,8 +307,27 @@ pub(in crate::compile::static_assets) fn compile(
     }
     let body_shift = data.payload.len() - ROOT_SIZE;
     table.shift_data_from(ROOT_SIZE, body_shift);
-    let body_start = data.allocate(0x1dc, BODY_SIZE)?;
-    data.payload[body_start..body_start + BODY_SIZE].copy_from_slice(&body_bytes);
+    if module.has_tag_name((SAGE_NS, "PropBody")) {
+        validate_attributes(module, &["id"], path)?;
+        if has_content(module) {
+            return Err(invalid(path, "PropBody cannot contain content"));
+        }
+        let start = data.allocate(0x1dc, 8)?;
+        let kind = 0xff88_404b;
+        let inherited = behaviors_basic::module_base(module, kind, start, &mut data, false)?;
+        let body = Table::sequence(vec![Entry::new(
+            2,
+            kind,
+            Target::Table(behaviors_basic::inherited(
+                0xf491_98c2,
+                Table::record(vec![inherited]),
+            )),
+        )]);
+        child_targets.push(("Body", Target::Table(body)));
+    } else {
+        let body_start = data.allocate(0x1dc, BODY_SIZE)?;
+        data.payload[body_start..body_start + BODY_SIZE].copy_from_slice(&body_bytes);
+    }
     if let Some(group) = updates {
         let target =
             client_updates::encode(group, &mut data, &mut references, &mut reference_types)?;
