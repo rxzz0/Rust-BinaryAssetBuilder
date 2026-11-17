@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="GroupAudioBare">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    <ClientUpdates><LargeGroupAudioClientUpdate id="GroupKey"><Key>AlphaKey</Key></LargeGroupAudioClientUpdate></ClientUpdates>
+  </GameObject>
+  <GameObject id="GroupAudioFull">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    <ClientUpdates>
+      <LargeGroupAudioClientUpdate id="GroupKey" FramesBetweenUpdatesMin="7" FramesBetweenUpdatesVariation="11" UnitWeight="321">
+        <Key>AlphaKey</Key><Key>Different_Key</Key>
+      </LargeGroupAudioClientUpdate>
+    </ClientUpdates>
+  </GameObject>
+</AssetDeclaration>

@@ -1048,6 +1048,11 @@ mod tests {
         assert_ea_fixture("capture-special-ability", 3);
     }
 
+    #[test]
+    fn large_group_audio_matches_ea() {
+        assert_ea_fixture("large-group-audio", 2);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
