@@ -1043,6 +1043,11 @@ mod tests {
         assert_ea_fixture("emotion-tracker", 5);
     }
 
+    #[test]
+    fn capture_special_ability_matches_ea() {
+        assert_ea_fixture("capture-special-ability", 3);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

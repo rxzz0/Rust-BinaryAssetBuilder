@@ -1,0 +1,15 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <SpecialPowerTemplate id="CaptureProbe" TargetType="OBJECT" />
+  <GameObject id="CaptureBare">
+    <Behaviors><CaptureSpecialAbilityUpdate id="ModuleTag_Capture" SpecialPowerTemplate="CaptureProbe" /></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="CaptureFull">
+    <Behaviors>
+      <CaptureSpecialAbilityUpdate id="ModuleTag_Capture" SpecialPowerTemplate="CaptureProbe" Options="DO_CAPTURE_FX"
+        UnpackTime="2s" PreparationTime="10s" PackTime="1s" StartAbilityRange="30"
+        AbilityAbortRange="45.25" AwardXPForTriggering="10" FaceTarget="false" />
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

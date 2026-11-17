@@ -15,6 +15,8 @@ use std::{io, sync::OnceLock};
 
 const KIND: u32 = 0x9122_2181;
 const TOGGLE: u32 = 0xed1a_e55c;
+const CAPTURE: u32 = 0x3139_98b5;
+const WEAPON: u32 = 0x1e45_a393;
 const TOGGLE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[(
     "ReloadAllWeaponsOnToggle",
     0x77e3_f4f7,
@@ -205,13 +207,17 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
-    let weapon = node.has_tag_name((SAGE_NS, "WeaponFireSpecialAbilityUpdate"));
-    let (kind, size, variant) = if weapon {
-        (0x1e45_a393, 0x110, WEAPON_FIELDS)
-    } else if node.has_tag_name((SAGE_NS, "ToggleStatusSpecialAbilityUpdate")) {
-        (TOGGLE, 0xfc, TOGGLE_FIELDS)
-    } else {
-        (KIND, 0x104, REPLACE_FIELDS)
+    let (kind, size, variant) = match node.tag_name().name() {
+        "WeaponFireSpecialAbilityUpdate" => (WEAPON, 0x110, WEAPON_FIELDS),
+        "ToggleStatusSpecialAbilityUpdate" => (TOGGLE, 0xfc, TOGGLE_FIELDS),
+        "CaptureSpecialAbilityUpdate" => (CAPTURE, 0xf0, &[][..]),
+        "ReplaceSelfSpecialAbility" => (KIND, 0x104, REPLACE_FIELDS),
+        name => {
+            return Err(invalid(
+                data.path,
+                format!("unsupported special ability {name}"),
+            ));
+        }
     };
     let all_fields = FIELDS.iter().chain(variant);
     let path = data.path;
@@ -348,11 +354,11 @@ pub(super) fn encode(
         ));
         return Ok((kind, Table::record(entries)));
     }
-    if weapon {
+    if matches!(kind, WEAPON | CAPTURE) {
         if children.next().is_some() {
             return Err(invalid(
                 path,
-                "unexpected WeaponFireSpecialAbilityUpdate child",
+                format!("unexpected {} child", node.tag_name().name()),
             ));
         }
         return Ok((kind, Table::record(entries)));

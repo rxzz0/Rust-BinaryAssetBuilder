@@ -1003,6 +1003,7 @@ pub(super) fn encode(
         "ReplaceSelfSpecialAbility"
             | "WeaponFireSpecialAbilityUpdate"
             | "ToggleStatusSpecialAbilityUpdate"
+            | "CaptureSpecialAbilityUpdate"
     ) {
         return super::replace_self::encode(node, pointer, data, references, reference_types)
             .map(Some);
