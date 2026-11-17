@@ -1,0 +1,27 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <GameObject id="ToggleAiFieldsProbe">
+        <Behaviors><ToggleStatusSpecialAbilityUpdate id="ToggleProbe" SpecialPowerTemplate="TogglePower" PackTime="2s" ReloadAllWeaponsOnToggle="false">
+            <ToggleState EnterStateSound="ToggleSound">
+                <SkirmishAiInfo ToggleHint="TOGGLE_DEFAULT"><StateWeapon Weapon="ToggleWeapon" /></SkirmishAiInfo>
+            </ToggleState>
+            <ToggleState ObjectStatus="GENERIC_TOGGLE_STATE" ModelConditions="WEAPONSET_TOGGLE_1">
+                <SkirmishAiInfo ToggleHint="TOGGLE_LEECH_HEALTH_AND_WEAPON"
+    UseOnlyWhenPowerAdvantageIsAbove="1.1" UseOnlyWhenPowerAdvantageIsBelow="1.2"
+    UseOnlyWhenCostAdvantageIsAbove="1.3" UseOnlyWhenCostAdvantageIsBelow="1.4"
+    NeverUseWhenFurtherThanNUnitsFromTarget="15" NeverUseWhenCloserThanNUnitsFromTarget="6" NeverUseWhenHealthIsBelow=".7"
+    OnlyUseWhenHaveTarget="true" MaxZDifferenceFromTarget="18"
+    NeverUseInState="ALPHA_STRIKE COMBAT" NeverUseDuringTask="GARRISONING"
+    NeverUseWhenClear="true" SelfDefenseDamageLookAheadTime="1s" SelfDefenseDamageLookBehindTime="2s"
+    SelfDefenseDamageFraction=".33" DontUseIfInRange="true" NumOtherAttackersOnTarget="4"
+    LeechWeaponUpgrade="ProbeUpgrade" LeechWeaponTargetHealthFraction=".2" LeechWeaponSOLModuleId="ModuleTag_Listener"
+    LeechHealthActivatePowerAdvantage=".5" LeechHealthDeactivatePowerAdvantage=".25"
+    StealthOthersInvisibilityModuleId="ModuleTag_Invis" ShieldMinCostProtected="250"
+    ShieldMinEnemyDPS="500" ShieldCostAdjustPastDistanceFraction=".6" ShieldCostAdjustMultiplierAtEdge=".8"
+    EnemyMustBeInVisionRange="true" NeverUseWhenTargetIsAnyKindOf="INFANTRY VEHICLE" Location="Land">
+    <StateWeapon Weapon="LeechWeapon" IsDisablingAttack="true" AffectsFriendlies="true" AffectsSelf="true" TotalValueGreaterThan="10" AoeAttackPowerLocationPreference="PREFER_CENTER_OF_ENEMIES" AoeAttackPowerBlockAreaAfterActivationTime="4s" AoeAttackEmanationLocation="EMANATE_FROM_TARGET" ToggleRangeHysteresis="12" ToggleShortRangeTargetForcesTarget="true"/>
+</SkirmishAiInfo>
+            </ToggleState>
+        </ToggleStatusSpecialAbilityUpdate></Behaviors>
+        <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    </GameObject>
+</AssetDeclaration>

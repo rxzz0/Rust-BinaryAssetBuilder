@@ -810,6 +810,7 @@ mod tests {
     #[test]
     fn toggle_status_ability_matches_ea() {
         assert_ea_fixture("toggle-status-ability", 1);
+        assert_ea_fixture("toggle-ai-fields", 1);
     }
 
     #[test]

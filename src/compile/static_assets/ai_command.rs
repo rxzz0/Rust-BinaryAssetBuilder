@@ -174,7 +174,14 @@ pub(super) fn write_info(
         children.next_if(|child| child.has_tag_name((SAGE_NS, "SpecialPowerWeapon")))
     {
         let target = data.allocate(start + 160, 28)?;
-        write_weapon(weapon, target, data, result)?;
+        write_weapon_fields(weapon, target, data)?;
+        write_import(
+            required(weapon, "Weapon", path)?,
+            "WeaponTemplate",
+            target,
+            data,
+            result,
+        )?;
     }
     if children.next().is_some() {
         return Err(invalid(path, "unexpected content in AISpecialPowerInfo"));
@@ -182,11 +189,10 @@ pub(super) fn write_info(
     Ok(())
 }
 
-fn write_weapon(
+pub(super) fn write_weapon_fields(
     node: Node<'_, '_>,
     start: usize,
     data: &mut BinaryData<'_>,
-    result: &mut Marshaled,
 ) -> io::Result<()> {
     const BOOLS: [(&str, bool); 4] = [
         ("IsDisablingAttack", false),
@@ -210,17 +216,13 @@ fn write_weapon(
     allowed.extend(BOOLS.iter().map(|&(name, _)| name));
     validate_attributes(node, &allowed, path)?;
     if has_content(node) {
-        return Err(invalid(path, "unexpected content in SpecialPowerWeapon"));
+        return Err(invalid(
+            path,
+            "unexpected content in special-power weapon data",
+        ));
     }
 
     let value = |field, default| node.attribute(field).unwrap_or(default);
-    write_import(
-        required(node, "Weapon", path)?,
-        "WeaponTemplate",
-        start,
-        data,
-        result,
-    )?;
     data.word(
         start + 4,
         integer(

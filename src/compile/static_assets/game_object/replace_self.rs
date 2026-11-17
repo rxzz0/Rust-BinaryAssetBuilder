@@ -528,79 +528,140 @@ fn toggle_ai(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Table> {
-    const OPTIONAL: &[(&str, u32, usize)] = &[
-        ("UseOnlyWhenPowerAdvantageIsAbove", 0x6458_64f3, 4),
-        ("UseOnlyWhenPowerAdvantageIsBelow", 0x6458_64f3, 8),
-        ("UseOnlyWhenCostAdvantageIsAbove", 0x6458_64f3, 0xc),
-        ("UseOnlyWhenCostAdvantageIsBelow", 0x6458_64f3, 0x10),
-        ("NeverUseWhenFurtherThanNUnitsFromTarget", 0x6458_64f3, 0x14),
-        ("NeverUseWhenCloserThanNUnitsFromTarget", 0x6458_64f3, 0x18),
-        ("NeverUseWhenHealthIsBelow", 0x6458_64f3, 0x1c),
+    const REAL: u32 = 0x6458_64f3;
+    const BOOL: u32 = 0x77e3_f4f7;
+    const INT: u32 = 0x23e6_50b8;
+    const TIME: u32 = 0x9986_69e8;
+    const POID: u32 = 0xbdf0_7965;
+    const STATE: u32 = 0xd762_0aaa;
+    const TASK: u32 = 0x74ba_c2ed;
+    const UPGRADE: u32 = 0x4aba_1f29;
+    const KIND_OF: u32 = 0x9afc_9193;
+    const LOCATION: u32 = 0x73b8_b420;
+    const FIELDS: &[(&str, u32, usize, Option<&str>)] = &[
+        ("UseOnlyWhenPowerAdvantageIsAbove", REAL, 4, None),
+        ("UseOnlyWhenPowerAdvantageIsBelow", REAL, 8, None),
+        ("UseOnlyWhenCostAdvantageIsAbove", REAL, 0xc, None),
+        ("UseOnlyWhenCostAdvantageIsBelow", REAL, 0x10, None),
+        ("NeverUseWhenFurtherThanNUnitsFromTarget", REAL, 0x14, None),
+        ("NeverUseWhenCloserThanNUnitsFromTarget", REAL, 0x18, None),
+        ("NeverUseWhenHealthIsBelow", REAL, 0x1c, None),
+        ("OnlyUseWhenHaveTarget", BOOL, 0x90, Some("false")),
+        ("MaxZDifferenceFromTarget", REAL, 0x20, None),
+        ("NeverUseInState", STATE, 0x24, Some("")),
+        ("NeverUseDuringTask", TASK, 0x28, Some("")),
+        ("NeverUseWhenClear", BOOL, 0x91, Some("false")),
+        ("SelfDefenseDamageLookAheadTime", TIME, 0x2c, None),
+        ("SelfDefenseDamageLookBehindTime", TIME, 0x30, None),
+        ("SelfDefenseDamageFraction", REAL, 0x34, None),
+        ("DontUseIfInRange", BOOL, 0x92, Some("false")),
+        ("NumOtherAttackersOnTarget", INT, 0x38, Some("1")),
+        ("LeechWeaponUpgrade", UPGRADE, 0x3c, Some("")),
+        ("LeechWeaponTargetHealthFraction", REAL, 0x40, Some("0.1")),
+        ("LeechWeaponSOLModuleId", POID, 0x44, None),
+        ("LeechHealthActivatePowerAdvantage", REAL, 0x48, Some("1.7")),
+        (
+            "LeechHealthDeactivatePowerAdvantage",
+            REAL,
+            0x4c,
+            Some("1.2"),
+        ),
+        ("StealthOthersInvisibilityModuleId", POID, 0x50, None),
+        ("ShieldMinCostProtected", INT, 0x54, Some("0")),
+        ("ShieldMinEnemyDPS", REAL, 0x58, Some("1000")),
+        (
+            "ShieldCostAdjustPastDistanceFraction",
+            REAL,
+            0x5c,
+            Some("0.5"),
+        ),
+        ("ShieldCostAdjustMultiplierAtEdge", REAL, 0x60, Some("0")),
+        ("EnemyMustBeInVisionRange", BOOL, 0x93, Some("false")),
+        ("NeverUseWhenTargetIsAnyKindOf", KIND_OF, 0x64, Some("")),
+        ("Location", LOCATION, 0x88, Some("Water Land")),
     ];
-    let path = data.path;
-    validate_attributes(node, &["ToggleHint"], path)?;
     const AI_SCHEMA: &str =
         include_str!("../../../../schemas/ra3/xsd/SkirmishAI/AssetTypeAISpecialPower.xsd");
+    const MICRO_SCHEMA: &str =
+        include_str!("../../../../schemas/ra3/xsd/SkirmishAI/AssetTypeAIMicroManagerStates.xsd");
     static HINTS: OnceLock<Vec<String>> = OnceLock::new();
+    static MICRO_STATES: OnceLock<Vec<String>> = OnceLock::new();
+    static MICRO_TASKS: OnceLock<Vec<String>> = OnceLock::new();
+
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("ToggleHint")
+        .chain(FIELDS.iter().map(|&(name, ..)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
     let hints =
         HINTS.get_or_init(|| super::ai_update::enum_values(AI_SCHEMA, "ToggleStatusAiHint"));
     let hint = required(node, "ToggleHint", path)?;
-    let index = hints
-        .iter()
-        .position(|v| v == hint)
-        .ok_or_else(|| invalid(path, "invalid ToggleHint"))?;
-    data.word(start, index as u32);
-    for (offset, value) in [
-        (0x38, 1),
-        (0x40, 0.1f32.to_bits()),
-        (0x48, 1.7f32.to_bits()),
-        (0x4c, 1.2f32.to_bits()),
-        (0x58, 1000.0f32.to_bits()),
-        (0x5c, 0.5f32.to_bits()),
-        (0x88, 3),
-    ] {
-        data.word(start + offset, value);
-    }
-    let mut entries = vec![Entry::named("ToggleHint", 0x018d_d8b9, Target::Data(start))];
-    entries.extend(
-        OPTIONAL
-            .iter()
-            .map(|&(name, kind, _)| Entry::named(name, kind, Target::Null)),
+    data.word(
+        start,
+        super::super::ai_strategic::enum_index(hint, hints, "ToggleHint", path)?,
     );
-    for (name, kind, offset) in [
-        ("OnlyUseWhenHaveTarget", 0x77e3_f4f7, 0x90),
-        ("MaxZDifferenceFromTarget", 0x6458_64f3, usize::MAX),
-        ("NeverUseInState", 0xd762_0aaa, 0x24),
-        ("NeverUseDuringTask", 0x74ba_c2ed, 0x28),
-        ("NeverUseWhenClear", 0x77e3_f4f7, 0x91),
-        ("SelfDefenseDamageLookAheadTime", 0x9986_69e8, usize::MAX),
-        ("SelfDefenseDamageLookBehindTime", 0x9986_69e8, usize::MAX),
-        ("SelfDefenseDamageFraction", 0x6458_64f3, usize::MAX),
-        ("DontUseIfInRange", 0x77e3_f4f7, 0x92),
-        ("NumOtherAttackersOnTarget", 0x23e6_50b8, 0x38),
-        ("LeechWeaponUpgrade", 0x4aba_1f29, 0x3c),
-        ("LeechWeaponTargetHealthFraction", 0x6458_64f3, 0x40),
-        ("LeechWeaponSOLModuleId", 0xbdf0_7965, usize::MAX),
-        ("LeechHealthActivatePowerAdvantage", 0x6458_64f3, 0x48),
-        ("LeechHealthDeactivatePowerAdvantage", 0x6458_64f3, 0x4c),
-        ("StealthOthersInvisibilityModuleId", 0xbdf0_7965, usize::MAX),
-        ("ShieldMinCostProtected", 0x23e6_50b8, 0x54),
-        ("ShieldMinEnemyDPS", 0x6458_64f3, 0x58),
-        ("ShieldCostAdjustPastDistanceFraction", 0x6458_64f3, 0x5c),
-        ("ShieldCostAdjustMultiplierAtEdge", 0x6458_64f3, 0x60),
-        ("EnemyMustBeInVisionRange", 0x77e3_f4f7, 0x93),
-        ("NeverUseWhenTargetIsAnyKindOf", 0x9afc_9193, 0x64),
-        ("Location", 0x73b8_b420, 0x88),
-    ] {
-        entries.push(Entry::named(
-            name,
-            kind,
-            if offset == usize::MAX {
-                Target::Null
+
+    let mut entries = vec![Entry::named("ToggleHint", 0x018d_d8b9, Target::Data(start))];
+    for &(name, kind, offset, default) in FIELDS {
+        let pointer = start + offset;
+        let target = if let Some(value) = node.attribute(name).or(default) {
+            let field = if default.is_some() {
+                pointer
             } else {
-                Target::Data(start + offset)
-            },
-        ));
+                data.allocate(pointer, 4)?
+            };
+            match kind {
+                BOOL => data.payload[field] = boolean(node, name, false, path)?,
+                INT => data.word(
+                    field,
+                    value
+                        .trim()
+                        .parse::<i32>()
+                        .map_err(|_| invalid(path, format!("invalid {name}")))?
+                        as u32,
+                ),
+                REAL => data.word(field, finite_number(value, name, path)?.to_bits()),
+                TIME => data.word(field, sage_time(value, name, path)?.to_bits()),
+                POID => data.word(field, super::super::hash_name(value)),
+                UPGRADE => write_reference(
+                    value,
+                    "UpgradeTemplate",
+                    field,
+                    data,
+                    references,
+                    reference_types,
+                )?,
+                KIND_OF => {
+                    for (index, word) in super::super::global_ui::kind_of_flags(value, path)?
+                        .into_iter()
+                        .enumerate()
+                    {
+                        data.word(field + index * 4, word);
+                    }
+                }
+                STATE | TASK => {
+                    let (cache, schema_type) = if kind == STATE {
+                        (&MICRO_STATES, "MicroManagerState")
+                    } else {
+                        (&MICRO_TASKS, "MicroManagerUnitTask")
+                    };
+                    let options = cache
+                        .get_or_init(|| super::ai_update::enum_values(MICRO_SCHEMA, schema_type));
+                    let bits = super::super::ai_strategic::flags(value, options, name, path)?;
+                    data.word(field, bits);
+                }
+                LOCATION => {
+                    let bits =
+                        super::super::ai_strategic::flags(value, &["Water", "Land"], name, path)?;
+                    data.word(field, bits);
+                }
+                _ => unreachable!(),
+            }
+            Target::Data(field)
+        } else {
+            Target::Null
+        };
+        entries.push(Entry::named(name, kind, target));
     }
     let mut children = significant_children(node);
     let weapon = if let Some(weapon) = children.next() {
@@ -610,8 +671,8 @@ fn toggle_ai(
         {
             return Err(invalid(path, "unsupported SkirmishAiInfo child"));
         }
-        validate_attributes(weapon, &["Weapon"], path)?;
         let weapon_start = data.allocate(start + 0x8c, 0x1c)?;
+        super::super::ai_command::write_weapon_fields(weapon, weapon_start, data)?;
         write_reference(
             required(weapon, "Weapon", path)?,
             "WeaponTemplate",
