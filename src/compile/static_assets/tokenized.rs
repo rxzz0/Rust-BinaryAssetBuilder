@@ -115,6 +115,14 @@ impl Table {
         }
     }
 
+    pub(super) fn data_offset(&self, name: &str) -> Option<usize> {
+        let name = fast_hash(name.as_bytes());
+        self.entries.iter().find_map(|entry| match entry.target {
+            Target::Data(offset) if entry.name == name => Some(offset),
+            _ => None,
+        })
+    }
+
     pub(super) fn replace_target(&mut self, name: &str, target: Target) -> bool {
         if let Some(entry) = self
             .entries

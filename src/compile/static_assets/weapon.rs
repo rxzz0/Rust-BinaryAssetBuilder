@@ -1,7 +1,8 @@
 use super::binary::BinaryData;
 use super::tokenized::{self, Entry, Table, Target};
 use super::{
-    Marshaled, asset_reference, finite_number, sage_time, significant_children, validate_attributes,
+    Marshaled, asset_reference, finite_number, percentage, sage_angle, sage_time,
+    significant_children, validate_attributes,
 };
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::{Document, Node};
@@ -14,63 +15,14 @@ const BASE: &[u8] = include_bytes!(
 
 pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     const ROOT: usize = 0x514;
-    const ATTRS: [(&str, usize, &str); 3] = [
-        ("AttackRange", 0, "0"),
-        ("MinimumAttackRange", 4, "0"),
-        ("WeaponSpeed", 0x28, "99999"),
-    ];
-    validate_attributes(
-        node,
-        &[
-            "id",
-            "AttackRange",
-            "MinimumAttackRange",
-            "WeaponSpeed",
-            "ClipSize",
-            "CanFireWhileMoving",
-            "Flags",
-            "RequiredAntiMask",
-            "RadiusDamageAffects",
-        ],
-        path,
-    )?;
     let mut data = BinaryData {
         payload: BASE[32 + ROOT..].to_vec(),
         relocations: Vec::new(),
         path,
     };
     let mut table = Table::from_layout(&BASE[32..32 + ROOT], &data.payload, path)?;
-    for (name, offset, default) in ATTRS {
-        data.word(
-            offset,
-            finite_number(node.attribute(name).unwrap_or(default), name, path)?.to_bits(),
-        );
-    }
-    let clip = node
-        .attribute("ClipSize")
-        .unwrap_or("0")
-        .trim()
-        .parse::<i32>()
-        .map_err(|_| invalid(path, "invalid WeaponTemplate ClipSize"))?;
-    data.word(0x6c, clip as u32);
-    data.payload[0x126] = match node
-        .attribute("CanFireWhileMoving")
-        .unwrap_or("false")
-        .trim()
-    {
-        "true" | "1" => 1,
-        "false" | "0" => 0,
-        _ => return Err(invalid(path, "invalid CanFireWhileMoving")),
-    };
-    for (name, kind, offset) in [
-        ("Flags", 0, 0xa8),
-        ("RadiusDamageAffects", 1, 0xc0),
-        ("RequiredAntiMask", 2, 0xcc),
-    ] {
-        if let Some(value) = node.attribute(name) {
-            data.word(offset, weapon_flags(value, kind, path)?);
-        }
-    }
+    let mut out = Marshaled::default();
+    encode_root_attributes(node, &mut table, &mut data, &mut out)?;
     let mut children = significant_children(node).peekable();
     for (name, offset) in [
         ("PreAttackDelay", 0xe8),
@@ -97,7 +49,6 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             }
         }
     }
-    let mut out = Marshaled::default();
     if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, "Nuggets"))) {
         let nuggets = encode_nuggets(child, &mut data, &mut out)?;
         if !table.replace_target("Nuggets", Target::Table(nuggets)) {
@@ -115,6 +66,161 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
     }
     data.relocations.sort_unstable();
     tokenized::finish(table, data, out)
+}
+
+const WEAPON_SCHEMA: &str = include_str!("../../../schemas/ra3/xsd/AssetTypeWeaponTemplate.xsd");
+
+fn encode_root_attributes(
+    node: Node<'_, '_>,
+    table: &mut Table,
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+) -> io::Result<()> {
+    static ATTRIBUTES: OnceLock<Vec<(String, String)>> = OnceLock::new();
+    let attributes = ATTRIBUTES.get_or_init(|| {
+        let schema = Document::parse(WEAPON_SCHEMA).expect("bundled weapon schema must be valid");
+        schema
+            .descendants()
+            .find(|field| {
+                field.has_tag_name(("http://www.w3.org/2001/XMLSchema", "complexType"))
+                    && field.attribute("name") == Some("WeaponTemplate")
+            })
+            .expect("bundled WeaponTemplate schema must exist")
+            .descendants()
+            .filter(|field| field.has_tag_name(("http://www.w3.org/2001/XMLSchema", "attribute")))
+            .map(|field| {
+                (
+                    field.attribute("name").unwrap().to_owned(),
+                    field.attribute("type").unwrap().to_owned(),
+                )
+            })
+            .collect()
+    });
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(attributes.iter().map(|(name, _)| name.as_str()))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    for (name, kind) in attributes {
+        let Some(raw) = node.attribute(name.as_str()) else {
+            continue;
+        };
+        let optional = match name.as_str() {
+            "FireSound" => Some((0x50, 4)),
+            "FireSoundPerClip" => Some((0x54, 4)),
+            "FiringLoopSound" => Some((0x58, 4)),
+            "RequiredFiringObjectStatus" => Some((0x84, 0x1c)),
+            "ForbiddenFiringObjectStatus" => Some((0x88, 0x1c)),
+            "PreAttackWeapon" => Some((0xdc, 4)),
+            _ => None,
+        };
+        let offset = if let Some((pointer, size)) = optional {
+            let target = data.allocate(pointer, size)?;
+            if !table.replace_target(name, Target::Data(target)) {
+                return Err(invalid(path, format!("weapon layout missing {name}")));
+            }
+            target
+        } else {
+            table
+                .data_offset(name)
+                .ok_or_else(|| invalid(path, format!("weapon layout missing {name}")))?
+        };
+        let word = match kind.as_str() {
+            "SageBool" => {
+                data.payload[offset] = match raw.trim() {
+                    "true" | "1" => 1,
+                    "false" | "0" => 0,
+                    _ => return Err(invalid(path, format!("invalid WeaponTemplate {name}"))),
+                };
+                continue;
+            }
+            "xs:string" => {
+                data.string(offset, raw)?;
+                continue;
+            }
+            "ObjectStatusBitFlags" => {
+                super::game_object::write_status_flags(raw, offset, data)?;
+                continue;
+            }
+            "SageReal" => finite_number(raw, name, path)?.to_bits(),
+            "Angle" => sage_angle(raw, name, path)?.to_bits(),
+            "Time" => sage_time(raw, name, path)?.to_bits(),
+            "Percentage" => percentage(raw, name, path)?.to_bits(),
+            "SageInt" => {
+                raw.trim()
+                    .parse::<i32>()
+                    .map_err(|_| invalid(path, format!("invalid {name}")))? as u32
+            }
+            "WeaponFlagsBitFlags" => weapon_flags(raw, 0, path)?,
+            "WeaponAffectsBitFlags" => weapon_flags(raw, 1, path)?,
+            "WeaponAntiBitFlags" => weapon_anti_flags(raw, path)?,
+            "WeaponCollideBitFlags" => weapon_flags(raw, 3, path)?,
+            "WeaponPrefireType"
+            | "WeaponReAcquireDetailType"
+            | "WeaponReloadType"
+            | "VirtualDamageType"
+            | "FXTriggerType" => weapon_enum(raw, kind, path)?,
+            "AudioEventInfoRef" => super::game_object::audio_reference(
+                raw,
+                path,
+                &mut out.references,
+                &mut out.reference_types,
+            )?,
+            "FXListRef" | "WeaponRef" | "GameObjectWeakRef" => {
+                if raw.trim().is_empty() {
+                    continue;
+                }
+                let ty = match kind.as_str() {
+                    "FXListRef" => "FXList",
+                    "WeaponRef" => "WeaponTemplate",
+                    _ => "GameObject",
+                };
+                let value = raw.split_once('\\').map_or(raw, |(value, _)| value);
+                let id = asset_reference(value, ty, path)?;
+                out.reference_types.push(id.type_id);
+                if kind == "GameObjectWeakRef" {
+                    id.instance_id
+                } else {
+                    out.references.push(id.into());
+                    out.references.len() as u32
+                }
+            }
+            _ => {
+                return Err(invalid(
+                    path,
+                    format!("unsupported WeaponTemplate attribute type {kind}"),
+                ));
+            }
+        };
+        data.word(offset, word);
+    }
+    Ok(())
+}
+
+fn weapon_enum(raw: &str, kind: &str, path: &Path) -> io::Result<u32> {
+    const NAMES: [&str; 4] = [
+        "WeaponPrefireType",
+        "WeaponReAcquireDetailType",
+        "WeaponReloadType",
+        "VirtualDamageType",
+    ];
+    static ENUMS: OnceLock<[Vec<String>; 4]> = OnceLock::new();
+    static FX: OnceLock<[Vec<String>; 1]> = OnceLock::new();
+    let values = if kind == "FXTriggerType" {
+        &FX.get_or_init(|| {
+            schema_enums(
+                include_str!("../../../schemas/ra3/xsd/Modules/BaseModules.xsd"),
+                &["FXTriggerType"],
+            )
+        })[0]
+    } else {
+        let index = NAMES
+            .iter()
+            .position(|&name| name == kind)
+            .expect("known weapon enum type");
+        &ENUMS.get_or_init(|| schema_enums(WEAPON_SCHEMA, &NAMES))[index]
+    };
+    super::ai_strategic::enum_index(raw.trim(), values, kind, path)
 }
 
 fn encode_nuggets(
@@ -731,21 +837,17 @@ pub(super) fn weapon_anti_flags(value: &str, path: &Path) -> io::Result<u32> {
 }
 
 fn weapon_flags(value: &str, kind: usize, path: &Path) -> io::Result<u32> {
-    static FLAGS: OnceLock<[Vec<String>; 3]> = OnceLock::new();
+    static FLAGS: OnceLock<[Vec<String>; 4]> = OnceLock::new();
     let flags = FLAGS.get_or_init(|| {
-        let schema = Document::parse(include_str!(
-            "../../../schemas/ra3/xsd/AssetTypeWeaponTemplate.xsd"
-        ))
-        .unwrap();
-        ["WeaponFlagsType", "WeaponAffectsType", "WpnAntiT"].map(|name| {
-            schema
-                .descendants()
-                .find(|node| node.attribute("name") == Some(name))
-                .unwrap()
-                .descendants()
-                .filter_map(|node| node.attribute("value").map(str::to_owned))
-                .collect()
-        })
+        schema_enums(
+            WEAPON_SCHEMA,
+            &[
+                "WeaponFlagsType",
+                "WeaponAffectsType",
+                "WpnAntiT",
+                "WeaponCollideType",
+            ],
+        )
     });
     value.split_ascii_whitespace().try_fold(0, |mask, flag| {
         let bit = flags[kind]

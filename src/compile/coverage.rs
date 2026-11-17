@@ -1070,6 +1070,11 @@ mod tests {
         assert_ea_fixture("stealth-detector", 5);
     }
 
+    #[test]
+    fn weapon_attributes_match_ea() {
+        assert_ea_fixture("weapon-fields", 3);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
