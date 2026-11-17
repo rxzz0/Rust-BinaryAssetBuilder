@@ -1,0 +1,19 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AudioEvent id="CrushTotal" />
+  <AudioEvent id="CrushRear" />
+  <AudioEvent id="CrushFront" />
+  <GameObject id="CrushBare">
+    <Behaviors><CrushDie id="ModuleTag_Crush"><DieMuxData DeathTypes="CRUSHED" /></CrushDie></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="CrushFull">
+    <Behaviors>
+      <CrushDie id="ModuleTag_Crush" TotalCrushSound="CrushTotal" BackEndCrushSound="CrushRear"
+        FrontEndCrushSound="CrushFront" TotalCrushSoundPercent="25%" BackEndCrushSoundPercent="50"
+        FrontEndCrushSoundPercent="75%">
+        <DieMuxData DeathTypes="CRUSHED" DamageAmountRequired="12.5" />
+      </CrushDie>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

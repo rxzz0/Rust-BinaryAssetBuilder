@@ -1028,6 +1028,11 @@ mod tests {
         assert_ea_fixture("game-object-unit-icon", 4);
     }
 
+    #[test]
+    fn crush_die_matches_ea() {
+        assert_ea_fixture("crush-die", 5);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

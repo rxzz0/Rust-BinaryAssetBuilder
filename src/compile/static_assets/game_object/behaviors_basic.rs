@@ -89,6 +89,47 @@ fn squish_collide(
     Ok((KIND, Table::record(entries)))
 }
 
+fn crush_die(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x91ed_30dc;
+    const SOUNDS: [(&str, u32, usize); 3] = [
+        ("TotalCrushSound", 0x63d7_b468, 0x34),
+        ("BackEndCrushSound", 0x63d7_b468, 0x38),
+        ("FrontEndCrushSound", 0x63d7_b468, 0x3c),
+    ];
+    const PERCENTS: [(&str, u32, usize); 3] = [
+        ("TotalCrushSoundPercent", 0x6458_64f3, 0x40),
+        ("BackEndCrushSoundPercent", 0x6458_64f3, 0x44),
+        ("FrontEndCrushSoundPercent", 0x6458_64f3, 0x48),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(SOUNDS.iter().chain(&PERCENTS).map(|&(name, _, _)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let start = data.allocate(pointer, 0x4c)?;
+    let behavior = module_base(node, KIND, start, data, false)?;
+    let mut entries = vec![die_parent(node, start, behavior, data)?];
+    for (name, _, offset) in SOUNDS {
+        if let Some(value) = node.attribute(name) {
+            let ordinal = super::audio_reference(value, path, references, reference_types)?;
+            data.word(start + offset, ordinal);
+        }
+    }
+    for (name, _, offset) in PERCENTS {
+        let value = percentage(node.attribute(name).unwrap_or("100"), name, path)?;
+        data.word(start + offset, value.to_bits());
+    }
+    entries.extend(fields(start, &SOUNDS));
+    entries.extend(fields(start, &PERCENTS));
+    Ok((KIND, Table::record(entries)))
+}
+
 fn wall_builder(
     node: Node<'_, '_>,
     pointer: usize,
@@ -579,6 +620,9 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "SquishCollide")) {
         return squish_collide(node, pointer, data).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "CrushDie")) {
+        return crush_die(node, pointer, data, references, reference_types).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "WallBuilderBehavior")) {
         return wall_builder(node, pointer, data, reference_types).map(Some);
     }
@@ -985,20 +1029,8 @@ pub(super) fn encode(
     ]);
     let behavior = inherited(0xd75d_93a2, module);
     if kind == 0x0f7e_c801 {
-        let mut children = super::super::significant_children(node);
-        let die = children
-            .next()
-            .filter(|n| n.has_tag_name((crate::compile::SAGE_NS, "DieMuxData")))
-            .ok_or_else(|| crate::compile::invalid(data.path, "DestroyDie requires DieMuxData"))?;
-        if children.next().is_some() {
-            return Err(invalid(data.path, "unexpected DestroyDie content"));
-        }
-        let mux = encode_die_mux(die, offset + 8, data)?;
-        let die = Table::record(vec![
-            base(0xa50d_729a, behavior),
-            Entry::new(0x33d7_093c, 0x0084_001b, Target::Table(mux)),
-        ]);
-        return Ok(Some((kind, inherited(0x9e4f_2b72, die))));
+        let die = die_parent(node, offset, base(0xa50d_729a, behavior), data)?;
+        return Ok(Some((kind, Table::record(vec![die]))));
     }
     if kind == 0x2e54_6f8e {
         return Ok(Some((
@@ -1587,6 +1619,31 @@ fn fire_weapon_when_dead(
         array("WeaponFireProbability", 0x080b_e21f, start + 0x80),
     ]);
     Ok((KIND, Table::record(entries)))
+}
+
+fn die_parent(
+    node: Node<'_, '_>,
+    start: usize,
+    behavior: Entry,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Entry> {
+    let mut children = significant_children(node);
+    let name = node.tag_name().name();
+    let mux = children
+        .next()
+        .filter(|child| child.has_tag_name((SAGE_NS, "DieMuxData")))
+        .ok_or_else(|| invalid(data.path, format!("{name} requires DieMuxData")))?;
+    if children.next().is_some() {
+        return Err(invalid(data.path, format!("unexpected {name} content")));
+    }
+    let mux = encode_die_mux(mux, start + 8, data)?;
+    Ok(base(
+        0x9e4f_2b72,
+        Table::record(vec![
+            behavior,
+            Entry::named("DieMuxData", 0x0084_001b, Target::Table(mux)),
+        ]),
+    ))
 }
 
 pub(super) fn encode_die_mux(
