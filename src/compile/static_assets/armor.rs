@@ -62,7 +62,7 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
     tokenized::finish(Table::record(fields), data, Marshaled::default())
 }
 
-fn damage_types() -> &'static [String] {
+pub(super) fn damage_types() -> &'static [String] {
     static TYPES: OnceLock<Vec<String>> = OnceLock::new();
     TYPES.get_or_init(|| {
         let schema = Document::parse(include_str!(

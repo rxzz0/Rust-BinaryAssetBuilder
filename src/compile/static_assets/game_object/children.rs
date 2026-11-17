@@ -279,33 +279,118 @@ fn skirmish(
     data: &mut BinaryData<'_>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Target> {
-    validate_attributes(
-        node,
-        &[
+    enum Field {
+        Enum(&'static [&'static str], &'static str),
+        DamageType,
+        Angle,
+        Int,
+        Bool(bool),
+        Real(&'static str),
+        AntiMask(&'static str),
+        OptionalReal,
+        OptionalAntiMask,
+    }
+
+    const BOOL: u32 = 0x77e3_f4f7;
+    const REAL: u32 = 0x6458_64f3;
+    const ANTI: u32 = 0xc8c6_9390;
+    const FIELDS: &[(&str, u32, usize, Field)] = &[
+        (
             "BaseBuildingLocation",
+            0xce5b_5436,
+            0,
+            Field::Enum(
+                &[
+                    "FRONT",
+                    "SIDE",
+                    "BACK",
+                    "SPREAD",
+                    "CENTER",
+                    "DEFENSE",
+                    "NEAR_RESOURCE_NODE",
+                ],
+                "FRONT",
+            ),
+        ),
+        ("AdditionalRotation", 0x4e16_ea4d, 4, Field::Angle),
+        ("BaseBuildingMaxNudges", 0x23e6_50b8, 8, Field::Int),
+        (
+            "BlockIfUnpackTargetBuildingCannotBeRebuilt",
+            BOOL,
+            0x50,
+            Field::Bool(true),
+        ),
+        (
+            "UnitBuilderStandardCombatUnit",
+            BOOL,
+            0x51,
+            Field::Bool(false),
+        ),
+        ("TargetDuringCrush", BOOL, 0x52, Field::Bool(false)),
+        ("CrushSpeedBonus", REAL, 0xc, Field::Real("0")),
+        ("OutOfRangePenalty", REAL, 0x10, Field::Real("1.3")),
+        (
+            "ContainedMembersProvideWeapon",
+            BOOL,
+            0x53,
+            Field::Bool(false),
+        ),
+        ("ConquerMetricsOverrideDPS", REAL, 0x14, Field::OptionalReal),
+        (
+            "ConquerMetricsOverrideDamageType",
+            0x4648_6ff1,
+            0x18,
+            Field::DamageType,
+        ),
+        (
+            "ConquerMetricsOverrideAntiMask",
+            ANTI,
+            0x1c,
+            Field::AntiMask("ANTI_GROUND ANTI_WATER"),
+        ),
+        (
+            "ConquerMetricsOverrideForbiddenAntiMask",
+            ANTI,
+            0x20,
+            Field::AntiMask(""),
+        ),
+        (
+            "ConquerMetricsOverrideDefendingAntiMask",
+            ANTI,
+            0x24,
+            Field::OptionalAntiMask,
+        ),
+        (
+            "ConquerMetricsDpsBonusAgainstDefenses",
+            REAL,
+            0x28,
+            Field::Real("1"),
+        ),
+        (
             "NearResourceNodeType",
-            "DodgeSafetyDistance",
-        ],
-        data.path,
-    )?;
-    let location = super::super::global_ui::enum_value(
-        node.attribute("BaseBuildingLocation").unwrap_or("FRONT"),
-        &[
-            "FRONT",
-            "SIDE",
-            "BACK",
-            "SPREAD",
-            "CENTER",
-            "DEFENSE",
-            "NEAR_RESOURCE_NODE",
-        ],
-        data.path,
-    )?;
-    let resource_type = super::super::global_ui::enum_value(
-        node.attribute("NearResourceNodeType").unwrap_or("ORE"),
-        &["TIBERIUM", "ORE", "SIGMA", "ENERGY"],
-        data.path,
-    )?;
+            0x071b_12c5,
+            0x2c,
+            Field::Enum(&["TIBERIUM", "ORE", "SIGMA", "ENERGY"], "ORE"),
+        ),
+        ("DodgeSafetyDistance", REAL, 0x30, Field::Real("300")),
+        (
+            "OverrideInnerDistanceToTarget",
+            REAL,
+            0x34,
+            Field::OptionalReal,
+        ),
+        (
+            "OverrideOuterDistanceToTarget",
+            REAL,
+            0x38,
+            Field::OptionalReal,
+        ),
+        ("CanFireUpCliffs", BOOL, 0x54, Field::Bool(false)),
+        ("DoesSecondaryDamage", BOOL, 0x55, Field::Bool(false)),
+    ];
+    let path = data.path;
+    let names: Vec<_> = FIELDS.iter().map(|&(name, _, _, _)| name).collect();
+    validate_attributes(node, &names, path)?;
     let mut children = super::super::significant_children(node).peekable();
     let construction = children
         .next_if(|child| child.has_tag_name((SAGE_NS, "ConstructionBaseSelectionCriteria")));
@@ -323,72 +408,62 @@ fn skirmish(
         ));
     }
     let start = data.allocate(0x1c8, 0x58)?;
-    for (offset, value) in [
-        (0, location),
-        (8, 3),
-        (0x10, 0x3fa6_6666),
-        (0x18, 0xe),
-        (0x1c, 3),
-        (0x28, 0x3f80_0000),
-        (0x2c, resource_type),
-        (
-            0x30,
-            super::super::finite_number(
-                node.attribute("DodgeSafetyDistance").unwrap_or("300"),
-                "DodgeSafetyDistance",
-                data.path,
-            )?
-            .to_bits(),
-        ),
-        (0x50, 1),
-    ] {
-        data.word(start + offset, value);
+    let mut entries = Vec::with_capacity(FIELDS.len() + 4);
+    for &(name, token, offset, ref kind) in FIELDS {
+        use super::super::{finite_number, sage_angle, weapon::weapon_anti_flags};
+
+        let address = start + offset;
+        let raw = node.attribute(name);
+        let target = match kind {
+            Field::OptionalReal | Field::OptionalAntiMask => match raw {
+                Some(raw) => {
+                    let value = if matches!(kind, Field::OptionalAntiMask) {
+                        weapon_anti_flags(raw, path)?
+                    } else {
+                        finite_number(raw, name, path)?.to_bits()
+                    };
+                    let target = data.allocate(address, 4)?;
+                    data.word(target, value);
+                    Target::Data(target)
+                }
+                None => Target::Null,
+            },
+            Field::Bool(default) => {
+                data.payload[address] = super::draws::boolean(node, name, *default, path)?;
+                Target::Data(address)
+            }
+            _ => {
+                let value = match kind {
+                    Field::Enum(options, default) => super::super::global_ui::enum_value(
+                        raw.unwrap_or(default).trim(),
+                        options,
+                        path,
+                    )?,
+                    Field::DamageType => super::super::ai_strategic::enum_index(
+                        raw.unwrap_or("UNDEFINED").trim(),
+                        super::super::armor::damage_types(),
+                        name,
+                        path,
+                    )?,
+                    Field::Angle => sage_angle(raw.unwrap_or("0r"), name, path)?.to_bits(),
+                    Field::Int => raw
+                        .unwrap_or("3")
+                        .trim()
+                        .parse::<i32>()
+                        .map_err(|_| invalid(path, format!("invalid {name}")))?
+                        as u32,
+                    Field::Real(default) => {
+                        finite_number(raw.unwrap_or(default), name, path)?.to_bits()
+                    }
+                    Field::AntiMask(default) => weapon_anti_flags(raw.unwrap_or(default), path)?,
+                    _ => unreachable!(),
+                };
+                data.word(address, value);
+                Target::Data(address)
+            }
+        };
+        entries.push(Entry::named(name, token, target));
     }
-    let fields = [
-        ("BaseBuildingLocation", 0xce5b_5436, Some(0)),
-        ("AdditionalRotation", 0x4e16_ea4d, Some(4)),
-        ("BaseBuildingMaxNudges", 0x23e6_50b8, Some(8)),
-        (
-            "BlockIfUnpackTargetBuildingCannotBeRebuilt",
-            0x77e3_f4f7,
-            Some(0x50),
-        ),
-        ("UnitBuilderStandardCombatUnit", 0x77e3_f4f7, Some(0x51)),
-        ("TargetDuringCrush", 0x77e3_f4f7, Some(0x52)),
-        ("CrushSpeedBonus", 0x6458_64f3, Some(0xc)),
-        ("OutOfRangePenalty", 0x6458_64f3, Some(0x10)),
-        ("ContainedMembersProvideWeapon", 0x77e3_f4f7, Some(0x53)),
-        ("ConquerMetricsOverrideDPS", 0x6458_64f3, None),
-        ("ConquerMetricsOverrideDamageType", 0x4648_6ff1, Some(0x18)),
-        ("ConquerMetricsOverrideAntiMask", 0xc8c6_9390, Some(0x1c)),
-        (
-            "ConquerMetricsOverrideForbiddenAntiMask",
-            0xc8c6_9390,
-            Some(0x20),
-        ),
-        ("ConquerMetricsOverrideDefendingAntiMask", 0xc8c6_9390, None),
-        (
-            "ConquerMetricsDpsBonusAgainstDefenses",
-            0x6458_64f3,
-            Some(0x28),
-        ),
-        ("NearResourceNodeType", 0x071b_12c5, Some(0x2c)),
-        ("DodgeSafetyDistance", 0x6458_64f3, Some(0x30)),
-        ("OverrideInnerDistanceToTarget", 0x6458_64f3, None),
-        ("OverrideOuterDistanceToTarget", 0x6458_64f3, None),
-        ("CanFireUpCliffs", 0x77e3_f4f7, Some(0x54)),
-        ("DoesSecondaryDamage", 0x77e3_f4f7, Some(0x55)),
-    ];
-    let mut entries = fields
-        .into_iter()
-        .map(|(name, kind, offset)| {
-            Entry::named(
-                name,
-                kind,
-                offset.map_or(Target::Null, |offset| Target::Data(start + offset)),
-            )
-        })
-        .collect::<Vec<_>>();
     entries.push(Entry::named(
         "AIContextualPower",
         0xcba6_c0c2,

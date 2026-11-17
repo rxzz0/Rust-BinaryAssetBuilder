@@ -1059,6 +1059,11 @@ mod tests {
         assert_ea_fixture("object-creation-actions", 2);
     }
 
+    #[test]
+    fn skirmish_ai_fields_match_ea() {
+        assert_ea_fixture("skirmish-fields", 1);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

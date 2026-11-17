@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="SkirmishFieldsProbe">
+    <SkirmishAIInformation BaseBuildingLocation="SIDE" AdditionalRotation="45d" BaseBuildingMaxNudges="-2"
+      BlockIfUnpackTargetBuildingCannotBeRebuilt="false" UnitBuilderStandardCombatUnit="true" TargetDuringCrush="true"
+      CrushSpeedBonus="1.25" OutOfRangePenalty="2.25" ContainedMembersProvideWeapon="true"
+      ConquerMetricsOverrideDPS="3.25" ConquerMetricsOverrideDamageType="CANNON"
+      ConquerMetricsOverrideAntiMask="ANTI_AIRBORNE_VEHICLE ANTI_GROUND"
+      ConquerMetricsOverrideForbiddenAntiMask="ANTI_WATER" ConquerMetricsOverrideDefendingAntiMask="ANTI_GROUND"
+      ConquerMetricsDpsBonusAgainstDefenses="4.25" NearResourceNodeType="SIGMA" DodgeSafetyDistance="5.25"
+      OverrideInnerDistanceToTarget="6.25" OverrideOuterDistanceToTarget="7.25"
+      CanFireUpCliffs="true" DoesSecondaryDamage="true" />
+    <Body><PropBody id="Body" /></Body>
+  </GameObject>
+</AssetDeclaration>

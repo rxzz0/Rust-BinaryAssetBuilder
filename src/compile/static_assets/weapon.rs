@@ -726,6 +726,10 @@ fn effect_table(start: usize) -> Table {
     ])
 }
 
+pub(super) fn weapon_anti_flags(value: &str, path: &Path) -> io::Result<u32> {
+    weapon_flags(value, 2, path)
+}
+
 fn weapon_flags(value: &str, kind: usize, path: &Path) -> io::Result<u32> {
     static FLAGS: OnceLock<[Vec<String>; 3]> = OnceLock::new();
     let flags = FLAGS.get_or_init(|| {
