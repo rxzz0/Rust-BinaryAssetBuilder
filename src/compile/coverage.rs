@@ -794,6 +794,7 @@ mod tests {
     #[test]
     fn truck_draw_matches_ea_batch() {
         assert_ea_fixture("truck-draw", 1);
+        assert_ea_fixture("scripted-draw-fields", 1);
     }
 
     #[test]

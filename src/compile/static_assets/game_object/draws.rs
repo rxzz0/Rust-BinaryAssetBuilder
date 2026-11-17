@@ -381,6 +381,10 @@ fn scripted_model(
         "ExtraPublicBone",
         "DependencySharedModelFlags",
         "BirthFadeTime",
+        "MinLODRequired",
+        "ProjectileBoneFeedbackEnabledSlots",
+        "TrackMarks",
+        "WadingParticleSys",
     ]
     .into_iter()
     .chain(SCRIPTED_FLAGS.iter().map(|&(name, _, _)| name))
@@ -480,6 +484,34 @@ fn scripted_model(
     }
     for &(name, offset, default) in SCRIPTED_FLAGS {
         data.payload[start + offset] = boolean(node, name, default, data.path)?;
+    }
+
+    if let Some(value) = node.attribute("MinLODRequired") {
+        let lod =
+            super::super::global_ui::enum_value(value, &["LOW", "MEDIUM", "HIGH"], data.path)?;
+        data.word(start + 0x20, lod);
+    }
+    if let Some(value) = node.attribute("ProjectileBoneFeedbackEnabledSlots") {
+        let mut flags = 0;
+        for slot in value.split_ascii_whitespace() {
+            flags |= 1 << super::behaviors_basic::weapon_slot(slot, data.path)?;
+        }
+        data.word(start + 0x24, flags);
+    }
+    for (name, kind, offset) in [
+        ("TrackMarks", "Texture", 0x28),
+        ("WadingParticleSys", "FXParticleSystemTemplate", 0x90),
+    ] {
+        if let Some(value) = node.attribute(name) {
+            let ordinal = super::passive_area::reference(
+                value,
+                kind,
+                data.path,
+                references,
+                reference_types,
+            )?;
+            data.word(start + offset, ordinal);
+        }
     }
 
     let bones = node

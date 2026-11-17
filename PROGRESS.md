@@ -1,5 +1,5 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 236 adds ParalyzeNugget, AttributeModifierNugget, and shared weapon effect filters, conditions, and upgrade lists. Five fixture assets match EA byte for byte. All 230 tests and Clippy passed.
-- Checkpoint 235 encodes WeaponTemplate root attributes using the SDK token layout. Checkpoint 234 encodes StealthDetectorUpdate.
-- Surge Step 6 gets past the weapon nuggets and reaches the Hammer Tank's TruckDraw TrackMarks. Next task is verifying and encoding the track-mark layout.
+- Checkpoint 237 encodes TrackMarks, WadingParticleSys, MinLODRequired, and ProjectileBoneFeedbackEnabledSlots in the shared ScriptedModelDraw layout. Both draw fixtures match EA byte for byte. All 230 tests and Clippy passed.
+- Checkpoint 236 encodes ParalyzeNugget, AttributeModifierNugget, and shared weapon effect conditions. Checkpoint 235 encodes WeaponTemplate root attributes.
+- Surge Step 6 passes the Hammer Tank's TruckDraw track marks and reaches SkirmishAiInfo OnlyUseWhenHaveTarget. Next task is verifying the special-power AI settings layout.

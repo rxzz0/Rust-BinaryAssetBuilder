@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DrawFieldsProbe">
+    <Draws>
+      <ScriptedModelDraw id="ModuleTag_Default"/>
+      <TruckDraw id="ModuleTag_Truck" TrackMarks="ProbeTracks" TrackMarksLeftBone="TreadL" TrackMarksRightBone="TreadR" WadingParticleSys="ProbeWade" MinLODRequired="HIGH" ProjectileBoneFeedbackEnabledSlots="PRIMARY_WEAPON QUINARY_WEAPON">
+        <ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name="ProbeModel"/></ModelConditionState>
+        <TreadTerrainParticles>ProbeTerrain</TreadTerrainParticles>
+      </TruckDraw>
+      <ScriptedModelDraw id="ModuleTag_Medium" MinLODRequired="MEDIUM" TrackMarks="ProbeOtherTracks"/>
+      <ScriptedModelDraw id="ModuleTag_Low" MinLODRequired="LOW" WadingParticleSys="ProbeOtherWade"/>
+    </Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
