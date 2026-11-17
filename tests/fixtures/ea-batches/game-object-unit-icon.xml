@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <PackedTextureImage id="IconImage" Rotated="true">
+    <Dimensions x="17" y="19" />
+    <Coords x="23" y="29" />
+    <TextureDimensions x="31" y="37" />
+  </PackedTextureImage>
+  <UnitTypeIcon id="UnitIconBare" />
+  <UnitTypeIcon id="UnitIconFull" Image="IconImage"><Offset x="-2.25" y="4.5" /></UnitTypeIcon>
+  <GameObject id="Bare" UnitTypeIcon="UnitIconFull"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1.0" /></Body></GameObject>
+</AssetDeclaration>

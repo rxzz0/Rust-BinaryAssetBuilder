@@ -440,6 +440,7 @@ impl Compiler<'_> {
             | "PlayerTech"
             | "AttributeModifier"
             | "UpgradeTemplate"
+            | "UnitTypeIcon"
             | "SpecialPowerTemplate"
             | "WeaponTemplate"
                 if node.attribute("inheritFrom").is_some() =>

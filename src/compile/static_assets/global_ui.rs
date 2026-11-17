@@ -1,7 +1,7 @@
 use super::binary::BinaryData;
 use super::{
     Marshaled, asset_reference, encode_words, fast_hash, finite_number, required_element,
-    significant_children, text_value, validate_attributes,
+    significant_children, text_value, validate_attributes, write_import,
 };
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::{Document, Node};
@@ -10,6 +10,87 @@ use std::path::Path;
 
 const HEALTH_BAR: &str = "HealthBarTemplate";
 const MAPPING_WORDS: usize = 29;
+
+pub(super) fn unit_type_icon(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "Image"], path)?;
+    let mut data = BinaryData {
+        payload: vec![0; 12],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    if let Some(image) = node
+        .attribute("Image")
+        .filter(|value| !value.trim().is_empty())
+    {
+        write_import(image, "PackedTextureImage", 4, &mut data, &mut result)?;
+    }
+    let mut children = significant_children(node).peekable();
+    if children.peek().is_some() {
+        let offset = required_element(&mut children, "Offset", path)?;
+        validate_attributes(offset, &["x", "y"], path)?;
+        if has_content(offset) || children.next().is_some() {
+            return Err(invalid(path, "unexpected content in UnitTypeIcon"));
+        }
+        let start = data.allocate(8, 8)?;
+        for (axis, position) in [("x", start), ("y", start + 4)] {
+            let value = finite_number(offset.attribute(axis).unwrap_or("0"), axis, path)?;
+            data.word(position, value.to_bits());
+        }
+        data.relocations.push(u32::MAX);
+    }
+    if !result.imports.is_empty() {
+        result.imports.push(u32::MAX);
+    }
+    result.payload = data.payload;
+    result.relocations = data.relocations;
+    Ok(result)
+}
+
+pub(super) fn packed_texture_image(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "Texture", "Rotated"], path)?;
+    let mut data = BinaryData {
+        payload: vec![0; 36],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    if let Some(texture) = node
+        .attribute("Texture")
+        .filter(|value| !value.trim().is_empty())
+    {
+        write_import(texture, "Texture", 4, &mut data, &mut result)?;
+        result.imports.push(u32::MAX);
+    }
+    let mut children = significant_children(node);
+    for (name, offset) in [("Dimensions", 8), ("Coords", 16), ("TextureDimensions", 24)] {
+        let field = required_element(&mut children, name, path)?;
+        validate_attributes(field, &["x", "y"], path)?;
+        if has_content(field) {
+            return Err(invalid(path, format!("unexpected content in {name}")));
+        }
+        for (axis, position) in [("x", offset), ("y", offset + 4)] {
+            let value = field
+                .attribute(axis)
+                .unwrap_or("0")
+                .trim()
+                .parse::<i32>()
+                .map_err(|_| invalid(path, format!("invalid {name} {axis}")))?;
+            data.word(position, value as u32);
+        }
+    }
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected content in PackedTextureImage"));
+    }
+    let rotated = match node.attribute("Rotated").map(str::trim) {
+        None | Some("false" | "0") => 0,
+        Some("true" | "1") => 1,
+        Some(value) => return Err(invalid(path, format!("invalid Rotated {value:?}"))),
+    };
+    data.word(32, rotated);
+    result.payload = data.payload;
+    Ok(result)
+}
 
 pub(super) fn camera(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     const FIELDS: [&str; 20] = [

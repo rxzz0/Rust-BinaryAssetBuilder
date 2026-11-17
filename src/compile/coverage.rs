@@ -1023,6 +1023,11 @@ mod tests {
         assert_ea_fixture("attribute-modifier", 2);
     }
 
+    #[test]
+    fn game_object_unit_icon_matches_ea() {
+        assert_ea_fixture("game-object-unit-icon", 4);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

@@ -82,6 +82,7 @@ pub(super) fn encode(
         "IsTrainable",
         "EvaEventSecondDamageFarFromFirstTimeoutMS",
         "UnitIntro",
+        "UnitTypeIcon",
         "CommandSet",
         "SelectPortrait",
         "ButtonImage",
@@ -248,15 +249,17 @@ pub(super) fn encode(
         })?;
         data.word(0x180, milliseconds.div_ceil(200));
     }
-    if let Some(value) = node.attribute("UnitIntro") {
-        let ordinal = super::passive_area::reference(
-            value,
-            "UnitIntro",
-            data.path,
-            references,
-            reference_types,
-        )?;
-        data.word(0x184, ordinal);
+    for (kind, offset) in [("UnitTypeIcon", 0x164), ("UnitIntro", 0x184)] {
+        if let Some(value) = node.attribute(kind) {
+            let ordinal = super::passive_area::reference(
+                value,
+                kind,
+                data.path,
+                references,
+                reference_types,
+            )?;
+            data.word(offset, ordinal);
+        }
     }
     if let Some(value) = node.attribute("ProductionQueueType") {
         data.word(
