@@ -2,11 +2,11 @@ use super::ai_strategic::{boolean_bytes, enum_index, flags};
 use super::binary::BinaryData;
 use super::global_ui::{filter_reference_types, kind_of_flags, object_filter};
 use super::{
-    Marshaled, finite_number, sage_angle, sage_time, significant_children, validate_attributes,
-    write_import,
+    Marshaled, finite_number, sage_angle, sage_time, schema_enums, significant_children,
+    validate_attributes, write_import,
 };
 use crate::compile::{SAGE_NS, has_content, invalid, required};
-use roxmltree::{Document, Node};
+use roxmltree::Node;
 use std::io;
 use std::path::Path;
 use std::sync::OnceLock;
@@ -269,17 +269,4 @@ fn integer(value: &str, field: &str, path: &Path) -> io::Result<u32> {
         .parse::<i32>()
         .map(|v| v as u32)
         .map_err(|_| invalid(path, format!("invalid {field}")))
-}
-
-fn schema_enums<const N: usize>(schema: &'static str, names: [&str; N]) -> [Vec<String>; N] {
-    let document = Document::parse(schema).expect("bundled AI schema must be valid");
-    names.map(|name| {
-        document
-            .descendants()
-            .find(|node| node.attribute("name") == Some(name))
-            .expect("bundled AI enum must exist")
-            .descendants()
-            .filter_map(|node| node.attribute("value").map(str::to_owned))
-            .collect()
-    })
 }

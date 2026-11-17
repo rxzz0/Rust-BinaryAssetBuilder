@@ -1,0 +1,8 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AttributeModifier id="AttrDefault"/>
+  <AttributeModifier id="AttrFull" EndFX="TestEnd" Category="WEAPON" Duration="2.5s" ReplaceInCategoryIfLongest="true" IgnoreIfAnticategoryActive="true" RemoveWhenDisabledByTypes="EMP HELD" StartFX="TestStart" ModelConditionsSet="FROZEN CHRONORIFT" ModelConditionsClear="MOVING" ObjectStatusToSet="UNDER_FROZEN" StackingLimit="7" ArmorSetType="AIRBORNE" Shader="TestShader">
+    <Modifier Type="SPEED" Value="68.5%"/>
+    <Modifier Type="RATE_OF_FIRE" Value="125%"/>
+    <Modifier/>
+  </AttributeModifier>
+</AssetDeclaration>

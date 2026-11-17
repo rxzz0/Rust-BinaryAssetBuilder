@@ -916,7 +916,7 @@ pub(super) fn boolean(
     }
 }
 
-pub(super) fn write_model_conditions(
+pub(in crate::compile::static_assets) fn write_model_conditions(
     value: &str,
     start: usize,
     data: &mut BinaryData<'_>,

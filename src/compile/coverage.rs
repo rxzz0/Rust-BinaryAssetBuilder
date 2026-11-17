@@ -1018,6 +1018,11 @@ mod tests {
         assert_ea_fixture("player-template", 3);
     }
 
+    #[test]
+    fn attribute_modifier_matches_ea() {
+        assert_ea_fixture("attribute-modifier", 2);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

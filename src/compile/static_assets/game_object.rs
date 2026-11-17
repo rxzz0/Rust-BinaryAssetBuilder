@@ -48,7 +48,9 @@ mod tech_upgrade;
 mod teleport_stored;
 
 pub(super) use client_behaviors::audio_reference;
+pub(super) use draws::write_model_conditions;
 pub(super) use encoder::compile;
+pub(super) use secondary_damage::write_status_flags;
 
 pub(super) fn object_filter_asset(node: Node<'_, '_>, path: &Path) -> io::Result<super::Marshaled> {
     super::validate_attributes(node, &["id"], path)?;

@@ -17,6 +17,7 @@ mod ai_settings;
 mod ai_strategic;
 mod ai_targeting;
 mod armor;
+mod attribute_modifier;
 mod audio;
 mod audio_file;
 mod binary;
@@ -62,6 +63,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "AIData" => (0x4123_a1aa, 30, ai_settings::data),
         "AIMicroManagerData" => (0x52ff_0fd3, 31, ai_settings::micro),
         "AITargetingHeuristic" => (0x92a7_8f51, 32, ai_targeting::compile),
+        "AttributeModifier" => (0xf901_fe9b, 51, attribute_modifier::compile),
         "ArmorTemplate" => (0x641a_d32e, 33, armor::compile),
         "UpgradeTemplate" => (0x4f8d_2969, 34, upgrade::compile),
         "W3DMesh" => (0xcd8a_089c, 35, w3d_mesh::compile),
@@ -1036,4 +1038,17 @@ fn hash_name(name: &str) -> u32 {
 
 fn encode_words(words: impl IntoIterator<Item = u32>) -> Vec<u8> {
     words.into_iter().flat_map(u32::to_le_bytes).collect()
+}
+
+fn schema_enums<const N: usize>(schema: &'static str, names: [&str; N]) -> [Vec<String>; N] {
+    let document = roxmltree::Document::parse(schema).expect("bundled schema must be valid");
+    names.map(|name| {
+        document
+            .descendants()
+            .find(|node| node.attribute("name") == Some(name))
+            .expect("bundled enum must exist")
+            .descendants()
+            .filter_map(|node| node.attribute("value").map(str::to_owned))
+            .collect()
+    })
 }

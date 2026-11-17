@@ -241,7 +241,7 @@ pub(super) fn encode_status(
     ))
 }
 
-pub(super) fn write_status_flags(
+pub(in crate::compile::static_assets) fn write_status_flags(
     value: &str,
     start: usize,
     data: &mut BinaryData<'_>,

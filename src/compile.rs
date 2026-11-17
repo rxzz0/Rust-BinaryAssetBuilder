@@ -438,6 +438,7 @@ impl Compiler<'_> {
             | "LogicCommand"
             | "ObjectFilterAsset"
             | "PlayerTech"
+            | "AttributeModifier"
             | "UpgradeTemplate"
             | "SpecialPowerTemplate"
             | "WeaponTemplate"
