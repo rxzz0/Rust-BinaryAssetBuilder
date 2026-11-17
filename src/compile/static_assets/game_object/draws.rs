@@ -928,7 +928,10 @@ pub(in crate::compile::static_assets) fn write_model_conditions(
     Ok(())
 }
 
-pub(super) fn model_condition_index(flag: &str, path: &std::path::Path) -> io::Result<usize> {
+pub(in crate::compile::static_assets) fn model_condition_index(
+    flag: &str,
+    path: &std::path::Path,
+) -> io::Result<usize> {
     static FLAGS: OnceLock<Vec<String>> = OnceLock::new();
     let flags = FLAGS.get_or_init(|| {
         let document = roxmltree::Document::parse(include_str!(

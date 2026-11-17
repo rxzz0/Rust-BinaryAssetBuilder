@@ -1,0 +1,25 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UpgradeTemplate id="FirstUpgrade" /><UpgradeTemplate id="SecondUpgrade" />
+  <AudioEvent id="ProbeFade" />
+  <SpecialPowerTemplate id="ProbePower" TargetType="NONE" />
+  <ObjectCreationList id="OclEmpty" />
+  <ObjectCreationList id="OclDefault"><CreateObject><CreateObject>UnitBase</CreateObject></CreateObject></ObjectCreationList>
+  <ObjectCreationList id="OclFull" Flags="CHOOSE_ONE_CREATE_NUGGET_FROM_LIST">
+    <CreateObject PutInContainer="ContainerUnit" Count="17" Options="IGNORE_ALL_OBJECTS CREATE_AT_TARGET DO_NOT_COPY_SCALE"
+      Disposition="LIKE_EXISTING ON_GROUND_ALIGNED USE_WATER_SURFACE FALL_TO_GROUND" VelocityScale="2.25"
+      MinForceMagnitude="3.25" MaxForceMagnitude="4.25" MinLifetime="5.25s" MaxLifetime="6.25s"
+      MinDistanceAFormation="7.25" MinDistanceBFormation="8.25" MaxDistanceFormation="9.25" FadeTime="10.25s"
+      StartingModelConditions="MOVING DYING" TempModelCondition="DEPLOYED" TempModelConditionTime="11.25s"
+      DispositionIntensity="12.25" DestinationPlayer="ProbePlayer" WaypointSpawn="ProbeWaypoint"
+      DispositionAngle="0.25r" MinForcePitch="0.5r" MaxForcePitch="0.75r" MinForceYaw="1.25r"
+      MaxForceYaw="1.5r" OrientationOffset="1.75r" FadeSound="ProbeFade" MinHordeDensity="25%" MaxHordeDensity="75%"
+      MinHealth="13.25" MaxHealth="14.25" InvulnerableTime="15.25s" StartingBusyTime="16.25s"
+      JustBuiltFrames="17.25s" VeterancyLevel="2" UseUpgradedLocomotor="true" DisabledWhileBusy="true"
+      FireSpecialPowerTemplate="ProbePower" StatusToCopyFromParent="UNDER_FROZEN">
+      <Offset x="18.25" y="19.25" z="20.25" />
+      <RequiredUpgrade>FirstUpgrade</RequiredUpgrade><ForbiddenUpgrade>SecondUpgrade</ForbiddenUpgrade>
+      <CreateObject>UnitA</CreateObject><CreateObject>UnitB</CreateObject>
+    </CreateObject>
+    <CreateObject MinLifetime="1s" MaxLifetime="2s"><CreateObject>UnitC</CreateObject></CreateObject>
+  </ObjectCreationList>
+</AssetDeclaration>

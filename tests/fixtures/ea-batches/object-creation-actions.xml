@@ -1,0 +1,27 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+
+  <WeaponTemplate id="ProbeWeapon" />
+  <ObjectCreationList id="OclOther" Flags="NONE CHOOSE_ONE_CREATE_NUGGET_FROM_LIST">
+    <CreateObject Disposition="DISPOSITION_NONE" Options="OCCOMMONNUGGETOPTION_NONE" />
+    <Attack />
+    <Attack NumberOfShots="5" WeaponSlot="SECONDARY_WEAPON" DeliveryDecalRadius="6.25" />
+    <FireWeapon Weapon="ProbeWeapon" />
+    <FlingObject CreateObject="UnitF" Speed="8.25">
+      <DistanceFromTarget Low="1.25" High="2.25" /><AngleAroundTarget Low="3.25" High="4.25" />
+    </FlingObject>
+    <FlingObject CreateObject="UnitG" Speed="9.25" Height="10.25" UsePrimaryObjectForOffsets="true" Count="11" InitialDelay="12.25s">
+      <Offset x="13.25" y="14.25" z="15.25" />
+      <DistanceFromTarget Low="16.25" High="17.25" /><AngleAroundTarget Low="18.25" High="19.25" />
+      <DistanceAtTarget Low="20.25" High="21.25" />
+    </FlingObject>
+    <StrafeAreaSquad CreateObject="UnitS" />
+    <StrafeAreaSquad CreateObject="UnitT" Count="22" Height="23.25" DistanceFromTarget="24.25" MaintainOffestToTarget="false">
+      <InterOffset x="25.25" y="26.25" z="27.25" /><IntraOffset x="28.25" y="29.25" z="30.25" />
+    </StrafeAreaSquad>
+    <ParabolicCurve CreateObject="UnitP" />
+    <ParabolicCurve CreateObject="UnitQ" Options="TRACK_TARGET_OBJECT" InitialDelay="31.25s" ApproachTime="32.25s"
+      StartDistanceFromTarget="33.25" EndDistanceFromTarget="34.25" CruiseHeight="35.25" AttackHeight="36.25" ApproachRoll="0.75r" LeaveRoll="1.75r">
+      <Offset x="37.25" y="38.25" z="39.25" />
+    </ParabolicCurve>
+  </ObjectCreationList>
+</AssetDeclaration>

@@ -1053,6 +1053,12 @@ mod tests {
         assert_ea_fixture("large-group-audio", 2);
     }
 
+    #[test]
+    fn object_creation_actions_match_ea() {
+        assert_ea_fixture("object-creation-list", 7);
+        assert_ea_fixture("object-creation-actions", 2);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

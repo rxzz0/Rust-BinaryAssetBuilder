@@ -595,7 +595,10 @@ fn charge_weapon(
     Ok((KIND, Table::record(entries)))
 }
 
-pub(super) fn weapon_slot(value: &str, path: &std::path::Path) -> io::Result<u32> {
+pub(in crate::compile::static_assets) fn weapon_slot(
+    value: &str,
+    path: &std::path::Path,
+) -> io::Result<u32> {
     super::super::global_ui::enum_value(
         value,
         &[

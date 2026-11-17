@@ -47,8 +47,9 @@ mod subobjects;
 mod tech_upgrade;
 mod teleport_stored;
 
+pub(super) use behaviors_basic::weapon_slot;
 pub(super) use client_behaviors::audio_reference;
-pub(super) use draws::write_model_conditions;
+pub(super) use draws::{model_condition_index, write_model_conditions};
 pub(super) use encoder::compile;
 pub(super) use secondary_damage::write_status_flags;
 
