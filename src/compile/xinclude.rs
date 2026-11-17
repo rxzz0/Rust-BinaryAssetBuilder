@@ -1,5 +1,8 @@
-use super::{Compiler, XML_NS, escape_xml, invalid, opening_tag_end, read_with_context, required};
-use roxmltree::Document;
+use super::{
+    Compiler, XML_NS, escape_xml, invalid, opening_tag_end, read_with_context, required,
+    write_namespace_attributes,
+};
+use roxmltree::{Document, Node};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -35,7 +38,8 @@ impl Compiler<'_> {
         for include in includes {
             if !include.has_tag_name((XI_NS, "include"))
                 || include.attributes().any(|attr| {
-                    attr.namespace().is_some() || !matches!(attr.name(), "href" | "parse")
+                    attr.namespace().is_some()
+                        || !matches!(attr.name(), "href" | "parse" | "xpointer")
                 })
                 || !matches!(include.attribute("parse"), None | Some("xml"))
                 || include.children().any(|child| {
@@ -44,16 +48,16 @@ impl Compiler<'_> {
                             && child.text().is_some_and(|text| !text.trim().is_empty())
                 })
             {
-                return Err(invalid(path, "expected xi:include of a whole XML fragment"));
+                return Err(invalid(path, "expected an XML xi:include"));
             }
             let href = required(include, "href", path)?;
             if href.contains('#') {
                 return Err(invalid(path, "XInclude fragment selectors are unsupported"));
             }
             let target = self.resolve(path, href)?;
-            let fragment = self.xml_fragment(path, &target, href, chain)?;
             let range = include.range();
             expanded.push_str(&xml[copied..range.start]);
+            let fragment = self.xml_fragment(path, &target, href, include, chain)?;
             expanded.push_str(&fragment);
             copied = range.end;
         }
@@ -66,6 +70,7 @@ impl Compiler<'_> {
         including: &Path,
         path: &Path,
         href: &str,
+        include: Node<'_, '_>,
         chain: &mut Vec<PathBuf>,
     ) -> io::Result<String> {
         if chain.iter().any(|ancestor| ancestor == path) {
@@ -92,36 +97,142 @@ impl Compiler<'_> {
         chain.pop();
         let document = Document::parse(&xml).map_err(|error| invalid(path, error))?;
         let root = document.root_element();
-        let fragment = &xml[root.range()];
-        let end = opening_tag_end(fragment);
-        let insert = end - usize::from(fragment.as_bytes()[end - 1] == b'/');
-        let mut expanded = String::with_capacity(fragment.len());
-        expanded.push_str(&fragment[..insert]);
-        if root.tag_name().namespace().is_none()
-            && !root
-                .namespaces()
-                .any(|namespace| namespace.name().is_none())
-        {
-            expanded.push_str(" xmlns=\"\"");
+        let base = if let Some((alias, relative)) = href.split_once(':') {
+            format!(
+                "{}:{}",
+                alias.to_ascii_lowercase(),
+                relative.replace('\\', "/")
+            )
+        } else {
+            let document_dir = chain[0].parent().expect("canonical document has a parent");
+            relative_xml_path(document_dir, path)
+        };
+        let mut expanded = String::new();
+        if let Some(pointer) = include.attribute("xpointer") {
+            if !matches_root(pointer, root)
+                .ok_or_else(|| invalid(including, format!("unsupported XPointer {pointer:?}")))?
+            {
+                return Err(invalid(
+                    including,
+                    format!("XPointer {pointer:?} does not match {}", path.display()),
+                ));
+            }
+            let mut children = root.children().filter(Node::is_element).peekable();
+            if children.peek().is_none() {
+                return Err(invalid(
+                    including,
+                    format!(
+                        "XPointer {pointer:?} selected no elements in {}",
+                        path.display()
+                    ),
+                ));
+            }
+            for child in children {
+                write_fragment(child, include, &base, &mut expanded);
+            }
+        } else {
+            write_fragment(root, include, &base, &mut expanded);
         }
-        if root.attribute((XML_NS, "base")).is_none() {
-            let base = if let Some((alias, relative)) = href.split_once(':') {
-                format!(
-                    "{}:{}",
-                    alias.to_ascii_lowercase(),
-                    relative.replace('\\', "/")
-                )
-            } else {
-                let document_dir = chain[0].parent().expect("canonical document has a parent");
-                relative_xml_path(document_dir, path)
-            };
-            expanded.push_str(" xml:base=\"");
-            escape_xml(&base, true, &mut expanded);
-            expanded.push('"');
-        }
-        expanded.push_str(&fragment[insert..]);
         Ok(expanded)
     }
+}
+
+fn matches_root(mut pointer: &str, root: Node<'_, '_>) -> Option<bool> {
+    pointer = pointer.trim();
+    let mut binding = None;
+    if let Some(declaration) = pointer.strip_prefix("xmlns(") {
+        let (declaration, rest) = declaration.split_once(')')?;
+        let (prefix, uri) = declaration.split_once('=')?;
+        binding = Some((prefix.trim(), uri.trim()));
+        pointer = rest.trim_start();
+    }
+    let (name, axis) = pointer
+        .strip_prefix("xpointer(/")?
+        .strip_suffix(')')?
+        .split_once('/')?;
+    if !matches!(axis, "child::*" | "*") {
+        return None;
+    }
+    let (name, namespace) = match name.split_once(':') {
+        Some((prefix, name)) => {
+            let (bound_prefix, uri) = binding?;
+            if prefix != bound_prefix {
+                return None;
+            }
+            (name, Some(uri))
+        }
+        None => (name, None),
+    };
+    Some(root.tag_name().name() == name && root.tag_name().namespace() == namespace)
+}
+
+fn write_fragment(node: Node<'_, '_>, include: Node<'_, '_>, base: &str, expanded: &mut String) {
+    let input = node.document().input_text();
+    let range = node.range();
+    let fragment = &input[range.clone()];
+    let end = opening_tag_end(fragment);
+    let insert = end - usize::from(fragment.as_bytes()[end - 1] == b'/');
+    expanded.push_str(&fragment[..insert]);
+    if !node
+        .namespaces()
+        .any(|namespace| namespace.name().is_none())
+        && (node.parent_element().is_none()
+            || include
+                .parent_element()
+                .is_some_and(|parent| parent.lookup_namespace_uri(None).is_some()))
+    {
+        expanded.push_str(" xmlns=\"\"");
+    }
+    if node.parent_element().is_some() {
+        let mut missing_namespaces = node
+            .namespaces()
+            .filter(|namespace| {
+                include
+                    .parent_element()
+                    .and_then(|parent| parent.lookup_namespace_uri(namespace.name()))
+                    != Some(namespace.uri())
+            })
+            .peekable();
+        if missing_namespaces.peek().is_some() {
+            let name_end = fragment
+                .find(|character: char| character.is_whitespace() || matches!(character, '/' | '>'))
+                .expect("parsed XML element name");
+            let mut local = String::new();
+            let mut cursor = range.start + name_end;
+            for attribute in node.attributes() {
+                write_namespace_attributes(
+                    node,
+                    None,
+                    &input[cursor..attribute.range().start],
+                    &mut local,
+                );
+                cursor = attribute.range().end;
+            }
+            write_namespace_attributes(
+                node,
+                None,
+                &input[cursor..range.start + insert],
+                &mut local,
+            );
+            for namespace in missing_namespaces {
+                let name = namespace.name().map_or_else(
+                    || " xmlns=\"".to_owned(),
+                    |prefix| format!(" xmlns:{prefix}=\""),
+                );
+                if !local.contains(&name) {
+                    expanded.push_str(&name);
+                    escape_xml(namespace.uri(), true, expanded);
+                    expanded.push('"');
+                }
+            }
+        }
+    }
+    if node.attribute((XML_NS, "base")).is_none() {
+        expanded.push_str(" xml:base=\"");
+        escape_xml(base, true, expanded);
+        expanded.push('"');
+    }
+    expanded.push_str(&fragment[insert..]);
 }
 
 fn relative_xml_path(directory: &Path, file: &Path) -> String {

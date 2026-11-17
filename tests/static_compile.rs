@@ -449,6 +449,34 @@ fn static_xinclude_expands_nested_fragments_before_defines_and_hashing() {
 }
 
 #[test]
+fn static_xpointer_child_selection_matches_ea() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/xpointer-videos");
+    let stream = compile_static(&root.join("probe.xml"), &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let oracle =
+        Manifest::parse(include_bytes!("fixtures/xpointer-videos/probe.manifest")).unwrap();
+    assert_eq!(manifest.assets.len(), 2);
+    let mut bin = &stream.files.bin[4..];
+    let mut relo = &stream.files.relo[4..];
+    for (actual, expected) in manifest.assets.iter().zip(oracle.assets) {
+        assert_eq!(actual.name, expected.name);
+        assert_eq!(actual.type_hash, expected.type_hash);
+        assert_eq!(actual.instance_hash, expected.instance_hash);
+        let asset: &[u8] = match actual.name {
+            b"Video:One" => include_bytes!("fixtures/xpointer-videos/one.asset"),
+            b"Video:Two" => include_bytes!("fixtures/xpointer-videos/two.asset"),
+            name => panic!("unexpected selected asset {name:?}"),
+        };
+        let (payload, relocations) = asset[32..].split_at(expected.chunk_sizes.instance as usize);
+        assert_eq!(&bin[..payload.len()], payload);
+        assert_eq!(&relo[..relocations.len()], relocations);
+        bin = &bin[payload.len()..];
+        relo = &relo[relocations.len()..];
+    }
+    assert!(bin.is_empty() && relo.is_empty());
+}
+
+#[test]
 fn static_expressions_use_transitive_defines_and_explicit_overrides() {
     let root = scratch_root();
     let defs = root.join("defs.xml");
