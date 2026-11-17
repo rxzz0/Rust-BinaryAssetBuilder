@@ -1487,3 +1487,48 @@ fn static_asset_duplicate_precedence_matches_ea() {
             .contains("duplicate asset ID PlayerTech:ParentPriority")
     );
 }
+
+#[test]
+fn inherited_upgrade_payload_matches_ea() {
+    let root = scratch_root();
+    let schemas = root.join("Schemas/xsd");
+    fs::create_dir_all(&schemas).unwrap();
+    fs::write(
+        schemas.join("CnC3Types.xsd"),
+        include_str!("../schemas/ra3/xsd/AssetTypeUpgradeTemplate.xsd").replace(
+            "</xs:schema>",
+            r#"<xs:complexType name="BaseInheritableAsset"/></xs:schema>"#,
+        ),
+    )
+    .unwrap();
+    let input = root.join("upgrade.xml");
+    fs::write(
+        &input,
+        include_bytes!("fixtures/inherited-upgrade/upgrade.xml"),
+    )
+    .unwrap();
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    assert_eq!(manifest.assets.len(), 2);
+    let mut payload = &stream.files.bin[4..];
+    let mut relocations = &stream.files.relo[4..];
+    for asset in &manifest.assets {
+        let ea: &[u8] = match asset.name {
+            b"UpgradeTemplate:UpgradeProbeBase" => {
+                include_bytes!("fixtures/inherited-upgrade/base.asset")
+            }
+            b"UpgradeTemplate:UpgradeProbeChild" => {
+                include_bytes!("fixtures/inherited-upgrade/child.asset")
+            }
+            _ => panic!("unexpected upgrade {:?}", asset.name),
+        };
+        let (actual_payload, rest) = payload.split_at(asset.chunk_sizes.instance as usize);
+        payload = rest;
+        let (actual_relocations, rest) =
+            relocations.split_at(asset.chunk_sizes.relocations as usize);
+        relocations = rest;
+        assert_eq!(actual_payload, &ea[32..32 + actual_payload.len()]);
+        assert_eq!(actual_relocations, &ea[32 + actual_payload.len()..]);
+        assert_eq!(asset.instance_hash.to_le_bytes(), ea[12..16]);
+    }
+}

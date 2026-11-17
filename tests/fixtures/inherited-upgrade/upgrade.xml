@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UpgradeTemplate id="UpgradeProbeBase" Type="PLAYER" DisplayName="GUI:Probe" BuildCost="750" BuildTime="12s" GroupName="BaseGroup" WaypointQueueable="true"/>
+  <UpgradeTemplate id="UpgradeProbeChild" inheritFrom="UpgradeProbeBase" BuildTime="6s" GroupName="DerivedGroup"/>
+</AssetDeclaration>

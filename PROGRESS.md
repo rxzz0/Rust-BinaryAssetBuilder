@@ -1,5 +1,5 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 221 adds native `PlayerTemplate` encoding for faction data, starting units, resources, beacons, and tech bonuses. Three EA fixtures match byte for byte. All 216 tests and Clippy passed.
-- Checkpoint 220 applies EA include precedence to static assets. Checkpoint 219 adds native AI special power data in logic commands.
-- Surge Step 6 reaches `UpgradeTemplate:Upgrade_AlliedTech2` inheriting from `BasePurchasableUpgrade`. Next task is to route upgrade inheritance through the existing schema-based XML merger and compare with EA.
+- Checkpoint 222 adds native `UpgradeTemplate` inheritance through the schema-based XML merger. The base and derived payloads, relocations, and instance hashes match EA. All 217 tests and Clippy passed.
+- Checkpoint 221 adds native `PlayerTemplate` encoding. Checkpoint 220 matches EA static include precedence. Checkpoint 219 adds AI special power data in logic commands.
+- Surge Step 6 reaches `AttributeModifier` in `Data/Mod/Units/MP/Allied Engineer/AttributeModifier.xml`. Next task is native `AttributeModifier` encoding.

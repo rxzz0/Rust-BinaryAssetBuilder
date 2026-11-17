@@ -438,6 +438,7 @@ impl Compiler<'_> {
             | "LogicCommand"
             | "ObjectFilterAsset"
             | "PlayerTech"
+            | "UpgradeTemplate"
             | "SpecialPowerTemplate"
             | "WeaponTemplate"
                 if node.attribute("inheritFrom").is_some() =>
