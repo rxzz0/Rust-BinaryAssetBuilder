@@ -24,6 +24,7 @@ mod binary;
 mod campaign;
 mod credits;
 mod damage_fx;
+mod emotion;
 pub(super) mod game_object;
 mod global_ui;
 mod hotkeys;
@@ -74,6 +75,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "AudioEvent" => (0x560c_2e45, 38, audio::single_sound),
         "OnDemandTextureImage" => (0x13db_2fbc, 41, on_demand_image),
         "DamageFX" => (0x0b2e_b0ab, 42, damage_fx::compile),
+        "EmotionTemplate" => (0x40da_32d1, 54, emotion::compile),
         "ObjectFilterAsset" => (0x4352_195e, 43, game_object::object_filter_asset),
         "PlayerTemplate" => (0x3521_4948, 50, player_template::compile),
         "PlayerTech" => (0x35dd_9987, 44, player_tech),

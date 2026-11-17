@@ -1,0 +1,29 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AttributeModifier id="EmotionMod" />
+  <EmotionTemplate id="EmotionBare" Type="CHEER" />
+  <EmotionTemplate id="EmotionFull" Type="FEAR" Options="IGNORE_IF_IDLE IGNORE_IF_HUMAN PREVENT_PLAYER_COMMANDS"
+    DurationActive="2.25s" DurationInactive="3.25s" DurationInactiveObject="4.25s" DurationInactiveType="5.25s"
+    EnemyThreatComparison="VALID_IF_ABOVE" EnemyThreat="-109"
+    FriendlyThreatComparison="VALID_IF_BELOW" FriendlyThreat="209"
+    AttributeModifier="EmotionMod" AttributeModifierStartDelay="6.25s" AttributeModifierDuration="7.25s"
+    AIStateLockDuration="8.25s" AIState="FACE_OBJECT" AILuaEventsList="ProbeEvents"
+    ModelConditionsSetOnStart="EMOTION_CELEBRATING" ModelConditionsSetOnEnd="MOVING"
+    ModelConditionsClearOnStart="DYING" ModelConditionsClearOnEnd="STUNNED_FLAILING" />
+  <GameObject id="EmotionBareObject">
+    <Behaviors><EmotionTrackerUpdate id="ModuleTag_Emotion" /></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="EmotionFullObject">
+    <Behaviors>
+      <EmotionTrackerUpdate id="ModuleTag_Emotion" TauntAndPointDistance="171.25" HeroScanDistance="172.25"
+        TauntAndPointUpdateDelay=".25s" FearScanDistance="173.25" IgnoreVeterancy="true" ImmuneToFearLevel="7">
+        <TauntAndPointExcluded Rule="NONE" />
+        <AfraidOf Rule="ANY" Include="INFANTRY" Relationship="ENEMIES" />
+        <AlwaysAfraidOf Rule="ALL" Include="AIRCRAFT" />
+        <PointAt Rule="ANY" Include="STRUCTURE" />
+        <AddEmotion>EmotionBare</AddEmotion><AddEmotion>EmotionFull</AddEmotion>
+      </EmotionTrackerUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

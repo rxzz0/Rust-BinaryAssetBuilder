@@ -629,6 +629,9 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "FreefallUpdate")) {
         return freefall_update(node, pointer, data).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "EmotionTrackerUpdate")) {
+        return emotion_tracker(node, pointer, data, references, reference_types).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "WallBuilderBehavior")) {
         return wall_builder(node, pointer, data, reference_types).map(Some);
     }
@@ -1166,6 +1169,99 @@ fn freefall_update(
         data.word(start + offset, value.to_bits());
     }
     entries.extend(fields(start, &FIELDS));
+    Ok((KIND, Table::record(entries)))
+}
+
+fn emotion_tracker(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xa966_196e;
+    const FIELDS: [(&str, u32, usize); 6] = [
+        ("TauntAndPointDistance", 0x6458_64f3, 8),
+        ("HeroScanDistance", 0x6458_64f3, 0xc),
+        ("TauntAndPointUpdateDelay", 0x9986_69e8, 0x10),
+        ("FearScanDistance", 0x6458_64f3, 0x14),
+        ("IgnoreVeterancy", 0x77e3_f4f7, 0x34),
+        ("ImmuneToFearLevel", 0x23e6_50b8, 0x18),
+    ];
+    const FILTERS: [&str; 4] = [
+        "TauntAndPointExcluded",
+        "AfraidOf",
+        "AlwaysAfraidOf",
+        "PointAt",
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(FIELDS.map(|(name, _, _)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let start = data.allocate(pointer, 0x38)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    for &(name, kind, offset) in &FIELDS[..4] {
+        let value = if kind == 0x9986_69e8 {
+            sage_time(node.attribute(name).unwrap_or("2s"), name, path)?
+        } else {
+            finite_number(node.attribute(name).unwrap_or("0"), name, path)?
+        };
+        data.word(start + offset, value.to_bits());
+    }
+    data.payload[start + 0x34] = boolean(node, "IgnoreVeterancy", false, path)?;
+    let fear_level = node
+        .attribute("ImmuneToFearLevel")
+        .unwrap_or("5")
+        .trim()
+        .parse::<i32>()
+        .map_err(|_| invalid(path, "invalid ImmuneToFearLevel"))?;
+    data.word(start + 0x18, fear_level as u32);
+    entries.extend(fields(start, &FIELDS));
+
+    let mut children = significant_children(node).peekable();
+    for (index, name) in FILTERS.into_iter().enumerate() {
+        let target =
+            if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, name))) {
+                Target::Table(super::parking::encode_filter(
+                    child,
+                    start + 0x1c + index * 4,
+                    data,
+                    reference_types,
+                )?)
+            } else {
+                Target::Null
+            };
+        entries.push(Entry::named(name, 0xe46e_a3b2, target));
+    }
+    let mut emotions = Vec::new();
+    for child in children {
+        if !child.has_tag_name((SAGE_NS, "AddEmotion")) {
+            return Err(invalid(path, "unexpected EmotionTrackerUpdate content"));
+        }
+        validate_attributes(child, &[], path)?;
+        let value = super::super::text_value(child, path)?;
+        emotions.push(super::passive_area::reference(
+            value,
+            "EmotionTemplate",
+            path,
+            references,
+            reference_types,
+        )?);
+    }
+    let list = start + 0x2c;
+    let items = data.list(list, emotions.len(), 4)?;
+    let mut targets = Vec::new();
+    for (index, ordinal) in emotions.into_iter().enumerate() {
+        let offset = items + index * 4;
+        data.word(offset, ordinal);
+        targets.push((0, Target::Data(offset)));
+    }
+    entries.push(Entry::named(
+        "AddEmotion",
+        0x9cfe_d1b4,
+        Target::Table(Table::array(list, targets)),
+    ));
     Ok((KIND, Table::record(entries)))
 }
 
