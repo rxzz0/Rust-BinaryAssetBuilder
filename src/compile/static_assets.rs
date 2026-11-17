@@ -27,6 +27,7 @@ pub(super) mod game_object;
 mod global_ui;
 mod hotkeys;
 pub(super) mod music;
+mod player_template;
 mod tokenized;
 mod upgrade;
 mod w3d_mesh;
@@ -70,6 +71,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "OnDemandTextureImage" => (0x13db_2fbc, 41, on_demand_image),
         "DamageFX" => (0x0b2e_b0ab, 42, damage_fx::compile),
         "ObjectFilterAsset" => (0x4352_195e, 43, game_object::object_filter_asset),
+        "PlayerTemplate" => (0x3521_4948, 50, player_template::compile),
         "PlayerTech" => (0x35dd_9987, 44, player_tech),
         "PlayerTechStoreTemplate" => (0x3a84_e115, 45, player_tech_store),
         "SpecialPowerTemplate" => (0x3aab_481c, 46, game_object::special_power::compile),
@@ -903,7 +905,7 @@ fn logic_command(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
         if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, name))) {
             let value = text_value(child, path)?;
             let offset = data.allocate(field, 4)?;
-            ai_command::write_import(value, ty, offset, &mut data, &mut result)?;
+            write_import(value, ty, offset, &mut data, &mut result)?;
         }
     }
     if let Some(info) =
@@ -979,6 +981,38 @@ fn reference_list(
         reference_types: vec![fast_hash(target_type.as_bytes()); count as usize],
         ..Marshaled::default()
     })
+}
+
+fn write_import(
+    value: &str,
+    ty: &str,
+    offset: usize,
+    data: &mut binary::BinaryData<'_>,
+    result: &mut Marshaled,
+) -> io::Result<()> {
+    let ordinal = if ty == "BaseAudioEventInfo" {
+        game_object::audio_reference(
+            value,
+            data.path,
+            &mut result.references,
+            &mut result.reference_types,
+        )?
+    } else {
+        let id = asset_reference(
+            value.split_once('\\').map_or(value, |(name, _)| name),
+            ty,
+            data.path,
+        )?;
+        result.reference_types.push(id.type_id);
+        result.references.push(id.into());
+        result.references.len() as u32
+    };
+    if ordinal == 0 {
+        return Ok(());
+    }
+    data.word(offset, ordinal);
+    result.imports.push(offset as u32);
+    Ok(())
 }
 
 fn asset_reference(value: &str, target_type: &str, path: &Path) -> io::Result<AssetId> {

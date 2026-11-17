@@ -2,8 +2,8 @@ use super::ai_strategic::{boolean_bytes, enum_index, flags};
 use super::binary::BinaryData;
 use super::global_ui::{filter_reference_types, kind_of_flags, object_filter};
 use super::{
-    Marshaled, asset_reference, finite_number, sage_angle, sage_time, significant_children,
-    validate_attributes,
+    Marshaled, finite_number, sage_angle, sage_time, significant_children, validate_attributes,
+    write_import,
 };
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::{Document, Node};
@@ -260,25 +260,6 @@ fn write_weapon(
         finite_number(value(HYSTERESIS, "0"), HYSTERESIS, path)?.to_bits(),
     );
     data.word(start + 24, boolean_bytes(node, &BOOLS, path)?);
-    Ok(())
-}
-
-pub(super) fn write_import(
-    value: &str,
-    ty: &str,
-    offset: usize,
-    data: &mut BinaryData<'_>,
-    result: &mut Marshaled,
-) -> io::Result<()> {
-    let id = asset_reference(
-        value.split_once('\\').map_or(value, |(name, _)| name),
-        ty,
-        data.path,
-    )?;
-    result.reference_types.push(id.type_id);
-    result.references.push(id.into());
-    data.word(offset, result.references.len() as u32);
-    result.imports.push(offset as u32);
     Ok(())
 }
 

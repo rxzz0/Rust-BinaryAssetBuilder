@@ -1,0 +1,19 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <PlayerTemplate id="PlayerTemplateDefault"><PreferredColor R="1" G="2" B="3"/><PreferredCampaignRadarColor R="4" G="5" B="6"/></PlayerTemplate>
+  <PlayerTemplate id="PlayerTemplateFull" Type="PLAYABLE" DisplayNameToken="GUI:Probe" FactionIconImageName="ProbeFlag" SkirmishMPVictoryMusic="AudioEvent:ProbeWin" LoadScreenMusic="ProbeMusic" SkirmishMPDefeatMusic="ProbeLose" FactionDataPathMusicEvent="ProbePath" MatchVictoryPathMusicEvent="ProbePathWin" MatchDefeatPathMusicEvent="ProbePathLose" Side="Soviet" StartingBuilding="ProbeBuilding" SpellBookSP="ProbeBookSP" SpellBookMP="ProbeBookMP" UnattachedMpBeaconTemplate="ProbeBeacon" AttachedMpBeaconTemplate="ProbeAttachedBeacon" MaxMpBeacons="7" ResourceModifierValueList="21 22 23" NumberOfResourceAccounts="3" ScriptedHuntTactic="ProbeHunt" ParachuteOCL="ProbeDrop" DefaultTech="ProbeTech" PlayerTechUpgradeBinding="ProbeBinding" TechRankPointsPerSecond="8" InitialTechPoints="9" PowerOutageTurnsOffRadar="false">
+    <RedAlertTemplate>ProbeRedAlert</RedAlertTemplate>
+    <PreferredColor R="11" G="22" B="33"/><PreferredCampaignRadarColor R="44" G="55" B="66"/>
+    <InitialUpgrade>ProbeUpgradeA</InitialUpgrade><InitialUpgrade>ProbeUpgradeB</InitialUpgrade>
+    <StartingUnitInfo><Object>ProbeUnitA</Object><Position x="1.25" y="2.5" z="-3"/></StartingUnitInfo>
+    <StartingUnitInfo><Object>ProbeUnitB</Object><Position x="4" y="5" z="6"/></StartingUnitInfo>
+    <ResourceModifierObjectFilter Rule="ANY" Include="VEHICLE"><IncludeThing>ProbeVehicle</IncludeThing></ResourceModifierObjectFilter>
+    <StartingMoney Account="1" Amount="1001"/><StartingMoney Account="2" Amount="1002"/>
+    <MoneyCap Account="1" Amount="2001"/>
+    <AIBeaconSettings BeaconType="HoldObject" UnattachedTemplate="ProbeHoldFree" AttachedTemplate="ProbeHoldAttached"/>
+    <AIBeaconSettings BeaconType="Assault"/>
+    <TechRank>ProbeRankA</TechRank><TechRank>ProbeRankB</TechRank>
+    <TechProductionBonuses RequiredTech="ProbeBonus" BuildCostBonus="11%" BuildCostBonusAllies="22%" BuildTimeBonus="33%" BuildTimeBonusAllies="44%" HarvesterBonus="55%" HarvesterBonusAllies="66%"/>
+    <TechProductionBonuses RequiredTech="ProbeBonusOther"/>
+  </PlayerTemplate>
+  <PlayerTemplate id="PlayerTemplateEmpty" DisplayNameToken="" FactionIconImageName="" LoadScreenMusic="" StartingBuilding="" Side="RANDOM"><PreferredColor/><PreferredCampaignRadarColor/></PlayerTemplate>
+</AssetDeclaration>
