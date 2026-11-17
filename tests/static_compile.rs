@@ -1421,3 +1421,69 @@ fn game_object_duplicate_precedence_matches_ea() {
             .contains("duplicate asset ID GameObject:SameObject")
     );
 }
+
+#[test]
+fn static_asset_duplicate_precedence_matches_ea() {
+    let root = scratch_root();
+    let declaration = |body: &str| {
+        format!(r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">{body}</AssetDeclaration>"#)
+    };
+    fs::write(
+        root.join("first.xml"),
+        declaration(
+            r#"
+        <PlayerTech id="SiblingPriority" TechPointsRequired="11"/>
+        <PlayerTech id="ParentPriority" TechPointsRequired="12"/>
+    "#,
+        ),
+    )
+    .unwrap();
+    fs::write(
+        root.join("second.xml"),
+        declaration(
+            r#"
+        <PlayerTech id="SiblingPriority" TechPointsRequired="21"/>
+        <PlayerTech id="ParentPriority" TechPointsRequired="22"/>
+    "#,
+        ),
+    )
+    .unwrap();
+    let input = root.join("precedence.xml");
+    let body = r#"
+        <Includes><Include type="all" source="first.xml"/><Include type="all" source="second.xml"/></Includes>
+        <PlayerTech id="ParentPriority" TechPointsRequired="30"/>
+    "#;
+    fs::write(&input, declaration(body)).unwrap();
+
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    assert_eq!(manifest.assets.len(), 2);
+    let mut offset = 4;
+    for asset in &manifest.assets {
+        let (tech_points, source) = match asset.name {
+            b"PlayerTech:SiblingPriority" => (11, "DATA:first.xml"),
+            b"PlayerTech:ParentPriority" => (30, "DATA:precedence.xml"),
+            name => panic!("unexpected asset {}", String::from_utf8_lossy(name)),
+        };
+        assert_eq!(asset.source_file_name, source.as_bytes());
+        assert_eq!(
+            stream.files.bin[offset + 4..offset + 8],
+            [tech_points, 0, 0, 0]
+        );
+        offset += asset.chunk_sizes.instance as usize;
+    }
+
+    fs::write(
+        &input,
+        declaration(&format!(
+            r#"{body}<PlayerTech id="ParentPriority" TechPointsRequired="40"/>"#
+        )),
+    )
+    .unwrap();
+    let error = compile_static(&input, &root, &root).err().unwrap();
+    assert!(
+        error
+            .to_string()
+            .contains("duplicate asset ID PlayerTech:ParentPriority")
+    );
+}

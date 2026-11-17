@@ -80,7 +80,7 @@ fn compile(
         visited: HashSet::new(),
         active: HashSet::new(),
         ids: HashSet::new(),
-        game_object_locations: HashMap::new(),
+        static_asset_locations: HashMap::new(),
         next_document_order: 0,
         assets: Vec::new(),
         tentative: HashMap::new(),
@@ -120,7 +120,7 @@ struct Compiler<'a> {
     visited: HashSet<(PathBuf, bool)>,
     active: HashSet<PathBuf>,
     ids: HashSet<AssetId>,
-    game_object_locations: HashMap<AssetId, (usize, usize)>,
+    static_asset_locations: HashMap<AssetId, (usize, usize)>,
     next_document_order: usize,
     assets: Vec<CompiledAsset>,
     tentative: HashMap<AssetId, Vec<TentativeAsset>>,
@@ -269,7 +269,7 @@ impl Compiler<'_> {
             .as_ref()
             .map_or(root, Document::root_element);
         let xml = expanded.as_ref().unwrap_or(&xml);
-        let mut local_game_objects = HashSet::new();
+        let mut local_assets = HashSet::new();
         for node in root.children().filter(Node::is_element) {
             if node.has_tag_name((SAGE_NS, "Includes")) {
                 if self.reference_directory.is_none() {
@@ -296,13 +296,12 @@ impl Compiler<'_> {
                 } else {
                     self.compile_apt_asset(node, path, &source)?
                 };
-                if self.reference_directory.is_some() && node.has_tag_name((SAGE_NS, "GameObject"))
-                {
-                    if !local_game_objects.insert(asset.id) {
+                if self.reference_directory.is_some() {
+                    if !local_assets.insert(asset.id) {
                         return Err(invalid(path, format!("duplicate asset ID {}", asset.name)));
                     }
                     if let Some((index, previous_order)) =
-                        self.game_object_locations.get_mut(&asset.id)
+                        self.static_asset_locations.get_mut(&asset.id)
                     {
                         // An including document takes precedence over its descendants.
                         // Across sibling include trees, EA keeps the first declaration.
@@ -312,24 +311,10 @@ impl Compiler<'_> {
                         }
                         continue;
                     }
-                    self.game_object_locations
+                    self.static_asset_locations
                         .insert(asset.id, (self.assets.len(), document_order));
                 }
                 if !self.ids.insert(asset.id) {
-                    // Multiple faction files declare the same shared AI base.
-                    if node.has_tag_name((SAGE_NS, "AIPersonalityDefinition"))
-                        && self.assets.iter().any(|previous| {
-                            previous.id == asset.id
-                                && previous.name == asset.name
-                                && previous.instance_hash == asset.instance_hash
-                                && previous.payload == asset.payload
-                                && previous.relocations == asset.relocations
-                                && previous.imports == asset.imports
-                                && previous.references == asset.references
-                        })
-                    {
-                        continue;
-                    }
                     return Err(invalid(path, format!("duplicate asset ID {}", asset.name)));
                 }
                 self.assets.push(asset);

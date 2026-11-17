@@ -1,5 +1,5 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 219 adds native `AISpecialPowerInfo` and `SpecialPowerWeapon` encoding inside `LogicCommand`. Three EA fixtures match byte for byte. All 214 tests and Clippy passed.
-- Surge Step 6 advances to duplicate `PlayerTech:PlayerTech_ProductionBonus_Allies` declarations from separate `type="all"` includes.
-- Next task is to verify EA's precedence for duplicate definitions across include files, then rerun Surge.
+- Checkpoint 220 applies EA include precedence to static assets. The first sibling include wins, the parent document takes precedence, and duplicates within one document are rejected. All 215 tests and Clippy passed.
+- Checkpoint 219 adds native `AISpecialPowerInfo` and `SpecialPowerWeapon` inside `LogicCommand`. Three EA fixtures match byte for byte.
+- Surge Step 6 now reaches `PlayerTemplate` in `Data/Mod/Common/PlayerTemplates.xml`. Next task is to probe and implement the native encoder.
