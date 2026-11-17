@@ -150,7 +150,7 @@ pub(super) fn encode(
     Ok((KIND, Table::record(entries)))
 }
 
-pub(super) fn weak_reference(
+pub(in crate::compile::static_assets) fn weak_reference(
     node: Node<'_, '_>,
     kind: &str,
     data: &BinaryData<'_>,
@@ -176,7 +176,11 @@ pub(super) fn weak_reference(
     Ok(id.instance_id)
 }
 
-pub(super) fn id_list(data: &mut BinaryData<'_>, count: usize, ids: Vec<u32>) -> io::Result<Table> {
+pub(in crate::compile::static_assets) fn id_list(
+    data: &mut BinaryData<'_>,
+    count: usize,
+    ids: Vec<u32>,
+) -> io::Result<Table> {
     let start = data.list(count, ids.len(), 4)?;
     let mut entries = Vec::with_capacity(ids.len());
     for (index, id) in ids.into_iter().enumerate() {

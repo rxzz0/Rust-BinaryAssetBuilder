@@ -1075,6 +1075,11 @@ mod tests {
         assert_ea_fixture("weapon-fields", 3);
     }
 
+    #[test]
+    fn weapon_nugget_conditions_match_ea() {
+        assert_ea_fixture("weapon-nugget-filters", 5);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

@@ -239,7 +239,7 @@ fn encode_nuggets(
                 (0x7814_daf0, fire_on_objects(child, pointer, data, out)?)
             }
             (Some(SAGE_NS), "TintObjectsNugget") => {
-                (0xda74_d739, tint_objects(child, pointer, data)?)
+                (0xda74_d739, tint_objects(child, pointer, data, out)?)
             }
             (Some(SAGE_NS), "DOTNugget") => {
                 (0xefbb_5226, fire_on_objects(child, pointer, data, out)?)
@@ -250,6 +250,13 @@ fn encode_nuggets(
             (Some(SAGE_NS), "DamageContainedNugget") => {
                 (0x929b_5398, fire_on_objects(child, pointer, data, out)?)
             }
+            (Some(SAGE_NS), "ParalyzeNugget") => {
+                (0x0a19_eadb, paralyze_nugget(child, pointer, data, out)?)
+            }
+            (Some(SAGE_NS), "AttributeModifierNugget") => (
+                0xe3c2_d15b,
+                attribute_modifier_nugget(child, pointer, data, out)?,
+            ),
             (Some(SAGE_NS), "ProjectileNugget") => (
                 0x87c7_bdcc,
                 simple_reference_nugget(child, pointer, data, out, true)?,
@@ -281,14 +288,14 @@ fn tint_objects(
     node: Node<'_, '_>,
     pointer: usize,
     data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
 ) -> io::Result<Table> {
     const FLOAT: u32 = 0x6458_64f3;
     const TIME: u32 = 0x9986_69e8;
     let path = data.path;
-    validate_attributes(
+    validate_effect_attributes(
         node,
         &[
-            "Radius",
             "PreColorTime",
             "PostColorTime",
             "SustainedColorTime",
@@ -299,16 +306,8 @@ fn tint_objects(
     )?;
     let start = data.allocate(pointer, 0x48)?;
     data.word(start, 0xda74_d739);
-    data.word(start + 4, 4);
-    data.word(
-        start + 0x10,
-        finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?.to_bits(),
-    );
-    let mut entries = vec![Entry::new(
-        1,
-        0xc7c2_cc04,
-        Target::Table(effect_table(start)),
-    )];
+    let mut children = significant_children(node).peekable();
+    let mut entries = vec![encode_effect(node, start, data, out, &mut children)?];
     for (index, (name, kind, default)) in [
         ("PreColorTime", TIME, "2s"),
         ("PostColorTime", TIME, "2s"),
@@ -329,7 +328,6 @@ fn tint_objects(
         data.word(offset, value.to_bits());
         entries.push(Entry::named(name, kind, Target::Data(offset)));
     }
-    let mut children = significant_children(node);
     let color = children.next();
     if color.is_some_and(|child| !child.has_tag_name((SAGE_NS, "Color")) || has_content(child))
         || children.next().is_some()
@@ -416,9 +414,6 @@ fn fire_on_objects(
         ("RadiusAffectsBridges", 0x97),
     ];
     let extended: Vec<_> = [
-        "id",
-        "Radius",
-        "PartitionFilterTestType",
         "Damage",
         "DamageType",
         "DamageFXType",
@@ -440,18 +435,12 @@ fn fire_on_objects(
             .flatten(),
     )
     .collect();
-    validate_attributes(
+    validate_effect_attributes(
         node,
         if is_damage {
             &extended
         } else {
-            &[
-                "Radius",
-                "PartitionFilterTestType",
-                "Weapon",
-                "FireOnVictimObject",
-                "VictimMustBeAlive",
-            ]
+            &["Weapon", "FireOnVictimObject", "VictimMustBeAlive"]
         },
         path,
     )?;
@@ -482,17 +471,6 @@ fn fire_on_objects(
     ] {
         data.word(start + offset, value);
     }
-    let partition = super::global_ui::enum_value(
-        node.attribute("PartitionFilterTestType")
-            .unwrap_or("EXTENTS_3D"),
-        &["CENTER_2D", "CIRCLE", "CENTER_3D", "SPHERE", "EXTENTS_3D"],
-        path,
-    )?;
-    data.word(start + 4, partition);
-    data.word(
-        start + 0x10,
-        finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?.to_bits(),
-    );
     if is_damage {
         for (name, offset) in DAMAGE_REALS {
             if let Some(value) = node.attribute(name) {
@@ -601,22 +579,17 @@ fn fire_on_objects(
         data.word(start + 0x9c, out.references.len() as u32);
     }
     let mut children = significant_children(node).peekable();
-    let name = if is_damage {
-        "SpecialObjectFilter"
-    } else {
-        "Filter"
-    };
-    let filter = if let Some(filter) = children.next_if(|child| child.has_tag_name((SAGE_NS, name)))
-    {
-        Target::Table(super::game_object::encode_object_filter(
-            filter,
-            start + if is_damage { 0x14 } else { 0x9c },
-            data,
-            &mut out.reference_types,
-        )?)
-    } else {
-        Target::Null
-    };
+    let effect = encode_effect(node, start, data, out, &mut children)?;
+    let filter =
+        match children.next_if(|child| !is_damage && child.has_tag_name((SAGE_NS, "Filter"))) {
+            Some(filter) => Target::Table(super::game_object::encode_object_filter(
+                filter,
+                start + 0x9c,
+                data,
+                &mut out.reference_types,
+            )?),
+            None => Target::Null,
+        };
     let contained_filter = if contained {
         let child = children
             .next_if(|child| child.has_tag_name((SAGE_NS, "DamageObjectFilter")))
@@ -633,14 +606,7 @@ fn fire_on_objects(
     if children.next().is_some() {
         return Err(invalid(path, "unsupported damage nugget child"));
     }
-    let mut effect = effect_table(start);
-    let filter = if is_damage {
-        effect.replace_target("SpecialObjectFilter", filter);
-        Target::Null
-    } else {
-        filter
-    };
-    let mut damage = vec![Entry::new(1, 0xc7c2_cc04, Target::Table(effect))];
+    let mut damage = vec![effect];
     damage.extend(
         DAMAGE_FIELDS
             .iter()
@@ -737,13 +703,9 @@ fn simple_reference_nugget(
         .map(|&(name, ..)| name)
         .chain((!projectile).then_some("TargetAsPrimaryObject"))
         .collect();
-    validate_attributes(node, &allowed, path)?;
-    if has_content(node) {
-        return Err(invalid(path, "unexpected weapon nugget child"));
-    }
+    validate_effect_attributes(node, &allowed, path)?;
     let start = data.allocate(pointer, if projectile { 0x44 } else { 0x30 })?;
     data.word(start, if projectile { 0x87c7_bdcc } else { 0xc606_7c3f });
-    data.word(start + 4, 4);
     for attr in node.attributes() {
         if let Some(&(_, _, offset, kind)) = refs.iter().find(|&&(name, ..)| name == attr.name())
             && !attr.value().trim().is_empty()
@@ -758,11 +720,11 @@ fn simple_reference_nugget(
             data.word(start + offset, out.references.len() as u32);
         }
     }
-    let mut entries = vec![Entry::new(
-        1,
-        0xc7c2_cc04,
-        Target::Table(effect_table(start)),
-    )];
+    let mut children = significant_children(node).peekable();
+    let mut entries = vec![encode_effect(node, start, data, out, &mut children)?];
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected weapon nugget child"));
+    }
     entries
         .extend(refs.iter().map(|&(name, kind, offset, _)| {
             Entry::named(name, kind, Target::Data(start + offset))
@@ -807,29 +769,234 @@ fn schema_enums<const N: usize>(schema: &str, names: &[&str; N]) -> [Vec<String>
     })
 }
 
-fn effect_table(start: usize) -> Table {
-    Table::record(vec![
+const EFFECT_ATTRIBUTES: &[&str] = &[
+    "id",
+    "PartitionFilterTestType",
+    "ForbiddenTargetObjectStatus",
+    "ForbiddenTargetModelCondition",
+    "Radius",
+];
+
+fn validate_effect_attributes(node: Node<'_, '_>, derived: &[&str], path: &Path) -> io::Result<()> {
+    let allowed: Vec<_> = EFFECT_ATTRIBUTES.iter().chain(derived).copied().collect();
+    validate_attributes(node, &allowed, path)
+}
+
+fn encode_effect<'a, 'input: 'a>(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+    children: &mut std::iter::Peekable<impl Iterator<Item = Node<'a, 'input>>>,
+) -> io::Result<Entry> {
+    use super::game_object::{
+        encode_object_filter, weak_id_list, weak_xml_reference, write_model_conditions,
+        write_status_flags,
+    };
+
+    let path = data.path;
+    let partition = super::global_ui::enum_value(
+        node.attribute("PartitionFilterTestType")
+            .unwrap_or("EXTENTS_3D"),
+        &["CENTER_2D", "CIRCLE", "CENTER_3D", "SPHERE", "EXTENTS_3D"],
+        path,
+    )?;
+    data.word(start + 4, partition);
+    data.word(
+        start + 0x10,
+        finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?.to_bits(),
+    );
+    let statuses = match node.attribute("ForbiddenTargetObjectStatus") {
+        Some(raw) => {
+            let offset = data.allocate(start + 8, 0x1c)?;
+            write_status_flags(raw, offset, data)?;
+            Target::Data(offset)
+        }
+        None => Target::Null,
+    };
+    let conditions = match node.attribute("ForbiddenTargetModelCondition") {
+        Some(raw) => {
+            let offset = data.allocate(start + 0xc, 0x3c)?;
+            write_model_conditions(raw, offset, data)?;
+            Target::Data(offset)
+        }
+        None => Target::Null,
+    };
+    let filter =
+        match children.next_if(|child| child.has_tag_name((SAGE_NS, "SpecialObjectFilter"))) {
+            Some(filter) => Target::Table(encode_object_filter(
+                filter,
+                start + 0x14,
+                data,
+                &mut out.reference_types,
+            )?),
+            None => Target::Null,
+        };
+    let mut entries = vec![
         Entry::new(0x19b0_42a0, 0x23e6_50b8, Target::Data(start)),
         Entry::named(
             "PartitionFilterTestType",
             0x9f0d_a607,
             Target::Data(start + 4),
         ),
-        Entry::named("ForbiddenTargetObjectStatus", 0xa7bd_811e, Target::Null),
-        Entry::named("ForbiddenTargetModelCondition", 0x67db_bfc9, Target::Null),
+        Entry::named("ForbiddenTargetObjectStatus", 0xa7bd_811e, statuses),
+        Entry::named("ForbiddenTargetModelCondition", 0x67db_bfc9, conditions),
         Entry::named("Radius", 0x6458_64f3, Target::Data(start + 0x10)),
-        Entry::named("SpecialObjectFilter", 0xe46e_a3b2, Target::Null),
-        Entry::named(
-            "RequiredUpgrade",
-            0x26fa_cfc7,
-            Target::Table(Table::array(start + 0x18, [])),
-        ),
-        Entry::named(
-            "ForbiddenUpgrade",
-            0x26fa_cfc7,
-            Target::Table(Table::array(start + 0x20, [])),
-        ),
-    ])
+        Entry::named("SpecialObjectFilter", 0xe46e_a3b2, filter),
+    ];
+    for (name, offset) in [("RequiredUpgrade", 0x18), ("ForbiddenUpgrade", 0x20)] {
+        let mut upgrades = Vec::new();
+        while let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, name))) {
+            upgrades.push(weak_xml_reference(
+                child,
+                "UpgradeTemplate",
+                data,
+                &mut out.reference_types,
+            )?);
+        }
+        let table = weak_id_list(data, start + offset, upgrades)?;
+        entries.push(Entry::named(name, 0x26fa_cfc7, Target::Table(table)));
+    }
+    Ok(Entry::new(
+        1,
+        0xc7c2_cc04,
+        Target::Table(Table::record(entries)),
+    ))
+}
+
+fn paralyze_nugget(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+) -> io::Result<Table> {
+    const FIELDS: &[(&str, u32, usize)] = &[
+        ("EffectArc", 0x4e16_ea4d, 0x28),
+        ("DurationSeconds", 0x9986_69e8, 0x2c),
+        ("ParalyzeType", 0x0744_db75, 0x30),
+        ("RemoveParalyzeType", 0x0744_db75, 0x34),
+        ("ParalyzeFX", 0x0d1c_8e83, 0x38),
+    ];
+    let path = data.path;
+    validate_effect_attributes(
+        node,
+        &FIELDS.iter().map(|&(name, _, _)| name).collect::<Vec<_>>(),
+        path,
+    )?;
+    let start = data.allocate(pointer, 0x3c)?;
+    data.word(start, 0x0a19_eadb);
+    let mut entries = Vec::with_capacity(FIELDS.len() + 1);
+    for &(name, _, offset) in FIELDS {
+        let value = match name {
+            "EffectArc" => {
+                sage_angle(node.attribute(name).unwrap_or("360d"), name, path)?.to_bits()
+            }
+            "DurationSeconds" => {
+                sage_time(node.attribute(name).unwrap_or("0s"), name, path)?.to_bits()
+            }
+            "ParalyzeFX" => nugget_reference(node.attribute(name), "FXList", path, out)?,
+            _ => {
+                static EFFECTS: OnceLock<[Vec<String>; 1]> = OnceLock::new();
+                let effects =
+                    EFFECTS.get_or_init(|| schema_enums(WEAPON_SCHEMA, &["ParalyzeEffectType"]));
+                super::ai_strategic::enum_index(
+                    node.attribute(name).unwrap_or("NONE"),
+                    &effects[0],
+                    name,
+                    path,
+                )?
+            }
+        };
+        data.word(start + offset, value);
+    }
+    let mut children = significant_children(node).peekable();
+    entries.push(encode_effect(node, start, data, out, &mut children)?);
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected ParalyzeNugget child"));
+    }
+    entries.extend(
+        FIELDS
+            .iter()
+            .map(|&(name, kind, offset)| Entry::named(name, kind, Target::Data(start + offset))),
+    );
+    Ok(Table::record(entries))
+}
+
+fn attribute_modifier_nugget(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+) -> io::Result<Table> {
+    const FIELDS: &[(&str, u32, usize)] = &[
+        ("AttributeModifierName", 0x09dd_cff3, 0x28),
+        ("AttributeModifierOwnerName", 0x09dd_cff3, 0x2c),
+        ("DamageFXType", 0x2faa_4e62, 0x30),
+        ("DamageArc", 0x4e16_ea4d, 0x34),
+        ("AntiCategories", 0x45f1_59e8, 0x38),
+        ("AntiFX", 0x0d1c_8e83, 0x3c),
+    ];
+    let path = data.path;
+    validate_effect_attributes(
+        node,
+        &FIELDS.iter().map(|&(name, _, _)| name).collect::<Vec<_>>(),
+        path,
+    )?;
+    let start = data.allocate(pointer, 0x40)?;
+    data.word(start, 0xe3c2_d15b);
+    for &(name, _, offset) in FIELDS {
+        let raw = node.attribute(name);
+        let value = match name {
+            "AttributeModifierName" | "AttributeModifierOwnerName" => {
+                nugget_reference(raw, "AttributeModifier", path, out)?
+            }
+            "DamageFXType" => {
+                static VALUES: OnceLock<[Vec<String>; 1]> = OnceLock::new();
+                let values = VALUES.get_or_init(|| {
+                    schema_enums(
+                        include_str!("../../../schemas/ra3/xsd/Includes/DamageFX.xsd"),
+                        &["DamageFXType"],
+                    )
+                });
+                raw.map_or(Ok(0), |raw| {
+                    super::ai_strategic::enum_index(raw, &values[0], name, path)
+                        .map(|index| index.wrapping_sub(1))
+                })?
+            }
+            "DamageArc" => sage_angle(raw.unwrap_or("360d"), name, path)?.to_bits(),
+            "AntiCategories" => super::game_object::category_flags(raw.unwrap_or(""), name, path)?,
+            "AntiFX" => nugget_reference(raw, "FXList", path, out)?,
+            _ => unreachable!(),
+        };
+        data.word(start + offset, value);
+    }
+    let mut children = significant_children(node).peekable();
+    let mut entries = vec![encode_effect(node, start, data, out, &mut children)?];
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected AttributeModifierNugget child"));
+    }
+    entries.extend(
+        FIELDS
+            .iter()
+            .map(|&(name, kind, offset)| Entry::named(name, kind, Target::Data(start + offset))),
+    );
+    Ok(Table::record(entries))
+}
+
+fn nugget_reference(
+    raw: Option<&str>,
+    kind: &str,
+    path: &Path,
+    out: &mut Marshaled,
+) -> io::Result<u32> {
+    let Some(raw) = raw.filter(|value| !value.trim().is_empty()) else {
+        return Ok(0);
+    };
+    let value = raw.split_once('\\').map_or(raw, |(name, _)| name);
+    let id = asset_reference(value, kind, path)?;
+    out.references.push(id.into());
+    out.reference_types.push(id.type_id);
+    Ok(out.references.len() as u32)
 }
 
 pub(super) fn weapon_anti_flags(value: &str, path: &Path) -> io::Result<u32> {

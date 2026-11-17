@@ -1,0 +1,27 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AttributeModifier id="TargetModifier" />
+  <AttributeModifier id="OwnerModifier" />
+  <WeaponTemplate id="ReferenceWeapon" />
+  <WeaponTemplate id="NuggetDefaultsProbe"><Nuggets><AttributeModifierNugget /></Nuggets></WeaponTemplate>
+  <WeaponTemplate id="NuggetFieldsProbe">
+    <Nuggets>
+      <ParalyzeNugget />
+      <ParalyzeNugget id="RemoveEMP" Radius="12.25" PartitionFilterTestType="SPHERE"
+        EffectArc="17d" DurationSeconds="125ms" RemoveParalyzeType="EMP"
+        ForbiddenTargetObjectStatus="RIOT_SHIELDED IN_SPIDER_HOLE" ForbiddenTargetModelCondition="DYING MOVING">
+        <SpecialObjectFilter Rule="ALL" Exclude="VEHICLE"><ExcludeThing>ProbeVictim</ExcludeThing></SpecialObjectFilter>
+        <RequiredUpgrade>ProbeRequired</RequiredUpgrade><ForbiddenUpgrade>ProbeForbidden</ForbiddenUpgrade>
+      </ParalyzeNugget>
+      <DamageNugget Damage="8.25" ForbiddenTargetObjectStatus="IN_SPIDER_HOLE">
+        <SpecialObjectFilter Rule="ALL" Exclude="STRUCTURE" />
+      </DamageNugget>
+      <AttributeModifierNugget AttributeModifierName="TargetModifier" AttributeModifierOwnerName="OwnerModifier"
+        DamageArc="25d" AntiCategories="BUFF STUN" DamageFXType="ALLIED_DOG" ForbiddenTargetObjectStatus="IN_SPIDER_HOLE">
+        <SpecialObjectFilter Rule="ALL" Exclude="AIRCRAFT" />
+      </AttributeModifierNugget>
+      <ProjectileNugget WarheadTemplate="ReferenceWeapon" Radius="6.25" ForbiddenTargetObjectStatus="IN_SPIDER_HOLE">
+        <SpecialObjectFilter Rule="ALL" Exclude="INFANTRY" />
+      </ProjectileNugget>
+    </Nuggets>
+  </WeaponTemplate>
+</AssetDeclaration>

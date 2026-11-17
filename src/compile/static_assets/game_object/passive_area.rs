@@ -164,7 +164,11 @@ pub(super) fn encode(
     Ok((KIND, Table::record(entries)))
 }
 
-pub(super) fn category_flags(value: &str, name: &str, path: &std::path::Path) -> io::Result<u32> {
+pub(in crate::compile::static_assets) fn category_flags(
+    value: &str,
+    name: &str,
+    path: &std::path::Path,
+) -> io::Result<u32> {
     static CATEGORIES: OnceLock<Vec<String>> = OnceLock::new();
     let values = CATEGORIES.get_or_init(|| {
         super::ai_update::enum_values(
