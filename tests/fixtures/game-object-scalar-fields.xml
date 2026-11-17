@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="Bare"
+    ThreatLevel="1.25" BountyValue="-201" MinZIncreaseForVoiceMoveToHigherGround="2.25"
+    Scale="3.25" LiveCameraFXPitch="4.25" FormationWidth="205" FormationDepth="206"
+    InstanceScaleFuzziness="5.25" StructureRubbleHeight="6.25" RamPower="-207" RamZMult="7.25"
+    CommandPointBonus="208" VoiceAttackChargeTimeout="209" VoiceMoveLandToWaterTimeout="8.25s"
+    VoiceMoveWaterToLandTimeout="9.25s" VoiceSelectUnderFireDamageTime="10.25s"
+    MaxDistanceForEngaged="11.25" EngagedStateTimeout="210" SlopeLimitIndex="211"
+    PathfindDiameter="12.25" SupplyOverride="-212" FiringArc="13.25"
+    CamouflageDetectorLevel="213" SelectionPriority="214" HasFiredRecentlyTime="14.25s"
+    ReinvisibilityDelay="15.25s" InvisibilityOpacityMin="0.25" InvisibilityOpacityMax="0.75">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1.0" /></Body>
+  </GameObject>
+</AssetDeclaration>

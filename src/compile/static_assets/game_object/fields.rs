@@ -6,6 +6,60 @@ use std::collections::HashMap;
 use std::io;
 use std::sync::OnceLock;
 
+const REAL_FIELDS: &[(&str, usize)] = &[
+    ("BuildTime", 0x84),
+    ("MinZIncreaseForVoiceMoveToHigherGround", 0xa8),
+    ("CampnessValueRadius", 0xb4),
+    ("Scale", 0xb8),
+    ("HealthBoxHeightOffset", 0xbc),
+    ("LiveCameraFXPitch", 0xc0),
+    ("InstanceScaleFuzziness", 0xcc),
+    ("StructureRubbleHeight", 0xd0),
+    ("RamZMult", 0xd8),
+    ("ShockwaveResistance", 0xdc),
+    ("MaxDistanceForEngaged", 0xfc),
+    ("ThreatLevel", 0x104),
+    ("PathfindDiameter", 0x10c),
+    ("FiringArc", 0x11c),
+    ("InvisibilityOpacityMin", 0x16c),
+    ("InvisibilityOpacityMax", 0x170),
+    ("EvaEventSecondDamageFarFromFirstScanRange", 0x17c),
+];
+
+const INTEGER_FIELDS: &[(&str, usize)] = &[
+    ("BountyValue", 0x80),
+    ("EnergyProduction", 0x88),
+    ("EnergyBonus", 0x8c),
+    ("VoicePriority", 0xa4),
+    ("FormationWidth", 0xc4),
+    ("FormationDepth", 0xc8),
+    ("RamPower", 0xd4),
+    ("CommandPoints", 0xe0),
+    ("CommandPointBonus", 0xe4),
+    ("SupplyOverride", 0x110),
+    ("CamouflageDetectorLevel", 0x120),
+    ("SelectionPriority", 0x124),
+    ("PathPriority", 0x128),
+    ("SubGroupPriority", 0x178),
+];
+
+const UNSIGNED_FIELDS: &[(&str, usize)] = &[
+    ("CampnessValue", 0xb0),
+    ("VoiceAttackChargeTimeout", 0xe8),
+    ("EngagedStateTimeout", 0x100),
+    ("SlopeLimitIndex", 0x108),
+];
+
+const TIME_FIELDS: &[(&str, usize)] = &[
+    ("JustBuiltTime", 0x64),
+    ("VoiceMoveLandToWaterTimeout", 0xec),
+    ("VoiceMoveWaterToLandTimeout", 0xf0),
+    ("VoiceSelectUnderFireTimeout", 0xf4),
+    ("VoiceSelectUnderFireDamageTime", 0xf8),
+    ("HasFiredRecentlyTime", 0x160),
+    ("ReinvisibilityDelay", 0x168),
+];
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     data: &mut BinaryData<'_>,
@@ -19,32 +73,18 @@ pub(super) fn encode(
         "TypeDescription",
         "RadarPriority",
         "PlacementViewAngle",
-        "JustBuiltTime",
         "Side",
         "EditorName",
         "EditorSorting",
-        "BuildTime",
         "MaxSimultaneousOfType",
         "RefundValue",
         "TransportSlotCount",
         "IsTrainable",
-        "EnergyProduction",
-        "EnergyBonus",
-        "VoicePriority",
-        "VoiceSelectUnderFireTimeout",
-        "CommandPoints",
-        "PathPriority",
-        "SubGroupPriority",
-        "EvaEventSecondDamageFarFromFirstScanRange",
         "EvaEventSecondDamageFarFromFirstTimeoutMS",
         "UnitIntro",
         "CommandSet",
         "SelectPortrait",
         "ButtonImage",
-        "CampnessValue",
-        "CampnessValueRadius",
-        "HealthBoxHeightOffset",
-        "ShockwaveResistance",
         "ProductionQueueType",
         "BuildPlacementTypeFlag",
         "UnitCategory",
@@ -56,6 +96,10 @@ pub(super) fn encode(
         }
         if attribute.namespace().is_none()
             && (ENCODED.contains(&attribute.name())
+                || [REAL_FIELDS, INTEGER_FIELDS, UNSIGNED_FIELDS, TIME_FIELDS]
+                    .iter()
+                    .flat_map(|fields| fields.iter())
+                    .any(|&(name, _)| name == attribute.name())
                 || schema_defaults()
                     .get(attribute.name())
                     .is_some_and(|default| default == attribute.value()))
@@ -108,10 +152,7 @@ pub(super) fn encode(
         let radians = if degrees { parsed.to_radians() } else { parsed };
         data.word(0x60, (radians as f32).to_bits());
     }
-    for (name, offset) in [
-        ("JustBuiltTime", 0x64),
-        ("VoiceSelectUnderFireTimeout", 0xf4),
-    ] {
+    for &(name, offset) in TIME_FIELDS {
         if let Some(value) = node.attribute(name) {
             let time = super::super::sage_time(value, name, data.path)?;
             data.word(offset, time.to_bits());
@@ -145,9 +186,6 @@ pub(super) fn encode(
             as u32;
         data.word(0x7c, number);
     }
-    if let Some(value) = node.attribute("BuildTime") {
-        data.word(0x84, finite_float(value, "BuildTime", data.path)?.to_bits());
-    }
     for (name, offset) in [("RefundValue", 0x23c), ("MaxSimultaneousOfType", 0x23e)] {
         if let Some(value) = node.attribute(name) {
             let number = value
@@ -164,14 +202,7 @@ pub(super) fn encode(
             .map_err(|_| invalid(data.path, "invalid TransportSlotCount"))?;
     }
     data.payload[0x241] = super::draws::boolean(node, "IsTrainable", true, data.path)?;
-    for (name, offset) in [
-        ("EnergyProduction", 0x88),
-        ("EnergyBonus", 0x8c),
-        ("VoicePriority", 0xa4),
-        ("CommandPoints", 0xe0),
-        ("PathPriority", 0x128),
-        ("SubGroupPriority", 0x178),
-    ] {
+    for &(name, offset) in INTEGER_FIELDS {
         if let Some(value) = node.attribute(name) {
             let number = value
                 .parse::<i32>()
@@ -195,18 +226,15 @@ pub(super) fn encode(
             reference_types.push(fast_hash(b"PackedTextureImage"));
         }
     }
-    if let Some(value) = node.attribute("CampnessValue") {
-        let number = value
-            .parse::<u32>()
-            .map_err(|_| invalid(data.path, "invalid CampnessValue"))?;
-        data.word(0xb0, number);
+    for &(name, offset) in UNSIGNED_FIELDS {
+        if let Some(value) = node.attribute(name) {
+            let number = value
+                .parse::<u32>()
+                .map_err(|_| invalid(data.path, format!("invalid {name}")))?;
+            data.word(offset, number);
+        }
     }
-    for (name, offset) in [
-        ("CampnessValueRadius", 0xb4),
-        ("HealthBoxHeightOffset", 0xbc),
-        ("ShockwaveResistance", 0xdc),
-        ("EvaEventSecondDamageFarFromFirstScanRange", 0x17c),
-    ] {
+    for &(name, offset) in REAL_FIELDS {
         if let Some(value) = node.attribute(name) {
             data.word(offset, finite_float(value, name, data.path)?.to_bits());
         }
@@ -423,6 +451,8 @@ mod tests {
             "EnergyProduction=1.5",
             "CampnessValue=-1",
             "HealthBoxHeightOffset=inf",
+            "ThreatLevel=NaN",
+            "SlopeLimitIndex=-1",
             "ProductionQueueType=OTHER",
             "BuildPlacementTypeFlag=OTHER",
             "UnitCategory=OTHER",

@@ -262,6 +262,14 @@ fn game_object_minimal_matches_ea_oracle() {
             include_bytes!("fixtures/game-object-fields-all.imp").as_slice(),
         ),
         (
+            "scalar-fields.xml",
+            include_bytes!("fixtures/game-object-scalar-fields.xml").as_slice(),
+            include_bytes!("fixtures/game-object-scalar-fields.manifest").as_slice(),
+            include_bytes!("fixtures/game-object-scalar-fields.bin").as_slice(),
+            include_bytes!("fixtures/game-object-scalar-fields.relo").as_slice(),
+            include_bytes!("fixtures/game-object-scalar-fields.imp").as_slice(),
+        ),
+        (
             "smc.xml",
             include_bytes!("fixtures/game-object-behavior-basic-smc.xml").as_slice(),
             include_bytes!("fixtures/game-object-behavior-basic-smc.manifest").as_slice(),
