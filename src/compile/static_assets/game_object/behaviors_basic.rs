@@ -623,6 +623,12 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "CrushDie")) {
         return crush_die(node, pointer, data, references, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "SuppressionUpdate")) {
+        return suppression_update(node, pointer, data, references, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "FreefallUpdate")) {
+        return freefall_update(node, pointer, data).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "WallBuilderBehavior")) {
         return wall_builder(node, pointer, data, reference_types).map(Some);
     }
@@ -1073,6 +1079,94 @@ pub(super) fn encode(
         inherited(0x29ca_d490, update)
     };
     Ok(Some((kind, table)))
+}
+
+fn suppression_update(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xbcfb_5bb7;
+    const FIELDS: [(&str, u32, usize); 6] = [
+        ("UpdateDelay", 0x9986_69e8, 8),
+        ("Suppressability", 0x6458_64f3, 12),
+        ("SuppressionDuration", 0x9986_69e8, 16),
+        ("AttributeModifierSuppressed", 0x09dd_cff3, 20),
+        ("AttributeModifierForceMove", 0x09dd_cff3, 24),
+        ("IgnoreSuppressionObjectStatus", 0xa7bd_811e, 28),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(FIELDS.map(|(name, _, _)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected SuppressionUpdate content"));
+    }
+    let start = data.allocate(pointer, 28 + super::secondary_damage::STATUS_BYTES)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    for (name, default, offset) in [("UpdateDelay", "1s", 8), ("SuppressionDuration", "3s", 16)] {
+        let time = sage_time(node.attribute(name).unwrap_or(default), name, path)?;
+        data.word(start + offset, time.to_bits());
+    }
+    let suppressability = finite_number(
+        node.attribute("Suppressability").unwrap_or("0"),
+        "Suppressability",
+        path,
+    )?;
+    data.word(start + 12, suppressability.to_bits());
+    for &(name, _, offset) in &FIELDS[3..5] {
+        if let Some(value) = node.attribute(name) {
+            let ordinal = super::passive_area::reference(
+                value,
+                "AttributeModifier",
+                path,
+                references,
+                reference_types,
+            )?;
+            data.word(start + offset, ordinal);
+        }
+    }
+    if let Some(flags) = node.attribute("IgnoreSuppressionObjectStatus") {
+        super::secondary_damage::write_status_flags(flags, start + 28, data)?;
+    }
+    entries.extend(fields(start, &FIELDS));
+    Ok((KIND, Table::record(entries)))
+}
+
+fn freefall_update(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xfc22_2f04;
+    const FIELDS: [(&str, u32, usize); 4] = [
+        ("ModelConditionsToSet", 0x67db_bfc9, 8),
+        ("InitialVelocity", 0x6458_64f3, 0x44),
+        ("Acceleration", 0x6458_64f3, 0x48),
+        ("TerminalVelocity", 0x6458_64f3, 0x4c),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(FIELDS.map(|(name, _, _)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected FreefallUpdate content"));
+    }
+    let start = data.allocate(pointer, 0x50)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    if let Some(flags) = node.attribute("ModelConditionsToSet") {
+        super::draws::write_model_conditions(flags, start + 8, data)?;
+    }
+    for (&(name, _, offset), default) in FIELDS[1..].iter().zip(["0", "1", "15"]) {
+        let value = finite_number(node.attribute(name).unwrap_or(default), name, path)?;
+        data.word(start + offset, value.to_bits());
+    }
+    entries.extend(fields(start, &FIELDS));
+    Ok((KIND, Table::record(entries)))
 }
 
 fn assisted_placement(

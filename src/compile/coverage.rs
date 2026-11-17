@@ -1033,6 +1033,11 @@ mod tests {
         assert_ea_fixture("crush-die", 5);
     }
 
+    #[test]
+    fn suppression_and_freefall_match_ea() {
+        assert_ea_fixture("suppression-freefall", 4);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

@@ -1,0 +1,18 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AttributeModifier id="Suppressed" />
+  <AttributeModifier id="ForceMove" />
+  <GameObject id="UpdateBare">
+    <Behaviors><SuppressionUpdate id="ModuleTag_Suppress" /><FreefallUpdate id="ModuleTag_Freefall" /></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="UpdateFull">
+    <Behaviors>
+      <SuppressionUpdate id="ModuleTag_Suppress" UpdateDelay="0.25s" Suppressability="42.5"
+        SuppressionDuration="9500ms" AttributeModifierSuppressed="Suppressed" AttributeModifierForceMove="ForceMove"
+        IgnoreSuppressionObjectStatus="UNDER_FROZEN" />
+      <FreefallUpdate id="ModuleTag_Freefall" ModelConditionsToSet="STUNNED_FLAILING DYING"
+        InitialVelocity="-1.25" Acceleration="2.25" TerminalVelocity="30" />
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>
