@@ -626,6 +626,9 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "CrushDie")) {
         return crush_die(node, pointer, data, references, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "StealthDetectorUpdate")) {
+        return stealth_detector_update(node, pointer, data, references, reference_types).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "SuppressionUpdate")) {
         return suppression_update(node, pointer, data, references, reference_types).map(Some);
     }
@@ -1140,6 +1143,111 @@ fn suppression_update(
         super::secondary_damage::write_status_flags(flags, start + 28, data)?;
     }
     entries.extend(fields(start, &FIELDS));
+    Ok((KIND, Table::record(entries)))
+}
+
+fn stealth_detector_update(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x7456_9aaa;
+    const AUDIO: u32 = 0x63d7_b468;
+    const PARTICLE: u32 = 0x43f1_ce36;
+    const BOOL: u32 = 0x77e3_f4f7;
+    const FIELDS: &[(&str, u32, usize)] = &[
+        ("DetectionRate", 0x9986_69e8, 0x24),
+        ("DetectionRange", 0x6458_64f3, 0x28),
+        ("InitiallyDisabled", BOOL, 0x98),
+        ("PingSound", AUDIO, 0x2c),
+        ("LoudPingSound", AUDIO, 0x30),
+        ("IRBeaconParticleSys", PARTICLE, 0x34),
+        ("IRParticleSys", PARTICLE, 0x38),
+        ("IRBrightParticleSys", PARTICLE, 0x3c),
+        ("IRGridParticleSys", PARTICLE, 0x40),
+        ("IRParticleSysBone", 0x1a29_33aa, 0x44),
+        ("ExtraRequiredKindOf", 0x9afc_9193, 0x4c),
+        ("ExtraForbiddenKindOf", 0x9afc_9193, 0x70),
+        ("CanDetectWhileGarrisoned", BOOL, 0x99),
+        ("CanDetectWhileContained", BOOL, 0x9a),
+        ("RequiredUpgrade", 0x4aba_1f29, 0x94),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(super::spawn::UPGRADE.iter().map(|&(name, _, _)| name))
+        .chain(FIELDS.iter().map(|&(name, _, _)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let start = data.allocate(pointer, 0x9c)?;
+    for (name, _, offset) in &FIELDS[5..9] {
+        let value = super::passive_area::reference(
+            node.attribute(*name).unwrap_or(""),
+            "FXParticleSystemTemplate",
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + offset, value);
+    }
+    for (name, _, offset) in &FIELDS[3..5] {
+        let value = super::audio_reference(
+            node.attribute(*name).unwrap_or(""),
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + offset, value);
+    }
+    let upgrade = super::passive_area::reference(
+        node.attribute("RequiredUpgrade").unwrap_or(""),
+        "UpgradeTemplate",
+        path,
+        references,
+        reference_types,
+    )?;
+    data.word(start + 0x94, upgrade);
+
+    for &(name, kind, offset) in FIELDS {
+        let address = start + offset;
+        match kind {
+            0x9986_69e8 => data.word(
+                address,
+                sage_time(node.attribute(name).unwrap_or("0.4s"), name, path)?.to_bits(),
+            ),
+            0x6458_64f3 => data.word(
+                address,
+                finite_number(node.attribute(name).unwrap_or("0"), name, path)?.to_bits(),
+            ),
+            BOOL => data.payload[address] = boolean(node, name, false, path)?,
+            0x1a29_33aa => {
+                if let Some(bone) = node.attribute(name).filter(|value| !value.is_empty()) {
+                    data.string(address, bone)?;
+                }
+            }
+            0x9afc_9193 => {
+                for (index, word) in super::super::global_ui::kind_of_flags(
+                    node.attribute(name).unwrap_or(""),
+                    path,
+                )?
+                .into_iter()
+                .enumerate()
+                {
+                    data.word(address + 4 * index, word);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut children = significant_children(node).peekable();
+    let parent = upgrade_parent(node, KIND, start, data, reference_types, &mut children)?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected StealthDetectorUpdate child"));
+    }
+    let mut entries = vec![parent];
+    entries.extend(fields(start, FIELDS));
     Ok((KIND, Table::record(entries)))
 }
 

@@ -161,7 +161,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut material_float_names = Vec::new();
     let mut create_object_modules = Vec::new();
     let mut spawn_modules = Vec::new();
-    let mut tech_modules = Vec::new();
+    let mut derived_upgrade_modules = Vec::new();
     let mut chooser_relocations = Vec::new();
     let mut subobject_modules = Vec::new();
     let mut aura_modules = Vec::new();
@@ -234,7 +234,7 @@ pub(in crate::compile::static_assets) fn compile(
                     &mut references,
                     &mut reference_types,
                 )?;
-                tech_modules.push((start, data.payload.len() as u32));
+                derived_upgrade_modules.push((start, data.payload.len() as u32));
                 Some(result)
             } else if module.has_tag_name((SAGE_NS, "SubObjectsUpgrade")) {
                 let start = data.payload.len() as u32;
@@ -257,13 +257,18 @@ pub(in crate::compile::static_assets) fn compile(
                 if module.has_tag_name((SAGE_NS, "SlaughterHordeContain")) {
                     slaughter_modules.push(data.payload.len() as u32);
                 }
-                behaviors_basic::encode(
+                let start = data.payload.len() as u32;
+                let result = behaviors_basic::encode(
                     module,
                     pointer,
                     &mut data,
                     &mut references,
                     &mut reference_types,
-                )?
+                )?;
+                if module.has_tag_name((SAGE_NS, "StealthDetectorUpdate")) {
+                    derived_upgrade_modules.push((start, data.payload.len() as u32));
+                }
+                result
             };
             let (kind, fields) = match encoded {
                 Some(encoded) => encoded,
@@ -416,10 +421,10 @@ pub(in crate::compile::static_assets) fn compile(
                 _ => {}
             }
         }
-        // The receiver's filter relocations precede pointers inherited from UpgradeModuleData.
-        let index = tech_modules.partition_point(|&(start, _)| start <= pointer);
+        // These modules emit derived relocations before inherited upgrade pointers.
+        let index = derived_upgrade_modules.partition_point(|&(start, _)| start <= pointer);
         if index > 0 {
-            let (start, end) = tech_modules[index - 1];
+            let (start, end) = derived_upgrade_modules[index - 1];
             match pointer - start {
                 8 => return (end - 1, 0),
                 0x10 => return (end - 1, 1),

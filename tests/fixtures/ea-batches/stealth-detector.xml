@@ -1,0 +1,20 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AudioEvent id="ProbePing" />
+  <AudioEvent id="ProbeLoudPing" />
+  <UpgradeTemplate id="ProbeStealthUpgrade" />
+  <GameObject id="DetectorBare">
+    <Behaviors><StealthDetectorUpdate id="Detector" /></Behaviors>
+    <Body><PropBody id="Body" /></Body>
+  </GameObject>
+  <GameObject id="DetectorFull">
+    <Behaviors>
+      <StealthDetectorUpdate id="Detector" RequiresAllTriggers="true" DetectionRate="250ms" DetectionRange="133.5"
+        InitiallyDisabled="true" PingSound="ProbePing" LoudPingSound="ProbeLoudPing" IRParticleSysBone="Bone_01"
+        ExtraRequiredKindOf="VEHICLE INFANTRY" ExtraForbiddenKindOf="AIRCRAFT"
+        CanDetectWhileGarrisoned="true" CanDetectWhileContained="true" RequiredUpgrade="ProbeStealthUpgrade">
+        <TriggeredBy>ProbeTrigger</TriggeredBy><ConflictsWith>ProbeConflict</ConflictsWith>
+      </StealthDetectorUpdate>
+    </Behaviors>
+    <Body><PropBody id="Body" /></Body>
+  </GameObject>
+</AssetDeclaration>

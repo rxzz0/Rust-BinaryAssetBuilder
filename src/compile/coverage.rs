@@ -94,6 +94,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "CreateObjectDie",
             "DefaultProductionExit",
             "DestroyDie",
+            "StealthDetectorUpdate",
             "EngineerContain",
             "FXListBehavior",
             "FireWeaponWhenDead",
@@ -1062,6 +1063,11 @@ mod tests {
     #[test]
     fn skirmish_ai_fields_match_ea() {
         assert_ea_fixture("skirmish-fields", 1);
+    }
+
+    #[test]
+    fn stealth_detectors_match_ea() {
+        assert_ea_fixture("stealth-detector", 5);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {
