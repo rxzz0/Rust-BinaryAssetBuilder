@@ -9,6 +9,7 @@ use std::io;
 use std::path::Path;
 
 mod ai_build;
+mod ai_command;
 mod ai_heuristics;
 mod ai_inheritance;
 mod ai_personality;
@@ -371,6 +372,17 @@ fn finite_number(value: &str, field: &str, path: &Path) -> io::Result<f32> {
         .ok()
         .filter(|number| number.is_finite())
         .ok_or_else(|| invalid(path, format!("invalid {field}")))
+}
+
+fn sage_angle(value: &str, field: &str, path: &Path) -> io::Result<f32> {
+    let value = value.trim();
+    if let Some(number) = value.strip_suffix('d') {
+        Ok(finite_number(number, field, path)?.to_radians())
+    } else if let Some(number) = value.strip_suffix('r') {
+        finite_number(number, field, path)
+    } else {
+        Err(invalid(path, format!("invalid {field}")))
+    }
 }
 
 fn sage_time(value: &str, field: &str, path: &Path) -> io::Result<f32> {
@@ -890,17 +902,14 @@ fn logic_command(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     ] {
         if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, name))) {
             let value = text_value(child, path)?;
-            let id = asset_reference(
-                value.split_once('\\').map_or(value, |(name, _)| name),
-                ty,
-                path,
-            )?;
-            result.reference_types.push(id.type_id);
-            result.references.push(id.into());
             let offset = data.allocate(field, 4)?;
-            data.word(offset, result.references.len() as u32);
-            result.imports.push(offset as u32);
+            ai_command::write_import(value, ty, offset, &mut data, &mut result)?;
         }
+    }
+    if let Some(info) =
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "AISpecialPowerInfo")))
+    {
+        ai_command::write_info(info, &mut data, &mut result)?;
     }
     if let Some(child) = children.next() {
         return Err(invalid(
@@ -909,7 +918,10 @@ fn logic_command(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
         ));
     }
     if !data.relocations.is_empty() {
+        data.relocations.sort_unstable();
         data.relocations.push(u32::MAX);
+    }
+    if !result.imports.is_empty() {
         result.imports.push(u32::MAX);
     }
     result.payload = data.payload;

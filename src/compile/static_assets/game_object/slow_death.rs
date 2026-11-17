@@ -212,12 +212,5 @@ pub(super) fn encode(
 }
 
 pub(super) fn angle(value: &str, name: &str, data: &BinaryData<'_>) -> io::Result<f32> {
-    let value = value.trim();
-    if let Some(number) = value.strip_suffix('d') {
-        Ok(finite_number(number, name, data.path)?.to_radians())
-    } else if let Some(number) = value.strip_suffix('r') {
-        finite_number(number, name, data.path)
-    } else {
-        Err(invalid(data.path, format!("invalid {name}")))
-    }
+    super::super::sage_angle(value, name, data.path)
 }

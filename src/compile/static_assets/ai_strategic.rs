@@ -468,15 +468,25 @@ fn int(value: &str, name: &str, path: &Path) -> io::Result<u32> {
         .map_err(|_| invalid(path, format!("invalid {name}")))
 }
 
-pub(super) fn enum_index(value: &str, values: &[&str], name: &str, path: &Path) -> io::Result<u32> {
+pub(super) fn enum_index(
+    value: &str,
+    values: &[impl AsRef<str>],
+    name: &str,
+    path: &Path,
+) -> io::Result<u32> {
     values
         .iter()
-        .position(|&candidate| candidate == value.trim())
+        .position(|candidate| candidate.as_ref() == value.trim())
         .map(|index| index as u32)
         .ok_or_else(|| invalid(path, format!("invalid {name} value {value:?}")))
 }
 
-pub(super) fn flags(value: &str, values: &[&str], name: &str, path: &Path) -> io::Result<u32> {
+pub(super) fn flags(
+    value: &str,
+    values: &[impl AsRef<str>],
+    name: &str,
+    path: &Path,
+) -> io::Result<u32> {
     value.split_ascii_whitespace().try_fold(0, |bits, flag| {
         Ok(bits | 1 << enum_index(flag, values, name, path)?)
     })

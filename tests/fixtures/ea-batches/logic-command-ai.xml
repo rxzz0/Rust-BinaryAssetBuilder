@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <LogicCommand id="AICommandDefault"><AISpecialPowerInfo Heuristic="MOVEMENT" Manager="SKIRMISH_AI"/></LogicCommand>
+  <LogicCommand id="AICommandFull" Type="SPECIAL_POWER">
+    <SpecialPower>ExamplePower</SpecialPower>
+    <AISpecialPowerInfo id="ModuleTag_Example" Heuristic="RUSH_ATTACK" Manager="MICRO_MANAGER" Distance="71.5" HealthFraction=".45" TargetObjectInclude="INFANTRY VEHICLE" TargetObjectExclude="AIRCRAFT" UseOnlyWhenPowerAdvantageIsAbove="2.7" NeverUseWhileRetreating="true" NeverUseWhilePullingBack="true" InvulnerabilityDamageLookAheadTime="2.5s" InvulnerabilityDamageLookBehindTime="3.5s" InvulnerabilityDamageFractionWhenOutOfRangeOfTarget=".7" InvulnerabilityDamageFractionWhenInRangeOfTarget=".8" InvulnerabilityAvoidUseIfAngleToNextPathNodeIsMoreThan="90d" MaxTargetSpeed="1234" RequireKillTargets="false" MinKillValue="75" MinTargetsHit="8" MinEnemiesNearby="9" NextLogicCommand="AICommandDefault" UseInMicroManagerState="RETREAT COMBAT" UseNearTacticalTarget="true" UseWhenOutOfAmmo="true" UpdateObject="ExampleObject" SearchRadius="215" Location="Water" MaxUpdatables="11" UseToCounterGarrison="true">
+      <ObjectFilter Rule="ANY" Include="INFANTRY"><IncludeThing>ExampleInfantry</IncludeThing></ObjectFilter>
+      <SpecialPowerWeapon Weapon="ExampleWeapon" IsDisablingAttack="true" AffectsFriendlies="true" AffectsSelf="true" TotalValueGreaterThan="13" AoeAttackPowerLocationPreference="PREFER_MAXIMUM_DAMAGE" AoeAttackPowerBlockAreaAfterActivationTime="4s" AoeAttackEmanationLocation="EMANATE_FROM_TARGET" ToggleRangeHysteresis="5.25" ToggleShortRangeTargetForcesTarget="true"/>
+    </AISpecialPowerInfo>
+  </LogicCommand>
+  <LogicCommand id="AICommandWeaponDefault"><AISpecialPowerInfo Heuristic="TOGGLE" Manager="TACTIC"><SpecialPowerWeapon Weapon="ExampleWeapon"/></AISpecialPowerInfo></LogicCommand>
+</AssetDeclaration>

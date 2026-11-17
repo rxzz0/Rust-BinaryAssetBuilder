@@ -1010,6 +1010,7 @@ mod tests {
     #[test]
     fn logic_command_matches_ea() {
         assert_ea_fixture("logic-command", 1);
+        assert_ea_fixture("logic-command-ai", 3);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {
