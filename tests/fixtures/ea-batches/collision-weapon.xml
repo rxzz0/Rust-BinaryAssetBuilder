@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeCollisionDefault">
+    <Draws/><Behaviors><FireWeaponCollide id="CollisionDefault"/></Behaviors><AI/>
+    <Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <GameObject id="ProbeCollisionCustom">
+    <Draws/><Behaviors>
+      <FireWeaponCollide id="CollisionCustom" WhereToFire="OWNER_POSITION" FireOnce="true" CollideWeapon="ProbeCollisionWeapon" Flags="TARGET_MUST_BE_MOVING DO_NOT_COLLIDE_WITH_PRODUCER WHEN_BEING_CRUSHED" RequiredStatus="CAN_ATTACK" ForbiddenStatus="NO_COLLISIONS"/>
+    </Behaviors><AI/>
+    <Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <WeaponTemplate id="ProbeCollisionWeapon"/>
+</AssetDeclaration>

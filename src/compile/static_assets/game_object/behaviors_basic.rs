@@ -41,6 +41,78 @@ pub(super) fn module_base(
     })
 }
 
+fn fire_weapon_collide(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    use super::super::ai_strategic::{enum_index, flags};
+
+    const KIND: u32 = 0xae4a_97b0;
+    const FIELDS: [(&str, u32, usize); 6] = [
+        ("CollideWeapon", 0xd046_dd22, 8),
+        ("FireOnce", 0x77e3_f4f7, 0x4c),
+        ("Flags", 0xd3bd_617c, 0xc),
+        ("RequiredStatus", 0xa7bd_811e, 0x10),
+        ("ForbiddenStatus", 0xa7bd_811e, 0x2c),
+        ("WhereToFire", 0xe0ab_5e11, 0x48),
+    ];
+    const LOCATIONS: [&str; 3] = ["TARGET_OBJECT", "TARGET_POSITION", "OWNER_POSITION"];
+    const FLAGS: [&str; 5] = [
+        "NONE",
+        "TARGET_MUST_BE_MOVING",
+        "DESTROY_SELF_ON_COLLIDE",
+        "DO_NOT_COLLIDE_WITH_PRODUCER",
+        "WHEN_BEING_CRUSHED",
+    ];
+    let path = data.path;
+    let allowed = ["id"]
+        .into_iter()
+        .chain(FIELDS.map(|(name, _, _)| name))
+        .collect::<Vec<_>>();
+    validate_attributes(node, &allowed, path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected FireWeaponCollide content"));
+    }
+    let start = data.allocate(pointer, 0x50)?;
+    let behavior = module_base(node, KIND, start, data, false)?;
+    let mut entries = vec![base(0x70e5_c103, Table::record(vec![behavior]))];
+    if let Some(weapon) = node.attribute("CollideWeapon") {
+        let ordinal = super::passive_area::reference(
+            weapon,
+            "WeaponTemplate",
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + 8, ordinal);
+    }
+    data.payload[start + 0x4c] = boolean(node, "FireOnce", false, path)?;
+    let flags = flags(
+        node.attribute("Flags").unwrap_or("NONE"),
+        &FLAGS,
+        "Flags",
+        path,
+    )?;
+    data.word(start + 0xc, flags);
+    for (name, offset) in [("RequiredStatus", 0x10), ("ForbiddenStatus", 0x2c)] {
+        if let Some(status) = node.attribute(name) {
+            super::secondary_damage::write_status_flags(status, start + offset, data)?;
+        }
+    }
+    let location = enum_index(
+        node.attribute("WhereToFire").unwrap_or("TARGET_OBJECT"),
+        &LOCATIONS,
+        "WhereToFire",
+        path,
+    )?;
+    data.word(start + 0x48, location);
+    entries.extend(fields(start, &FIELDS));
+    Ok((KIND, Table::record(entries)))
+}
+
 fn squish_collide(
     node: Node<'_, '_>,
     pointer: usize,
@@ -828,6 +900,9 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
+    if node.has_tag_name((SAGE_NS, "FireWeaponCollide")) {
+        return fire_weapon_collide(node, pointer, data, references, reference_types).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "SquishCollide")) {
         return squish_collide(node, pointer, data).map(Some);
     }

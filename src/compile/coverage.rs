@@ -109,6 +109,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "EngineerContain",
             "FXListBehavior",
             "FireWeaponWhenDead",
+            "FireWeaponCollide",
             "InfiltratorContain",
             "LUAEventList",
             "ObjectDefectionHelper",
@@ -1307,6 +1308,11 @@ mod tests {
     #[test]
     fn animation_sound_frame_and_reference_variants_match_ea() {
         assert_ea_fixture("animation-sound-edge", 1);
+    }
+
+    #[test]
+    fn fire_weapon_collide_matches_ea() {
+        assert_ea_fixture("collision-weapon", 3);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {
