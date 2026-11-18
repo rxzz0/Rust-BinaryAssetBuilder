@@ -2,7 +2,7 @@
 
 use binary_asset_builder::big::pack_big;
 use binary_asset_builder::compile::{
-    CompiledStream, compile_apt_ui, compile_apt_ui_directory, compile_sdk_global,
+    CompiledStream, compile_apt_ui, compile_apt_ui_directory, compile_map, compile_sdk_global,
     compile_sdk_static, compile_static, merge_assets, sdk_coverage, verify_ea_batch,
     write_compiled_stream,
 };
@@ -21,6 +21,7 @@ Usage
   binary-asset-builder compile <file.xml> --data-root <directory> --output <new-directory>
   binary-asset-builder compile-aptui <input-directory> --data-root <directory> --output <directory>
   binary-asset-builder compile-static <file.xml> --data-root <directory> --references <directory> --output <new-directory>
+  binary-asset-builder compile-map <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory>
   binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory>
   binary-asset-builder merge-assets <file.manifest> --assets <directory>
@@ -147,13 +148,18 @@ fn main() -> ExitCode {
             references,
             output_flag,
             output,
-        ] if command == "compile-static"
+        ] if (command == "compile-static" || command == "compile-map")
             && root_flag == "--data-root"
             && references_flag == "--references"
             && output_flag == "--output" =>
         {
             let input = Path::new(input);
-            let result = compile_static(input, Path::new(root), Path::new(references))
+            let compile = if command == "compile-map" {
+                compile_map
+            } else {
+                compile_static
+            };
+            let result = compile(input, Path::new(root), Path::new(references))
                 .and_then(|stream| write_compiled_stream(input, Path::new(output), stream));
             match result {
                 Ok(()) => ExitCode::SUCCESS,

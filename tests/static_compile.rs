@@ -1,5 +1,5 @@
 use binary_asset_builder::{
-    compile::{CustomData, compile_sdk_global, compile_sdk_static, compile_static},
+    compile::{CustomData, compile_map, compile_sdk_global, compile_sdk_static, compile_static},
     manifest::{AssetEntry, AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest},
 };
 use std::fs;
@@ -1689,6 +1689,73 @@ fn links_polymorphic_render_models_like_ea() {
     assert_eq!(
         &stream.files.bin[payload_start..payload_start + payload_len],
         &oracle[32..32 + payload_len]
+    );
+}
+
+#[test]
+fn maps_link_worldbuilder_models_and_keep_local_overrides() {
+    let root = scratch_root();
+    let map = root.join("map.xml");
+    let assets = root.join("WorldBuilder.xml");
+    fs::create_dir(root.join("Data")).unwrap();
+    fs::write(
+        &assets,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <W3DContainer id="StockModel"/>
+        <GameObject id="Prop" EditorName="Stock"><Body><PropBody id="Body"/></Body></GameObject>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stock = compile_static(&assets, &root, &root).unwrap();
+    fs::write(root.join("worldbuilder.manifest"), &stock.manifest).unwrap();
+    fs::write(
+        root.join("Data/props.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <GameObject id="Prop" EditorName="Map">
+            <Draws><PropDraw id="Draw" Model="StockModel"/></Draws>
+            <Body><PropBody id="Body"/></Body>
+        </GameObject>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        &map,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <Includes><Include type="instance" source="DATA:props.xml"/></Includes>
+        <GameMap id="Map"><Prop ThingTemplate="Prop"><Position x="0" y="0" z="0"/></Prop></GameMap>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+
+    let stream = compile_map(&map, &root, &root).unwrap();
+    let actual = Manifest::parse(&stream.manifest).unwrap();
+    let expected = Manifest::parse(&stock.manifest).unwrap();
+    let stock_model = expected
+        .assets
+        .iter()
+        .find(|a| a.name == b"W3DContainer:StockModel")
+        .unwrap();
+    let stock_prop = expected
+        .assets
+        .iter()
+        .find(|a| a.name == b"GameObject:Prop")
+        .unwrap();
+    let map_prop = actual
+        .assets
+        .iter()
+        .find(|a| a.id == stock_prop.id)
+        .unwrap();
+    assert_eq!(actual.assets.len(), 2);
+    assert_eq!(map_prop.instance_hash, stock_prop.instance_hash);
+    assert_eq!(
+        map_prop.references.iter().collect::<Vec<_>>(),
+        [stock_model.id]
+    );
+    assert_eq!(actual.referenced_manifests.len(), 1);
+    assert!(actual.referenced_manifests[0].is_patch);
+    assert_eq!(
+        actual.referenced_manifests[0].path,
+        b"worldbuilder.11.manifest"
     );
 }
 

@@ -35,7 +35,12 @@ pub fn compile_sdk_global(input: &Path, sdk_root: &Path, output: &Path) -> io::R
         return Ok(());
     }
     let outputs = compile_streams(&sources, b" \r\n", |source| {
-        super::compile(source, sdk_root, Some(output), true)
+        super::compile(
+            source,
+            sdk_root,
+            Some(output),
+            super::ReferenceMode::Implicit,
+        )
     })?;
     publish(&output.join(relative), outputs, |path| {
         is_generated(path) && is_map_metadata(path)

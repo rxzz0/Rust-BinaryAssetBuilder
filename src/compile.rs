@@ -49,7 +49,7 @@ pub enum CustomData {
 
 /// Compiles a linked RA3 PC stream from AptUI declarations and their includes.
 pub fn compile_apt_ui(input: &Path, data_root: &Path) -> io::Result<CompiledStream> {
-    compile(input, data_root, None, false)
+    compile(input, data_root, None, ReferenceMode::Explicit)
 }
 
 /// Compiles supported static XML assets against the SDK's precompiled streams.
@@ -58,14 +58,40 @@ pub fn compile_static(
     data_root: &Path,
     reference_directory: &Path,
 ) -> io::Result<CompiledStream> {
-    compile(input, data_root, Some(reference_directory), false)
+    compile(
+        input,
+        data_root,
+        Some(reference_directory),
+        ReferenceMode::Explicit,
+    )
+}
+
+/// Compiles an RA3 map stream linked against the SDK's WorldBuilder assets.
+pub fn compile_map(
+    input: &Path,
+    data_root: &Path,
+    reference_directory: &Path,
+) -> io::Result<CompiledStream> {
+    compile(
+        input,
+        data_root,
+        Some(reference_directory),
+        ReferenceMode::Map,
+    )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReferenceMode {
+    Explicit,
+    Implicit,
+    Map,
 }
 
 fn compile(
     input: &Path,
     data_root: &Path,
     reference_directory: Option<&Path>,
-    implicit_sdk_references: bool,
+    reference_mode: ReferenceMode,
 ) -> io::Result<CompiledStream> {
     let root = fs::canonicalize(data_root)?;
     let input = fs::canonicalize(input)?;
@@ -76,10 +102,27 @@ fn compile(
         mods.eq_ignore_ascii_case("mods")
             .then(|| root.join(mods).join(name))
     });
+    let is_map = reference_mode == ReferenceMode::Map;
+    let map_root = if is_map { input.parent() } else { None };
+    let paths = |directory, sdk_directory| {
+        search_paths(
+            &root,
+            map_root,
+            mod_root.as_deref(),
+            directory,
+            sdk_directory,
+        )
+    };
+    let worldbuilder_hashes = if is_map {
+        crate::fix_assets::worldbuilder_hashes(reference_directory.unwrap())?
+    } else {
+        HashMap::new()
+    };
     let mut compiler = Compiler {
-        data_paths: search_paths(&root, mod_root.as_deref(), "Data", "SageXml"),
-        art_paths: search_paths(&root, mod_root.as_deref(), "Art", "Art"),
-        audio_paths: search_paths(&root, mod_root.as_deref(), "Audio", "Audio"),
+        data_paths: paths("Data", "SageXml"),
+        art_paths: paths("Art", "Art"),
+        audio_paths: paths("Audio", "Audio"),
+        map_art_path: map_root.map(|map| map.join("Art")),
         root,
         visited: HashSet::new(),
         active: HashSet::new(),
@@ -93,9 +136,10 @@ fn compile(
         game_object_schema: None,
         music_headers: HashMap::new(),
         reference_directory,
-        implicit_sdk_references,
+        reference_mode,
         referenced_manifests: Vec::new(),
         external_ids: HashSet::new(),
+        worldbuilder_hashes,
     };
     compiler.read_document(&input, false, false)?;
     compiler.add_referenced_instances()?;
@@ -104,11 +148,15 @@ fn compile(
 
 fn search_paths(
     root: &Path,
+    map_root: Option<&Path>,
     mod_root: Option<&Path>,
     directory: &str,
     sdk_directory: &str,
 ) -> Vec<PathBuf> {
     let mut paths = vec![root.to_path_buf()];
+    if let Some(map_root) = map_root {
+        paths.push(map_root.join(directory));
+    }
     if let Some(mod_root) = mod_root {
         paths.push(mod_root.join(directory));
     }
@@ -133,9 +181,11 @@ struct Compiler<'a> {
     game_object_schema: Option<static_assets::game_object::Schema>,
     music_headers: HashMap<PathBuf, static_assets::music::Header>,
     reference_directory: Option<&'a Path>,
-    implicit_sdk_references: bool,
+    reference_mode: ReferenceMode,
+    map_art_path: Option<PathBuf>,
     referenced_manifests: Vec<String>,
     external_ids: HashSet<AssetId>,
+    worldbuilder_hashes: HashMap<AssetId, u32>,
 }
 
 #[derive(Clone)]
@@ -543,8 +593,17 @@ impl Compiler<'_> {
             };
             roots
                 .iter()
-                .map(|root| root.join(bucket).join(path))
-                .find(|candidate| candidate.is_file())
+                .find_map(|root| {
+                    let candidate = root.join(bucket).join(path);
+                    if candidate.is_file() {
+                        return Some(candidate);
+                    }
+                    if self.map_art_path.as_ref() == Some(root) && !bucket.is_empty() {
+                        let flat = root.join(path);
+                        return flat.is_file().then_some(flat);
+                    }
+                    None
+                })
                 .ok_or_else(|| {
                     io::Error::new(
                         io::ErrorKind::NotFound,
@@ -570,12 +629,18 @@ impl Compiler<'_> {
             .strip_prefix(&self.root)
             .map_err(|_| invalid(document, "reference lies outside the data root"))?
             .with_extension("manifest");
-        let name = relative
+        let mut name = relative
             .to_str()
             .filter(|name| name.is_ascii())
             .ok_or_else(|| invalid(document, "manifest reference path must be ASCII"))?
             .replace('/', "\\")
             .to_ascii_lowercase();
+        if self.reference_mode == ReferenceMode::Map
+            && let Some(file @ ("static.manifest" | "global.manifest" | "audio.manifest")) =
+                name.strip_prefix("sagexml\\")
+        {
+            name = file.to_owned();
+        }
         if self.referenced_manifests.contains(&name) {
             return Ok(());
         }
@@ -692,7 +757,7 @@ impl Compiler<'_> {
         if self.assets.is_empty() {
             return Err(invalid(&self.root, "input contains no supported assets"));
         }
-        if self.implicit_sdk_references
+        if self.reference_mode == ReferenceMode::Implicit
             && self
                 .assets
                 .iter()
@@ -733,7 +798,9 @@ impl Compiler<'_> {
             relocations: 0,
             imports: 0,
         };
+        let worldbuilder_ids: HashSet<_> = self.worldbuilder_hashes.keys().copied().collect();
         let mut resolved_references = Vec::with_capacity(self.assets.len());
+        let mut deferred = HashSet::new();
         for asset in &self.assets {
             let mut resolved = Vec::with_capacity(asset.references.len());
             for reference in &asset.references {
@@ -742,7 +809,24 @@ impl Compiler<'_> {
                     resolved.push(local);
                     continue;
                 }
-                let Some(external) = reference.external_id(&self.external_ids) else {
+                let Some(external) = reference
+                    .external_id(&self.external_ids)
+                    .or_else(|| reference.external_id(&worldbuilder_ids))
+                else {
+                    // Map placements can reference assets supplied by the game's active streams.
+                    if self.reference_mode == ReferenceMode::Map
+                        && asset.name.starts_with("GameMap:")
+                    {
+                        let id = reference.declared_id();
+                        resolved.push(id);
+                        if deferred.insert(id) {
+                            eprintln!(
+                                "Map runtime reference {:08x}:{:08x} in {}",
+                                id.type_id, id.instance_id, asset.name
+                            );
+                        }
+                        continue;
+                    }
                     return Err(invalid(
                         &self.root,
                         format!(
@@ -784,7 +868,11 @@ impl Compiler<'_> {
                 AssetEntry {
                     id: asset.id,
                     type_hash: asset.type_hash,
-                    instance_hash: asset.instance_hash,
+                    instance_hash: self
+                        .worldbuilder_hashes
+                        .get(&asset.id)
+                        .copied()
+                        .unwrap_or(asset.instance_hash),
                     chunk_sizes,
                     name: asset.name.as_bytes(),
                     source_file_name: asset.source.as_bytes(),
@@ -807,13 +895,20 @@ impl Compiler<'_> {
                 .map_err(|_| invalid(&self.root, "stream is too large"))?,
             max_chunk_sizes,
             assets,
-            referenced_manifests: self
-                .referenced_manifests
-                .iter()
-                .map(|path| ReferencedManifest {
-                    path: path.as_bytes(),
-                    is_patch: false,
+            referenced_manifests: (self.reference_mode == ReferenceMode::Map)
+                .then_some(ReferencedManifest {
+                    path: b"worldbuilder.11.manifest",
+                    is_patch: true,
                 })
+                .into_iter()
+                .chain(
+                    self.referenced_manifests
+                        .iter()
+                        .map(|path| ReferencedManifest {
+                            path: path.as_bytes(),
+                            is_patch: false,
+                        }),
+                )
                 .collect(),
         }
         .encode()

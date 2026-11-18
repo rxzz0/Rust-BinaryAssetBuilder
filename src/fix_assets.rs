@@ -158,7 +158,7 @@ fn external_ids(
     Ok(ids)
 }
 
-fn worldbuilder_hashes(references: &Path) -> io::Result<HashMap<AssetId, u32>> {
+pub(crate) fn worldbuilder_hashes(references: &Path) -> io::Result<HashMap<AssetId, u32>> {
     let schema_copy = references.join("sagexml").join("worldbuilder.manifest");
     let path = if schema_copy.is_file() {
         schema_copy
