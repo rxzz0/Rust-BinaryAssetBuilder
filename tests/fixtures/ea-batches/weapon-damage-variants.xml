@@ -1,0 +1,24 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="ProbeDamageAndSpawnBare">
+    <Nuggets><DamageAndSpawnNugget><SpawnTemplate>ProbeSpawn</SpawnTemplate></DamageAndSpawnNugget></Nuggets>
+  </WeaponTemplate>
+  <WeaponTemplate id="ProbeDamageAndSpawnFull">
+    <Nuggets>
+      <DamageAndSpawnNugget Damage="20" SpawnProbability=".7" SpawnedModelConditionFlags="DAMAGED REALLYDAMAGED" ForbiddenTargetModelCondition="SHRINK_EFFECT">
+        <SpecialObjectFilter Rule="ALL" Include="INFANTRY"/>
+        <RequiredUpgrade>ProbeUpgrade</RequiredUpgrade>
+        <SpawnTemplate>ProbeSpawn2</SpawnTemplate>
+      </DamageAndSpawnNugget>
+    </Nuggets>
+  </WeaponTemplate>
+  <WeaponTemplate id="ProbeLeechHealth">
+    <Nuggets>
+      <LeechHealthDamageNugget/>
+      <LeechHealthDamageNugget Damage="15" PercentDamageToHeal="72%" AcceptDamageAdd="false" />
+      <LeechPercentMaxHealthDamageNugget/>
+      <LeechPercentMaxHealthDamageNugget Damage="4" PercentMaxHealthToTake="35%">
+        <SpecialObjectFilter Rule="ANY" Include="STRUCTURE"/>
+      </LeechPercentMaxHealthDamageNugget>
+    </Nuggets>
+  </WeaponTemplate>
+</AssetDeclaration>

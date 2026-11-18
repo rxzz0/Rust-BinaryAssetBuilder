@@ -1,0 +1,39 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <WeaponTemplate id="LuaEffectDefaults">
+        <Nuggets><LuaEventNugget/></Nuggets>
+    </WeaponTemplate>
+    <WeaponTemplate id="LuaEffectFields">
+        <Nuggets>
+            <LuaEventNugget EventName="OnTestWeapon" Radius="28.5" SendToEnemies="true" SendToAllies="false" SendToNeutral="true" ForbiddenTargetObjectStatus="NO_COLLISIONS">
+                <SpecialObjectFilter Rule="ANY" Include="INFANTRY"/>
+                <RequiredUpgrade>Upgrade_Probe</RequiredUpgrade>
+            </LuaEventNugget>
+        </Nuggets>
+    </WeaponTemplate>
+    <WeaponTemplate id="SeedTiberiumDefaults">
+        <Nuggets><SeedTiberiumNugget/></Nuggets>
+    </WeaponTemplate>
+    <WeaponTemplate id="SeedTiberiumFields">
+        <Nuggets>
+            <SeedTiberiumNugget WeaponOCL="TestSpawn" FieldAmount="27.5" SpawnedInFieldBonus="1.5" Radius="9">
+                <SpecialObjectFilter Rule="ALL" Include="INFANTRY"/>
+                <ForbiddenUpgrade>Upgrade_Probe</ForbiddenUpgrade>
+            </SeedTiberiumNugget>
+        </Nuggets>
+    </WeaponTemplate>
+    <WeaponTemplate id="GrapplingHookDefaults">
+        <Nuggets><GrapplingHookNugget/></Nuggets>
+    </WeaponTemplate>
+    <WeaponTemplate id="GrapplingHookFields">
+        <Nuggets>
+            <GrapplingHookNugget Damage="55" Radius="7" ForbiddenTargetObjectStatus="NO_COLLISIONS">
+                <SpecialObjectFilter Rule="ANY" Include="INFANTRY"/>
+                <RequiredUpgrade>Upgrade_Probe</RequiredUpgrade>
+            </GrapplingHookNugget>
+        </Nuggets>
+    </WeaponTemplate>
+    <WeaponTemplate id="LuaEventEmpty"><Nuggets><LuaEventNugget EventName=""/></Nuggets></WeaponTemplate>
+    <WeaponTemplate id="LuaEventWhitespace"><Nuggets><LuaEventNugget EventName="  "/></Nuggets></WeaponTemplate>
+    <WeaponTemplate id="LuaEventCP1252"><Nuggets><LuaEventNugget EventName="café"/></Nuggets></WeaponTemplate>
+    <WeaponTemplate id="SeedPrimary"><Nuggets><SeedTiberiumNugget TargetAsPrimaryObject="true"/></Nuggets></WeaponTemplate>
+</AssetDeclaration>

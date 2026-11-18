@@ -8,6 +8,9 @@ use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::{Document, Node};
 use std::{io, path::Path, sync::OnceLock};
 
+mod damage_variants;
+mod misc_variants;
+
 // Read the fixed token table and default fields from the empty EA fixture.
 const BASE: &[u8] = include_bytes!(
     "../../../tests/fixtures/ea-batches/weapon-template-root-assets/94d4d96e.0ce6168e.a529f9d4.226acfbb.asset"
@@ -361,6 +364,7 @@ fn encode_nuggets(
     let mut entries = Vec::with_capacity(children.len());
     for (index, child) in children.into_iter().enumerate() {
         let pointer = first + index * 4;
+        let variant = damage_variants::Variant::for_node(child);
         let (kind, target) = match (child.tag_name().namespace(), child.tag_name().name()) {
             (Some(SAGE_NS), "FireOnObjectsNugget") => {
                 (0x7814_daf0, fire_on_objects(child, pointer, data, out)?)
@@ -403,6 +407,18 @@ fn encode_nuggets(
             (Some(SAGE_NS), "WeaponOCLNugget") => (
                 0xc606_7c3f,
                 simple_reference_nugget(child, pointer, data, out, false)?,
+            ),
+            (Some(SAGE_NS), "LuaEventNugget") => {
+                let start = data.payload.len() as u32;
+                derived_relocations.push((start, start + 0x28, start + 0x34));
+                misc_variants::encode(child, pointer, data, out)?
+            }
+            (Some(SAGE_NS), "SeedTiberiumNugget") => {
+                misc_variants::encode(child, pointer, data, out)?
+            }
+            (Some(SAGE_NS), _) if let Some(variant) = variant => (
+                variant.type_id(),
+                fire_on_objects(child, pointer, data, out)?,
             ),
             (Some(SAGE_NS), name) => {
                 let (_, kind, fields) = SIMPLE_EFFECTS
@@ -731,7 +747,8 @@ fn fire_on_objects(
     let direct = node.has_tag_name((SAGE_NS, "DamageNugget"));
     let contained = node.has_tag_name((SAGE_NS, "DamageContainedNugget"));
     let line = node.has_tag_name((SAGE_NS, "LineDamageNugget"));
-    let is_damage = dot || direct || contained || line;
+    let variant = damage_variants::Variant::for_node(node);
+    let is_damage = dot || direct || contained || line || variant.is_some();
     const LINE_FIELDS: &[(&str, u32, usize)] = &[
         ("OffsetAngle", 0x4e16_ea4d, 0x98),
         ("LineWidth", 0x6458_64f3, 0x9c),
@@ -787,6 +804,11 @@ fn fire_on_objects(
             .flatten()
             .map(|&(name, _, _)| name),
     )
+    .chain(
+        variant
+            .into_iter()
+            .flat_map(|variant| variant.attributes().iter().copied()),
+    )
     .collect();
     validate_effect_attributes(
         node,
@@ -799,7 +821,9 @@ fn fire_on_objects(
     )?;
     let start = data.allocate(
         pointer,
-        if contained {
+        if let Some(variant) = variant {
+            variant.size()
+        } else if contained {
             0x110
         } else if line {
             0xb0
@@ -843,7 +867,9 @@ fn fire_on_objects(
         }
         data.word(
             start,
-            if dot {
+            if let Some(variant) = variant {
+                variant.type_id()
+            } else if dot {
                 0xefbb_5226
             } else if line {
                 LINE_DAMAGE
@@ -936,8 +962,17 @@ fn fire_on_objects(
     } else {
         None
     };
-    if children.next().is_some() {
-        return Err(invalid(path, "unsupported damage nugget child"));
+    let derived = variant
+        .map(|variant| variant.encode_fields(node, start, data, out, &mut children))
+        .transpose()?;
+    if let Some(child) = children.next() {
+        return Err(invalid(
+            path,
+            format!(
+                "unsupported damage nugget child {}",
+                child.tag_name().name()
+            ),
+        ));
     }
     let mut damage = vec![effect];
     damage.extend(
@@ -950,6 +985,15 @@ fn fire_on_objects(
         0xe4a6_e6e4,
         Target::Table(Table::array(start + 0x88, [])),
     ));
+    if let Some(derived) = derived {
+        let mut fields = vec![Entry::new(
+            1,
+            0xc0f5_3e99,
+            Target::Table(Table::record(damage)),
+        )];
+        fields.extend(derived);
+        return Ok(Table::record(fields));
+    }
     if direct {
         return Ok(Table::record(damage));
     }

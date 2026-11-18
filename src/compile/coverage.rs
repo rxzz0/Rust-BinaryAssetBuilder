@@ -1247,6 +1247,12 @@ mod tests {
         assert_ea_fixture("weapon-meta-impact", 2);
     }
 
+    #[test]
+    fn remaining_weapon_nuggets_match_ea() {
+        assert_ea_fixture("weapon-damage-variants", 3);
+        assert_ea_fixture("weapon-misc-complete", 10);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
