@@ -128,6 +128,10 @@ pub(super) fn encode(
                     material_float_names,
                 )?,
             ),
+            "PropDraw" if node.has_tag_name((SAGE_NS, "PropDraw")) => (
+                0x148a_a464,
+                prop_draw(node, pointer, data, references, reference_types)?,
+            ),
             "TracerModelDraw" if node.has_tag_name((SAGE_NS, "TracerModelDraw")) => (
                 0x5401_8e60,
                 encode_tracer(node, pointer, data, references, reference_types)?,
@@ -151,6 +155,56 @@ pub(super) fn encode(
     Ok(Target::Table(Table::array(list, items)))
 }
 
+fn prop_draw(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Table> {
+    let path = data.path;
+    validate_attributes(node, &["id", "Model"], path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected PropDraw content"));
+    }
+    let start = data.allocate(pointer, 12)?;
+    let parent = draw_base(node, 0x148a_a464, start, data)?;
+    let model = super::passive_area::reference(
+        node.attribute("Model").unwrap_or(""),
+        "BaseRenderAssetType",
+        path,
+        references,
+        reference_types,
+    )?;
+    data.word(start + 8, model);
+    Ok(Table::record(vec![
+        parent,
+        Entry::named("Model", 0xfcb1_06d5, Target::Data(start + 8)),
+    ]))
+}
+
+fn draw_base(
+    node: Node<'_, '_>,
+    kind: u32,
+    start: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Entry> {
+    use super::behaviors_basic::{base, inherited};
+
+    data.word(start, kind);
+    data.word(start + 4, hash_name(required(node, "id", data.path)?));
+    Ok(base(
+        0x17f6_1728,
+        inherited(
+            0xd75d_93a2,
+            Table::record(vec![
+                Entry::new(0x19b0_42a0, 0x23e6_50b8, Target::Data(start)),
+                Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
+            ]),
+        ),
+    ))
+}
+
 fn encode_tracer(
     node: Node<'_, '_>,
     pointer: usize,
@@ -158,7 +212,7 @@ fn encode_tracer(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Table> {
-    use super::behaviors_basic::{base, inherited, weapon_slot};
+    use super::behaviors_basic::weapon_slot;
 
     const REALS: [&str; 10] = [
         "MinLength",
@@ -188,18 +242,7 @@ fn encode_tracer(
         .collect();
     validate_attributes(node, &allowed, path)?;
     let start = data.allocate(pointer, 0x70)?;
-    data.word(start, 0x5401_8e60);
-    data.word(start + 4, hash_name(required(node, "id", path)?));
-    let mut entries = vec![base(
-        0x17f6_1728,
-        inherited(
-            0xd75d_93a2,
-            Table::record(vec![
-                Entry::new(0x19b0_42a0, 0x23e6_50b8, Target::Data(start)),
-                Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
-            ]),
-        ),
-    )];
+    let mut entries = vec![draw_base(node, 0x5401_8e60, start, data)?];
     for (index, name) in REALS.into_iter().enumerate() {
         let default = if name == "SweepSpeed" { "1" } else { "0" };
         let field = start + 8 + 4 * index;

@@ -15,6 +15,7 @@ const MODULES: &[(&str, &[&str])] = &[
         &[
             "DynamicsDraw",
             "LaserDraw",
+            "PropDraw",
             "ScriptedModelDraw",
             "StreamDraw",
             "TankDraw",
