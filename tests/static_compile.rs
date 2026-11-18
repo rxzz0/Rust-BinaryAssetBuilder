@@ -1570,6 +1570,42 @@ fn inherited_upgrade_payload_matches_ea() {
 }
 
 #[test]
+fn inherited_fx_lists_match_ea() {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/inherited-fx");
+    let root = scratch_root();
+    let schemas = root.join("Schemas/xsd");
+    fs::create_dir_all(&schemas).unwrap();
+    let schema = include_str!("../schemas/ra3/xsd/AssetTypeFXList.xsd").replace(
+        "</xs:schema>",
+        "<xs:complexType name=\"BaseAssetType\"/></xs:schema>",
+    );
+    fs::write(schemas.join("CnC3Types.xsd"), schema).unwrap();
+    let input = root.join("inherited-fx.xml");
+    fs::copy(fixtures.join("inherited-fx.xml"), &input).unwrap();
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    assert_eq!(manifest.assets.len(), 4);
+    let mut payload = &stream.files.bin[4..];
+    let mut relocations = &stream.files.relo[4..];
+    for entry in manifest.assets {
+        let filename = format!(
+            "{:08x}.{:08x}.{:08x}.{:08x}.asset",
+            entry.id.type_id, entry.type_hash, entry.id.instance_id, entry.instance_hash
+        );
+        let ea = fs::read(fixtures.join("assets").join(&filename)).unwrap();
+        let bytes = entry.chunk_sizes.instance as usize;
+        let relo_bytes = entry.chunk_sizes.relocations as usize;
+        let (current, remaining) = payload.split_at(bytes);
+        let (relo, remaining_relo) = relocations.split_at(relo_bytes);
+        assert_eq!(current, &ea[32..32 + bytes], "{filename}");
+        assert_eq!(relo, &ea[32 + bytes..32 + bytes + relo_bytes], "{filename}");
+        payload = remaining;
+        relocations = remaining_relo;
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn inherited_experience_level_payload_matches_ea() {
     let root = scratch_root();
     let schemas = root.join("Schemas/xsd");

@@ -1,7 +1,7 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 284 adds all four PlayerPowerButtonTemplate variants and shares cursor and list handling with unit ability buttons. All 17 EA button fixtures, 277 tests, and Clippy passed.
-- Checkpoints 280–283 add ore and automatic deposit behaviors, JetAIUpdate, and cleared GameObject EVA events.
-- Checkpoints 274–279 add locomotor and surface mappings, transformed display and upgrade fields, sweeping damage, expanded animation sound support, and FireWeaponCollide.
+- Checkpoint 285 links inherited FX lists. EA fixtures cover appending and replacing nuggets and linking a particle effect. All 278 tests and Clippy passed.
+- Checkpoint 284 adds all four PlayerPowerButtonTemplate variants. All 17 EA button fixtures matched.
+- Checkpoints 274–283 add locomotor and surface mappings, transformed display and upgrade fields, sweeping damage, animation sound support, collision, ore, JetAIUpdate, and cleared EVA events.
 
-- Surge Step 6 passes Reaper's cleared EVA entry and reaches FXList inheritance on Steel Ronin. Next task is compiling inherited FX lists.
+- Surge Step 6 passed inherited FX lists in 11.15 seconds of release compilation before it reached DamageNugget DamageArc on Steel Ronin. Next task is encoding that field.

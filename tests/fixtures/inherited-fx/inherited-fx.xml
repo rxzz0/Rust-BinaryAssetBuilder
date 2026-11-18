@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset" xmlns:xai="uri:ea.com:eala:asset:instance">
+  <FXList id="FxInheritedBase" PlayEvenIfShrouded="true">
+    <NuggetList><ForceFeedback/><ForceFeedback/></NuggetList>
+  </FXList>
+  <FXList id="FxInheritedDerived" inheritFrom="FxInheritedBase" Tailorable="true">
+    <NuggetList><ParticleSystem Particle="FxInheritanceParticle" Ricochet="true"/></NuggetList>
+  </FXList>
+  <FXList id="FxInheritedReplaced" inheritFrom="FxInheritedDerived">
+    <NuggetList xai:joinAction="Replace"><Sound/></NuggetList>
+  </FXList>
+  <FXParticleSystemTemplate id="FxInheritanceParticle"><Physics/><Draw/><Volume/><Velocity/></FXParticleSystemTemplate>
+</AssetDeclaration>
