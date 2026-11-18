@@ -1,5 +1,5 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 238 encodes SkirmishAiInfo attributes and StateWeapon settings for toggle abilities. It reuses the special-power weapon encoder. Both toggle fixtures match EA byte for byte. All 230 tests and Clippy passed.
-- Checkpoint 237 encodes scriptable draw track marks, particles, and flags. Checkpoint 236 encodes two weapon nuggets and shared effect conditions.
-- Surge Step 6 passes the Hammer Tank's toggle ability and reaches ConvergingLaserState. Next task is verifying and encoding that behavior.
+- Checkpoint 239 adds ConvergingLaserState, SweepingLaserState, and StreamState, reusing the LaserState layout and preserving XML reference order. Both laser fixtures match EA byte for byte. All 230 tests and Clippy passed.
+- Checkpoint 238 encodes toggle ability AI settings and StateWeapon. Checkpoint 237 encodes inherited ScriptedModelDraw references and flags.
+- Surge Step 6 passes the Hammer Tank's laser states and reaches ObjectCreationUpgrade. Next task is encoding the upgrade and its spawn reference.

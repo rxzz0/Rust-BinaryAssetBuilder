@@ -1,0 +1,20 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="LaserStateVariantsProbe">
+    <Behaviors>
+      <ConvergingLaserState id="ConvergingDefault"/>
+      <ConvergingLaserState id="ConvergingConfigured" OriginBoneName="Origin" LaserId="301" ConvergingAngle="135d" AngleRotation="45d" Radius="100" SweepWeapon="SweepGun" SweepFXTimeout=".25s" VeteranSweepFXList="VetSweep" SweepFXList="Sweep" ModelConditions="FIRING_OR_PREATTACK_D" Lifetime="2s">
+        <LaserEndParticleSystem>EndA</LaserEndParticleSystem>
+        <LaserStartParticleSystem>StartA</LaserStartParticleSystem>
+        <EndOffset x="2" y="-3"/>
+        <ObjectStatusValidation RequiredStatus="CAN_ATTACK" ForbiddenStatus="WEAPON_UPGRADED_01"/>
+      </ConvergingLaserState>
+      <SweepingLaserState id="SweepingDefault"/>
+      <SweepingLaserState id="SweepingConfigured" LaserId="9" OriginBoneName="Origin" Radius="20" SweepFXList="SweepAlt" VeteranSweepFXList="VetSweepAlt" SweepFXTimeout="2s" SweepWeapon="SweepGunAlt">
+        <LaserEndParticleSystem>EndB</LaserEndParticleSystem>
+      </SweepingLaserState>
+      <StreamState id="StreamDefault"/>
+      <StreamState id="StreamConfigured" StreamId="101"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

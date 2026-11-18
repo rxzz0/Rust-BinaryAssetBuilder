@@ -907,7 +907,10 @@ pub(super) fn encode(
         return super::infiltrator::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
-    if node.has_tag_name((SAGE_NS, "LaserState")) {
+    if matches!(
+        node.tag_name().name(),
+        "LaserState" | "ConvergingLaserState" | "SweepingLaserState" | "StreamState"
+    ) {
         return super::laser_state::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
