@@ -1028,6 +1028,11 @@ mod tests {
     }
 
     #[test]
+    fn unit_ability_button_templates_match_ea_batch() {
+        assert_ea_fixture("unit-ability-buttons", 12);
+    }
+
+    #[test]
     fn button_single_state_matches_ea_batch() {
         assert_ea_fixture("button-state", 3);
     }

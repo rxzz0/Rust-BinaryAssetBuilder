@@ -8,6 +8,7 @@ use roxmltree::Node;
 use std::io;
 use std::path::Path;
 
+mod ability_buttons;
 mod ai_build;
 mod ai_command;
 mod ai_heuristics;
@@ -53,6 +54,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "UnitIntro" => (0x5708_06d2, 8, unit_intro),
         "UnitTypeIcon" => (0xf9e6_8b56, 52, global_ui::unit_type_icon),
         "ButtonSingleStateData" => (0xe15d_5b18, 62, global_ui::button_single_state),
+        "UnitAbilityButtonTemplate" => (0xb087_4c15, 63, ability_buttons::compile),
         "PackedTextureImage" => (0xf8fc_ad30, 53, global_ui::packed_texture_image),
         "VideoEventList" => (0x96da_1c03, 9, video_events),
         "LogicCommandSet" => (0x8ae8_b68c, 11, logic_commands),

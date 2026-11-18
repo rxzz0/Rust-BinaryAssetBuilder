@@ -1,0 +1,24 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UnitAbilityButtonTemplate id="AbilityAssemble" LogicCommand="CmdAssemble"><Data><AssembleStructure StateData="StateAssemble"/></Data></UnitAbilityButtonTemplate>
+  <UnitAbilityButtonTemplate id="AbilityBuildUnit" LogicCommand="CmdBuild"><Data><BuildUnit/></Data></UnitAbilityButtonTemplate>
+  <UnitAbilityButtonTemplate id="AbilityBuildWall" LogicCommand="CmdWall"><Data><BuildWall StateData="StateWall"/></Data></UnitAbilityButtonTemplate>
+  <UnitAbilityButtonTemplate id="AbilityEvacuate" LogicCommand="CmdEvacuate"><Data><Evacuate StateData="StateEvacuate"/></Data></UnitAbilityButtonTemplate>
+  <UnitAbilityButtonTemplate id="AbilityMultiple" LogicCommand="CmdMultiple"><Data>
+    <MultiplePowersTargetedSpecialPower StateData="StateMultiple" RadiusCursor="RadiusMultiple" ValidTargetCursor="ValidMultiple" InvalidTargetCursor="InvalidMultiple" ValidTargetOutline="HOVER_ATTACK">
+      <ValidTargetTintColor R=".12" G=".34" B=".56"/>
+      <AdditionalSpecialPowerTemplate>Power1</AdditionalSpecialPowerTemplate>
+      <AdditionalSpecialPowerTemplate>Power2</AdditionalSpecialPowerTemplate>
+      <AdditionalRadiusCursor>Radius1</AdditionalRadiusCursor>
+      <AdditionalRadiusCursor>Radius2</AdditionalRadiusCursor>
+      <AdditionalValidTargetCursor>Cursor1</AdditionalValidTargetCursor>
+      <AdditionalValidTargetCursor>Cursor2</AdditionalValidTargetCursor>
+    </MultiplePowersTargetedSpecialPower>
+  </Data></UnitAbilityButtonTemplate>
+  <UnitAbilityButtonTemplate id="AbilityObjectUpgrade" LogicCommand="CmdObjectUpgrade"><Data><ObjectUpgrade StateData="StateObjectUpgrade"/></Data></UnitAbilityButtonTemplate>
+  <UnitAbilityButtonTemplate id="AbilityPlayerUpgrade" LogicCommand="CmdPlayerUpgrade"><Data><PlayerUpgrade StateData="StatePlayerUpgrade"/></Data></UnitAbilityButtonTemplate>
+  <UnitAbilityButtonTemplate id="AbilitySpecial" LogicCommand="CmdSpecial"><Data><SpecialPower StateData="StateSpecial"/></Data></UnitAbilityButtonTemplate>
+  <UnitAbilityButtonTemplate id="AbilityTargeted" LogicCommand="CmdTargeted"><Data><TargetedSpecialPower RadiusCursor="RadiusTargeted" StateData="StateTargeted"/></Data></UnitAbilityButtonTemplate>
+  <UnitAbilityButtonTemplate id="AbilityTargetedDefaults" LogicCommand="CmdTargetedDefaults"><Data><TargetedSpecialPower StateData="StateTargetedDefaults"/></Data></UnitAbilityButtonTemplate>
+  <UnitAbilityButtonTemplate id="AbilityToggle" LogicCommand="CmdToggle"><Data><ToggleSpecialPower><StateData>State1</StateData><StateData>State2</StateData></ToggleSpecialPower></Data></UnitAbilityButtonTemplate>
+  <UnitAbilityButtonTemplate id="AbilityUnpack" LogicCommand="CmdUnpack"><Data><Unpack StateData="StateUnpack"/></Data></UnitAbilityButtonTemplate>
+</AssetDeclaration>
