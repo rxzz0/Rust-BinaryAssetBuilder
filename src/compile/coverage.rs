@@ -1341,6 +1341,12 @@ mod tests {
     }
 
     #[test]
+    fn joypad_buttons_match_ea() {
+        assert_ea_fixture("joypad-buttons", 38);
+        assert_ea_fixture("edge-joypad", 3);
+    }
+
+    #[test]
     fn player_power_buttons_match_ea() {
         assert_ea_fixture("player-power-buttons", 5);
     }

@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <JoypadCommandBarButtonTemplate id="EmptyJoypadPlayerPower">
+    <Data><PlayerTargetedPower StateData="" SpecialPower="" RadiusCursor=""/></Data>
+  </JoypadCommandBarButtonTemplate>
+  <JoypadCommandBarButtonTemplate id="EmptyJoypadToggle">
+    <Data><ToggleSpecialPower LogicCommand=""><StateData/></ToggleSpecialPower></Data>
+  </JoypadCommandBarButtonTemplate>
+  <JoypadCommandBarButtonTemplate id="EmptyJoypadMarker">
+    <Data><PlayerMultipleTargetsTargetedPower StateData="State1" SpecialPower="Power1" TargetMarkerTemplate="" TargetMarkerFXList=""/></Data>
+  </JoypadCommandBarButtonTemplate>
+</AssetDeclaration>
