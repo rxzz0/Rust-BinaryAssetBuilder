@@ -26,6 +26,7 @@ mod campaign;
 mod credits;
 mod damage_fx;
 mod emotion;
+mod eva;
 mod experience_level;
 mod fx_list;
 pub(super) mod game_object;
@@ -79,6 +80,8 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "AttributeModifier" => (0xf901_fe9b, 51, attribute_modifier::compile),
         "ArmorTemplate" => (0x641a_d32e, 33, armor::compile),
         "UpgradeTemplate" => (0x4f8d_2969, 34, upgrade::compile),
+        "EvaEvent" => (0x70a6_4bea, 67, eva::event),
+        "EvaSettings" => (0xafad_556c, 68, eva::settings),
         "W3DAnimation" => (0x5545_5fe8, 66, w3d_animation::compile),
         "W3DMesh" => (0xcd8a_089c, 35, w3d_mesh::compile),
         "W3DContainer" => (0x619d_a33f, 36, w3d_mesh::container),

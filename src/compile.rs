@@ -460,6 +460,7 @@ impl Compiler<'_> {
             | "SpecialPowerTemplate"
             | "WeaponTemplate"
             | "ExperienceLevelTemplate"
+            | "EvaEvent"
                 if node.attribute("inheritFrom").is_some() =>
             {
                 self.compile_schema_inherited_asset(node, path, source)

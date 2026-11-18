@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <EvaSettings id="EvaTimingDefaults"/>
+  <EvaSettings id="EvaTimingConfigured" EnemySightedMaxVoicePositionScanRange="37"
+    MaxTimeToKeepJumpToEvents="12.5s" MaxTimeBeforeResettingLastJumpTo="0.5s" MinDistanceBetweenJumpToEvents="9"/>
+  <EvaEvent id="EvaVoiceDefaults"/>
+  <EvaEvent id="EvaVoiceConfigured" Priority="7" TimeBetweenEvents="3s" ExpirationTime="12.5s"
+    AlwaysPlayFromHomeBase="true" CountAsJumpToLocation="false" QuietTime="4s"
+    TimeToWaitBeforePlaying="5s" SuppressOn360="true" SuppressOnPC="true">
+    <SideSound Sound="EvaAudio1" Side="PlayerProbe1"/>
+    <SideSound Sound="EvaAudio2" Side="PlayerProbe2"/>
+    <OtherEvaEventToBlock>EvaVoiceDefaults</OtherEvaEventToBlock>
+    <OtherEvaEventToBlock>EvaVoiceAlternate</OtherEvaEventToBlock>
+  </EvaEvent>
+</AssetDeclaration>
