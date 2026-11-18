@@ -95,9 +95,17 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
     if let Some(&environment) = fields[8].first() {
         validate_leaf(environment, &["Cloud", "Macro", "Environment"], path)?;
         let start = data.allocate(60, 12)?;
-        for (index, name) in ["Cloud", "Macro", "Environment"].into_iter().enumerate() {
+        let fields = ["Cloud", "Macro", "Environment"];
+        for attribute in environment
+            .attributes()
+            .filter(|attr| attr.namespace().is_none())
+        {
+            let index = fields
+                .iter()
+                .position(|&name| name == attribute.name())
+                .unwrap();
             reference(
-                environment.attribute(name),
+                Some(attribute.value()),
                 "Texture",
                 start + index * 4,
                 &mut data,
@@ -124,11 +132,12 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
         let start = data.allocate(76, 28)?;
         map_analysis(analysis, start, &mut data)?;
     }
-    for offsets in [&mut data.relocations, &mut result.imports] {
-        if !offsets.is_empty() {
-            offsets.sort_unstable();
-            offsets.push(u32::MAX);
-        }
+    if !data.relocations.is_empty() {
+        data.relocations.sort_unstable();
+        data.relocations.push(u32::MAX);
+    }
+    if !result.imports.is_empty() {
+        result.imports.push(u32::MAX);
     }
     result.payload = data.payload;
     result.relocations = data.relocations;

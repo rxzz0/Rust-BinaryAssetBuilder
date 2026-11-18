@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 309 preserves XML order for GameMap environment references and import offsets. Surge's GameMap asset matched EA byte for byte, including its reference table. All 295 tests and Clippy passed.
 - Checkpoint 308 links map streams to WorldBuilder, resolves stock render models, and reconciles shared hashes. Surge produced a valid 159-asset stream with the shipped reference layout. Its shipped map still has 12 additional dependencies. All 295 tests and Clippy passed.
 - Checkpoint 307 compiles ToppleUpdate effects, stump IDs, physics settings, and flags. All six EA assets matched. All 294 tests and Clippy passed. Surge's official map reaches reference resolution.
 - Checkpoint 306 compiles PropDraw and its optional model reference. All four EA assets matched. All 294 tests and Clippy passed. Surge's official map reaches ToppleUpdate.
