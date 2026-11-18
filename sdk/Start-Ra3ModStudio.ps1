@@ -229,8 +229,60 @@ $source = $source.Replace('echo ERROR The Rust official map compiler is still mi
 $source = $source.Replace('echo ERROR Creating BIG files failed.', 'echo Critical: Creating BIG files failed.')
 $source = $source.Replace('String.Format("Build failed on step {0}", BuildHelper.CurrentStep-1)', 'String.Format("Build failed on step {0}", stepId)')
 
+$legacySource = $source
+$source = $source.Replace(
+    'String.Format(" && (\"{0}\" \"{1}\\mod.manifest\" /f)", LoDStreamBuilder, BuiltModDataPath)',
+    ('String.Format(" && (\"{0}\" fix-assets \"{1}\" --references \"{2}\" 2>&1)", ' + $rustExpression + ', Path.Combine(BuiltModDataPath, "mod.manifest"), BuiltModsPath)')
+)
+$source = Set-ModBuildStep $source 7 8 @'
+case 7:
+{
+    BuildHelper.DisplayLine("Step 7: Merging precompiled assets with Rust");
+    RunExecutableArguments argsRustMerge = new RunExecutableArguments(Cmd);
+    string rustMerge = RUST_EXE;
+    string modManifest = Path.Combine(BuiltModDataPath, "mod.manifest");
+    const string mergeFormat = "(\"{0}\" merge-assets \"{1}\" --assets \"{2}\" 2>&1 || (echo Critical: Merge Assets failed. & exit /b 1))";
+    argsRustMerge.Arguments = String.Format(
+        "/C (@echo off) & (if exist \"{0}\" if exist \"{1}\" {2})",
+        modManifest, Path.Combine(ModAssetsPath, "mod"),
+        String.Format(mergeFormat, rustMerge, modManifest, Path.Combine(ModAssetsPath, "mod")));
+    foreach (string group in new string[] { "additionalmaps", "aptui" })
+    {
+        string pattern = group == "additionalmaps" ? "mapmetadata_*.manifest" : "*.manifest";
+        string assets = Path.Combine(Path.Combine(ModAssetsPath, group), "%~nI");
+        argsRustMerge.Arguments += String.Format(
+            " & (for %I in (\"{0}\") do (if exist \"%~fI\" if exist \"{1}\" {2}))",
+            Path.Combine(Path.Combine(BuiltModDataPath, group), pattern), assets,
+            String.Format(mergeFormat, rustMerge, "%~fI", assets));
+    }
+    if (!(bool)currentGUIData["step8"])
+    {
+        argsRustMerge.Arguments += String.Format(
+            " & (if exist \"{1}\" (\"{0}\" fix-assets \"{1}\" --references \"{2}\" 2>&1 || (echo Critical: Fix Assets failed. & exit /b 1)))",
+            rustMerge, modManifest, BuiltModsPath);
+    }
+    BuildHelper.RunStep(StepType.RunExecutable, argsRustMerge);
+    break;
+}
+'@
+$source = [regex]::Replace($source, '(?m)^[\t ]*(?:string (?:AssetMerger|StreamSorter|LoDStreamBuilder);|(?:AssetMerger|StreamSorter|LoDStreamBuilder) = .*;)\r?\n', '')
+
+$source = Set-ModBuildStep $source 10 11 @'
+case 10:
+    BuildHelper.DisplayLine(String.Format("Step {0}: Creating BIG files with Rust", stepId));
+    RunExecutableArguments argsBig = new RunExecutableArguments(Cmd);
+    argsBig.Arguments = String.Format(
+        "/C (@echo off)"
+        + " && (if exist \"{1}\" (\"{0}\" pack-big \"{1}\" --output \"{2}\\{3}\" 2>&1))"
+        + " && (if exist \"{4}\" (\"{0}\" pack-big \"{4}\" --output \"{2}\\{5}\" 2>&1))"
+        + " || (echo ERROR Creating BIG files failed. & exit /b 1)",
+        RUST_EXE, BuiltModPath, ModInstallPath, ModBigStreams, ModAdditionalFilesPath, ModBigMisc);
+    BuildHelper.RunStep(StepType.RunExecutable, argsBig);
+    break;
+'@
+
 if ($InstallDefault) {
-    $knownSources = @($source, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
+    $knownSources = @($source, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
     if ($hasRustCheck -and $knownSources -cnotcontains $currentSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."
     }

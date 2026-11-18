@@ -3,7 +3,8 @@
 use binary_asset_builder::big::pack_big;
 use binary_asset_builder::compile::{
     CompiledStream, compile_apt_ui, compile_apt_ui_directory, compile_sdk_global,
-    compile_sdk_static, compile_static, sdk_coverage, verify_ea_batch, write_compiled_stream,
+    compile_sdk_static, compile_static, merge_assets, sdk_coverage, verify_ea_batch,
+    write_compiled_stream,
 };
 use binary_asset_builder::fix_assets::fix_assets;
 use binary_asset_builder::linked_stream::{check_linked_files, link_assets};
@@ -22,6 +23,7 @@ Usage
   binary-asset-builder compile-static <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory>
   binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory>
+  binary-asset-builder merge-assets <file.manifest> --assets <directory>
   binary-asset-builder fix-assets <mod.manifest> --references <builtmods-directory>
   binary-asset-builder pack-big <directory> --output <file.big>
   binary-asset-builder relink <file.manifest> --assets <directory> --output <new-directory>
@@ -57,6 +59,12 @@ fn main() -> ExitCode {
                 Path::new(assets),
                 io::stdout().lock(),
             ))
+        }
+        [command, input, flag, assets] if command == "merge-assets" && flag == "--assets" => {
+            let input = Path::new(input);
+            diagnostic(merge_assets(input, Path::new(assets)).map(|count| {
+                println!("Merged {count} precompiled assets into {}", input.display());
+            }))
         }
         [command, input, flag, references] if command == "fix-assets" && flag == "--references" => {
             let input = Path::new(input);
