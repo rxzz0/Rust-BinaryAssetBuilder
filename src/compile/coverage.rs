@@ -13,9 +13,11 @@ const MODULES: &[(&str, &[&str])] = &[
     (
         "Draws",
         &[
+            "DynamicsDraw",
             "LaserDraw",
             "ScriptedModelDraw",
             "StreamDraw",
+            "TankDraw",
             "TracerModelDraw",
             "TruckDraw",
         ],
@@ -1256,6 +1258,11 @@ mod tests {
     #[test]
     fn damage_scalar_filters_match_ea() {
         assert_ea_fixture("weapon-damage-scalar-filters", 2);
+    }
+
+    #[test]
+    fn dynamics_draw_matches_ea() {
+        assert_ea_fixture("dynamics-draw", 3);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

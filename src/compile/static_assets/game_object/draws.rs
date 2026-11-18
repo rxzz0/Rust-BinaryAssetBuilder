@@ -4,6 +4,7 @@ use super::super::{
     AssetReference, asset_reference, finite_number, hash_name, required_element,
     significant_children, validate_attributes,
 };
+use super::dynamics;
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
@@ -46,13 +47,41 @@ fn scripted_flag(name: &'static str) -> (&'static str, u32, usize) {
     (name, BOOL, offset)
 }
 
+#[derive(Default)]
+pub(super) struct DrawRelocations {
+    extensions: Vec<(u32, u32, u32)>,
+    bone_names: Vec<u32>,
+}
+
+impl DrawRelocations {
+    pub(super) fn key(&self, pointer: u32) -> Option<(u32, u32)> {
+        let index = self
+            .extensions
+            .partition_point(|&(start, _, _)| start <= pointer);
+        let &(start, size, end) = self.extensions.get(index.checked_sub(1)?)?;
+        let offset = pointer - start;
+        if (0xd8..size).contains(&offset) {
+            Some((start, offset))
+        } else if (start + size..end).contains(&pointer) {
+            let offset = if self.bone_names.binary_search(&pointer).is_ok() {
+                offset - 0x50
+            } else {
+                offset
+            };
+            Some((end, offset))
+        } else {
+            None
+        }
+    }
+}
+
 pub(super) fn encode(
     group: Node<'_, '_>,
     data: &mut BinaryData<'_>,
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
     material_float_names: &mut Vec<u32>,
-    derived_draw_relocations: &mut Vec<(u32, u32, u32)>,
+    relocations: &mut DrawRelocations,
 ) -> io::Result<Target> {
     let modules: Vec<_> = significant_children(group).collect();
     let list = data.allocate(0x1cc, 8)?;
@@ -61,7 +90,7 @@ pub(super) fn encode(
     for (index, node) in modules.into_iter().enumerate() {
         let pointer = pointers + index * 4;
         let (kind, module) = match node.tag_name().name() {
-            name @ ("ScriptedModelDraw" | "TruckDraw" | "TankDraw")
+            name @ ("ScriptedModelDraw" | "TruckDraw" | "TankDraw" | "DynamicsDraw")
                 if node.has_tag_name((SAGE_NS, name)) =>
             {
                 (
@@ -73,7 +102,7 @@ pub(super) fn encode(
                         references,
                         reference_types,
                         material_float_names,
-                        derived_draw_relocations,
+                        relocations,
                     )?,
                 )
             }
@@ -371,6 +400,7 @@ fn scripted_layout(name: &str) -> (u32, usize) {
     match name {
         "TruckDraw" => (TRUCK_DRAW, 0x18c),
         "TankDraw" => (TANK_DRAW, 0xe4),
+        "DynamicsDraw" => (dynamics::DRAW_KIND, dynamics::DRAW_SIZE),
         _ => (SCRIPTED_MODEL_DRAW, 0xd8),
     }
 }
@@ -421,11 +451,12 @@ fn scripted_model(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
     material_float_names: &mut Vec<u32>,
-    derived_draw_relocations: &mut Vec<(u32, u32, u32)>,
+    relocations: &mut DrawRelocations,
 ) -> io::Result<Table> {
     let (kind, size) = scripted_layout(node.tag_name().name());
     let truck = kind == TRUCK_DRAW;
     let tank = kind == TANK_DRAW;
+    let dynamics = kind == dynamics::DRAW_KIND;
     let allowed: Vec<_> = [
         "id",
         "ExtraPublicBone",
@@ -450,6 +481,12 @@ fn scripted_model(
             .filter(|_| truck)
             .map(|&(name, _, _, _)| name),
     )
+    .chain(
+        dynamics
+            .then_some(dynamics::DRAW_ATTRIBUTES)
+            .into_iter()
+            .flatten(),
+    )
     .collect();
     validate_attributes(node, &allowed, data.path)?;
     let mut states = Vec::new();
@@ -457,6 +494,8 @@ fn scripted_model(
     let mut tread_particles = None;
     let mut tread_maps = Vec::new();
     let mut articulation_bones = Vec::new();
+    let mut bone_volumes = None;
+    let mut lifetime = None;
     for child in significant_children(node) {
         if child.has_tag_name((SAGE_NS, "ModelConditionState")) {
             states.push(child);
@@ -471,6 +510,11 @@ fn scripted_model(
             tread_maps.push(child);
         } else if tank && child.has_tag_name((SAGE_NS, "ArticulationBone")) {
             articulation_bones.push(child);
+        } else if dynamics && child.has_tag_name((SAGE_NS, "BoneVolumes")) && bone_volumes.is_none()
+        {
+            bone_volumes = Some(child);
+        } else if dynamics && child.has_tag_name((SAGE_NS, "Lifetime")) && lifetime.is_none() {
+            lifetime = Some(child);
         } else {
             return Err(invalid(
                 data.path,
@@ -499,10 +543,23 @@ fn scripted_model(
             &articulation_bones,
             data,
         )?),
+        dynamics::DRAW_KIND => Some((
+            dynamics::draw_fields(
+                node,
+                start,
+                bone_volumes,
+                lifetime,
+                data,
+                &mut relocations.bone_names,
+            )?,
+            None,
+        )),
         _ => None,
     };
     if derived.is_some() {
-        derived_draw_relocations.push((start as u32, size as u32, data.payload.len() as u32));
+        relocations
+            .extensions
+            .push((start as u32, size as u32, data.payload.len() as u32));
     }
     for (offset, bits) in [
         (0x10, 0x3ecc_cccd),
@@ -676,24 +733,27 @@ fn scripted_model(
     ]);
     let table = Table::record(entries);
     if let Some((mut entries, particle_offset)) = derived {
-        let particles = if let Some((particles, offset)) = tread_particles.zip(particle_offset) {
-            let value = super::super::text_value(particles, data.path)?;
-            let ordinal = super::passive_area::reference(
-                value,
-                "TerrainParticleMapping",
-                data.path,
-                references,
-                reference_types,
-            )?;
-            data.word(offset, ordinal);
-            Target::Data(offset)
-        } else {
-            Target::Null
-        };
-        entries.insert(
-            if truck { TRUCK_FIELDS.len() } else { 0 },
-            Entry::named("TreadTerrainParticles", 0xa6ff_4551, particles),
-        );
+        if !dynamics {
+            let particles = if let Some((particles, offset)) = tread_particles.zip(particle_offset)
+            {
+                let value = super::super::text_value(particles, data.path)?;
+                let ordinal = super::passive_area::reference(
+                    value,
+                    "TerrainParticleMapping",
+                    data.path,
+                    references,
+                    reference_types,
+                )?;
+                data.word(offset, ordinal);
+                Target::Data(offset)
+            } else {
+                Target::Null
+            };
+            entries.insert(
+                if truck { TRUCK_FIELDS.len() } else { 0 },
+                Entry::named("TreadTerrainParticles", 0xa6ff_4551, particles),
+            );
+        }
         entries.insert(0, super::behaviors_basic::base(SCRIPTED_MODEL_DRAW, table));
         Ok(Table::record(entries))
     } else {

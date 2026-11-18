@@ -1,0 +1,25 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DynamicsDrawBare">
+     <Draws><DynamicsDraw id="ModuleTag_Draw"/></Draws>
+  <Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body></GameObject>
+  <GameObject id="DynamicsDrawEmptyLists">
+     <Draws><DynamicsDraw id="ModuleTag_Draw"><BoneVolumes/><Lifetime/></DynamicsDraw></Draws>
+  <Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body></GameObject>
+  <GameObject id="DynamicsDrawConfigured">
+    <Draws>
+      <DynamicsDraw id="ModuleTag_Draw" Collision="INTERCOLLIDING" IntuitiveCollision="COLLIDES_WITH_GROUND_ONLY"
+          DrawPriority="REMOVABLE" LODPriority="LOW" Explodiness="4" FlingPerturbation="15" InitiallyActive="false"
+          ExtraPublicBone="ROOT_BONE" BirthFadeTime="100">
+        <ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name="DynamicsProbeModel"/></ModelConditionState>
+        <BoneVolumes>
+          <BoneVolume BoneName="BONE1" Mass="2" Bounciness="50%">
+            <Sphere Radius="2"><Translation x="1" y="2" z="3"/><Rotation x="0" y="0" z="0" w="1"/></Sphere>
+            <Capsule Radius="3" HalfLength="5"/>
+          </BoneVolume>
+          <BoneVolume BoneName="BONE2" ReportContacts="true"><Box HalfSizeX="1" HalfSizeY="2" HalfSizeZ="3" EdgeRadius="1"/></BoneVolume>
+        </BoneVolumes>
+        <Lifetime Delay="2s" FadeTime="1.5s"/>
+      </DynamicsDraw>
+    </Draws>
+  <Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body></GameObject>
+</AssetDeclaration>

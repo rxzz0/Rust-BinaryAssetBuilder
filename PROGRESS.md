@@ -1,6 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 270 adds native per-target damage multipliers for the shared DamageNugget layout, with object filters and upgrade conditions. Both EA fixtures match. All 262 tests and Clippy passed.
-- Checkpoint 269 completes the RA3 weapon nugget variants. Checkpoints 266–268 add W3D animation, per-target scatter radii, and MetaImpactNugget.
+- Checkpoint 271 adds native DynamicsDraw using the shared model draw and dynamics volume encoders. All three EA fixtures, 263 tests, and Clippy passed.
+- Checkpoint 270 adds filtered damage scalars and required upgrades. Checkpoint 269 completes the RA3 weapon nugget variants.
 
-- Surge Step 6 compiles Desolator's weapon data and reaches DynamicsDraw in Future Tank X-1. Next task is the DynamicsDraw encoder.
+- Surge Step 6 passes Future Tank X-1's DynamicsDraw and reaches LocomotorTemplate. Next task is the native locomotor asset encoder.
