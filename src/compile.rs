@@ -461,6 +461,8 @@ impl Compiler<'_> {
             | "WeaponTemplate"
             | "ExperienceLevelTemplate"
             | "EvaEvent"
+            | "LocomotorTemplate"
+            | "BounceKickTerrainMapping"
                 if node.attribute("inheritFrom").is_some() =>
             {
                 self.compile_schema_inherited_asset(node, path, source)

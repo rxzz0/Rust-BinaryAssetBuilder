@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <LocomotorTemplate id="LocomotorProbeBare"/>
+  <LocomotorTemplate id="LocomotorProbeJetEmpty"><JetLocomotorData/></LocomotorTemplate>
+  <LocomotorTemplate id="LocomotorProbeMixed" Surfaces="GROUND AIR CRUSHABLE_WALL" Appearance="SHIP" FormationPriority="ARTILLERY_3" BehaviorZ="SEA_LEVEL_SMOOTH_Z" ActiveModelConditions="DAMAGED REALLYDAMAGED" EnteringModelConditions="STUNNED STUNNED_STANDING_UP" EnteringModelConditionsTime="2.125s" ActiveObjectStatus="NO_COLLISIONS" ForbiddenObjectStatus="NO_COLLISIONS" CanReverseMove="true" ReverseMoveSpeed="80%" MinTurnSpeed="20%" AccelPitchLimit="0.3r" ResubmergeDelay="1.5s" WaterToAirTransitionFX="LocomotorProbeFx"><BounceKickTerrainMap>ProbeGroundBounce</BounceKickTerrainMap><JetLocomotorData Options="NO_CIRCLE_WHILE_USING_SPECIALPOWER" AttackPathStartRunDistance="11" AttackPathClimbDistance="22" AttackPathDiveDistanceStart="33" AttackPathDiveDistanceEnd="44"/></LocomotorTemplate>
+  <BounceKickTerrainMapping id="LocomotorBounceBare"/>
+  <BounceKickTerrainMapping id="ProbeGroundBounce"><Mapping TerrainClass="Sand" BounceMultiplier="80%"/><Mapping TerrainClass="Rock" BounceMultiplier="40%"/></BounceKickTerrainMapping>
+</AssetDeclaration>

@@ -32,6 +32,7 @@ mod fx_list;
 pub(super) mod game_object;
 mod global_ui;
 mod hotkeys;
+mod locomotor;
 pub(super) mod music;
 mod object_creation;
 mod particle_system;
@@ -82,6 +83,8 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "UpgradeTemplate" => (0x4f8d_2969, 34, upgrade::compile),
         "EvaEvent" => (0x70a6_4bea, 67, eva::event),
         "EvaSettings" => (0xafad_556c, 68, eva::settings),
+        "LocomotorTemplate" => (0xca32_f95d, 69, locomotor::locomotor_template),
+        "BounceKickTerrainMapping" => (0x7dc1_f449, 70, locomotor::bounce_kick_terrain_mapping),
         "W3DAnimation" => (0x5545_5fe8, 66, w3d_animation::compile),
         "W3DMesh" => (0xcd8a_089c, 35, w3d_mesh::compile),
         "W3DContainer" => (0x619d_a33f, 36, w3d_mesh::container),

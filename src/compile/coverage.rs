@@ -1275,6 +1275,11 @@ mod tests {
         assert_ea_fixture("eva-events-and-settings", 4);
     }
 
+    #[test]
+    fn locomotor_templates_and_bounce_maps_match_ea() {
+        assert_ea_fixture("locomotor-templates", 5);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
