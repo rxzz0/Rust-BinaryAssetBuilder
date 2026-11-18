@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <WeaponTemplate id="WeaponMetaDefaults"><Nuggets><MetaImpactNugget/></Nuggets></WeaponTemplate>
+    <WeaponTemplate id="WeaponMetaConfigured">
+        <Nuggets>
+            <MetaImpactNugget Radius="17" ForbiddenTargetModelCondition="STUNNED"
+                ShockWaveAmount="1" ShockWaveRadius="2" ShockWaveArc="90d" ShockWaveArcInverted="true"
+                ShockWaveTaperOff="4" ShockWaveSpeed="5" ShockWaveZMult="6" CyclonicFactor="7"
+                ShockwaveDelaySeconds="2s" Suppression="9" InvertShockWave="true" FlipDirection="true"
+                OnlyWhenJustDied="true" ShockWaveClearRadius="true"
+                ShockWaveClearWaveMult="11" ShockWaveClearFlingHeight="12">
+                <SpecialObjectFilter Rule="ANY" Include="INFANTRY"/>
+                <KillObjectFilter Rule="ALL" Exclude="STRUCTURE"><IncludeThing>MetaProbeObject</IncludeThing></KillObjectFilter>
+            </MetaImpactNugget>
+        </Nuggets>
+    </WeaponTemplate>
+</AssetDeclaration>

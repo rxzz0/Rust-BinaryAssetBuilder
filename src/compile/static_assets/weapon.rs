@@ -56,9 +56,9 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             return Err(invalid(path, "weapon layout missing WeaponAiHintInfo"));
         }
     }
-    let mut projectile_starts = Vec::new();
+    let mut derived_relocations = Vec::new();
     if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, "Nuggets"))) {
-        let nuggets = encode_nuggets(child, &mut data, &mut out, &mut projectile_starts)?;
+        let nuggets = encode_nuggets(child, &mut data, &mut out, &mut derived_relocations)?;
         if !table.replace_target("Nuggets", Target::Table(nuggets)) {
             return Err(invalid(path, "weapon layout missing Nuggets"));
         }
@@ -85,15 +85,13 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
         ));
     }
     data.relocations.sort_unstable();
-    // The projectile layout emits its direct pointers before inherited effect pointers.
-    for start in projectile_starts {
+    // These layouts emit derived pointers before their inherited effect pointers.
+    for (start, derived_start, end) in derived_relocations {
         let first = data.relocations.partition_point(|&offset| offset < start);
         let derived = data
             .relocations
-            .partition_point(|&offset| offset < start + 0x28);
-        let end = data
-            .relocations
-            .partition_point(|&offset| offset < start + 0x44);
+            .partition_point(|&offset| offset < derived_start);
+        let end = data.relocations.partition_point(|&offset| offset < end);
         data.relocations[first..end].rotate_left(derived - first);
     }
     tokenized::finish(table, data, out)
@@ -355,7 +353,7 @@ fn encode_nuggets(
     node: Node<'_, '_>,
     data: &mut BinaryData<'_>,
     out: &mut Marshaled,
-    projectile_starts: &mut Vec<u32>,
+    derived_relocations: &mut Vec<(u32, u32, u32)>,
 ) -> io::Result<Table> {
     validate_attributes(node, &[], data.path)?;
     let children: Vec<_> = significant_children(node).collect();
@@ -382,6 +380,11 @@ fn encode_nuggets(
             (Some(SAGE_NS), "DamageContainedNugget") => {
                 (0x929b_5398, fire_on_objects(child, pointer, data, out)?)
             }
+            (Some(SAGE_NS), "MetaImpactNugget") => {
+                let start = data.payload.len() as u32;
+                derived_relocations.push((start, start + 0x28, start + 0x60));
+                (META_IMPACT, meta_impact(child, pointer, data, out)?)
+            }
             (Some(SAGE_NS), "ParalyzeNugget") => {
                 (0x0a19_eadb, paralyze_nugget(child, pointer, data, out)?)
             }
@@ -390,7 +393,8 @@ fn encode_nuggets(
                 attribute_modifier_nugget(child, pointer, data, out)?,
             ),
             (Some(SAGE_NS), "ProjectileNugget") => {
-                projectile_starts.push(data.payload.len() as u32);
+                let start = data.payload.len() as u32;
+                derived_relocations.push((start, start + 0x28, start + 0x44));
                 (
                     0x87c7_bdcc,
                     simple_reference_nugget(child, pointer, data, out, true)?,
@@ -1348,6 +1352,86 @@ fn encode_effect<'a, 'input: 'a>(
         0xc7c2_cc04,
         Target::Table(Table::record(entries)),
     ))
+}
+
+const META_IMPACT: u32 = 0xaf42_89fb;
+
+fn meta_impact(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+) -> io::Result<Table> {
+    const FIELDS: &[(&str, EffectValue, &str, usize)] = &[
+        ("ShockWaveAmount", Real, "0", 0x28),
+        ("ShockWaveRadius", Real, "0", 0x2c),
+        ("ShockWaveArc", Angle, "360d", 0x30),
+        ("ShockWaveArcInverted", Boolean, "false", 0x58),
+        ("ShockWaveTaperOff", Real, "0", 0x34),
+        ("ShockWaveSpeed", Real, "0", 0x38),
+        ("ShockWaveZMult", Real, "1", 0x3c),
+        ("CyclonicFactor", Real, "0", 0x40),
+        ("ShockwaveDelaySeconds", Time, "0s", 0x44),
+        ("Suppression", Real, "0", 0x48),
+        ("InvertShockWave", Boolean, "false", 0x59),
+        ("FlipDirection", Boolean, "false", 0x5a),
+        ("OnlyWhenJustDied", Boolean, "false", 0x5b),
+        ("ShockWaveClearRadius", Boolean, "false", 0x5c),
+        ("ShockWaveClearWaveMult", Real, "2", 0x4c),
+        ("ShockWaveClearFlingHeight", Real, "100", 0x50),
+    ];
+    let path = data.path;
+    let attributes: Vec<_> = FIELDS.iter().map(|&(name, ..)| name).collect();
+    validate_effect_attributes(node, &attributes, path)?;
+    let start = data.allocate(pointer, 0x60)?;
+    data.word(start, META_IMPACT);
+    let kill_filter = node
+        .children()
+        .find(|child| child.has_tag_name((SAGE_NS, "KillObjectFilter")))
+        .map(|child| {
+            super::game_object::encode_object_filter(
+                child,
+                start + 0x54,
+                data,
+                &mut out.reference_types,
+            )
+        })
+        .transpose()?;
+    let mut children = significant_children(node).peekable();
+    let mut entries = vec![encode_effect(node, start, data, out, &mut children)?];
+    children.next_if(|child| child.has_tag_name((SAGE_NS, "KillObjectFilter")));
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected MetaImpactNugget child"));
+    }
+    for &(name, ref kind, default, offset) in FIELDS {
+        let raw = node.attribute(name).unwrap_or(default);
+        let field = start + offset;
+        let token = match kind {
+            Boolean => {
+                data.payload[field] = flag(node, name, default == "true", path)?;
+                0x77e3_f4f7
+            }
+            Angle => {
+                data.word(field, sage_angle(raw, name, path)?.to_bits());
+                0x4e16_ea4d
+            }
+            Time => {
+                data.word(field, sage_time(raw, name, path)?.to_bits());
+                0x9986_69e8
+            }
+            _ => {
+                data.word(field, finite_number(raw, name, path)?.to_bits());
+                0x6458_64f3
+            }
+        };
+        entries.push(Entry::named(name, token, Target::Data(field)));
+    }
+    entries.push(Entry::named(
+        "KillObjectFilter",
+        0xe46e_a3b2,
+        kill_filter.map_or(Target::Null, Target::Table),
+    ));
+    Ok(Table::record(entries))
 }
 
 fn paralyze_nugget(

@@ -1242,6 +1242,11 @@ mod tests {
         assert_ea_fixture("weapon-scatter-radii", 2);
     }
 
+    #[test]
+    fn meta_impact_nugget_matches_ea() {
+        assert_ea_fixture("weapon-meta-impact", 2);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

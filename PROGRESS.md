@@ -1,6 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 267 adds native WeaponTemplate scatter radii with target filters and model conditions. Both EA fixtures match. All 259 tests and Clippy passed.
-- Checkpoint 266 adds native W3DAnimation with adaptive delta and timecoded compression. All 43 EA fixture assets match.
+- Checkpoint 268 adds MetaImpactNugget including shared hit filters and the optional kill filter. Both EA fixtures match. All 260 tests and Clippy passed.
+- Checkpoint 267 adds scatter radii by target type. Checkpoint 266 adds W3D animation compression.
 
-- Surge Step 6 passes Archer Maiden's weapon scatter radii and reaches MetaImpactNugget in Cryo Legionnaire's weapon data. Next task is the remaining weapon nugget layouts.
+- Surge Step 6 passes Cryo Legionnaire's MetaImpactNugget and reaches a damage nugget child in Desolator's weapon data. Next task is the damage nugget child and remaining weapon variants.
