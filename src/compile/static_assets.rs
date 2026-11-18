@@ -47,6 +47,7 @@ mod player_template;
 mod road;
 mod stance_template;
 mod surface_mappings;
+pub(super) mod targeting_compare;
 mod tokenized;
 mod upgrade;
 mod w3d_animation;
@@ -110,6 +111,10 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "StaticGameLOD" => (0x4a93_fc61, 83, game_lod::static_lod),
         "DynamicGameLOD" => (0x692b_85b7, 83, game_lod::dynamic_lod),
         "AudioLOD" => (0x014c_bb53, 83, audio_settings::lod),
+        "TargetingDistanceCompare" => (0xc00c_41f3, 76, targeting_compare::distance),
+        "TargetingCombatChainCompare" => (0xb613_8c0d, 76, targeting_compare::marker),
+        "TargetingInTurretArcCompare" => (0x5c98_6fb1, 76, targeting_compare::marker),
+        "TargetingCompareList" => (0x4d83_d996, 77, targeting_compare::list),
         "MusicScriptTrack" => (0xbbde_2f64, 79, music::script_track),
         "MusicPalette" => (0xd96f_c160, 80, music::palette),
         "W3DAnimation" => (0x5545_5fe8, 66, w3d_animation::compile),
@@ -1093,11 +1098,12 @@ fn write_import(
         )?
     } else {
         let target = value.trim().split_once(':').map_or(ty, |(kind, _)| kind);
-        let id = if ty == music_conditions::BASE && music_conditions::type_hash(target).is_some() {
-            asset_reference(value, target, data.path)?
-        } else {
-            asset_reference(value, ty, data.path)?
+        let subtype = match ty {
+            music_conditions::BASE => music_conditions::type_hash(target).is_some(),
+            targeting_compare::BASE => targeting_compare::TYPES.contains(&target),
+            _ => false,
         };
+        let id = asset_reference(value, if subtype { target } else { ty }, data.path)?;
         result.reference_types.push(fast_hash(ty.as_bytes()));
         result.references.push(id.into());
         result.references.len() as u32
