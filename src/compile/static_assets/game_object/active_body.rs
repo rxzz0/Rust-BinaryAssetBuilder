@@ -1,5 +1,10 @@
-use super::super::{finite_number, hash_name, percentage, sage_time, validate_attributes};
-use crate::compile::{has_content, invalid, required};
+use super::super::binary::BinaryData;
+use super::super::tokenized::{Entry, Table, Target};
+use super::super::{
+    AssetReference, finite_number, hash_name, percentage, sage_time, significant_children,
+    validate_attributes,
+};
+use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
 use std::path::Path;
@@ -40,9 +45,6 @@ pub(super) fn encode(node: Node<'_, '_>, kind: u32, path: &Path) -> io::Result<[
         ],
         path,
     )?;
-    if has_content(node) {
-        return Err(invalid(path, "ActiveBody cannot contain child elements"));
-    }
     let id = required(node, "id", path)?;
     let real = |name, default| finite_number(node.attribute(name).unwrap_or(default), name, path);
     let percent = |name, default| percentage(node.attribute(name).unwrap_or(default), name, path);
@@ -79,6 +81,55 @@ pub(super) fn encode(node: Node<'_, '_>, kind: u32, path: &Path) -> io::Result<[
         };
     }
     Ok(body)
+}
+
+pub(super) fn damage_ranges(
+    node: Node<'_, '_>,
+    body: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Option<Target>> {
+    let path = data.path;
+    let ranges: Vec<_> = significant_children(node).collect();
+    if ranges.is_empty() {
+        return Ok(None);
+    }
+    let count = body + 0x40;
+    let start = data.list(count, ranges.len(), 12)?;
+    let mut items = Vec::with_capacity(ranges.len());
+    for (index, range) in ranges.into_iter().enumerate() {
+        if !range.has_tag_name((SAGE_NS, "DamageRangeModifier")) || has_content(range) {
+            return Err(invalid(path, "expected ActiveBody DamageRangeModifier"));
+        }
+        validate_attributes(range, &["Min", "Max", "AttributeModifier"], path)?;
+        let offset = start + index * 12;
+        for (slot, name) in [(offset, "Min"), (offset + 4, "Max")] {
+            data.word(
+                slot,
+                percentage(required(range, name, path)?, name, path)?.to_bits(),
+            );
+        }
+        let ordinal = super::passive_area::reference(
+            range
+                .attribute("AttributeModifier")
+                .ok_or_else(|| invalid(path, "DamageRangeModifier requires AttributeModifier"))?,
+            "AttributeModifier",
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(offset + 8, ordinal);
+        items.push((
+            0,
+            Target::Table(Table::record(vec![
+                Entry::named("Min", 0x6458_64f3, Target::Data(offset)),
+                Entry::named("Max", 0x6458_64f3, Target::Data(offset + 4)),
+                Entry::named("AttributeModifier", 0x09dd_cff3, Target::Data(offset + 8)),
+            ])),
+        ));
+    }
+    Ok(Some(Target::Table(Table::array(count, items))))
 }
 
 #[cfg(test)]

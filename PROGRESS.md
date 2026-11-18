@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 303 compiles inherited Body damage ranges, including thresholds and modifier references. All four EA assets matched. All 294 tests and Clippy passed.
 - Checkpoint 302 compiles GameObject Browser category lists. All three EA fixtures matched. All 294 tests and Clippy passed.
 - Checkpoint 301 compiles BridgeBuilder references, lengths, optional pieces, and damage threshold. All five EA assets matched. All 294 tests and Clippy passed. Surge's official map reaches the GameObject Browser field.
 - Checkpoint 300 adds HighlanderBody, ManagedActiveBody, ManagedImmortalBody, and ManagerBody using the shared ActiveBody encoder. All eight EA fixtures matched. All 294 tests and Clippy passed. Surge's official map reaches BridgeBuilder.

@@ -120,7 +120,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut modules = significant_children(body);
     let module = modules
         .next()
-        .ok_or_else(|| invalid(path, "Body requires ImmortalBody"))?;
+        .ok_or_else(|| invalid(path, "Body requires a module"))?;
     if modules.next().is_some() || module.tag_name().namespace() != Some(SAGE_NS) {
         return Err(invalid(path, "Body requires a single supported module"));
     }
@@ -151,11 +151,6 @@ pub(in crate::compile::static_assets) fn compile(
     let mut template_data = data.payload.clone();
     template_data.extend_from_slice(&body_bytes);
     let mut table = Table::from_layout(tokens, &template_data, path)?;
-    if let Some((kind, bases)) = variant
-        && !table.derive_variant("Body", kind, bases)
-    {
-        return Err(invalid(path, "GameObject layout is missing Body variant"));
-    }
     let mut reference_types = Vec::new();
     let mut references = Vec::new();
     let mut material_float_names = Vec::new();
@@ -370,6 +365,28 @@ pub(in crate::compile::static_assets) fn compile(
     } else {
         let body_start = data.allocate(0x1dc, BODY_SIZE)?;
         data.payload[body_start..body_start + BODY_SIZE].copy_from_slice(&body_bytes);
+        if let Some(target) = active_body::damage_ranges(
+            module,
+            body_start,
+            &mut data,
+            &mut references,
+            &mut reference_types,
+        )? {
+            let body = table
+                .variant_fields("Body")
+                .ok_or_else(|| invalid(path, "GameObject layout is missing Body variant"))?;
+            if !body.replace_target("DamageRangeModifier", target) {
+                return Err(invalid(
+                    path,
+                    "GameObject layout is missing DamageRangeModifier",
+                ));
+            }
+        }
+    }
+    if let Some((kind, bases)) = variant
+        && !table.derive_variant("Body", kind, bases)
+    {
+        return Err(invalid(path, "GameObject layout is missing Body variant"));
     }
     if let Some(group) = updates {
         let target =

@@ -136,17 +136,27 @@ impl Table {
         }
     }
 
-    pub(super) fn derive_variant(&mut self, name: &str, kind: u32, bases: &[u32]) -> bool {
+    fn variant(&mut self, name: &str) -> Option<&mut Entry> {
         let name = fast_hash(name.as_bytes());
-        let Some(Target::Table(variants)) = self
-            .entries
-            .iter_mut()
-            .find(|entry| entry.name == name)
-            .map(|entry| &mut entry.target)
+        let Target::Table(variants) = &mut self.entries.iter_mut().find(|e| e.name == name)?.target
         else {
-            return false;
+            return None;
         };
-        let [variant] = variants.entries.as_mut_slice() else {
+        match variants.entries.as_mut_slice() {
+            [variant] if variant.name == 2 => Some(variant),
+            _ => None,
+        }
+    }
+
+    pub(super) fn variant_fields(&mut self, name: &str) -> Option<&mut Table> {
+        match &mut self.variant(name)?.target {
+            Target::Table(fields) => Some(fields),
+            _ => None,
+        }
+    }
+
+    pub(super) fn derive_variant(&mut self, name: &str, kind: u32, bases: &[u32]) -> bool {
+        let Some(variant) = self.variant(name) else {
             return false;
         };
         variant.kind = kind;
