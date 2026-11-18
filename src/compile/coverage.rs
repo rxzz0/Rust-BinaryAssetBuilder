@@ -1253,6 +1253,11 @@ mod tests {
         assert_ea_fixture("weapon-misc-complete", 10);
     }
 
+    #[test]
+    fn damage_scalar_filters_match_ea() {
+        assert_ea_fixture("weapon-damage-scalar-filters", 2);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

@@ -1,6 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 269 completes the RA3 WeaponTemplate nugget variants with DamageAndSpawn, both life-leech variants, GrapplingHook, LuaEvent, and SeedTiberium. All 13 EA fixtures, 261 tests, and Clippy passed.
-- Checkpoint 268 adds MetaImpactNugget. Checkpoint 267 adds scatter radii by target type. Checkpoint 266 adds W3D animation compression.
+- Checkpoint 270 adds native per-target damage multipliers for the shared DamageNugget layout, with object filters and upgrade conditions. Both EA fixtures match. All 262 tests and Clippy passed.
+- Checkpoint 269 completes the RA3 weapon nugget variants. Checkpoints 266–268 add W3D animation, per-target scatter radii, and MetaImpactNugget.
 
-- Surge Step 6 reaches DamageScalarDetails in Desolator's weapon data. Next task is damage multipliers with target filters and required upgrades.
+- Surge Step 6 compiles Desolator's weapon data and reaches DynamicsDraw in Future Tank X-1. Next task is the DynamicsDraw encoder.

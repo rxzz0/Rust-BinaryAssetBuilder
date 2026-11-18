@@ -1,0 +1,19 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <WeaponTemplate id="DamageScalarsMinimum">
+        <Nuggets><DamageNugget><DamageScalarDetails><Filter/></DamageScalarDetails></DamageNugget></Nuggets>
+    </WeaponTemplate>
+    <WeaponTemplate id="DamageScalarsConfigured">
+        <Nuggets>
+            <DOTNugget Damage="3" DamageInterval="1s" DamageDuration="7s" ForbiddenTargetObjectStatus="NO_COLLISIONS">
+                <SpecialObjectFilter Rule="ANY" Include="INFANTRY"/>
+                <RequiredUpgrade>BaseProbeUpgrade</RequiredUpgrade>
+                <DamageScalarDetails Scalar="50%">
+                    <Filter Rule="ALL" Include="VEHICLE"><IncludeThing>ScalarProbeObject</IncludeThing></Filter>
+                    <RequiredUpgrade>ScalarProbeUpgrade</RequiredUpgrade>
+                    <RequiredUpgrade>ScalarSecondUpgrade</RequiredUpgrade>
+                </DamageScalarDetails>
+                <DamageScalarDetails Scalar="125%"><Filter Rule="NONE" Exclude="STRUCTURE"/></DamageScalarDetails>
+            </DOTNugget>
+        </Nuggets>
+    </WeaponTemplate>
+</AssetDeclaration>

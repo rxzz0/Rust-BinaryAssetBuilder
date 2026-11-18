@@ -364,6 +364,13 @@ fn encode_nuggets(
     let mut entries = Vec::with_capacity(children.len());
     for (index, child) in children.into_iter().enumerate() {
         let pointer = first + index * 4;
+        if child
+            .children()
+            .any(|node| node.has_tag_name((SAGE_NS, "DamageScalarDetails")))
+        {
+            let start = data.payload.len() as u32;
+            derived_relocations.push((start, start + 0x88, start + 0x90));
+        }
         let variant = damage_variants::Variant::for_node(child);
         let (kind, target) = match (child.tag_name().namespace(), child.tag_name().name()) {
             (Some(SAGE_NS), "FireOnObjectsNugget") => {
@@ -937,6 +944,12 @@ fn fire_on_objects(
         out.references.push(id.into());
         data.word(start + 0x9c, out.references.len() as u32);
     }
+    let mut scalar_reference_types = Vec::new();
+    let scalars = if is_damage {
+        encode_damage_scalars(node, start + 0x88, data, &mut scalar_reference_types)?
+    } else {
+        Table::array(start + 0x88, [])
+    };
     let mut children = significant_children(node).peekable();
     let effect = encode_effect(node, start, data, out, &mut children)?;
     let filter =
@@ -949,6 +962,13 @@ fn fire_on_objects(
             )?),
             None => Target::Null,
         };
+    if is_damage {
+        while children
+            .next_if(|child| child.has_tag_name((SAGE_NS, "DamageScalarDetails")))
+            .is_some()
+        {}
+    }
+    out.reference_types.extend(scalar_reference_types);
     let contained_filter = if contained {
         let child = children
             .next_if(|child| child.has_tag_name((SAGE_NS, "DamageObjectFilter")))
@@ -980,11 +1000,7 @@ fn fire_on_objects(
             .iter()
             .map(|&(name, kind, offset)| Entry::new(name, kind, Target::Data(start + offset))),
     );
-    damage.push(Entry::new(
-        0x9197_20cd,
-        0xe4a6_e6e4,
-        Target::Table(Table::array(start + 0x88, [])),
-    ));
+    damage.push(Entry::new(0x9197_20cd, 0xe4a6_e6e4, Target::Table(scalars)));
     if let Some(derived) = derived {
         let mut fields = vec![Entry::new(
             1,
@@ -1071,6 +1087,58 @@ fn fire_on_objects(
         Entry::named("VictimMustBeAlive", 0x77e3_f4f7, Target::Data(start + 0xa1)),
         Entry::named("Filter", 0xe46e_a3b2, filter),
     ]))
+}
+
+fn encode_damage_scalars(
+    node: Node<'_, '_>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Table> {
+    use super::game_object::{encode_inline_object_filter, weak_id_list, weak_xml_reference};
+
+    const ENTRY_SIZE: usize = 0x7c;
+    let path = data.path;
+    let scalars: Vec<_> = node
+        .children()
+        .filter(|child| child.has_tag_name((SAGE_NS, "DamageScalarDetails")))
+        .collect();
+    let start = data.list(count, scalars.len(), ENTRY_SIZE)?;
+    let mut entries = Vec::with_capacity(scalars.len());
+    for (index, node) in scalars.into_iter().enumerate() {
+        let record = start + index * ENTRY_SIZE;
+        validate_attributes(node, &["Scalar"], path)?;
+        let scalar = percentage(node.attribute("Scalar").unwrap_or("100%"), "Scalar", path)?;
+        data.word(record, scalar.to_bits());
+        let mut children = significant_children(node);
+        let filter = children
+            .next()
+            .filter(|child| child.has_tag_name((SAGE_NS, "Filter")))
+            .ok_or_else(|| invalid(path, "DamageScalarDetails requires Filter"))?;
+        let filter = encode_inline_object_filter(filter, record + 4, data, reference_types)?;
+        let mut upgrades = Vec::new();
+        for child in children {
+            if !child.has_tag_name((SAGE_NS, "RequiredUpgrade")) {
+                return Err(invalid(path, "unexpected DamageScalarDetails child"));
+            }
+            upgrades.push(weak_xml_reference(
+                child,
+                "UpgradeTemplate",
+                data,
+                reference_types,
+            )?);
+        }
+        let upgrades = weak_id_list(data, record + 0x74, upgrades)?;
+        entries.push((
+            0,
+            Target::Table(Table::record(vec![
+                Entry::named("Scalar", 0x6458_64f3, Target::Data(record)),
+                Entry::named("Filter", 0xe46e_a3b2, Target::Table(filter)),
+                Entry::named("RequiredUpgrade", 0x26fa_cfc7, Target::Table(upgrades)),
+            ])),
+        ));
+    }
+    Ok(Table::array(count, entries))
 }
 
 fn flag(node: Node<'_, '_>, name: &str, default: bool, path: &Path) -> io::Result<u8> {
