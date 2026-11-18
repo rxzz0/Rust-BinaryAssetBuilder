@@ -1285,6 +1285,11 @@ mod tests {
         assert_ea_fixture("transformed-display", 2);
     }
 
+    #[test]
+    fn terrain_particles_and_dynamic_contacts_match_ea() {
+        assert_ea_fixture("terrain-contact-mappings", 6);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

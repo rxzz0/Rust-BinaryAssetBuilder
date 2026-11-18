@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <FXList id="CheckpointContactFX"><NuggetList/></FXList>
+  <FXParticleSystemTemplate id="CheckpointTerrainParticles"><Physics/><Draw/><Volume/><Velocity/></FXParticleSystemTemplate>
+  <TerrainParticleMapping id="CheckpointTerrainDefaults"/>
+  <TerrainParticleMapping id="CheckpointTerrainCustom" AccelerationMultiplier="112.5%">
+    <Mapping/>
+    <Mapping ParticleSystem="CheckpointTerrainParticles" TerrainClass="Mud" RequiredModelConditions="MOVING ATTACKING" ForbiddenModelConditions="DAMAGED"/>
+    <Mapping TerrainClass="Snow" ParticleSystem="CheckpointTerrainParticles"/>
+  </TerrainParticleMapping>
+  <DynamicsContactTagMapping id="CheckpointContactDefaults"/>
+  <DynamicsContactTagMapping id="CheckpointContactCustom">
+    <Mapping/>
+    <Mapping ContactA="VEHICLE" ContactB="GROUND" MinForce="4.25" FX="CheckpointContactFX"/>
+    <Mapping FX="CheckpointContactFX" ContactB="DEBRIS" ContactA="WATER"/>
+  </DynamicsContactTagMapping>
+</AssetDeclaration>

@@ -37,6 +37,7 @@ pub(super) mod music;
 mod object_creation;
 mod particle_system;
 mod player_template;
+mod surface_mappings;
 mod tokenized;
 mod upgrade;
 mod w3d_animation;
@@ -85,6 +86,8 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "EvaSettings" => (0xafad_556c, 68, eva::settings),
         "LocomotorTemplate" => (0xca32_f95d, 69, locomotor::locomotor_template),
         "BounceKickTerrainMapping" => (0x7dc1_f449, 70, locomotor::bounce_kick_terrain_mapping),
+        "TerrainParticleMapping" => (0xa321_84fe, 71, surface_mappings::terrain_particles),
+        "DynamicsContactTagMapping" => (0x358a_b09d, 72, surface_mappings::dynamics_contacts),
         "W3DAnimation" => (0x5545_5fe8, 66, w3d_animation::compile),
         "W3DMesh" => (0xcd8a_089c, 35, w3d_mesh::compile),
         "W3DContainer" => (0x619d_a33f, 36, w3d_mesh::container),

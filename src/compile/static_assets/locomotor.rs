@@ -350,7 +350,6 @@ pub(super) fn bounce_kick_terrain_mapping(
         relocations: Vec::new(),
         path,
     };
-    let terrain = &schema().terrain;
     let start = data.list(4, significant_children(node).count(), 8)?;
     for (index, mapping) in significant_children(node).enumerate() {
         if !mapping.has_tag_name((SAGE_NS, "Mapping")) || has_content(mapping) {
@@ -362,7 +361,7 @@ pub(super) fn bounce_kick_terrain_mapping(
         validate_attributes(mapping, &[TERRAIN_CLASS, MULTIPLIER], path)?;
         let offset = start + index * 8;
         if let Some(raw) = mapping.attribute(TERRAIN_CLASS) {
-            data.word(offset, enum_index(raw, terrain, TERRAIN_CLASS, path)?);
+            data.word(offset, terrain_class(raw, path)?);
         }
         if let Some(raw) = mapping.attribute(MULTIPLIER) {
             data.word(offset + 4, percentage(raw, MULTIPLIER, path)?.to_bits());
@@ -373,6 +372,10 @@ pub(super) fn bounce_kick_terrain_mapping(
         relocations: finish_relocations(data.relocations),
         ..Marshaled::default()
     })
+}
+
+pub(super) fn terrain_class(value: &str, path: &Path) -> io::Result<u32> {
+    enum_index(value, &schema().terrain, "TerrainClass", path)
 }
 
 fn sage_int(value: &str, name: &str, path: &Path) -> io::Result<u32> {
