@@ -142,6 +142,7 @@ pub(super) fn has_encoder(type_name: &str) -> bool {
                 | "AudioFile"
                 | "OnDemandTexture"
                 | "Texture"
+                | "TerrainTextureAtlas"
         )
 }
 
@@ -537,7 +538,7 @@ fn w3d_collision_box(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     })
 }
 
-fn significant_children<'a, 'input>(
+pub(super) fn significant_children<'a, 'input>(
     node: Node<'a, 'input>,
 ) -> impl Iterator<Item = Node<'a, 'input>> {
     node.children().filter(|child| {

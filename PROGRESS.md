@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 299 compiles TerrainTextureAtlas tile packing, wrapped borders, and DDS mip chains. Three EA fixtures matched tile layout, DDS headers, and level-zero normal bytes. Compression, some mip bytes, and instance hashes differ. All 294 tests and Clippy passed.
 - Checkpoint 298 compiles GameMap objects, world properties, and water analysis. All five EA assets matched. All 293 tests and Clippy passed.
 - Checkpoint 297 compiles Road geometry settings and texture references. Both EA assets matched. All 292 tests and Clippy passed.
 - Checkpoint 296 compiles GameScriptList, including nested groups, object parameters, and ANSI action hashes. All six EA assets matched. All 291 tests and Clippy passed.

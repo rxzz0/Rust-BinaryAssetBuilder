@@ -21,6 +21,7 @@ mod merge_assets;
 mod precompiled;
 mod sdk_static;
 mod static_assets;
+mod terrain_atlas;
 mod texture;
 mod xinclude;
 
@@ -503,6 +504,7 @@ impl Compiler<'_> {
             {
                 self.compile_schema_inherited_asset(node, path, source)
             }
+            "TerrainTextureAtlas" => self.compile_terrain_atlas(node, path, source),
             _ => static_assets::compile_asset(node, path, source),
         }
     }
