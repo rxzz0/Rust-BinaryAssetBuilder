@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <Road id="RoadDefault"/>
+  <Road id="RoadConfigured" Texture="" NormalTexture="" RoadWidth="25.5" RoadWidthInTexture="0.5" Priority="-1.25"/>
+</AssetDeclaration>

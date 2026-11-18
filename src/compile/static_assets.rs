@@ -40,6 +40,7 @@ mod object_creation;
 mod particle_system;
 mod player_power_button;
 mod player_template;
+mod road;
 mod stance_template;
 mod surface_mappings;
 mod tokenized;
@@ -96,6 +97,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "JoypadCommandBarButtonTemplate" => (0x2913_cc3c, 74, joypad_buttons::compile),
         "StanceTemplate" => (0x4829_f362, 75, stance_template::compile),
         "GameScriptList" => (0xa268_995a, 76, game_script_list::compile),
+        "Road" => (0x2bfd_2964, 77, road::compile),
         "W3DAnimation" => (0x5545_5fe8, 66, w3d_animation::compile),
         "W3DMesh" => (0xcd8a_089c, 35, w3d_mesh::compile),
         "W3DContainer" => (0x619d_a33f, 36, w3d_mesh::container),

@@ -1349,6 +1349,11 @@ mod tests {
     }
 
     #[test]
+    fn roads_match_ea() {
+        assert_ea_fixture("road", 2);
+    }
+
+    #[test]
     fn game_script_lists_match_ea() {
         assert_ea_fixture("game-script-list", 6);
     }
