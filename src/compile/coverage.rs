@@ -1023,6 +1023,11 @@ mod tests {
     }
 
     #[test]
+    fn weapon_activation_nuggets_match_ea_batch() {
+        assert_ea_fixture("weapon-activation-nuggets", 1);
+    }
+
+    #[test]
     fn weapon_ai_hints_match_ea_batch() {
         assert_ea_fixture("weapon-ai-hints", 2);
     }

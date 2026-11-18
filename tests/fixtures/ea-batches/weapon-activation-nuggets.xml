@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="ActivationProbe">
+    <Nuggets>
+      <ActivateLaserNugget/>
+      <ActivateStreamNugget/>
+      <ActivateLaserNugget Lifetime="2.5s" LaserId="-3" HitGroundFX="GroundProbe" OverShootDistance="13" Radius="4">
+        <SpecialObjectFilter Rule="ANY"><IncludeThing>TargetProbe</IncludeThing></SpecialObjectFilter>
+      </ActivateLaserNugget>
+      <ActivateStreamNugget Lifetime="0.5s" StreamId="4" Radius="1"/>
+    </Nuggets>
+  </WeaponTemplate>
+</AssetDeclaration>

@@ -1,5 +1,5 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 246 encodes WeaponAiHintInfo, including optional target speed, lock-on behavior, and warhead references. Both fixtures match EA byte for byte. All 237 tests and Clippy passed.
-- Checkpoint 245 encodes LineDamageNugget. Checkpoint 244 encodes UpgradeSoundSelectorClientBehavior.
-- Surge Step 6 passes Natasha's weapon AI hints and reaches ActivateLaserNugget. Next task is encoding the laser and stream activation variants.
+- Checkpoint 247 encodes ActivateLaserNugget and ActivateStreamNugget with effect filters, lifetime, IDs, ground FX, and overshoot. The fixture matches EA byte for byte. All 238 tests and Clippy passed.
+- Checkpoint 246 encodes WeaponAiHintInfo. Checkpoint 245 encodes LineDamageNugget.
+- Surge Step 6 passes Natasha's laser activation and reaches SpecialPowerNugget. Next task is encoding this and related weapon effect variants.

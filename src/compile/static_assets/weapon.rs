@@ -277,6 +277,8 @@ fn weapon_enum(raw: &str, kind: &str, path: &Path) -> io::Result<u32> {
     super::ai_strategic::enum_index(raw.trim(), values, kind, path)
 }
 
+const ACTIVATE_LASER: u32 = 0xe960_34a2;
+const ACTIVATE_STREAM: u32 = 0x80ba_8a54;
 const LINE_DAMAGE: u32 = 0xefaf_6340;
 
 fn encode_nuggets(
@@ -303,6 +305,14 @@ fn encode_nuggets(
             (Some(SAGE_NS), "DamageNugget") => {
                 (0xc0f5_3e99, fire_on_objects(child, pointer, data, out)?)
             }
+            (Some(SAGE_NS), "ActivateLaserNugget") => (
+                ACTIVATE_LASER,
+                activation_nugget(child, pointer, data, out, ACTIVATE_LASER)?,
+            ),
+            (Some(SAGE_NS), "ActivateStreamNugget") => (
+                ACTIVATE_STREAM,
+                activation_nugget(child, pointer, data, out, ACTIVATE_STREAM)?,
+            ),
             (Some(SAGE_NS), "LineDamageNugget") => {
                 (LINE_DAMAGE, fire_on_objects(child, pointer, data, out)?)
             }
@@ -341,6 +351,65 @@ fn encode_nuggets(
         ));
     }
     Ok(Table::array(0xfc, entries))
+}
+
+fn activation_nugget(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+    kind: u32,
+) -> io::Result<Table> {
+    let path = data.path;
+    let laser = kind == ACTIVATE_LASER;
+    let (name, allowed, size): (&str, &[&str], usize) = if laser {
+        (
+            "LaserId",
+            &["Lifetime", "LaserId", "HitGroundFX", "OverShootDistance"],
+            0x38,
+        )
+    } else {
+        ("StreamId", &["Lifetime", "StreamId"], 0x30)
+    };
+    validate_effect_attributes(node, allowed, path)?;
+    let start = data.allocate(pointer, size)?;
+    data.word(start, kind);
+    let lifetime = sage_time(node.attribute("Lifetime").unwrap_or("1s"), "Lifetime", path)?;
+    let id = node
+        .attribute(name)
+        .unwrap_or("0")
+        .trim()
+        .parse::<i32>()
+        .map_err(|_| invalid(path, format!("invalid {name}")))?;
+    data.word(start + 0x28, lifetime.to_bits());
+    data.word(start + 0x2c, id as u32);
+    if laser {
+        let hit = nugget_reference(node.attribute("HitGroundFX"), "FXList", path, out)?;
+        let distance = finite_number(
+            node.attribute("OverShootDistance").unwrap_or("0"),
+            "OverShootDistance",
+            path,
+        )?;
+        data.word(start + 0x30, hit);
+        data.word(start + 0x34, distance.to_bits());
+    }
+    let mut children = significant_children(node).peekable();
+    let effect = encode_effect(node, start, data, out, &mut children)?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected laser or stream activation child"));
+    }
+    let mut fields = vec![
+        effect,
+        Entry::named("Lifetime", 0x9986_69e8, Target::Data(start + 0x28)),
+        Entry::named(name, 0x23e6_50b8, Target::Data(start + 0x2c)),
+    ];
+    if laser {
+        fields.extend([
+            Entry::named("HitGroundFX", 0x0d1c_8e83, Target::Data(start + 0x30)),
+            Entry::named("OverShootDistance", 0x6458_64f3, Target::Data(start + 0x34)),
+        ]);
+    }
+    Ok(Table::record(fields))
 }
 
 fn tint_objects(
