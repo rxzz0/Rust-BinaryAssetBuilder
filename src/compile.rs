@@ -172,31 +172,45 @@ impl From<AssetId> for AssetReference {
     }
 }
 
+const RENDER_ASSET_TYPE: u32 = 0xb22f_87c9;
+
 impl AssetReference {
-    fn local_id(&self, ids: &HashSet<AssetId>) -> Option<AssetId> {
-        if ids.contains(&self.id) {
-            return Some(self.id);
-        }
-        if self.external_type != Some(fast_hash(b"BaseAudioEventInfo")) {
-            return None;
-        }
-        ["Multisound", "AmbientStream", "DialogEvent", "MusicTrack"]
-            .into_iter()
-            .map(|name| AssetId {
-                type_id: fast_hash(name.as_bytes()),
-                instance_id: self.id.instance_id,
-            })
-            .find(|id| ids.contains(id))
+    fn candidate_ids(&self) -> impl Iterator<Item = AssetId> + '_ {
+        let subtypes: &[&str] = if self.id.type_id == RENDER_ASSET_TYPE {
+            &["W3DContainer", "W3DMesh", "W3DCollisionBox"]
+        } else if self.external_type == Some(fast_hash(b"BaseAudioEventInfo")) {
+            &["Multisound", "AmbientStream", "DialogEvent", "MusicTrack"]
+        } else {
+            &[]
+        };
+        std::iter::once(self.id).chain(subtypes.iter().map(|name| AssetId {
+            type_id: fast_hash(name.as_bytes()),
+            instance_id: self.id.instance_id,
+        }))
     }
 
-    fn output_id(&self, local_ids: &HashSet<AssetId>) -> AssetId {
-        if let Some(id) = self.local_id(local_ids) {
-            return id;
+    fn local_id(&self, ids: &HashSet<AssetId>) -> Option<AssetId> {
+        self.candidate_ids().find(|id| ids.contains(id))
+    }
+
+    fn external_id(&self, ids: &HashSet<AssetId>) -> Option<AssetId> {
+        if self.id.type_id == RENDER_ASSET_TYPE {
+            return self.local_id(ids);
         }
+        let declared = self.declared_id();
+        (ids.contains(&declared) || self.local_id(ids).is_some()).then_some(declared)
+    }
+
+    fn declared_id(&self) -> AssetId {
         AssetId {
             type_id: self.external_type.unwrap_or(self.id.type_id),
             instance_id: self.id.instance_id,
         }
+    }
+
+    fn output_id(&self, local_ids: &HashSet<AssetId>) -> AssetId {
+        self.local_id(local_ids)
+            .unwrap_or_else(|| self.declared_id())
     }
 }
 
@@ -391,7 +405,12 @@ impl Compiler<'_> {
                 self.assets[index]
                     .references
                     .iter()
-                    .map(|reference| reference.id),
+                    .filter(|reference| reference.local_id(&self.ids).is_none())
+                    .filter_map(|reference| {
+                        reference
+                            .candidate_ids()
+                            .find(|id| self.tentative.contains_key(id))
+                    }),
             );
             for id in pending.drain(..) {
                 if self.ids.contains(&id) {
@@ -663,8 +682,7 @@ impl Compiler<'_> {
                 .flat_map(|asset| &asset.references)
                 .any(|reference| {
                     reference.local_id(&self.ids).is_none()
-                        && reference.local_id(&self.external_ids).is_none()
-                        && !self.external_ids.contains(&reference.output_id(&self.ids))
+                        && reference.external_id(&self.external_ids).is_none()
                 })
         {
             let root = self.reference_directory.unwrap();
@@ -707,10 +725,7 @@ impl Compiler<'_> {
                     resolved.push(local);
                     continue;
                 }
-                let external = reference.output_id(&self.ids);
-                if reference.local_id(&self.external_ids).is_none()
-                    && !self.external_ids.contains(&external)
-                {
+                let Some(external) = reference.external_id(&self.external_ids) else {
                     return Err(invalid(
                         &self.root,
                         format!(
@@ -718,7 +733,7 @@ impl Compiler<'_> {
                             id.type_id, id.instance_id, asset.name
                         ),
                     ));
-                }
+                };
                 resolved.push(external);
             }
             resolved_references.push(resolved);

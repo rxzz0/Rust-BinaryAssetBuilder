@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <Includes><Include type="reference" source="remote-models.xml"/></Includes>
+  <W3DContainer id="LocalProbeModel"/>
+  <GameObject id="RenderLinkProbe">
+    <Draws>
+      <ScriptedModelDraw id="ModuleTag_Draw">
+        <ModelConditionState ParseCondStateType="PARSE_DEFAULT">
+          <Model Name="ExternalProbeModel"/>
+          <Model Name="LocalProbeModel"/>
+          <Model Name="ExternalProbeBox"/>
+        </ModelConditionState>
+      </ScriptedModelDraw>
+    </Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

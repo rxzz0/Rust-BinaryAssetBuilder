@@ -1657,3 +1657,37 @@ fn inherited_experience_level_payload_matches_ea() {
     }
     panic!("missing derived experience level");
 }
+
+#[test]
+fn links_polymorphic_render_models_like_ea() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/render-link");
+    let stream = compile_static(&root.join("render-link.xml"), &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let ea = Manifest::parse(include_bytes!("fixtures/render-link/render-link.manifest")).unwrap();
+    let index = manifest
+        .assets
+        .iter()
+        .position(|asset| asset.name == b"GameObject:RenderLinkProbe")
+        .unwrap();
+    let actual = &manifest.assets[index];
+    let expected = ea
+        .assets
+        .iter()
+        .find(|asset| asset.id == actual.id)
+        .unwrap();
+    assert_eq!(
+        actual.references.iter().collect::<Vec<_>>(),
+        expected.references.iter().collect::<Vec<_>>()
+    );
+    assert_eq!(actual.type_hash, expected.type_hash);
+    let payload_start = 4 + manifest.assets[..index]
+        .iter()
+        .map(|asset| asset.chunk_sizes.instance as usize)
+        .sum::<usize>();
+    let payload_len = actual.chunk_sizes.instance as usize;
+    let oracle = include_bytes!("fixtures/render-link/render-link.asset");
+    assert_eq!(
+        &stream.files.bin[payload_start..payload_start + payload_len],
+        &oracle[32..32 + payload_len]
+    );
+}
