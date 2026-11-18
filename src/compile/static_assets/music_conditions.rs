@@ -1,6 +1,6 @@
 use super::binary::BinaryData;
 use super::game_object::{encode_inline_object_filter, write_model_conditions};
-use super::music::{finish_music_script, script_string_hash};
+use super::music::script_string_hash;
 use super::{
     Marshaled, asset_reference, finite_number, sage_int, sage_time, significant_children,
     text_value, validate_attributes, write_import,
@@ -341,7 +341,7 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             ));
         }
     }
-    Ok(finish_music_script(result, data))
+    Ok(data.finish(result))
 }
 
 fn write_child_reference(

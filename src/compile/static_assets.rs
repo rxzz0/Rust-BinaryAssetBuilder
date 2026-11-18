@@ -21,6 +21,7 @@ mod armor;
 mod attribute_modifier;
 mod audio;
 mod audio_file;
+mod audio_settings;
 mod binary;
 mod campaign;
 mod credits;
@@ -101,6 +102,9 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "GameScriptList" => (0xa268_995a, 76, game_script_list::compile),
         "Road" => (0x2bfd_2964, 77, road::compile),
         "GameMap" => (0xf465_7c12, 78, game_map::compile),
+        "AudioSettings" => (0xd86e_d334, 83, audio_settings::settings),
+        "AnimationSoundSettings" => (0xbcf8_03d4, 83, audio_settings::animation),
+        "AudioLOD" => (0x014c_bb53, 83, audio_settings::lod),
         "MusicScriptTrack" => (0xbbde_2f64, 79, music::script_track),
         "MusicPalette" => (0xd96f_c160, 80, music::palette),
         "W3DAnimation" => (0x5545_5fe8, 66, w3d_animation::compile),

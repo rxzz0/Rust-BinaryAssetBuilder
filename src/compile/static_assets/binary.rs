@@ -1,3 +1,4 @@
+use super::Marshaled;
 use crate::compile::{invalid, windows_1252};
 use std::io;
 use std::path::Path;
@@ -9,6 +10,17 @@ pub(super) struct BinaryData<'a> {
 }
 
 impl BinaryData<'_> {
+    pub(super) fn finish(mut self, mut result: Marshaled) -> Marshaled {
+        for offsets in [&mut result.imports, &mut self.relocations] {
+            if !offsets.is_empty() {
+                offsets.push(u32::MAX);
+            }
+        }
+        result.payload = self.payload;
+        result.relocations = self.relocations;
+        result
+    }
+
     pub(super) fn word(&mut self, offset: usize, word: u32) {
         self.payload[offset..offset + 4].copy_from_slice(&word.to_le_bytes());
     }

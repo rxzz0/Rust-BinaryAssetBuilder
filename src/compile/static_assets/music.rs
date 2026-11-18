@@ -45,7 +45,7 @@ pub(super) fn palette(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             )?;
         }
     }
-    Ok(finish_music_script(result, data))
+    Ok(data.finish(result))
 }
 
 pub(super) fn script_track(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
@@ -114,24 +114,13 @@ pub(super) fn script_track(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
     for (index, (name, default)) in flags.into_iter().enumerate() {
         data.payload[32 + index] = boolean(node, name, default, path)?;
     }
-    Ok(finish_music_script(result, data))
+    Ok(data.finish(result))
 }
 
 pub(super) fn script_string_hash(value: &str, field: &str, path: &Path) -> io::Result<u32> {
     let bytes = crate::compile::windows_1252(value)
         .ok_or_else(|| invalid(path, format!("{field} must use Windows-1252")))?;
     Ok(asset_string_hash(&bytes))
-}
-
-pub(super) fn finish_music_script(mut result: Marshaled, mut data: BinaryData<'_>) -> Marshaled {
-    for offsets in [&mut result.imports, &mut data.relocations] {
-        if !offsets.is_empty() {
-            offsets.push(u32::MAX);
-        }
-    }
-    result.payload = data.payload;
-    result.relocations = data.relocations;
-    result
 }
 
 pub(in crate::compile) struct Header {
@@ -492,7 +481,7 @@ pub(super) fn dynamic_state(node: Node<'_, '_>, path: &Path) -> io::Result<Marsh
         &mut result,
     )?;
     result.imports.sort_unstable();
-    Ok(finish_music_script(result, data))
+    Ok(data.finish(result))
 }
 
 pub(super) fn dynamic_state_set(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
@@ -510,7 +499,7 @@ pub(super) fn dynamic_state_set(node: Node<'_, '_>, path: &Path) -> io::Result<M
     )?;
     data.word(4, category);
     write_reference_list(node, "State", DYNAMIC_STATE, 8, &mut data, &mut result)?;
-    Ok(finish_music_script(result, data))
+    Ok(data.finish(result))
 }
 
 pub(super) fn dynamic_transition(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
@@ -541,7 +530,7 @@ pub(super) fn dynamic_transition(node: Node<'_, '_>, path: &Path) -> io::Result<
         &mut data,
         &mut result,
     )?;
-    Ok(finish_music_script(result, data))
+    Ok(data.finish(result))
 }
 
 fn write_reference_list(
