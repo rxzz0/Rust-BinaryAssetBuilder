@@ -1,0 +1,26 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="AutoDepositProbeDefaults">
+    <Behaviors><AutoDepositUpdate id="Default"/></Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="AutoDepositProbeConfigured">
+    <Behaviors>
+      <AutoDepositUpdate id="OilDerrickTransfer" DepositInterval="1s" GiveNoXP="true" Flags="ACTIVE_WHEN_REPAIRING">
+        <InitialCaptureBonus Account="0" Amount="1000"/>
+        <Deposit Account="0" Amount="100"/>
+      </AutoDepositUpdate>
+      <AutoDepositUpdate id="CustomAccounts" DepositInterval="2375ms" GiveNoXP="true" OnlyWhenGarrisoned="true" Flags="NONE ACTIVE_WHEN_REPAIRING" TransactionCategory="SHARED_DEPOSIT">
+        <InitialCaptureBonus Amount="0x00000010" Account="0x00000001"/>
+        <InitialCaptureBonus Account="2" Amount="400"/>
+        <Deposit Account="2" Amount="77"/>
+        <Deposit Account="1" Amount="85"/>
+        <ResourceCap Account="1" Amount="0xFFFFFFFF"/>
+        <ResourceCap Account="2" Amount="12345"/>
+      </AutoDepositUpdate>
+      <AutoDepositUpdate id="ResourceCapOnly" Flags="" TransactionCategory="PRODUCTION">
+        <ResourceCap Account="0.0" Amount="9999999999"/>
+      </AutoDepositUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

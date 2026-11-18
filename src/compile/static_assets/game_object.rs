@@ -2,6 +2,7 @@ mod active_body;
 mod ai_update;
 mod animation;
 mod attack_assist;
+mod auto_deposit;
 mod behaviors_basic;
 pub(super) use behaviors_basic::optional_vector;
 mod bezier_projectile;

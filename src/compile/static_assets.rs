@@ -402,6 +402,20 @@ fn production_queue_type(value: &str, field: &str, path: &Path) -> io::Result<u3
         .ok_or_else(|| invalid(path, format!("invalid {field} {value}")))
 }
 
+fn sage_uint(value: &str, name: &str, path: &Path) -> io::Result<u32> {
+    let value = value.trim();
+    let number = if value == "0.0" {
+        Ok(0)
+    } else if let Some(hex) = value.strip_prefix("0x") {
+        u64::from_str_radix(hex, 16)
+    } else {
+        value.parse::<u64>()
+    };
+    number
+        .map(|value| value.min(u64::from(u32::MAX)) as u32)
+        .map_err(|_| invalid(path, format!("invalid {name} {value:?}")))
+}
+
 fn sage_int(value: &str, name: &str, path: &Path) -> io::Result<u32> {
     let value = value.trim();
     let number = if let Some(hex) = value.strip_prefix("0x") {

@@ -113,6 +113,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "MonitorConditionUpdate",
             "OreMinerBehavior",
             "OreNodeBehavior",
+            "AutoDepositUpdate",
             "InfiltratorContain",
             "LUAEventList",
             "ObjectDefectionHelper",
@@ -1322,6 +1323,11 @@ mod tests {
     fn ore_collection_and_deposit_match_ea() {
         assert_ea_fixture("ore-behaviors", 9);
         assert_ea_fixture("monitor-condition", 3);
+    }
+
+    #[test]
+    fn automatic_resource_deposits_match_ea() {
+        assert_ea_fixture("auto-deposit", 2);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

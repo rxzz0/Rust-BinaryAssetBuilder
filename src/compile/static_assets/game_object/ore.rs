@@ -1,7 +1,8 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, percentage, sage_time, significant_children, validate_attributes,
+    AssetReference, percentage, sage_time, sage_uint as unsigned, significant_children,
+    validate_attributes,
 };
 use super::behaviors_basic::{base, module_base};
 use super::draws::{fields, model_condition_index};
@@ -9,7 +10,7 @@ use super::passive_area::reference;
 use super::secondary_damage::encode_status;
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
-use std::{io, path::Path};
+use std::io;
 
 const UINT: u32 = 0x7631_77a4;
 const PERCENTAGE: u32 = 0x6458_64f3;
@@ -159,16 +160,4 @@ pub(super) fn deposit(
     let mut entries = vec![behavior];
     entries.extend(fields(start, &FIELDS));
     Ok((KIND, Table::record(entries)))
-}
-
-fn unsigned(value: &str, name: &str, path: &Path) -> io::Result<u32> {
-    let value = value.trim();
-    let word = match value {
-        "0.0" => Ok(0),
-        _ => match value.strip_prefix("0x") {
-            Some(hex) => u32::from_str_radix(hex, 16),
-            None => value.parse(),
-        },
-    };
-    word.map_err(|_| invalid(path, format!("invalid {name}: {value:?}")))
 }
