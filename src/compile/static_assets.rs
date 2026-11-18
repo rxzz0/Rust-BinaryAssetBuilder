@@ -1082,6 +1082,8 @@ fn write_import(
 
 fn asset_reference(value: &str, target_type: &str, path: &Path) -> io::Result<AssetId> {
     let value = value.trim();
+    // Inherited XML can carry a reference ordinal appended by the schema materializer.
+    let value = value.split_once('\\').map_or(value, |(name, _)| name);
     let (kind, name) = value.split_once(':').unwrap_or((target_type, value));
     if kind != target_type || name.is_empty() || name.contains(':') || !name.is_ascii() {
         return Err(invalid(

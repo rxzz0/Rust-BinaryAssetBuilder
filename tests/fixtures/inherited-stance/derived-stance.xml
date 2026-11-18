@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <Includes><Include type="instance" source="stance-base.xml"/><Include type="reference" source="stance-library.xml"/></Includes>
+  <GameObject id="StanceDerived" inheritFrom="StanceBase"/>
+</AssetDeclaration>

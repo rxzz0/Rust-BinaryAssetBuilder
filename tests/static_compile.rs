@@ -1691,3 +1691,64 @@ fn links_polymorphic_render_models_like_ea() {
         &oracle[32..32 + payload_len]
     );
 }
+
+#[test]
+fn inherited_stance_reference_omits_schema_ordinal() {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/inherited-stance");
+    let root = scratch_root();
+    let schemas = root.join("Schemas/xsd");
+    fs::create_dir_all(&schemas).unwrap();
+    fs::write(
+        schemas.join("CnC3Types.xsd"),
+        r#"
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:complexType name="GameObject">
+                <xs:sequence>
+                    <xs:element name="Behaviors" type="Behaviors"/>
+                    <xs:element name="Body" type="Body"/>
+                </xs:sequence>
+            </xs:complexType>
+            <xs:complexType name="Behaviors"><xs:choice maxOccurs="unbounded">
+                <xs:element name="StancesBehavior" type="StancesBehavior"/>
+            </xs:choice></xs:complexType>
+            <xs:complexType name="StancesBehavior">
+                <xs:attribute name="StanceTemplate" type="AssetReference"/>
+            </xs:complexType>
+            <xs:complexType name="Body"><xs:sequence>
+                <xs:element name="ImmortalBody" type="ImmortalBody"/>
+            </xs:sequence></xs:complexType>
+            <xs:complexType name="ImmortalBody"/>
+        </xs:schema>
+    "#,
+    )
+    .unwrap();
+    for name in [
+        "stance-base.xml",
+        "derived-stance.xml",
+        "stance-library.xml",
+        "stance-library.manifest",
+    ] {
+        fs::copy(fixtures.join(name), root.join(name)).unwrap();
+    }
+    let stream = compile_static(&root.join("derived-stance.xml"), &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let index = manifest
+        .assets
+        .iter()
+        .position(|asset| asset.name == b"GameObject:StanceDerived")
+        .unwrap();
+    let external = Manifest::parse(include_bytes!(
+        "fixtures/inherited-stance/stance-library.manifest"
+    ))
+    .unwrap();
+    let stance = &external.assets[0];
+    let derived = &manifest.assets[index];
+    assert!(derived.references.iter().eq([stance.id]));
+    let start = 4 + manifest.assets[..index]
+        .iter()
+        .map(|asset| asset.chunk_sizes.instance as usize)
+        .sum::<usize>();
+    let size = derived.chunk_sizes.instance as usize;
+    let ea = include_bytes!("fixtures/inherited-stance/942fff2d.cb8d0980.e02eaed7.fd668405.asset");
+    assert_eq!(&stream.files.bin[start..start + size], &ea[32..32 + size]);
+}

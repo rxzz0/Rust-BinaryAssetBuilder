@@ -1,7 +1,7 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 289 adds AssistedPlacementInfoBehavior, including hint objects, optional filter references, and placement restrictions. Both fixtures match EA. All 282 tests and Clippy passed.
-- Checkpoint 288 links abstract render references to concrete local and external W3D assets. Checkpoints 284–287 add button variants, inherited FX lists, and weapon damage arcs.
-- Checkpoints 274–283 add locomotor and surface mappings, transformed display and upgrade fields, sweeping damage, animation sound support, collision, ore, JetAIUpdate, and cleared EVA events.
+- Checkpoint 290 strips schema reference ordinals before hashing references inherited from instance includes. The inherited stance fixture matches EA. All 283 tests and Clippy passed.
+- Checkpoints 288–289 link concrete render assets and compile assisted placement hints.
+- Checkpoints 274–287 add locomotors, surface mappings, GameObject fields and behaviors, button variants, FX inheritance, and weapon damage arcs.
 
-- Surge release Step 6 reached an inherited StanceTemplate reference on AlliedAntiAirVehicleTech1. Reference indexing appends an ordinal that the stance encoder was hashing into the asset name. Resolve that reference next.
+- Surge Step 6 passed the inherited stance and reached an abstract audio reference in AlliedAntiAirVehicleTech1 after 8.53 seconds. Link concrete audio types next, then rerun Fix Assets and BIG packaging.
