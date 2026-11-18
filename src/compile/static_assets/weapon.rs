@@ -373,14 +373,47 @@ enum EffectValue {
     Time,
     Integer,
     Boolean,
+    ModuleId,
+    DamageEnum(usize, u32),
+    InfoWarFlags,
     Reference(&'static str, u32),
 }
 
-use EffectValue::{Angle, Boolean, Integer, Percentage, Real, Reference, Time};
+use EffectValue::{
+    Angle, Boolean, DamageEnum, InfoWarFlags, Integer, ModuleId, Percentage, Real, Reference, Time,
+};
 
 type EffectField = (&'static str, EffectValue, Option<&'static str>);
 const LIFETIME: EffectField = ("Lifetime", Time, Some("1s"));
 const SIMPLE_EFFECTS: &[(&str, u32, &[EffectField])] = &[
+    (
+        "AttachNugget",
+        0x2255_aed4,
+        &[("AttachModuleId", ModuleId, None)],
+    ),
+    (
+        "StripMaxHealthPercentNugget",
+        0x60af_0859,
+        &[
+            ("AmountToStrip", Percentage, Some("50%")),
+            ("DamageType", DamageEnum(0, 0x4648_6ff1), Some("UNDEFINED")),
+            ("DeathType", DamageEnum(1, 0xc608_ed36), Some("NORMAL")),
+            (
+                "DamageFXType",
+                DamageEnum(2, 0x2faa_4e62),
+                Some("UNDEFINED"),
+            ),
+        ],
+    ),
+    (
+        "InformationWarfareNugget",
+        0x3a4d_3175,
+        &[
+            ("InfoWarType", InfoWarFlags, Some("NONE")),
+            ("RadarJamRadius", Real, Some("0")),
+            ("RadarJamDuration", Time, Some("0s")),
+        ],
+    ),
     (
         "ActivateLaserNugget",
         0xe960_34a2,
@@ -493,6 +526,20 @@ fn simple_effect(
                 0x77e3_f4f7,
                 u32::from(flag(node, name, raw == "true", path)?),
             ),
+            ModuleId => (
+                0xbdf0_7965,
+                super::hash_name(&raw.trim().to_ascii_lowercase()),
+            ),
+            DamageEnum(index, token) => (token, damage_enum(index, raw, path)?),
+            InfoWarFlags => {
+                static FLAGS: OnceLock<[Vec<String>; 1]> = OnceLock::new();
+                let flags = FLAGS.get_or_init(|| schema_enums(WEAPON_SCHEMA, &["InfoWarEffect"]));
+                let mask = raw.split_ascii_whitespace().try_fold(0, |mask, flag| {
+                    super::ai_strategic::enum_index(flag, &flags[0], name, path)
+                        .map(|bit| mask | 1 << bit)
+                })?;
+                (0x0fd4_89e2, mask)
+            }
             Reference(kind, token) => (token, nugget_reference(Some(raw), kind, path, out)?),
         };
         let offset = start + 0x28 + index * 4;
@@ -746,41 +793,17 @@ fn fire_on_objects(
             start + 0x28,
             finite_number(node.attribute("Damage").unwrap_or("0"), "Damage", path)?.to_bits(),
         );
-        for (index, (name, default, schema)) in [
-            (
-                "DamageType",
-                "UNDEFINED",
-                include_str!("../../../schemas/ra3/xsd/Includes/DamageDef.xsd"),
-            ),
-            (
-                "DeathType",
-                "NORMAL",
-                include_str!("../../../schemas/ra3/xsd/Includes/Death.xsd"),
-            ),
-            (
-                "DamageFXType",
-                "UNDEFINED",
-                include_str!("../../../schemas/ra3/xsd/Includes/DamageFX.xsd"),
-            ),
+        for (index, (name, default)) in [
+            ("DamageType", "UNDEFINED"),
+            ("DeathType", "NORMAL"),
+            ("DamageFXType", "UNDEFINED"),
         ]
         .into_iter()
         .enumerate()
         {
-            static VALUES: [OnceLock<Vec<String>>; 3] = [const { OnceLock::new() }; 3];
-            let values = VALUES[index].get_or_init(|| schema_enums(schema, &[name])[0].clone());
-            let value = node.attribute(name).unwrap_or(default);
-            let ordinal = values
-                .iter()
-                .position(|choice| choice == value)
-                .ok_or_else(|| invalid(path, format!("invalid {name} {value}")))?
-                as u32;
             data.word(
                 start + 0x4c + index * 4,
-                if index == 2 {
-                    ordinal.wrapping_sub(1)
-                } else {
-                    ordinal
-                },
+                damage_enum(index, node.attribute(name).unwrap_or(default), path)?,
             );
         }
     }
@@ -1135,6 +1158,28 @@ fn projectile_children<'a, 'input: 'a>(
         ),
         Entry::named("SpecificBarrelOverride", 0x23e6_50b8, barrel),
     ])
+}
+
+fn damage_enum(index: usize, raw: &str, path: &Path) -> io::Result<u32> {
+    const SCHEMAS: &[(&str, &str)] = &[
+        (
+            "DamageType",
+            include_str!("../../../schemas/ra3/xsd/Includes/DamageDef.xsd"),
+        ),
+        (
+            "DeathType",
+            include_str!("../../../schemas/ra3/xsd/Includes/Death.xsd"),
+        ),
+        (
+            "DamageFXType",
+            include_str!("../../../schemas/ra3/xsd/Includes/DamageFX.xsd"),
+        ),
+    ];
+    static VALUES: [OnceLock<[Vec<String>; 1]>; 3] = [const { OnceLock::new() }; 3];
+    let (name, schema) = SCHEMAS[index];
+    let values = VALUES[index].get_or_init(|| schema_enums(schema, &[name]));
+    let ordinal = super::ai_strategic::enum_index(raw, &values[0], name, path)?;
+    Ok(ordinal.wrapping_sub(u32::from(index == 2)))
 }
 
 fn schema_enums<const N: usize>(schema: &str, names: &[&str; N]) -> [Vec<String>; N] {

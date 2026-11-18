@@ -1023,6 +1023,11 @@ mod tests {
     }
 
     #[test]
+    fn weapon_status_effects_match_ea_batch() {
+        assert_ea_fixture("status-effects", 2);
+    }
+
+    #[test]
     fn projectile_variants_match_ea_batch() {
         assert_ea_fixture("projectile-variants", 1);
     }

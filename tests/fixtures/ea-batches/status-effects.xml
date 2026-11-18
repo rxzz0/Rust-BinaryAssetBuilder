@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="StatusEffectsDefault">
+    <Nuggets><AttachNugget AttachModuleId="ModuleTag_Probe"/><StripMaxHealthPercentNugget/><ParalyzeNugget/><InformationWarfareNugget/></Nuggets>
+  </WeaponTemplate>
+  <WeaponTemplate id="StatusEffectsConfigured">
+    <Nuggets>
+      <AttachNugget AttachModuleId="ModuleTag_ProbeConfigured" Radius="2"><SpecialObjectFilter Rule="ANY"><IncludeThing>TargetProbe</IncludeThing></SpecialObjectFilter></AttachNugget>
+      <StripMaxHealthPercentNugget AmountToStrip="33%" DamageType="CANNON" DeathType="EXPLODED" DamageFXType="GDI_CANNON"/>
+      <ParalyzeNugget EffectArc="90d" DurationSeconds="3s" ParalyzeType="EMP" ParalyzeFX="ParalyzeFXProbe"/>
+      <InformationWarfareNugget RadarJamRadius="30" RadarJamDuration="5s" InfoWarType="RADAR_JAM"/>
+    </Nuggets>
+  </WeaponTemplate>
+</AssetDeclaration>

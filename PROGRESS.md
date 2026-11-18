@@ -1,6 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 253 encodes ProjectileNugget veterancy entries, barrel overrides and launch offsets. The fixture matches EA byte for byte. All 244 tests and Clippy passed.
-- Checkpoint 252 encodes TrackIncomingWeaponFireBehavior and TrackDamage. Checkpoint 251 encodes SpecialAbilityUpdate and TimedOpacityUpdate.
+- Checkpoint 254 encodes AttachNugget, StripMaxHealthPercentNugget and InformationWarfareNugget. Both fixtures match EA byte for byte. All 245 tests and Clippy passed.
+- Checkpoint 253 encodes projectile veterancy, barrel overrides and launch offsets. Checkpoint 252 adds weapon and damage tracking.
 
-- Surge Step 6 passes Shinobi's weapon and reaches AttachNugget in Tanya's weapon template.
+- Surge Step 6 passes Tanya's weapon and reaches FXList in the Tesla Trooper. Next task is the native FXList encoder.
