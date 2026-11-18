@@ -1,5 +1,5 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 251 encodes direct SpecialAbilityUpdate and TimedOpacityUpdate with default and configured fields. The fixture matches EA byte for byte. All 242 tests and Clippy passed.
-- Checkpoint 250 encodes the module activation variants and toggle-state triggers. Checkpoint 249 fixes mixed-case GameObject boolean values.
-- Surge Step 6 passes Shinobi's ability and opacity updates and reaches TrackIncomingWeaponFireBehavior. Next task is encoding the two damage tracking modules from the SDK schema.
+- Checkpoint 252 encodes TrackIncomingWeaponFireBehavior and TrackDamage, including the tracking interval and instant-weapon filter. The fixture matches EA byte for byte. All 243 tests and Clippy passed.
+- Checkpoint 251 encodes SpecialAbilityUpdate and TimedOpacityUpdate. Checkpoint 250 adds module activation and toggle triggers.
+- Surge Step 6 passes Shinobi's GameObject and reaches VeterancyProjectiles in its weapon template. Next task is completing ProjectileNugget child fields.

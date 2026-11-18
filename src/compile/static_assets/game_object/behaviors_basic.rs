@@ -1255,10 +1255,35 @@ pub(super) fn encode(
         entries.extend(fields(start, FIELDS));
         return Ok(Some((KIND, Table::record(entries))));
     }
+    if node.has_tag_name((SAGE_NS, "TrackDamage")) {
+        const KIND: u32 = 0xd554_889d;
+        const FIELDS: &[(&str, u32, usize)] = &[
+            ("TimeToTrack", 0x9986_69e8, 8),
+            ("InstantWeaponsOnly", 0x77e3_f4f7, 12),
+        ];
+        let path = data.path;
+        validate_attributes(node, &["id", "TimeToTrack", "InstantWeaponsOnly"], path)?;
+        if has_content(node) {
+            return Err(invalid(path, "unexpected TrackDamage content"));
+        }
+        let start = data.allocate(pointer, 16)?;
+        let behavior = module_base(node, KIND, start, data, false)?;
+        let damage = base(
+            0x025c_0bd7,
+            inherited(0x2900_211d, Table::record(vec![behavior])),
+        );
+        let time = sage_time(required(node, "TimeToTrack", path)?, "TimeToTrack", path)?;
+        data.word(start + 8, time.to_bits());
+        data.payload[start + 12] = boolean(node, "InstantWeaponsOnly", false, path)?;
+        let mut entries = vec![damage];
+        entries.extend(fields(start, FIELDS));
+        return Ok(Some((KIND, Table::record(entries))));
+    }
     let (kind, size, extra) = match node.tag_name().name() {
         "SubStructureBehavior" => (0x331e_6db8, 8, None),
         "ProductionUpdateInfo" => (0x1b33_7783, 8, None),
         "ObjectSMCHelper" => (0x7f72_f242, 8, None),
+        "TrackIncomingWeaponFireBehavior" => (0x15e9_b3e0, 8, None),
         "ObjectDefectionHelper" => (0x18a4_208f, 8, None),
         "RadarBehavior" => (0x2e54_6f8e, 8, None),
         "StoreTemplateIDBehavior" => (0x50b8_001c, 8, None),
@@ -1295,7 +1320,7 @@ pub(super) fn encode(
             inherited(0x30a3_6b8d, inherited(0xa50d_729a, behavior)),
         )));
     }
-    if matches!(kind, 0x1b33_7783 | 0x331e_6db8 | 0x50b8_001c) {
+    if matches!(kind, 0x1b33_7783 | 0x331e_6db8 | 0x50b8_001c | 0x15e9_b3e0) {
         return Ok(Some((kind, inherited(0xa50d_729a, behavior))));
     }
     if kind == 0xfa6a_c8b6 {

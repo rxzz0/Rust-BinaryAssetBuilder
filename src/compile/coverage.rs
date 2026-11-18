@@ -1023,6 +1023,11 @@ mod tests {
     }
 
     #[test]
+    fn damage_tracking_matches_ea_batch() {
+        assert_ea_fixture("damage-tracking", 1);
+    }
+
+    #[test]
     fn ability_opacity_updates_match_ea_batch() {
         assert_ea_fixture("ability-opacity-updates", 1);
     }

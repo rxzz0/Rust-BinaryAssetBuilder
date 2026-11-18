@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DamageTrackingProbe">
+    <Behaviors>
+      <TrackIncomingWeaponFireBehavior id="Incoming"/>
+      <TrackDamage id="TrackDefault" TimeToTrack="1s"/>
+      <TrackDamage id="TrackConfigured" TimeToTrack="1.25s" InstantWeaponsOnly="true"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
