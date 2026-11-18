@@ -1,0 +1,21 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="UpgradeSoundSelectorProbe">
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+    <ClientBehaviors>
+      <UpgradeSoundSelectorClientBehavior id="Plain">
+        <Override/>
+      </UpgradeSoundSelectorClientBehavior>
+      <UpgradeSoundSelectorClientBehavior id="Configured">
+        <Override RequiredModelConditions="MOVING ATTACKING" ConflictingModelConditions="DAMAGED" VoicePriorityOverride="-3">
+          <AudioArrayVoice><AudioEntry Sound="VoiceProbe" AudioType="voiceMove"/></AudioArrayVoice>
+          <AudioArraySound><AudioEntry Sound="SoundProbe" AudioType="soundMoveLoop"/></AudioArraySound>
+          <RequiredUpgrade>UpgradeFirst</RequiredUpgrade>
+          <RequiredUpgrade>UpgradeSecond</RequiredUpgrade>
+          <ConflictingUpgrade>UpgradeThird</ConflictingUpgrade>
+        </Override>
+        <Override VoicePriorityOverride="0"/>
+      </UpgradeSoundSelectorClientBehavior>
+    </ClientBehaviors>
+
+  </GameObject>
+</AssetDeclaration>

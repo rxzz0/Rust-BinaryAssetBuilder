@@ -27,6 +27,7 @@ const MODULES: &[(&str, &[&str])] = &[
         &[
             "ModelConditionAudioLoopClientBehavior",
             "ModelConditionSoundSelectorClientBehavior",
+            "UpgradeSoundSelectorClientBehavior",
         ],
     ),
     (
@@ -697,6 +698,11 @@ mod tests {
     #[test]
     fn lift_object_matches_ea_batch() {
         assert_ea_fixture("lift-object", 1);
+    }
+
+    #[test]
+    fn upgrade_sound_selector_matches_ea_batch() {
+        assert_ea_fixture("upgrade-sound-selector", 1);
     }
 
     #[test]

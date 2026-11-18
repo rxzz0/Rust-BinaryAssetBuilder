@@ -14,6 +14,7 @@ use std::sync::OnceLock;
 const ANIMATION_SOUND: u32 = 0x27ef_791d;
 const LOOP: u32 = 0x5a3e_dbf4;
 const SELECTOR: u32 = 0x327c_fb76;
+const UPGRADE_SELECTOR: u32 = 0xf911_5aa9;
 const SOUND: u32 = 0x63d7_b468;
 const INT: u32 = 0x23e6_50b8;
 
@@ -41,6 +42,9 @@ pub(super) fn encode(
             "ModelConditionSoundSelectorClientBehavior" => {
                 (SELECTOR, "Override", 0xbfa5_beba, 0x84)
             }
+            "UpgradeSoundSelectorClientBehavior" => {
+                (UPGRADE_SELECTOR, "Override", 0x94f2_5492, 0x94)
+            }
             name => {
                 return Err(invalid(
                     encoder.data.path,
@@ -61,7 +65,7 @@ pub(super) fn encode(
         };
         validate_attributes(node, allowed, encoder.data.path)?;
         let children = elements(node, name, encoder.data.path)?;
-        if kind != LOOP && children.is_empty() {
+        if matches!(kind, ANIMATION_SOUND | SELECTOR) && children.is_empty() {
             return Err(invalid(
                 encoder.data.path,
                 format!("client behavior requires {name}"),
@@ -101,7 +105,7 @@ pub(super) fn encode(
                 } else if is_animation {
                     encoder.animation_sound(child, offset)?
                 } else {
-                    encoder.sound_override(child, offset)?
+                    encoder.sound_override(child, offset, kind == UPGRADE_SELECTOR)?
                 }),
             ));
         }
@@ -251,19 +255,37 @@ impl AudioEncoder<'_, '_> {
         Ok(Table::record(vec![sound, required, excluded]))
     }
 
-    fn sound_override(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
+    fn sound_override(
+        &mut self,
+        node: Node<'_, '_>,
+        start: usize,
+        upgrade: bool,
+    ) -> io::Result<Table> {
+        let names = if upgrade {
+            ["RequiredModelConditions", "ConflictingModelConditions"]
+        } else {
+            ["RequiredFlags", "ExcludedFlags"]
+        };
         validate_attributes(
             node,
-            &["RequiredFlags", "ExcludedFlags", "VoicePriorityOverride"],
+            &[names[0], names[1], "VoicePriorityOverride"],
             self.data.path,
         )?;
         let mut voice = None;
         let mut sound = None;
+        let mut required_upgrades = Vec::new();
+        let mut conflicting_upgrades = Vec::new();
         for child in significant_children(node) {
             let slot = if child.has_tag_name((SAGE_NS, "AudioArrayVoice")) {
                 &mut voice
             } else if child.has_tag_name((SAGE_NS, "AudioArraySound")) {
                 &mut sound
+            } else if upgrade && child.has_tag_name((SAGE_NS, "RequiredUpgrade")) {
+                required_upgrades.push(child);
+                continue;
+            } else if upgrade && child.has_tag_name((SAGE_NS, "ConflictingUpgrade")) {
+                conflicting_upgrades.push(child);
+                continue;
             } else {
                 return Err(invalid(self.data.path, "unsupported sound override child"));
             };
@@ -271,7 +293,7 @@ impl AudioEncoder<'_, '_> {
                 return Err(invalid(self.data.path, "repeated sound override child"));
             }
         }
-        let [required, excluded] = condition_fields(node, start, self.data)?;
+        let [required, excluded] = named_condition_fields(node, start, self.data, names)?;
         let priority = if let Some(value) = node.attribute("VoicePriorityOverride") {
             let value = value
                 .trim()
@@ -285,13 +307,34 @@ impl AudioEncoder<'_, '_> {
         };
         let voice = self.audio_array(voice, start + 0x7c, true)?;
         let sound = self.audio_array(sound, start + 0x80, false)?;
-        Ok(Table::record(vec![
+        let mut fields = vec![
             required,
             excluded,
             Entry::named("VoicePriorityOverride", INT, priority),
             Entry::named("AudioArrayVoice", 0x09d1_8241, voice),
             Entry::named("AudioArraySound", 0x5986_7d0b, sound),
-        ]))
+        ];
+        if upgrade {
+            for (name, offset, children) in [
+                ("RequiredUpgrade", start + 0x84, required_upgrades),
+                ("ConflictingUpgrade", start + 0x8c, conflicting_upgrades),
+            ] {
+                let ids = children
+                    .into_iter()
+                    .map(|child| {
+                        super::spawn::weak_reference(
+                            child,
+                            "UpgradeTemplate",
+                            self.data,
+                            self.reference_types,
+                        )
+                    })
+                    .collect::<io::Result<Vec<_>>>()?;
+                let ids = super::spawn::id_list(self.data, offset, ids)?;
+                fields.push(Entry::named(name, 0x26fa_cfc7, Target::Table(ids)));
+            }
+        }
+        Ok(Table::record(fields))
     }
 
     fn audio_array(
@@ -473,16 +516,25 @@ fn condition_fields(
     start: usize,
     data: &mut BinaryData<'_>,
 ) -> io::Result<[Entry; 2]> {
-    let excluded = start + 0x3c;
-    write_model_conditions(node.attribute("RequiredFlags").unwrap_or(""), start, data)?;
+    named_condition_fields(node, start, data, ["RequiredFlags", "ExcludedFlags"])
+}
+
+fn named_condition_fields(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    [required, excluded]: [&str; 2],
+) -> io::Result<[Entry; 2]> {
+    let excluded_offset = start + 0x3c;
+    write_model_conditions(node.attribute(required).unwrap_or(""), start, data)?;
     write_model_conditions(
-        node.attribute("ExcludedFlags").unwrap_or(""),
-        excluded,
+        node.attribute(excluded).unwrap_or(""),
+        excluded_offset,
         data,
     )?;
     Ok([
-        field("RequiredFlags", 0x67db_bfc9, start),
-        field("ExcludedFlags", 0x67db_bfc9, excluded),
+        field(required, 0x67db_bfc9, start),
+        field(excluded, 0x67db_bfc9, excluded_offset),
     ])
 }
 
