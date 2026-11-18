@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="DamageArcDefault">
+    <Nuggets><DamageNugget id="Damage" Damage="100" Radius="105"/></Nuggets>
+  </WeaponTemplate>
+  <WeaponTemplate id="DamageArcDegrees">
+    <Nuggets><DamageNugget id="Damage" Damage="100" Radius="105" DamageArc="75d"/></Nuggets>
+  </WeaponTemplate>
+  <WeaponTemplate id="DamageArcInverted">
+    <Nuggets><LineDamageNugget id="Damage" DamageArc="1.25r" DamageArcInverted="true"/></Nuggets>
+  </WeaponTemplate>
+</AssetDeclaration>

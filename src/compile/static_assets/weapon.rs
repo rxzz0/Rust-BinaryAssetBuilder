@@ -878,6 +878,7 @@ fn fire_on_objects(
         "DamageType",
         "DamageFXType",
         "DeathType",
+        "DamageArc",
         "DelayTimeSeconds",
     ]
     .into_iter()
@@ -947,6 +948,12 @@ fn fire_on_objects(
         data.word(start + offset, value);
     }
     if is_damage {
+        if let Some(value) = node.attribute("DamageArc") {
+            data.word(
+                start + 0x34,
+                sage_angle(value, "DamageArc", path)?.to_bits(),
+            );
+        }
         for (name, offset) in DAMAGE_REALS {
             if let Some(value) = node.attribute(name) {
                 data.word(start + offset, finite_number(value, name, path)?.to_bits());

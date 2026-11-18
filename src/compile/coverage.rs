@@ -1341,6 +1341,11 @@ mod tests {
     }
 
     #[test]
+    fn damage_arcs_match_ea() {
+        assert_ea_fixture("damage-arc", 3);
+    }
+
+    #[test]
     fn joypad_buttons_match_ea() {
         assert_ea_fixture("joypad-buttons", 38);
         assert_ea_fixture("edge-joypad", 3);

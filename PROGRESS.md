@@ -1,7 +1,7 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 286 adds all 29 JoypadCommandBarButtonTemplate variants. All 41 EA fixtures matched, including explicitly empty references. All 279 tests and Clippy passed.
-- Checkpoints 284–285 add all four PlayerPowerButtonTemplate variants and compile inherited FX lists.
+- Checkpoint 287 encodes explicit DamageArc angles on DamageNugget and derived types. All three EA angle fixtures, 280 tests, and Clippy passed.
+- Checkpoints 284–286 add player power and joypad buttons and link inherited FX lists.
 - Checkpoints 274–283 add locomotor and surface mappings, transformed display and upgrade fields, sweeping damage, animation sound support, collision, ore, JetAIUpdate, and cleared EVA events.
 
-- Surge Step 6 passed inherited FX lists in 11.15 seconds of release compilation before it reached DamageNugget DamageArc on Steel Ronin. Next task is encoding that field.
+- In 10.03 seconds, the Surge release compile finished native XML encoding and reached reference linking. Next task is resolving b22f87c9:2b479bd3 in AlliedAirfield.
