@@ -99,6 +99,7 @@ pub(in crate::compile::static_assets) fn compile(
                 continue;
             }
             "DisplayName"
+            | "DisplayNameTransformed"
             | "GameDependency"
             | "ProjectedBuildabilityInfo"
             | "ObjectResourceInfo"

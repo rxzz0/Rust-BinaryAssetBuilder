@@ -1,6 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 274 adds native LocomotorTemplate and BounceKickTerrainMapping, including jet settings, terrain multipliers, and inherited templates. Compact fixtures, 119 field probes, 266 tests, and Clippy passed.
-- Checkpoints 267–273 complete the weapon nugget variants, damage and scatter modifiers, root voice and filter fields, DynamicsDraw, and EVA events and settings.
+- Checkpoint 275 adds transformed GameObject names, descriptions, portraits, and button images. Both EA fixtures, 267 tests, and Clippy passed.
+- Checkpoints 267–274 add the remaining weapon nugget and root fields, DynamicsDraw, EVA events and settings, and locomotor templates and bounce maps.
 
-- Surge Step 6 passes Future Tank X-1's locomotor and reaches DisplayNameTransformed on Giga-Fortress. Next task is transformed GameObject labels.
+- Surge Step 6 passes Giga-Fortress's transformed display fields and reaches GeometryUpgrade. Next task is the geometry and remove-upgrade behaviors.

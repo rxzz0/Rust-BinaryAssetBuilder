@@ -70,7 +70,9 @@ pub(super) fn encode(
         "id",
         "KindOf",
         "Description",
+        "DescriptionTransformed",
         "TypeDescription",
+        "TypeDescriptionTransformed",
         "RadarPriority",
         "PlacementViewAngle",
         "Side",
@@ -85,7 +87,9 @@ pub(super) fn encode(
         "UnitTypeIcon",
         "CommandSet",
         "SelectPortrait",
+        "SelectPortraitTransformed",
         "ButtonImage",
+        "ButtonImageTransformed",
         "ProductionQueueType",
         "BuildPlacementTypeFlag",
         "UnitCategory",
@@ -119,7 +123,12 @@ pub(super) fn encode(
     if let Some(flags) = node.attribute("KindOf") {
         write_kind_of(flags, 0, data)?;
     }
-    for (name, offset) in [("Description", 0x2c), ("TypeDescription", 0x3c)] {
+    for (name, offset) in [
+        ("Description", 0x2c),
+        ("DescriptionTransformed", 0x34),
+        ("TypeDescription", 0x3c),
+        ("TypeDescriptionTransformed", 0x44),
+    ] {
         if let Some(value) = node.attribute(name) {
             data.string(offset, value)?;
         }
@@ -218,7 +227,12 @@ pub(super) fn encode(
         data.word(0x90, weak_id(value, "LogicCommandSet", data.path)?);
         reference_types.push(fast_hash(b"LogicCommandSet"));
     }
-    for (name, offset) in [("SelectPortrait", 0x94), ("ButtonImage", 0x9c)] {
+    for (name, offset) in [
+        ("SelectPortrait", 0x94),
+        ("SelectPortraitTransformed", 0x98),
+        ("ButtonImage", 0x9c),
+        ("ButtonImageTransformed", 0xa0),
+    ] {
         if let Some(value) = node
             .attribute(name)
             .filter(|value| !value.trim().is_empty())

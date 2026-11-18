@@ -12,15 +12,19 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Vec<(&'static str, Target)>> {
     let mut targets = Vec::new();
-    if let Some(child) = find(node, "DisplayName")? {
-        validate_attributes(child, &[], data.path)?;
-        if child.children().any(|item| item.is_element()) {
-            return Err(invalid(data.path, "DisplayName cannot contain elements"));
+    for (name, pointer) in [("DisplayName", 0x188), ("DisplayNameTransformed", 0x18c)] {
+        if let Some(child) = find(node, name)? {
+            validate_attributes(child, &[], data.path)?;
+            if child.children().any(|item| item.is_element()) {
+                return Err(invalid(
+                    data.path,
+                    format!("{name} cannot contain elements"),
+                ));
+            }
+            let header = data.allocate(pointer, 8)?;
+            data.string(header, child.text().unwrap_or(""))?;
+            targets.push((name, Target::Data(header)));
         }
-        let value = child.text().unwrap_or("");
-        let header = data.allocate(0x188, 8)?;
-        data.string(header, value)?;
-        targets.push(("DisplayName", Target::Data(header)));
     }
     if let Some(child) = find(node, "GameDependency")? {
         targets.push((

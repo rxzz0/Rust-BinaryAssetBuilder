@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeTransformedAll" ButtonImageTransformed="ButtonAlt" SelectPortrait="Portrait" SelectPortraitTransformed="PortraitAlt" ButtonImage="Button" Description="Desc:Regular" DescriptionTransformed="Desc:Transformed" TypeDescription="Type:Regular" TypeDescriptionTransformed="Type:Transformed">
+    <DisplayName>Name:Regular</DisplayName>
+    <DisplayNameTransformed>Name:Transformed</DisplayNameTransformed>
+  <Draws/><Behaviors/><AI/><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body></GameObject>
+  <GameObject id="ProbeTransformedEmpty" DescriptionTransformed="" TypeDescriptionTransformed="">
+    <DisplayNameTransformed/>
+  <Draws/><Behaviors/><AI/><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body></GameObject>
+</AssetDeclaration>

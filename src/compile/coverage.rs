@@ -1280,6 +1280,11 @@ mod tests {
         assert_ea_fixture("locomotor-templates", 5);
     }
 
+    #[test]
+    fn transformed_game_object_labels_match_ea() {
+        assert_ea_fixture("transformed-display", 2);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
