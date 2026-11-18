@@ -4,7 +4,7 @@ use super::super::{
     AssetReference, asset_reference, finite_number, percentage, required_element, sage_time,
     significant_children, text_value, validate_attributes,
 };
-use super::behaviors_basic::{base, encode_die_mux, module_base};
+use super::behaviors_basic::{base, encode_die_mux, module_base, optional_vector};
 use super::draws::{boolean, fields};
 use super::parking::{encode_filter, encode_inline_filter};
 use super::secondary_damage::{status_index, write_status_flags};
@@ -13,6 +13,8 @@ use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
 
+const TRANSPORT: u32 = 0x578c_272f;
+const OPEN: u32 = 0xd7cc_2e35;
 const GARRISON: u32 = 0xbae3_bc7d;
 const SLAUGHTER: u32 = 0xc194_7edc;
 const BOOL: u32 = 0x77e3_f4f7;
@@ -65,6 +67,35 @@ const GARRISON_FLAGS: [(&str, u32, usize); 3] = [
     ("ResetInitialTeamOnCapture", BOOL, 0x9e),
 ];
 
+const DURATION: u32 = 0x6f6d_1ae7;
+const STRING: u32 = 0x1a29_33aa;
+const KIND_OF: u32 = 0x9afc_9193;
+const CONDITION: u32 = 0x1572_3e0b;
+const WEAPON: u32 = 0xd046_dd22;
+const TRANSPORT_FIELDS: &[(&str, u32, usize, &str)] = &[
+    ("ScatterNearbyOnExit", BOOL, 0x140, "true"),
+    ("OrientLikeContainerOnExit", BOOL, 0x141, "false"),
+    ("DestroyRidersWhoAreNotFreeToExit", BOOL, 0x142, "false"),
+    ("ExitBone", STRING, 0x94, ""),
+    ("HealthRegenPercentPerSec", FLOAT, 0x9c, "0"),
+    ("ExitDelay", DURATION, 0xa0, "0"),
+    ("TypeOneForWeaponState", KIND_OF, 0xa4, ""),
+    ("TypeTwoForWeaponState", KIND_OF, 0xc8, ""),
+    ("TypeThreeForWeaponState", KIND_OF, 0xec, ""),
+    ("ForceOrientationContainer", BOOL, 0x143, "true"),
+    ("ConditionForEntry", CONDITION, 0x110, ""),
+    ("ShouldThrowOutPassengers", BOOL, 0x144, "false"),
+    ("ThrowOutPassengersDelay", DURATION, 0x114, "0"),
+    ("ThrowOutPassengersLandingWarhead", WEAPON, 0x118, ""),
+    ("FadePassengerOnEnter", BOOL, 0x145, "false"),
+    ("FadePassengerOnExit", BOOL, 0x146, "false"),
+    ("EnterFadeTime", FLOAT, 0x11c, "0"),
+    ("ExitFadeTime", FLOAT, 0x120, "0"),
+    ("FadeReverse", BOOL, 0x147, "false"),
+    ("ReleaseSnappyness", FLOAT, 0x124, "0.7"),
+    ("ExtendedExitContainerChecks", BOOL, 0x148, "false"),
+];
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,
@@ -73,13 +104,21 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
     let path = data.path;
-    let slaughter = node.has_tag_name((SAGE_NS, "SlaughterHordeContain"));
-    let kind = if slaughter { SLAUGHTER } else { GARRISON };
+    let (kind, size) = match node.tag_name().name() {
+        "OpenContain" => (OPEN, 0x94),
+        "TransportContain" => (TRANSPORT, 0x14c),
+        "SlaughterHordeContain" => (SLAUGHTER, 0x144),
+        _ => (GARRISON, 0xa0),
+    };
     let mut allowed: Vec<_> = std::iter::once("id")
         .chain(OPEN_FIELDS.iter().map(|&(name, _, _, _)| name))
-        .chain(GARRISON_FLAGS.map(|(name, _, _)| name))
         .collect();
-    if slaughter {
+    match kind {
+        TRANSPORT => allowed.extend(TRANSPORT_FIELDS.iter().map(|&(name, ..)| name)),
+        GARRISON | SLAUGHTER => allowed.extend(GARRISON_FLAGS.map(|(name, _, _)| name)),
+        _ => {}
+    }
+    if kind == SLAUGHTER {
         allowed.extend([
             "ExitDelay",
             "CashBackPercent",
@@ -88,9 +127,9 @@ pub(super) fn encode(
         ]);
     }
     validate_attributes(node, &allowed, path)?;
-    let start = data.allocate(pointer, if slaughter { 0x144 } else { 0xa0 })?;
+    let start = data.allocate(pointer, size)?;
     let mut children: Vec<_> = significant_children(node).collect();
-    let derived = if slaughter {
+    let slaughter = if kind == SLAUGHTER {
         Some(slaughter_fields(
             node,
             &mut children,
@@ -102,11 +141,58 @@ pub(super) fn encode(
     } else {
         None
     };
+    let ordered_imports = matches!(kind, OPEN | TRANSPORT);
+    if ordered_imports {
+        contain_attribute_references(node, start, data, references, reference_types)?;
+    }
+    // Transport stores derived blocks first, but EA hashes references in XML order.
+    let mut modifiers = Vec::new();
+    let mut modifier_reference_types = Vec::new();
+    let mut derived_reference_types = Vec::new();
+    let transport = if kind == TRANSPORT {
+        for child in children
+            .iter()
+            .filter(|child| child.has_tag_name((SAGE_NS, "ModifierToGiveOnExit")))
+        {
+            modifiers.push(super::passive_area::reference(
+                text_value(*child, path)?,
+                "AttributeModifier",
+                path,
+                references,
+                &mut modifier_reference_types,
+            )?);
+        }
+        let first_derived = children
+            .iter()
+            .position(|child| {
+                child.tag_name().namespace() == Some(SAGE_NS)
+                    && matches!(
+                        child.tag_name().name(),
+                        "InitialPayload"
+                            | "ThrowOutPassengersVelocity"
+                            | "UpgradeCreationTrigger"
+                            | "FadeFilter"
+                    )
+            })
+            .unwrap_or(children.len());
+        let derived = children.split_off(first_derived);
+        Some(transport_fields(
+            node,
+            derived,
+            start,
+            data,
+            references,
+            &mut derived_reference_types,
+        )?)
+    } else {
+        None
+    };
     let mut open = vec![module_base(node, kind, start, data, true)?];
     for &(name, kind, offset, default) in OPEN_FIELDS {
         let value = node.attribute(name).unwrap_or(default);
         let field = start + offset;
         match kind {
+            SOUND if ordered_imports => {}
             BOOL => data.payload[field] = boolean(node, name, default == "true", path)?,
             STATUS => write_status_flags(value, field, data)?,
             _ => {
@@ -163,18 +249,20 @@ pub(super) fn encode(
             Target::Table(passenger_data(child, offset, data, reference_types)?),
         ));
     }
-    let mut modifiers = Vec::new();
     while let Some(child) =
         children.next_if(|child| child.has_tag_name((SAGE_NS, "ModifierToGiveOnExit")))
     {
-        modifiers.push(super::passive_area::reference(
-            text_value(child, path)?,
-            "AttributeModifier",
-            path,
-            references,
-            reference_types,
-        )?);
+        if transport.is_none() {
+            modifiers.push(super::passive_area::reference(
+                text_value(child, path)?,
+                "AttributeModifier",
+                path,
+                references,
+                reference_types,
+            )?);
+        }
     }
+    reference_types.extend(modifier_reference_types);
     let modifiers = id_list(data, start + 0x78, modifiers)?;
     let mut members = Vec::new();
     while let Some(child) =
@@ -230,6 +318,20 @@ pub(super) fn encode(
             Target::Table(Table::array(start + 0x80, member_items)),
         ),
     ]);
+    if matches!(kind, OPEN | TRANSPORT) {
+        if children.next().is_some() {
+            return Err(invalid(
+                path,
+                format!("unexpected {} child", node.tag_name().name()),
+            ));
+        }
+        if let Some(mut entries) = transport {
+            reference_types.extend(derived_reference_types);
+            entries.insert(0, base(OPEN, Table::record(open)));
+            return Ok((kind, Table::record(entries)));
+        }
+        return Ok((kind, Table::record(open)));
+    }
     if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, "InitialRoster"))) {
         named_leaf(child, &["TemplateId", "Count"], path)?;
         let id = match child.attribute("TemplateId") {
@@ -255,7 +357,7 @@ pub(super) fn encode(
         )
         .collect(),
     );
-    let mut entries = vec![base(0xd7cc_2e35, Table::record(open))];
+    let mut entries = vec![base(OPEN, Table::record(open))];
     entries.extend(fields(start, &GARRISON_FLAGS));
     entries.push(Entry::named(
         "InitialRoster",
@@ -265,7 +367,7 @@ pub(super) fn encode(
     let garrison = Table::record(entries);
     Ok((
         kind,
-        match derived {
+        match slaughter {
             Some((mut horde, mut slaughter)) => {
                 horde.insert(0, base(GARRISON, garrison));
                 slaughter.insert(0, base(0x1d7f_c977, Table::record(horde)));
@@ -274,6 +376,197 @@ pub(super) fn encode(
             None => garrison,
         },
     ))
+}
+
+fn contain_attribute_references(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<()> {
+    for attr in node.attributes() {
+        let (kind, offset) = match attr.name() {
+            "EnterSound" => ("BaseAudioEventInfo", 0xc),
+            "ExitSound" => ("BaseAudioEventInfo", 0x10),
+            "ThrowOutPassengersLandingWarhead" => ("WeaponTemplate", 0x118),
+            _ => continue,
+        };
+        let ordinal = super::passive_area::reference(
+            attr.value(),
+            kind,
+            data.path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + offset, ordinal);
+    }
+    Ok(())
+}
+
+fn transport_fields(
+    node: Node<'_, '_>,
+    children: Vec<Node<'_, '_>>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Vec<Entry>> {
+    let path = data.path;
+    let mut entries = Vec::with_capacity(TRANSPORT_FIELDS.len() + 4);
+    for &(name, kind, offset, default) in TRANSPORT_FIELDS {
+        let field = start + offset;
+        let value = node.attribute(name).unwrap_or(default);
+        match kind {
+            BOOL => data.payload[field] = boolean(node, name, default == "true", path)?,
+            STRING => {
+                if let Some(value) = node.attribute(name) {
+                    data.string(field, value)?;
+                }
+            }
+            FLOAT => data.word(field, finite_number(value, name, path)?.to_bits()),
+            DURATION => data.word(field, unsigned(value, name, path)?.div_ceil(200)),
+            KIND_OF => super::fields::write_kind_of(value, field, data)?,
+            CONDITION => {
+                if let Some(value) = node.attribute(name) {
+                    let condition = if value.trim() == "INVALID" {
+                        u32::MAX
+                    } else {
+                        super::draws::model_condition_index(value.trim(), path)? as u32
+                    };
+                    data.word(field, condition);
+                }
+            }
+            WEAPON => {}
+            _ => unreachable!(),
+        }
+        entries.push(Entry::named(name, kind, Target::Data(field)));
+    }
+    let mut children = children.into_iter().peekable();
+    let mut payloads = Vec::new();
+    while let Some(child) =
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "InitialPayload")))
+    {
+        payloads.push(child);
+    }
+    let payload = start + 0x128;
+    if payloads.len() > 4 {
+        return Err(invalid(
+            path,
+            "TransportContain allows at most four InitialPayload entries",
+        ));
+    }
+    let first = data.list(payload, payloads.len(), 8)?;
+    let mut items = Vec::with_capacity(payloads.len());
+    for (index, child) in payloads.into_iter().enumerate() {
+        named_leaf(child, &["Name", "Count"], path)?;
+        let offset = first + index * 8;
+        if let Some(name) = child
+            .attribute("Name")
+            .filter(|name| !name.trim().is_empty())
+        {
+            data.word(offset, object_id(name, path, reference_types)?);
+        }
+        data.word(
+            offset + 4,
+            signed(child.attribute("Count").unwrap_or("0"), "Count", path)?,
+        );
+        let table =
+            Table::record(fields(offset, &[("Name", 0x148e_d75d, 0), ("Count", INT, 4)]).collect());
+        items.push((0, Target::Table(table)));
+    }
+    entries.push(Entry::named(
+        "InitialPayload",
+        0xb967_ae82,
+        Target::Table(Table::array(payload, items)),
+    ));
+
+    let velocity =
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "ThrowOutPassengersVelocity")));
+    let velocity = optional_vector(velocity, start + 0x130, data)?;
+    entries.push(Entry::named(
+        "ThrowOutPassengersVelocity",
+        0x2936_8077,
+        velocity,
+    ));
+
+    let mut triggers = Vec::new();
+    while let Some(child) =
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "UpgradeCreationTrigger")))
+    {
+        triggers.push(child);
+    }
+    let trigger = start + 0x134;
+    if triggers.len() > 4 {
+        return Err(invalid(
+            path,
+            "TransportContain allows at most four UpgradeCreationTrigger entries",
+        ));
+    }
+    let first = data.list(trigger, triggers.len(), 12)?;
+    let mut items = Vec::with_capacity(triggers.len());
+    for (index, child) in triggers.into_iter().enumerate() {
+        named_leaf(child, &["Upgrade", "Template", "Num"], path)?;
+        let offset = first + index * 12;
+        for attr in child.attributes() {
+            match attr.name() {
+                "Upgrade" => {
+                    let ordinal = super::passive_area::reference(
+                        attr.value(),
+                        "UpgradeTemplate",
+                        path,
+                        references,
+                        reference_types,
+                    )?;
+                    data.word(offset, ordinal);
+                }
+                "Template" if !attr.value().trim().is_empty() => {
+                    data.word(offset + 4, object_id(attr.value(), path, reference_types)?);
+                }
+                _ => {}
+            }
+        }
+        data.word(
+            offset + 8,
+            unsigned(child.attribute("Num").unwrap_or("0"), "Num", path)?,
+        );
+        let table = Table::record(
+            fields(
+                offset,
+                &[
+                    ("Upgrade", 0x4aba_1f29, 0),
+                    ("Template", 0x148e_d75d, 4),
+                    ("Num", UINT, 8),
+                ],
+            )
+            .collect(),
+        );
+        items.push((0, Target::Table(table)));
+    }
+    entries.push(Entry::named(
+        "UpgradeCreationTrigger",
+        0x1ce0_24d5,
+        Target::Table(Table::array(trigger, items)),
+    ));
+    let fade = if let Some(child) =
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "FadeFilter")))
+    {
+        Target::Table(encode_filter(child, start + 0x13c, data, reference_types)?)
+    } else {
+        Target::Null
+    };
+    entries.push(Entry::named("FadeFilter", 0xe46e_a3b2, fade));
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected TransportContain child"));
+    }
+    Ok(entries)
+}
+
+fn unsigned(value: &str, name: &str, path: &std::path::Path) -> io::Result<u32> {
+    value
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| invalid(path, format!("invalid {name}")))
 }
 
 fn slaughter_fields(

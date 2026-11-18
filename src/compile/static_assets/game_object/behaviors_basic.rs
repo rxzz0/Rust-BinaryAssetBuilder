@@ -267,7 +267,7 @@ fn upgrade_parent<'a, 'input: 'a>(
     Ok(base(0xae60_ae98, Table::record(upgrade)))
 }
 
-fn optional_vector(
+pub(super) fn optional_vector(
     node: Option<Node<'_, '_>>,
     pointer: usize,
     data: &mut BinaryData<'_>,
@@ -951,7 +951,7 @@ pub(super) fn encode(
     }
     if matches!(
         node.tag_name().name(),
-        "GarrisonContain" | "SlaughterHordeContain"
+        "GarrisonContain" | "SlaughterHordeContain" | "OpenContain" | "TransportContain"
     ) {
         return super::garrison::encode(node, pointer, data, references, reference_types).map(Some);
     }

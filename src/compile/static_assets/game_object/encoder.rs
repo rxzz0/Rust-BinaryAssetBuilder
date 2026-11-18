@@ -167,6 +167,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut aura_modules = Vec::new();
     let mut auto_heal_modules = Vec::new();
     let mut slaughter_modules = Vec::new();
+    let mut transport_modules = Vec::new();
     let mut truck_relocations = Vec::new();
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
     let mut child_targets =
@@ -253,6 +254,9 @@ pub(in crate::compile::static_assets) fn compile(
                 }
                 if module.has_tag_name((SAGE_NS, "AutoHealBehavior")) {
                     auto_heal_modules.push(data.payload.len() as u32);
+                }
+                if module.has_tag_name((SAGE_NS, "TransportContain")) {
+                    transport_modules.push(data.payload.len() as u32);
                 }
                 if module.has_tag_name((SAGE_NS, "SlaughterHordeContain")) {
                     slaughter_modules.push(data.payload.len() as u32);
@@ -468,6 +472,14 @@ pub(in crate::compile::static_assets) fn compile(
                 0x10 => return (start + 0x64, 4),
                 0x18 => return (start + 0x64, 5),
                 _ => {}
+            }
+        }
+        // TransportContain lists the derived pointers before its OpenContain pointers.
+        let index = transport_modules.partition_point(|&start| start <= pointer);
+        if index > 0 {
+            let start = transport_modules[index - 1];
+            if (0x94..0x14c).contains(&(pointer - start)) {
+                return (start, pointer - start);
             }
         }
         let index = slaughter_modules.partition_point(|&start| start <= pointer);

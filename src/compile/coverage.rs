@@ -67,6 +67,8 @@ const MODULES: &[(&str, &[&str])] = &[
             "SecondaryObjectListenerModule",
             "LiftObjectUpdate",
             "GarrisonContain",
+            "OpenContain",
+            "TransportContain",
             "InvisibilityBehavior",
             "AttributeModifierAuraUpdate",
             "SlaughterHordeContain",
@@ -695,6 +697,11 @@ mod tests {
     #[test]
     fn lift_object_matches_ea_batch() {
         assert_ea_fixture("lift-object", 1);
+    }
+
+    #[test]
+    fn transport_contain_matches_ea_batch() {
+        assert_ea_fixture("transport-contain", 1);
     }
 
     #[test]

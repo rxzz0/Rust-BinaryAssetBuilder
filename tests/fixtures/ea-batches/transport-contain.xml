@@ -1,0 +1,29 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="TransportContainProbe">
+    <Behaviors>
+      <TransportContain id="TransportDefault"/>
+      <TransportContain id="TransportConfigured" ExitSound="ExitProbe" ThrowOutPassengersLandingWarhead="LandingProbe" EnterSound="EnterProbe" ContainMax="2" ScatterNearbyOnExit="false" OrientLikeContainerOnExit="true" DestroyRidersWhoAreNotFreeToExit="true" ExitBone="BoneExit" HealthRegenPercentPerSec="10" ExitDelay="250" TypeOneForWeaponState="INFANTRY" TypeTwoForWeaponState="VEHICLE" TypeThreeForWeaponState="AIRCRAFT" ForceOrientationContainer="false" ConditionForEntry="SOLD" ShouldThrowOutPassengers="true" ThrowOutPassengersDelay="120" FadePassengerOnEnter="true" FadePassengerOnExit="true" EnterFadeTime=".75" ExitFadeTime=".5" FadeReverse="true" ReleaseSnappyness=".9" ExtendedExitContainerChecks="true">
+        <PassengerFilter Rule="ANY" Include="INFANTRY"><IncludeThing>UnitA</IncludeThing></PassengerFilter>
+        <DieMuxData DeathTypes="ALL"/>
+        <PassengerData BonePrefix="Passenger" MaxPassengers="2"><Filter Rule="ANY" Include="INFANTRY"/></PassengerData>
+        <ModifierToGiveOnExit>ProbeModifier</ModifierToGiveOnExit>
+        <MemberTemplateStatusInfo ThingTemplate="UnitB" ObjectStatus="SOLD"/>
+        <InitialPayload Name="PayloadUnit" Count="2"/>
+        <InitialPayload/>
+        <ThrowOutPassengersVelocity x="1" y="2" z="-3"/>
+        <UpgradeCreationTrigger Upgrade="SpawnUpgrade" Template="TriggerUnit" Num="4"/>
+        <UpgradeCreationTrigger/>
+        <FadeFilter Rule="NONE"><ExcludeThing>UnitC</ExcludeThing></FadeFilter>
+      </TransportContain>
+      <TransportContain id="TransportTimingA" ConditionForEntry="INVALID" ExitDelay="1" ThrowOutPassengersDelay="99"/>
+      <TransportContain id="TransportTimingB" ExitDelay="100" ThrowOutPassengersDelay="101"/>
+      <TransportContain id="TransportTimingC" ExitDelay="1000" ThrowOutPassengersDelay="33333"/>
+      <OpenContain id="OpenDefault"/>
+      <OpenContain id="OpenConfigured" ExitSound="OpenExit" EnterSound="OpenEnter" ContainMax="4">
+        <PassengerFilter Rule="ANY"><IncludeThing>UnitD</IncludeThing></PassengerFilter>
+        <ModifierToGiveOnExit>OpenModifier</ModifierToGiveOnExit>
+      </OpenContain>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
