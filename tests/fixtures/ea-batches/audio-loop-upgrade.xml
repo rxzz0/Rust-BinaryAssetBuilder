@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="AudioLoopUpgradeProbe">
+    <Behaviors>
+      <AudioLoopUpgrade id="LoopDefault"/>
+      <AudioLoopUpgrade id="LoopConfigured" SoundToPlay="UpgradeLoop" KillAfterMS="345" KillOnDeath="true" Permanent="true">
+        <CustomAnimAndDuration AnimState="SOLD" Frames="12"/>
+        <TriggeredBy>LoopTriggerA</TriggeredBy>
+        <TriggeredBy>LoopTriggerB</TriggeredBy>
+        <ConflictsWith>LoopConflict</ConflictsWith>
+      </AudioLoopUpgrade>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

@@ -292,6 +292,53 @@ fn optional_vector(
     Ok(Target::Data(start))
 }
 
+fn audio_loop_upgrade(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x22ed_33d8;
+    const FIELDS: &[(&str, u32, usize)] = &[
+        ("SoundToPlay", 0x63d7_b468, 0x24),
+        ("KillAfterMS", 0x7631_77a4, 0x28),
+        ("KillOnDeath", 0x77e3_f4f7, 0x2c),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(
+            FIELDS
+                .iter()
+                .chain(super::spawn::UPGRADE)
+                .map(|&(name, ..)| name),
+        )
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let start = data.allocate(pointer, 0x30)?;
+    if let Some(value) = node.attribute("SoundToPlay") {
+        let ordinal =
+            super::client_behaviors::audio_reference(value, path, references, reference_types)?;
+        data.word(start + 0x24, ordinal);
+    }
+    let kill_after = node
+        .attribute("KillAfterMS")
+        .unwrap_or("0")
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| invalid(path, "invalid KillAfterMS"))?;
+    data.word(start + 0x28, kill_after);
+    data.payload[start + 0x2c] = boolean(node, "KillOnDeath", false, path)?;
+    let mut children = significant_children(node).peekable();
+    let parent = upgrade_parent(node, KIND, start, data, reference_types, &mut children)?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected AudioLoopUpgrade child"));
+    }
+    let mut entries = vec![parent];
+    entries.extend(fields(start, FIELDS));
+    Ok((KIND, Table::record(entries)))
+}
+
 fn object_creation_upgrade(
     node: Node<'_, '_>,
     pointer: usize,
@@ -886,6 +933,9 @@ pub(super) fn encode(
         }
         entries.extend(fields(start, &FIELDS));
         return Ok(Some((KIND, Table::record(entries))));
+    }
+    if node.has_tag_name((SAGE_NS, "AudioLoopUpgrade")) {
+        return audio_loop_upgrade(node, pointer, data, references, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "ObjectCreationUpgrade")) {
         return object_creation_upgrade(node, pointer, data, references, reference_types).map(Some);

@@ -114,6 +114,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "SpawnBehavior",
             "ObjectCreationUpgrade",
             "SlaveWatcherBehavior",
+            "AudioLoopUpgrade",
             "StancesBehavior",
             "StructureSellUpdate",
             "StructureUnpackUpdate",
@@ -414,6 +415,11 @@ mod tests {
     #[test]
     fn death_weapon_probability_matches_ea() {
         assert_ea_fixture("death-weapon-probability", 1);
+    }
+
+    #[test]
+    fn audio_loop_upgrade_matches_ea() {
+        assert_ea_fixture("audio-loop-upgrade", 1);
     }
 
     #[test]
