@@ -1,0 +1,29 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ScriptObjectA"><Body><ActiveBody id="Body"/></Body></GameObject>
+  <GameObject id="ScriptObjectB"><Body><ActiveBody id="Body"/></Body></GameObject>
+  <GameScriptList id="ScriptListMissing"/>
+  <GameScriptList id="ScriptListEmpty"><ScriptSet/></GameScriptList>
+  <GameScriptList id="ScriptListNested">
+    <ScriptSet id="Primary">
+      <Script id="My Script"><Action Type="Go Ahead"/><Action Type="Start"><ParameterList/></Action></Script>
+      <Script id="Empty Script" />
+      <ScriptGroup id="Second"><Script id="Child Script"><Action Type="Terminé"/><Action Type="É"/><Action Type=""/></Script><ScriptGroup id="Third" /></ScriptGroup>
+      <ScriptGroup id="Other" />
+    </ScriptSet>
+  </GameScriptList>
+  <GameScriptList id="ScriptListParameters">
+    <ScriptSet>
+      <Script id="Object Parameters">
+        <Action Type="Select">
+          <ParameterList>
+            <ObjectType Object="ScriptObjectB"/>
+            <ObjectTypeList><Object>ScriptObjectA</Object><Object>ScriptObjectB</Object></ObjectTypeList>
+            <ObjectType/>
+            <ObjectTypeList/>
+            <ObjectType Object=""/>
+          </ParameterList>
+        </Action>
+      </Script>
+    </ScriptSet>
+  </GameScriptList>
+</AssetDeclaration>

@@ -1349,6 +1349,11 @@ mod tests {
     }
 
     #[test]
+    fn game_script_lists_match_ea() {
+        assert_ea_fixture("game-script-list", 6);
+    }
+
+    #[test]
     fn stance_templates_match_ea() {
         assert_ea_fixture("stance-template", 5);
     }

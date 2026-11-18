@@ -14,10 +14,19 @@ pub fn fast_hash(bytes: &[u8]) -> u32 {
 
 /// Hashes bytes with an explicit seed. Empty input returns zero.
 pub fn fast_hash_with_seed(seed: u32, bytes: &[u8]) -> u32 {
+    fast_hash_seeded::<false>(seed, bytes)
+}
+
+/// Hashes the ANSI bytes used for RA3 StringHash values.
+pub(crate) fn asset_string_hash(bytes: &[u8]) -> u32 {
+    fast_hash_seeded::<true>(bytes.len() as u32, bytes)
+}
+
+fn fast_hash_seeded<const SIGNED_TAIL: bool>(seed: u32, bytes: &[u8]) -> u32 {
     if bytes.is_empty() {
         return 0;
     }
-    let mut hash = mix_bytes(seed, bytes);
+    let mut hash = mix_bytes::<SIGNED_TAIL>(seed, bytes);
     hash ^= hash << 3;
     hash = hash.wrapping_add(hash >> 5);
     hash ^= hash << 2;
@@ -37,7 +46,7 @@ pub fn launcher_hash_with_seed(seed: u32, bytes: &[u8]) -> u32 {
         return 0;
     }
     bytes.chunks(LAUNCHER_CHUNK_SIZE).fold(seed, |seed, chunk| {
-        let mut hash = mix_bytes(seed, chunk);
+        let mut hash = mix_bytes::<false>(seed, chunk);
         hash ^= hash << 3;
         hash = hash.wrapping_add(hash >> 5);
         hash ^= hash << 4;
@@ -47,7 +56,7 @@ pub fn launcher_hash_with_seed(seed: u32, bytes: &[u8]) -> u32 {
     })
 }
 
-fn mix_bytes(mut hash: u32, bytes: &[u8]) -> u32 {
+fn mix_bytes<const SIGNED_TAIL: bool>(mut hash: u32, bytes: &[u8]) -> u32 {
     let (blocks, tail) = bytes.as_chunks::<4>();
     for block in blocks {
         let low = u32::from(u16::from_le_bytes([block[0], block[1]]));
@@ -59,7 +68,7 @@ fn mix_bytes(mut hash: u32, bytes: &[u8]) -> u32 {
 
     match tail {
         [first] => {
-            hash = hash.wrapping_add(u32::from(*first));
+            hash = hash.wrapping_add(tail_byte::<SIGNED_TAIL>(*first));
             hash ^= hash << 10;
             hash = hash.wrapping_add(hash >> 1);
         }
@@ -71,13 +80,21 @@ fn mix_bytes(mut hash: u32, bytes: &[u8]) -> u32 {
         [first, second, third] => {
             hash = hash.wrapping_add(u32::from(u16::from_le_bytes([*first, *second])));
             hash ^= hash << 16;
-            hash ^= u32::from(*third) << 18;
+            hash ^= tail_byte::<SIGNED_TAIL>(*third) << 18;
             hash = hash.wrapping_add(hash >> 11);
         }
         _ => {}
     }
 
     hash
+}
+
+fn tail_byte<const SIGNED_TAIL: bool>(byte: u8) -> u32 {
+    if SIGNED_TAIL {
+        (byte as i8 as i32) as u32
+    } else {
+        u32::from(byte)
+    }
 }
 
 #[cfg(test)]

@@ -30,6 +30,7 @@ mod eva;
 mod experience_level;
 mod fx_list;
 pub(super) mod game_object;
+mod game_script_list;
 mod global_ui;
 mod hotkeys;
 mod joypad_buttons;
@@ -94,6 +95,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "PlayerPowerButtonTemplate" => (0xa640_9dd2, 73, player_power_button::compile),
         "JoypadCommandBarButtonTemplate" => (0x2913_cc3c, 74, joypad_buttons::compile),
         "StanceTemplate" => (0x4829_f362, 75, stance_template::compile),
+        "GameScriptList" => (0xa268_995a, 76, game_script_list::compile),
         "W3DAnimation" => (0x5545_5fe8, 66, w3d_animation::compile),
         "W3DMesh" => (0xcd8a_089c, 35, w3d_mesh::compile),
         "W3DContainer" => (0x619d_a33f, 36, w3d_mesh::container),
