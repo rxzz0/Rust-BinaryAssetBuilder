@@ -1,5 +1,5 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 244 encodes UpgradeSoundSelectorClientBehavior with model conditions, optional voice priority, audio overrides, and weak upgrade lists. The fixture matches EA byte for byte. All 235 tests and Clippy passed.
-- Checkpoint 243 encodes OpenContain and TransportContain, including inherited passenger data, payloads, triggers, and timings. Checkpoint 242 encodes AudioLoopUpgrade.
-- Surge Step 6 passes the Multigunner IFV's upgrade sound selector and reaches LineDamageNugget in Natasha's weapon template. Next task is extending the shared damage nugget encoder.
+- Checkpoint 245 encodes LineDamageNugget with the inherited damage fields and filters, offset angle, line dimensions, dynamic length, and overshoot. The fixture matches EA byte for byte. All 236 tests and Clippy passed.
+- Checkpoint 244 encodes UpgradeSoundSelectorClientBehavior. Checkpoint 243 encodes OpenContain and TransportContain.
+- Surge Step 6 passes Natasha's line damage and reaches WeaponAiHintInfo. Next task is encoding the weapon AI hint child.

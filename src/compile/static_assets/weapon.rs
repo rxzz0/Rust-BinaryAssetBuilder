@@ -223,6 +223,8 @@ fn weapon_enum(raw: &str, kind: &str, path: &Path) -> io::Result<u32> {
     super::ai_strategic::enum_index(raw.trim(), values, kind, path)
 }
 
+const LINE_DAMAGE: u32 = 0xefaf_6340;
+
 fn encode_nuggets(
     node: Node<'_, '_>,
     data: &mut BinaryData<'_>,
@@ -246,6 +248,9 @@ fn encode_nuggets(
             }
             (Some(SAGE_NS), "DamageNugget") => {
                 (0xc0f5_3e99, fire_on_objects(child, pointer, data, out)?)
+            }
+            (Some(SAGE_NS), "LineDamageNugget") => {
+                (LINE_DAMAGE, fire_on_objects(child, pointer, data, out)?)
             }
             (Some(SAGE_NS), "DamageContainedNugget") => {
                 (0x929b_5398, fire_on_objects(child, pointer, data, out)?)
@@ -392,7 +397,16 @@ fn fire_on_objects(
     let dot = node.has_tag_name((SAGE_NS, "DOTNugget"));
     let direct = node.has_tag_name((SAGE_NS, "DamageNugget"));
     let contained = node.has_tag_name((SAGE_NS, "DamageContainedNugget"));
-    let is_damage = dot || direct || contained;
+    let line = node.has_tag_name((SAGE_NS, "LineDamageNugget"));
+    let is_damage = dot || direct || contained || line;
+    const LINE_FIELDS: &[(&str, u32, usize)] = &[
+        ("OffsetAngle", 0x4e16_ea4d, 0x98),
+        ("LineWidth", 0x6458_64f3, 0x9c),
+        ("LineLengthLeadIn", 0x6458_64f3, 0xa0),
+        ("LineLengthLeadOut", 0x6458_64f3, 0xa4),
+        ("UseDynamicLineLength", 0x77e3_f4f7, 0xac),
+        ("OverShootDistance", 0x6458_64f3, 0xa8),
+    ];
     const DAMAGE_REALS: [(&str, usize); 8] = [
         ("DamageTaperOff", 0x2c),
         ("MinRadius", 0x30),
@@ -434,6 +448,12 @@ fn fire_on_objects(
             .into_iter()
             .flatten(),
     )
+    .chain(
+        line.then_some(LINE_FIELDS)
+            .into_iter()
+            .flatten()
+            .map(|&(name, _, _)| name),
+    )
     .collect();
     validate_effect_attributes(
         node,
@@ -448,6 +468,8 @@ fn fire_on_objects(
         pointer,
         if contained {
             0x110
+        } else if line {
+            0xb0
         } else if direct {
             0x98
         } else {
@@ -490,6 +512,8 @@ fn fire_on_objects(
             start,
             if dot {
                 0xefbb_5226
+            } else if line {
+                LINE_DAMAGE
             } else if contained {
                 0x929b_5398
             } else {
@@ -619,6 +643,29 @@ fn fire_on_objects(
     ));
     if direct {
         return Ok(Table::record(damage));
+    }
+    if line {
+        let mut fields = vec![Entry::new(
+            1,
+            0xc0f5_3e99,
+            Target::Table(Table::record(damage)),
+        )];
+        for &(name, kind, offset) in LINE_FIELDS {
+            let offset = start + offset;
+            match name {
+                "UseDynamicLineLength" => data.payload[offset] = flag(node, name, false, path)?,
+                "OffsetAngle" => data.word(
+                    offset,
+                    sage_angle(node.attribute(name).unwrap_or("0d"), name, path)?.to_bits(),
+                ),
+                _ => data.word(
+                    offset,
+                    finite_number(node.attribute(name).unwrap_or("0"), name, path)?.to_bits(),
+                ),
+            }
+            fields.push(Entry::named(name, kind, Target::Data(offset)));
+        }
+        return Ok(Table::record(fields));
     }
     if let Some(filter) = contained_filter {
         let max = node

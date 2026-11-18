@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="LineDamageNuggetProbe">
+    <Nuggets>
+      <LineDamageNugget/>
+      <LineDamageNugget Damage="17.0" OffsetAngle="-45d" LineWidth="5.0" LineLengthLeadIn="1.5" LineLengthLeadOut="3.5" UseDynamicLineLength="true" OverShootDistance="10.0">
+        <SpecialObjectFilter Rule="NONE" Include="INFANTRY"><IncludeThing>ExcludedInfantry</IncludeThing></SpecialObjectFilter>
+      </LineDamageNugget>
+    </Nuggets>
+  </WeaponTemplate>
+</AssetDeclaration>

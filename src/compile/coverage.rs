@@ -1023,6 +1023,11 @@ mod tests {
     }
 
     #[test]
+    fn line_damage_nugget_matches_ea_batch() {
+        assert_ea_fixture("line-damage-nugget", 1);
+    }
+
+    #[test]
     fn damage_and_reference_weapon_nuggets_match_ea() {
         for name in ["weapon-dot", "weapon-projectile", "weapon-ocl"] {
             assert_ea_fixture(name, 1);
