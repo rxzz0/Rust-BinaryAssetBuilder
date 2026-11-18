@@ -170,9 +170,27 @@ pub(in crate::compile::static_assets) fn compile(
     let mut slaughter_modules = Vec::new();
     let mut transport_modules = Vec::new();
     let mut derived_draw_relocations = super::draws::DrawRelocations::default();
+    let mut child_targets = Vec::new();
+    if let Some(browser) = node.attribute("Browser") {
+        let categories: Vec<_> = browser.split_ascii_whitespace().collect();
+        if !categories.is_empty() {
+            let start = data.list(0x24, categories.len(), 8)?;
+            let mut items = Vec::with_capacity(categories.len());
+            for (index, category) in categories.into_iter().enumerate() {
+                let offset = start + index * 8;
+                data.string(offset, category)?;
+                items.push((0, Target::Data(offset)));
+            }
+            child_targets.push(("Browser", Target::Table(Table::array(0x24, items))));
+        }
+    }
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
-    let mut child_targets =
-        children::encode(node, &mut data, &mut references, &mut reference_types)?;
+    child_targets.extend(children::encode(
+        node,
+        &mut data,
+        &mut references,
+        &mut reference_types,
+    )?);
     if let Some(group) = draws {
         let target = draws::encode(
             group,

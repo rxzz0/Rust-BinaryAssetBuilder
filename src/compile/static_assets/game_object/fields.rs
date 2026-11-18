@@ -68,6 +68,7 @@ pub(super) fn encode(
 ) -> io::Result<()> {
     const ENCODED: &[&str] = &[
         "id",
+        "Browser",
         "KindOf",
         "Description",
         "DescriptionTransformed",
