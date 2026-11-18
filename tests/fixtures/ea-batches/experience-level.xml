@@ -1,0 +1,27 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <ExperienceLevelTemplate id="ExperienceDefault"><LevelUpTintColor/></ExperienceLevelTemplate>
+  <ExperienceLevelTemplate id="ExperienceCustom" Rank="0x00000004" RequiredExperience="19" ExperienceAward="25" ExperienceAwardOwnGuysDie="-31" LevelUpOCL="ProbeCreation" Prerequisite="ExperienceDefault" ModelConditionState="MOVING DAMAGED" InformUpdateModule="true" SinglePlayerOnly="true" ShowLevelUpTint="true" LevelUpTintPreColorTime="250ms" LevelUpTintPostColorTime="2s" LevelUpTintSustainColorTime="3s" LevelUpTintFrequency="4.5" LevelUpTintAmplitude="5.5">
+    <LevelUpTintColor r=".1" g=".2" b=".3" a=".4"/>
+    <Upgrade>ProbeUpgrade1</Upgrade>
+    <Upgrade>ProbeUpgrade2</Upgrade>
+    <LevelUpFxList BoneName="FirstBone" FxList="ProbeFx1"/>
+    <LevelUpFxList FxList="ProbeFx2" BoneName=""/>
+    <LevelUpFxList/>
+    <Target>ProbeObject1</Target>
+    <Target>ProbeObject2</Target>
+    <AttributeModifier>ProbeModifier1</AttributeModifier>
+    <AttributeModifier>ProbeModifier2</AttributeModifier>
+    <Decal>
+      <Component Texture2="ProbeTexture2" Texture="ProbeTexture1" Style="ADDITIVE_DECAL" OpacityMin="50%" OpacityMax="75%" OpacityPulsesPerSecond="3.2" RotationMin="4" RotationMax="5" RotationDegreesPerSecond="6" MinRadius="7" MaxRadius="8" RadiusPulsesPerSecond="9" PositionOffsetMin="10" PositionOffsetMax="11" PositionOffsetPulsesPerSecond="12">
+        <Color R="17" G="35" B="59" A="99"/>
+      </Component>
+      <Component/>
+    </Decal>
+  </ExperienceLevelTemplate>
+  <ExperienceLevelTemplate id="ExperienceEmptyDecal" MultiPlayerOnly="true"><LevelUpTintColor/><Decal/></ExperienceLevelTemplate>
+  <ExperienceLevelTemplate id="ExperienceRefOrder" Prerequisite="ExperienceDefault" LevelUpOCL="ProbeCreation">
+    <LevelUpTintColor/>
+    <LevelUpFxList FxList="ProbeFx1"/>
+    <AttributeModifier>ProbeModifier1</AttributeModifier>
+  </ExperienceLevelTemplate>
+</AssetDeclaration>

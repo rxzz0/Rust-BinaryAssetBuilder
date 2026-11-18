@@ -1028,6 +1028,11 @@ mod tests {
     }
 
     #[test]
+    fn experience_level_matches_ea_batch() {
+        assert_ea_fixture("experience-level", 4);
+    }
+
+    #[test]
     fn unit_ability_button_templates_match_ea_batch() {
         assert_ea_fixture("unit-ability-buttons", 12);
     }

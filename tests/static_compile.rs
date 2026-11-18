@@ -1568,3 +1568,56 @@ fn inherited_upgrade_payload_matches_ea() {
         assert_eq!(asset.instance_hash.to_le_bytes(), ea[12..16]);
     }
 }
+
+#[test]
+fn inherited_experience_level_payload_matches_ea() {
+    let root = scratch_root();
+    let schemas = root.join("Schemas/xsd");
+    fs::create_dir_all(&schemas).unwrap();
+    let schema = include_str!("../schemas/ra3/xsd/AssetTypeExperienceLevelTemplate.xsd")
+        .lines()
+        .filter(|line| !line.contains("schemaLocation="))
+        .collect::<Vec<_>>()
+        .join("\n")
+        .replace(
+            "</xs:schema>",
+            r#"
+              <xs:complexType name="BaseInheritableAsset"/>
+              <xs:complexType name="Color4f"/>
+              <xs:simpleType name="WeakReference"><xs:restriction base="xs:string"/></xs:simpleType>
+              <xs:simpleType name="GameObjectWeakRef"><xs:restriction base="WeakReference"/></xs:simpleType>
+              <xs:simpleType name="UpgradeTemplateWeakRef"><xs:restriction base="WeakReference"/></xs:simpleType>
+            </xs:schema>"#,
+        );
+    fs::write(schemas.join("CnC3Types.xsd"), schema).unwrap();
+    let input = root.join("rank.xml");
+    fs::write(
+        &input,
+        include_bytes!("fixtures/inherited-experience/rank.xml"),
+    )
+    .unwrap();
+    fs::create_dir(root.join("base")).unwrap();
+    fs::write(
+        root.join("base/template.xml"),
+        include_bytes!("fixtures/inherited-experience/base/template.xml"),
+    )
+    .unwrap();
+
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let mut payload = &stream.files.bin[4..];
+    let mut relocations = &stream.files.relo[4..];
+    for asset in &manifest.assets {
+        let (current, remaining) = payload.split_at(asset.chunk_sizes.instance as usize);
+        payload = remaining;
+        let (relo, remaining) = relocations.split_at(asset.chunk_sizes.relocations as usize);
+        relocations = remaining;
+        if asset.name == b"ExperienceLevelTemplate:RankDerived" {
+            let ea = include_bytes!("fixtures/inherited-experience/derived.asset");
+            assert_eq!(current, &ea[32..32 + current.len()]);
+            assert_eq!(relo, &ea[32 + current.len()..]);
+            return;
+        }
+    }
+    panic!("missing derived experience level");
+}

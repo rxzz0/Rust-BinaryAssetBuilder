@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <Includes><Include type="instance" source="base/template.xml"/></Includes>
+  <ExperienceLevelTemplate id="RankDerived" inheritFrom="RankBase" RequiredExperience="20">
+    <LevelUpTintColor r="0.7"/>
+    <Target>DerivedTarget</Target>
+  </ExperienceLevelTemplate>
+</AssetDeclaration>

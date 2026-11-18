@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <ExperienceLevelTemplate id="RankBase" Rank="3" RequiredExperience="10" ShowLevelUpTint="true">
+    <LevelUpTintColor r="0.1" g="0.2" b="0.3" a="0.4"/>
+    <Upgrade>BaseUpgrade</Upgrade>
+    <Target>BaseTarget</Target>
+  </ExperienceLevelTemplate>
+</AssetDeclaration>

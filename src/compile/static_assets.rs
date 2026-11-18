@@ -26,6 +26,7 @@ mod campaign;
 mod credits;
 mod damage_fx;
 mod emotion;
+mod experience_level;
 mod fx_list;
 pub(super) mod game_object;
 mod global_ui;
@@ -55,6 +56,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "UnitTypeIcon" => (0xf9e6_8b56, 52, global_ui::unit_type_icon),
         "ButtonSingleStateData" => (0xe15d_5b18, 62, global_ui::button_single_state),
         "UnitAbilityButtonTemplate" => (0xb087_4c15, 63, ability_buttons::compile),
+        "ExperienceLevelTemplate" => (0x20d1_6b26, 64, experience_level::compile),
         "PackedTextureImage" => (0xf8fc_ad30, 53, global_ui::packed_texture_image),
         "VideoEventList" => (0x96da_1c03, 9, video_events),
         "LogicCommandSet" => (0x8ae8_b68c, 11, logic_commands),
