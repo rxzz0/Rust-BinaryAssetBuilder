@@ -1,0 +1,36 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AudioEvent id="SingleSoundSettingsProbe" SubmixSlider="VOICE">
+    <PitchShift Low="1" High="2"/>
+    <PerFilePitchShift Low="3" High="4"/>
+    <Delay Low="5" High="6"/>
+    <InitialDelay Low="7" High="8"/>
+    <VolumeSliderMultiplier Slider="MUSIC" Multiplier="0.5"/>
+    <VolumeSliderMultiplier Slider="AMBIENT" Multiplier="1.5"/>
+    <MinRangeShift Low="11" High="12"/>
+    <MaxRangeShift Low="13" High="14"/>
+    <LimitGroup>GroupA</LimitGroup>
+    <LimitGroup>GroupB</LimitGroup>
+    <NonInterruptibleTime Low="15s" High="160ms"/>
+    <Attack>AttackA</Attack>
+    <Sound>SoundA</Sound>
+    <Decay>DecayA</Decay>
+  </AudioEvent>
+  <MusicTrack id="MusicSettingsProbe">
+    <VolumeSliderMultiplier Slider="NONE" Multiplier="2.5"/>
+    <LimitGroup>GroupB</LimitGroup>
+    <NonInterruptibleTime Low="1s" High="2s"/>
+    <Filename>MusicA</Filename>
+  </MusicTrack>
+  <DialogEvent id="DialogSettingsProbe">
+    <MinRangeShift Low="1" High="2"/>
+    <MaxRangeShift Low="3" High="4"/>
+    <LimitGroup>GroupB</LimitGroup>
+    <Filename>DialogA</Filename>
+  </DialogEvent>
+  <AmbientStream id="AmbientSettingsProbe">
+    <VolumeSliderMultiplier Slider="SOUNDFX" Multiplier="2"/>
+    <NonInterruptibleTime Low="250ms" High="2s"/>
+  </AmbientStream>
+  <AudioEventLimitGroup id="GroupA" Limit="3"/>
+  <AudioEventLimitGroup id="GroupB" Limit="-1"/>
+</AssetDeclaration>

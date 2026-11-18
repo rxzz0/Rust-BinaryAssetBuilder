@@ -2,7 +2,7 @@ use super::binary::BinaryData;
 use super::global_ui::enum_value;
 use super::write_import;
 use super::{
-    Marshaled, asset_reference, finite_number, percentage, significant_children,
+    Marshaled, asset_reference, finite_number, percentage, sage_time, significant_children,
     validate_attributes,
 };
 use crate::compile::{SAGE_NS, has_content, invalid, required};
@@ -93,8 +93,18 @@ pub(super) fn single_sound(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
         data.word(offset, flags);
     }
     let mut result = Marshaled::default();
-    let mut ranges = [None; 4];
-    let range_names = ["PitchShift", "PerFilePitchShift", "Delay", "InitialDelay"];
+    let mut ranges = [None; 7];
+    let range_names = [
+        "PitchShift",
+        "PerFilePitchShift",
+        "Delay",
+        "InitialDelay",
+        "MinRangeShift",
+        "MaxRangeShift",
+        "NonInterruptibleTime",
+    ];
+    let mut multipliers = Vec::new();
+    let mut groups = Vec::new();
     let mut filename = None;
     let mut lists = [Vec::new(), Vec::new(), Vec::new()];
     for child in significant_children(node) {
@@ -104,6 +114,12 @@ pub(super) fn single_sound(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
                 if ranges[i].replace(child).is_none() {
                     continue;
                 }
+            } else if name == "VolumeSliderMultiplier" {
+                multipliers.push(child);
+                continue;
+            } else if name == "LimitGroup" {
+                groups.push(child);
+                continue;
             } else if event {
                 if let Some(i) = ["Attack", "Sound", "Decay"]
                     .iter()
@@ -120,6 +136,14 @@ pub(super) fn single_sound(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
             path,
             format!("unsupported {} child {name}", node.tag_name().name()),
         ));
+    }
+    // The reference table follows the base sound fields, while imports follow payload allocation.
+    for &group in &groups {
+        let value = super::text_value(group, path)?;
+        let value = value.split_once('\\').map_or(value, |(name, _)| name);
+        let reference = asset_reference(value, "AudioEventLimitGroup", path)?;
+        result.reference_types.push(reference.type_id);
+        result.references.push(reference.into());
     }
     if let Some(filename) = filename {
         let filename = super::text_value(filename, path)?;
@@ -161,26 +185,41 @@ pub(super) fn single_sound(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
         let offset = data.allocate(0x50, 4)?;
         data.word(offset, index);
     }
-    for (index, range) in ranges.into_iter().enumerate() {
-        let Some(range) = range else { continue };
-        validate_attributes(range, &["Low", "High"], path)?;
-        if has_content(range) {
-            return Err(invalid(path, "unexpected audio range content"));
+    for (index, range) in ranges[..4].iter().enumerate() {
+        if let Some(range) = range {
+            audio_range(*range, 0x54 + index * 4, &mut data)?;
         }
-        let start = data.allocate(0x54 + index * 4, 8)?;
-        for (name, offset) in [("Low", start), ("High", start + 4)] {
-            let value = required(range, name, path)?;
-            let word = if index < 2 {
-                finite_number(value, name, path)?.to_bits()
-            } else {
-                value
-                    .trim()
-                    .parse::<i32>()
-                    .map_err(|_| invalid(path, "invalid integer audio delay"))?
-                    as u32
-            };
-            data.word(offset, word);
+    }
+    let first = data.list(0x64, multipliers.len(), 8)?;
+    for (index, item) in multipliers.into_iter().enumerate() {
+        validate_attributes(item, &["Slider", "Multiplier"], path)?;
+        if has_content(item) {
+            return Err(invalid(path, "unexpected VolumeSliderMultiplier content"));
         }
+        let offset = first + index * 8;
+        data.word(
+            offset,
+            enum_value(required(item, "Slider", path)?, SLIDER, path)?,
+        );
+        let value = required(item, "Multiplier", path)?;
+        data.word(
+            offset + 4,
+            finite_number(value, "Multiplier", path)?.to_bits(),
+        );
+    }
+    for (range, pointer) in [(&ranges[4], 0x6c), (&ranges[5], 0x70)] {
+        if let Some(range) = range {
+            audio_range(*range, pointer, &mut data)?;
+        }
+    }
+    let first = data.list(0x74, groups.len(), 4)?;
+    for index in 0..groups.len() {
+        let offset = first + index * 4;
+        data.word(offset, index as u32 + 1);
+        result.imports.push(offset as u32);
+    }
+    if let Some(range) = ranges[6] {
+        audio_range(range, 0x7c, &mut data)?;
     }
     if !data.relocations.is_empty() {
         data.relocations.push(u32::MAX);
@@ -191,6 +230,47 @@ pub(super) fn single_sound(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
         result.imports.push(u32::MAX);
     }
     Ok(result)
+}
+
+fn audio_range(node: Node<'_, '_>, pointer: usize, data: &mut BinaryData<'_>) -> io::Result<()> {
+    let path = data.path;
+    validate_attributes(node, &["Low", "High"], path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected audio range content"));
+    }
+    let start = data.allocate(pointer, 8)?;
+    for (name, offset) in [("Low", start), ("High", start + 4)] {
+        let value = required(node, name, path)?;
+        let word = match pointer {
+            0x5c | 0x60 => audio_integer(value, name, path)?,
+            0x7c => sage_time(value, name, path)?.to_bits(),
+            _ => finite_number(value, name, path)?.to_bits(),
+        };
+        data.word(offset, word);
+    }
+    Ok(())
+}
+
+fn audio_integer(value: &str, name: &str, path: &Path) -> io::Result<u32> {
+    let value = value.trim();
+    let parsed = if let Some(hex) = value.strip_prefix("0x") {
+        u32::from_str_radix(hex, 16)
+    } else {
+        value.parse::<i32>().map(|word| word as u32)
+    };
+    parsed.map_err(|_| invalid(path, format!("invalid audio {name}: {value}")))
+}
+
+pub(super) fn limit_group(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "Limit"], path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected AudioEventLimitGroup content"));
+    }
+    let limit = audio_integer(required(node, "Limit", path)?, "Limit", path)?;
+    Ok(Marshaled {
+        payload: super::encode_words([0, limit]),
+        ..Marshaled::default()
+    })
 }
 
 pub(super) fn multisound(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
