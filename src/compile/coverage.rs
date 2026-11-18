@@ -1023,6 +1023,13 @@ mod tests {
     }
 
     #[test]
+    fn particle_template_matches_ea_batches() {
+        assert_ea_fixture("particle-template", 3);
+        assert_ea_fixture("particle-emission", 9);
+        assert_ea_fixture("particle-effects", 18);
+    }
+
+    #[test]
     fn multisound_matches_ea_batch() {
         assert_ea_fixture("multisound", 3);
     }

@@ -1,0 +1,23 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <FXParticleSystemTemplate id="ParticleTemplateEmpty"><Physics/><Draw/><Volume/><Velocity/></FXParticleSystemTemplate>
+    <FXParticleSystemTemplate id="ParticleTemplateConfigured" Shader="ALPHA" ParticleTexture="TextureProbe" Drawable="DrawableProbe" SlaveSystem="SlaveProbe" PerParticleAttachedSystem="AttachedProbe" EmitterSound="SoundProbe" Priority="HIGH_OR_ABOVE" Type="GPU_PARTICLE" SystemLifetime="31" SortLevel="32" IsOneShot="true" IsEmitAboveGroundOnly="true" UseMaximumHeight="true">
+        <SlavePosOffset x="1" y="2" z="3"/>
+        <Lifetime Low="4" High="5" Type="GAUSSIAN"/>
+        <Size Low="6" High="7"/>
+        <StartSizeRate Low="8" High="9"/>
+        <BurstDelay Low="10" High="11"/>
+        <BurstCount Low="12" High="13"/>
+        <InitialDelay Low="14" High="15"/>
+        <Alphas><Alpha Low="0.2" High="0.8" Frame="2" RelativeAge="30%"/><Alpha Low="0.3"/></Alphas>
+        <Colors UseHouseColor="true" HouseColorSaturation="0.6">
+            <Color Frame="3" RelativeAge="70%"><Color r="0.1" g="0.2" b="0.3"/></Color>
+            <Color><Color r="0.4" g="0.5" b="0.6"/></Color>
+            <ColorScale Low="0.7" High="0.8"/>
+        </Colors>
+        <Wind Strength="4" TurbulenceAmplitude="6" TurbulenceFrequency="7"/>
+        <Physics/><Draw/><Volume/><Velocity/><Event/><Update/>
+    </FXParticleSystemTemplate>
+    <FXParticleSystemTemplate id="ParticleTemplateEmptyNested" IsGroundAligned="true" IsParticleUpTowardsEmitter="true">
+        <Alphas/><Colors/><Wind/><Physics/><Draw/><Volume/><Velocity/>
+    </FXParticleSystemTemplate>
+</AssetDeclaration>

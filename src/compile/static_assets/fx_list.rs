@@ -352,7 +352,7 @@ fn particle<'a, 'input: 'a>(
     write_flags(node, PARTICLE_FLAGS, start + 0x8c, data)
 }
 
-fn vector(
+pub(super) fn vector(
     node: Node<'_, '_>,
     angles: bool,
     start: usize,
@@ -378,9 +378,22 @@ fn vector(
     Ok(())
 }
 
-fn random_variable(node: Node<'_, '_>, start: usize, data: &mut BinaryData<'_>) -> io::Result<()> {
+pub(super) fn random_variable(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<()> {
     let path = data.path;
     validate_leaf(node, &["Type", "Low", "High"], path)?;
+    random_values(node, start, data)
+}
+
+pub(super) fn random_values(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<()> {
+    let path = data.path;
     let distribution = enum_value(
         node.attribute("Type").unwrap_or("UNIFORM"),
         &[
@@ -403,7 +416,7 @@ fn random_variable(node: Node<'_, '_>, start: usize, data: &mut BinaryData<'_>) 
     Ok(())
 }
 
-fn validate_leaf(node: Node<'_, '_>, fields: &[&str], path: &Path) -> io::Result<()> {
+pub(super) fn validate_leaf(node: Node<'_, '_>, fields: &[&str], path: &Path) -> io::Result<()> {
     validate_attributes(node, fields, path)?;
     if has_content(node) {
         return Err(invalid(
@@ -437,7 +450,12 @@ fn write_flags(
     Ok(())
 }
 
-fn boolean(node: Node<'_, '_>, name: &str, default: bool, path: &Path) -> io::Result<u8> {
+pub(super) fn boolean(
+    node: Node<'_, '_>,
+    name: &str,
+    default: bool,
+    path: &Path,
+) -> io::Result<u8> {
     match node.attribute(name).map(str::trim) {
         None => Ok(u8::from(default)),
         Some("true" | "True" | "1") => Ok(1),
