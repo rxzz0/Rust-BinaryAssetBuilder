@@ -1,0 +1,18 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DeathWeaponProbabilityProbe">
+    <Behaviors>
+      <FireWeaponWhenDead id="ModuleTag_Configured" DeathWeapon="Burst" UseMyKillerAsWeaponSource="true" FocusFireKindOfFlag="INFANTRY" InitiallyActive="true" DelayTime=".5s" WaypointMode="true">
+        <CustomAnimAndDuration AnimState="SOLD" Frames="12"/>
+        <TriggeredBy>EnableDeathWeapon</TriggeredBy>
+        <ConflictsWith>DisableDeathWeapon</ConflictsWith>
+        <WeaponOffset x="7" y="-1" z="2"/>
+        <DieMuxData VeterancyLevels="VETERAN ELITE" ExemptStatus="SOLD" DeathTypes="NORMAL"/>
+        <WeaponFireProbability DeathType="NORMAL BURNED" ChancePercentage="65"/>
+        <WeaponFireProbability DeathType="INTERNAL_DESTRUCTION" ChancePercentage="23"/>
+        <WeaponFireProbability/>
+      </FireWeaponWhenDead>
+      <FireWeaponWhenDead id="ModuleTag_Default"><DieMuxData/></FireWeaponWhenDead>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

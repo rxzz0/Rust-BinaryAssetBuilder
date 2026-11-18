@@ -161,7 +161,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut material_float_names = Vec::new();
     let mut create_object_modules = Vec::new();
     let mut spawn_modules = Vec::new();
-    let mut derived_upgrade_modules = Vec::new();
+    let mut upgrade_relocation_anchors = Vec::new();
     let mut chooser_relocations = Vec::new();
     let mut subobject_modules = Vec::new();
     let mut aura_modules = Vec::new();
@@ -234,7 +234,7 @@ pub(in crate::compile::static_assets) fn compile(
                     &mut references,
                     &mut reference_types,
                 )?;
-                derived_upgrade_modules.push((start, data.payload.len() as u32));
+                upgrade_relocation_anchors.push((start, data.payload.len() as u32 - 1));
                 Some(result)
             } else if module.has_tag_name((SAGE_NS, "SubObjectsUpgrade")) {
                 let start = data.payload.len() as u32;
@@ -269,7 +269,10 @@ pub(in crate::compile::static_assets) fn compile(
                     module.tag_name().name(),
                     "StealthDetectorUpdate" | "ObjectCreationUpgrade"
                 ) {
-                    derived_upgrade_modules.push((start, data.payload.len() as u32));
+                    upgrade_relocation_anchors.push((start, data.payload.len() as u32 - 1));
+                }
+                if module.has_tag_name((SAGE_NS, "FireWeaponWhenDead")) {
+                    upgrade_relocation_anchors.push((start, start + 0x88));
                 }
                 result
             };
@@ -425,13 +428,13 @@ pub(in crate::compile::static_assets) fn compile(
             }
         }
         // These modules emit derived relocations before inherited upgrade pointers.
-        let index = derived_upgrade_modules.partition_point(|&(start, _)| start <= pointer);
+        let index = upgrade_relocation_anchors.partition_point(|&(start, _)| start <= pointer);
         if index > 0 {
-            let (start, end) = derived_upgrade_modules[index - 1];
+            let (start, anchor) = upgrade_relocation_anchors[index - 1];
             match pointer - start {
-                8 => return (end - 1, 0),
-                0x10 => return (end - 1, 1),
-                0x18 => return (end - 1, 2),
+                8 => return (anchor, 0),
+                0x10 => return (anchor, 1),
+                0x18 => return (anchor, 2),
                 _ => {}
             }
         }

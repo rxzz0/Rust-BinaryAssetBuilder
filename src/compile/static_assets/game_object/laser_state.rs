@@ -23,7 +23,6 @@ pub(super) fn encode(
 ) -> io::Result<(u32, Table)> {
     const CONVERGING: u32 = 0x5f74_98f9;
     const SWEEPING: u32 = 0x3c93_4753;
-    const STREAM: u32 = 0xfef8_5f95;
     const ANGLE: u32 = 0x4e16_ea4d;
     const REAL: u32 = 0x6458_64f3;
     const FX: u32 = 0x0d1c_8e83;
@@ -50,23 +49,6 @@ pub(super) fn encode(
     ];
 
     let path = data.path;
-    if node.has_tag_name((SAGE_NS, "StreamState")) {
-        validate_attributes(node, &["id", "StreamId"], path)?;
-        if has_content(node) {
-            return Err(invalid(path, "unexpected StreamState content"));
-        }
-        let start = data.allocate(pointer, 12)?;
-        let id = state_id(node, "StreamId", path)?;
-        let module = module_base(node, STREAM, start, data, true)?;
-        data.word(start + 8, id);
-        return Ok((
-            STREAM,
-            Table::record(vec![
-                module,
-                Entry::named("StreamId", 0x23e6_50b8, Target::Data(start + 8)),
-            ]),
-        ));
-    }
     let (kind, size, derived) = match node.tag_name().name() {
         "ConvergingLaserState" => (CONVERGING, 0x88, CONVERGING_FIELDS),
         "SweepingLaserState" => (SWEEPING, 0x40, SWEEPING_FIELDS),

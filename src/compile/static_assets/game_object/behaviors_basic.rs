@@ -4,7 +4,7 @@ use super::super::{
     AssetReference, asset_reference, fast_hash, finite_number, hash_name, percentage, sage_time,
     significant_children, validate_attributes,
 };
-use super::draws::{array, boolean, fields};
+use super::draws::{boolean, fields};
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
@@ -267,6 +267,31 @@ fn upgrade_parent<'a, 'input: 'a>(
     Ok(base(0xae60_ae98, Table::record(upgrade)))
 }
 
+fn optional_vector(
+    node: Option<Node<'_, '_>>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Target> {
+    let Some(node) = node else {
+        return Ok(Target::Null);
+    };
+    let path = data.path;
+    let axes = ["x", "y", "z"];
+    validate_attributes(node, &axes, path)?;
+    if has_content(node) {
+        return Err(invalid(
+            path,
+            format!("unexpected {} content", node.tag_name().name()),
+        ));
+    }
+    let start = data.allocate(pointer, 12)?;
+    for (axis, name) in axes.into_iter().enumerate() {
+        let value = finite_number(node.attribute(name).unwrap_or("0"), name, path)?;
+        data.word(start + axis * 4, value.to_bits());
+    }
+    Ok(Target::Data(start))
+}
+
 fn object_creation_upgrade(
     node: Node<'_, '_>,
     pointer: usize,
@@ -340,24 +365,7 @@ fn object_creation_upgrade(
     let mut children = significant_children(node)
         .filter(|child| Some(*child) != offset)
         .peekable();
-    let offset = if let Some(child) = offset {
-        let axes = ["x", "y", "z"];
-        validate_attributes(child, &axes, path)?;
-        if has_content(child) {
-            return Err(invalid(
-                path,
-                "unexpected ObjectCreationUpgrade Offset content",
-            ));
-        }
-        let point = data.allocate(start + 0x40, 12)?;
-        for (axis, name) in axes.into_iter().enumerate() {
-            let value = finite_number(child.attribute(name).unwrap_or("0"), name, path)?;
-            data.word(point + axis * 4, value.to_bits());
-        }
-        Target::Data(point)
-    } else {
-        Target::Null
-    };
+    let offset = optional_vector(offset, start + 0x40, data)?;
     let parent = upgrade_parent(node, KIND, start, data, reference_types, &mut children)?;
     if children.next().is_some() {
         return Err(invalid(path, "unexpected ObjectCreationUpgrade child"));
@@ -1068,7 +1076,7 @@ pub(super) fn encode(
     }
     if matches!(
         node.tag_name().name(),
-        "LaserState" | "ConvergingLaserState" | "SweepingLaserState" | "StreamState"
+        "LaserState" | "ConvergingLaserState" | "SweepingLaserState"
     ) {
         return super::laser_state::encode(node, pointer, data, references, reference_types)
             .map(Some);
@@ -1990,13 +1998,6 @@ fn fire_weapon_when_dead(
 ) -> io::Result<(u32, Table)> {
     const KIND: u32 = 0x90ce_b49c;
     const BOOL: u32 = 0x77e3_f4f7;
-    const UPGRADE_FLAGS: &[(&str, u32, usize)] = &[
-        ("RequiresAllTriggers", BOOL, 0x1c),
-        ("RequiresAllConflictingTriggers", BOOL, 0x1d),
-        ("Permanent", BOOL, 0x1e),
-        ("WaypointMode", BOOL, 0x1f),
-        ("WaypointModeTerminal", BOOL, 0x20),
-    ];
     const FIRE_FLAGS: &[(&str, u32, usize)] = &[
         ("InitiallyActive", BOOL, 0x88),
         ("ActiveDuringConstruction", BOOL, 0x89),
@@ -2005,32 +2006,34 @@ fn fire_weapon_when_dead(
         ("UseMyKillerAsWeaponSource", BOOL, 0x8c),
     ];
     let path = data.path;
-    let allowed: Vec<_> = UPGRADE_FLAGS
+    let allowed: Vec<_> = super::spawn::UPGRADE
         .iter()
         .chain(FIRE_FLAGS)
         .map(|&(name, _, _)| name)
         .chain(["id", "DelayTime", "DeathWeapon", "FocusFireKindOfFlag"])
         .collect();
     validate_attributes(node, &allowed, path)?;
-    let mut children = significant_children(node);
+
+    let children: Vec<_> = significant_children(node).collect();
+    let derived_start = children
+        .iter()
+        .take_while(|child| {
+            child.tag_name().namespace() == Some(SAGE_NS)
+                && matches!(
+                    child.tag_name().name(),
+                    "CustomAnimAndDuration" | "TriggeredBy" | "ConflictsWith"
+                )
+        })
+        .count();
+    let (inherited, derived) = children.split_at(derived_start);
+    let mut children = derived.iter().copied().peekable();
+    let offset = children.next_if(|child| child.has_tag_name((SAGE_NS, "WeaponOffset")));
     let die = children
-        .next()
-        .filter(|child| child.has_tag_name((SAGE_NS, "DieMuxData")))
+        .next_if(|child| child.has_tag_name((SAGE_NS, "DieMuxData")))
         .ok_or_else(|| invalid(path, "FireWeaponWhenDead requires DieMuxData"))?;
-    if let Some(child) = children.next() {
-        return Err(invalid(
-            path,
-            format!(
-                "unsupported FireWeaponWhenDead child {}",
-                child.tag_name().name()
-            ),
-        ));
-    }
     let start = data.allocate(pointer, 0x90)?;
-    data.word(start, KIND);
-    data.word(start + 4, hash_name(required(node, "id", path)?));
-    for &(name, _, offset) in UPGRADE_FLAGS.iter().chain(FIRE_FLAGS) {
-        data.payload[start + offset] = boolean(node, name, name == "WaypointModeTerminal", path)?;
+    for &(name, _, offset) in FIRE_FLAGS {
+        data.payload[start + offset] = boolean(node, name, false, path)?;
     }
     let delay = sage_time(
         node.attribute("DelayTime").unwrap_or("0s"),
@@ -2038,31 +2041,65 @@ fn fire_weapon_when_dead(
         path,
     )?;
     data.word(start + 0x24, delay.to_bits());
-    if let Some(value) = node
-        .attribute("DeathWeapon")
-        .filter(|value| !value.trim().is_empty())
-    {
-        let plain = value.split_once('\\').map_or(value, |(name, _)| name);
-        let id = asset_reference(plain, "WeaponTemplate", path)?;
-        references.push(id.into());
-        reference_types.push(id.type_id);
-        data.word(start + 0x28, references.len() as u32);
+    if let Some(value) = node.attribute("DeathWeapon") {
+        let ordinal = super::passive_area::reference(
+            value,
+            "WeaponTemplate",
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + 0x28, ordinal);
     }
     if let Some(value) = node.attribute("FocusFireKindOfFlag") {
         super::fields::write_kind_of(value, start + 0x2c, data)?;
     }
-    let module = Table::record(vec![
-        Entry::new(0x19b0_42a0, 0x23e6_50b8, Target::Data(start)),
-        Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
-    ]);
-    let mut upgrade = vec![base(0xa50d_729a, inherited(0xd75d_93a2, module))];
-    upgrade.extend(fields(start, UPGRADE_FLAGS));
-    upgrade.extend([
-        Entry::named("CustomAnimAndDuration", 0x6b74_6af6, Target::Null),
-        array("TriggeredBy", 0x26fa_cfc7, start + 0x0c),
-        array("ConflictsWith", 0x26fa_cfc7, start + 0x14),
-    ]);
-    let mut entries = vec![base(0xae60_ae98, Table::record(upgrade))];
+    let offset = optional_vector(offset, start + 0x50, data)?;
+    let die = encode_die_mux(die, start + 0x54, data)?;
+    let probabilities = start + 0x80;
+    let first = data.list(probabilities, children.len(), 12)?;
+    let mut probability_tables = Vec::new();
+    for (index, child) in children.enumerate() {
+        if !child.has_tag_name((SAGE_NS, "WeaponFireProbability")) || has_content(child) {
+            return Err(invalid(
+                path,
+                format!(
+                    "unexpected FireWeaponWhenDead child {}",
+                    child.tag_name().name()
+                ),
+            ));
+        }
+        validate_attributes(child, &["DeathType", "ChancePercentage"], path)?;
+        let flags = death_flags(child.attribute("DeathType").unwrap_or(""), path)?;
+        let chance = child
+            .attribute("ChancePercentage")
+            .unwrap_or("0")
+            .trim()
+            .parse::<u32>()
+            .map_err(|_| invalid(path, "invalid ChancePercentage"))?;
+        let start = first + index * 12;
+        data.word(start, flags as u32);
+        data.word(start + 4, (flags >> 32) as u32);
+        data.word(start + 8, chance);
+        let table = Table::record(
+            fields(
+                start,
+                &[
+                    ("DeathType", 0x034d_f1a1, 0),
+                    ("ChancePercentage", 0x7631_77a4, 8),
+                ],
+            )
+            .collect(),
+        );
+        probability_tables.push((0, Target::Table(table)));
+    }
+    let mut inherited = inherited.iter().copied().peekable();
+    let parent = upgrade_parent(node, KIND, start, data, reference_types, &mut inherited)?;
+    if inherited.next().is_some() {
+        return Err(invalid(path, "unexpected FireWeaponWhenDead upgrade child"));
+    }
+
+    let mut entries = vec![parent];
     entries.extend(fields(start, &FIRE_FLAGS[..4]));
     entries.extend(fields(
         start,
@@ -2074,13 +2111,13 @@ fn fire_weapon_when_dead(
     ));
     entries.extend(fields(start, &FIRE_FLAGS[4..]));
     entries.extend([
-        Entry::named("WeaponOffset", 0x2936_8077, Target::Null),
+        Entry::named("WeaponOffset", 0x2936_8077, offset),
+        Entry::named("DieMuxData", 0x0084_001b, Target::Table(die)),
         Entry::named(
-            "DieMuxData",
-            0x0084_001b,
-            Target::Table(encode_die_mux(die, start + 0x54, data)?),
+            "WeaponFireProbability",
+            0x080b_e21f,
+            Target::Table(Table::array(probabilities, probability_tables)),
         ),
-        array("WeaponFireProbability", 0x080b_e21f, start + 0x80),
     ]);
     Ok((KIND, Table::record(entries)))
 }

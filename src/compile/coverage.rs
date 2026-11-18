@@ -36,7 +36,6 @@ const MODULES: &[(&str, &[&str])] = &[
             "LaserState",
             "ConvergingLaserState",
             "SweepingLaserState",
-            "StreamState",
             "AttackAssistResponseBehavior",
             "NotifyWhenAttackingBehavior",
             "TechUpgrade",
@@ -410,6 +409,11 @@ mod tests {
     #[test]
     fn upgrade_spawn_modules_match_ea() {
         assert_ea_fixture("upgrade-spawn-modules", 1);
+    }
+
+    #[test]
+    fn death_weapon_probability_matches_ea() {
+        assert_ea_fixture("death-weapon-probability", 1);
     }
 
     #[test]
