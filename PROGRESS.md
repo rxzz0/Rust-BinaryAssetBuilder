@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 315 adds GraphicsHardware, GameLODPreset, StaticGameLOD and DynamicGameLOD. All 18 assets in the shipped GameLOD stream match EA bytes, references and hashes. All 296 tests and Clippy passed.
 - Checkpoint 314 encodes AudioSettings, AnimationSoundSettings, and AudioLOD. All four fixture assets and the shipped PC AudioSettings with platform defines matched EA. All 296 tests and Clippy passed.
 - Checkpoint 313 encodes Pathfinder dynamic music states, state sets, and transitions. All 161 assets from the standard and scripted SDK state configurations with fixture event handles matched EA, including references and hashes. All 296 tests and Clippy passed.
 - Checkpoint 312 adds all 18 MusicScript condition types, with inline filters, weak references, and compound conditions. All 24 EA fixture assets matched, and the native stream linked successfully. All 296 tests and Clippy passed.

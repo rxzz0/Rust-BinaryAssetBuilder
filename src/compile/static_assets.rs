@@ -30,6 +30,7 @@ mod emotion;
 mod eva;
 mod experience_level;
 mod fx_list;
+mod game_lod;
 mod game_map;
 pub(super) mod game_object;
 mod game_script_list;
@@ -104,6 +105,10 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "GameMap" => (0xf465_7c12, 78, game_map::compile),
         "AudioSettings" => (0xd86e_d334, 83, audio_settings::settings),
         "AnimationSoundSettings" => (0xbcf8_03d4, 83, audio_settings::animation),
+        "GraphicsHardware" => (0x42aa_52a8, 82, game_lod::hardware),
+        "GameLODPreset" => (0xd948_d68d, 83, game_lod::preset),
+        "StaticGameLOD" => (0x4a93_fc61, 83, game_lod::static_lod),
+        "DynamicGameLOD" => (0x692b_85b7, 83, game_lod::dynamic_lod),
         "AudioLOD" => (0x014c_bb53, 83, audio_settings::lod),
         "MusicScriptTrack" => (0xbbde_2f64, 79, music::script_track),
         "MusicPalette" => (0xd96f_c160, 80, music::palette),

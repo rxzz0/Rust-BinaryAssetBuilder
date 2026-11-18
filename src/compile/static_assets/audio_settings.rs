@@ -301,24 +301,6 @@ pub(super) fn lod(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
         required(node, name, path)?;
         data.payload[40 + index] = boolean(node, name, false, path)?;
     }
-    let processors: Vec<_> = significant_children(node).collect();
-    let start = data.list(32, processors.len(), 8)?;
-    for (index, processor) in processors.into_iter().enumerate() {
-        if !processor.has_tag_name((SAGE_NS, "Processor")) {
-            return Err(invalid(path, "expected an AudioLOD Processor"));
-        }
-        validate_leaf(processor, &["Type", "MinMHz"], path)?;
-        let kind = enum_value(
-            required(processor, "Type", path)?,
-            &["UNKNOWN", "PENTIUM_4", "CORE_DUO", "ATHLON", "ATHLON_64"],
-            path,
-        )?;
-        let offset = start + index * 8;
-        data.word(offset, kind);
-        data.word(
-            offset + 4,
-            sage_int(required(processor, "MinMHz", path)?, "MinMHz", path)?,
-        );
-    }
+    super::game_lod::write_processors(node, 32, &mut data)?;
     Ok(data.finish(Marshaled::default()))
 }
