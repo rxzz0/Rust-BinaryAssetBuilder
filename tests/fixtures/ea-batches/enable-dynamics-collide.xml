@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="EnableDynamicsDefault">
+    <Draws/>
+    <Behaviors><EnableDynamicsCollide id="ModuleTag_EnableDynamics"/></Behaviors>
+    <AI/>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <GameObject id="EnableDynamicsExplicit">
+    <Draws/>
+    <Behaviors><EnableDynamicsCollide id="ModuleTag_EnableDynamics" Weight="3.75"/></Behaviors>
+    <AI/>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+</AssetDeclaration>

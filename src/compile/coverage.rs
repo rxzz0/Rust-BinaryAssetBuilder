@@ -69,6 +69,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "EjectPassengersSpecialAbilityUpdate",
             "OCLSpecialPower",
             "SquishCollide",
+            "EnableDynamicsCollide",
             "WallBuilderBehavior",
             "StreamState",
             "StatusBitsUpgrade",
@@ -1340,6 +1341,11 @@ mod tests {
     #[test]
     fn cleared_eva_event_references_match_ea() {
         assert_ea_fixture("eva-entry-clear", 2);
+    }
+
+    #[test]
+    fn enable_dynamics_collide_matches_ea() {
+        assert_ea_fixture("enable-dynamics-collide", 2);
     }
 
     #[test]

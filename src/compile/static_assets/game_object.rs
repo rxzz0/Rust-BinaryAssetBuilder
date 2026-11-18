@@ -15,6 +15,7 @@ mod create_object_die;
 mod draws;
 mod dynamics;
 mod eject_passengers;
+mod enable_dynamics_collide;
 pub(in crate::compile) use draws::SCRIPTED_FLAGS;
 mod attach;
 mod encoder;
