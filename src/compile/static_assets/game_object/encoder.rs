@@ -168,7 +168,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut auto_heal_modules = Vec::new();
     let mut slaughter_modules = Vec::new();
     let mut transport_modules = Vec::new();
-    let mut truck_relocations = Vec::new();
+    let mut derived_draw_relocations = Vec::new();
     fields::encode(node, &mut data, &mut reference_types, &mut references)?;
     let mut child_targets =
         children::encode(node, &mut data, &mut references, &mut reference_types)?;
@@ -179,7 +179,7 @@ pub(in crate::compile::static_assets) fn compile(
             &mut references,
             &mut reference_types,
             &mut material_float_names,
-            &mut truck_relocations,
+            &mut derived_draw_relocations,
         )?;
         child_targets.push(("Draws", target));
     }
@@ -400,14 +400,14 @@ pub(in crate::compile::static_assets) fn compile(
         }
     }
     let relocation_key = |pointer| {
-        // TruckDraw emits its derived pointers before the inherited draw pointers.
-        let index = truck_relocations.partition_point(|&(start, _)| start <= pointer);
+        // Model draw extensions emit derived pointers before inherited pointers.
+        let index = derived_draw_relocations.partition_point(|&(start, _, _)| start <= pointer);
         if index > 0 {
-            let (start, end) = truck_relocations[index - 1];
-            if (0xd8..0x18c).contains(&(pointer - start)) {
+            let (start, size, end) = derived_draw_relocations[index - 1];
+            if (0xd8..size).contains(&(pointer - start)) {
                 return (start, pointer - start);
             }
-            if (start + 0x18c..end).contains(&pointer) {
+            if (start + size..end).contains(&pointer) {
                 return (end, pointer - start);
             }
         }

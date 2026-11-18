@@ -1023,6 +1023,11 @@ mod tests {
     }
 
     #[test]
+    fn tank_draw_matches_ea_batch() {
+        assert_ea_fixture("tank-draw", 1);
+    }
+
+    #[test]
     fn particle_template_matches_ea_batches() {
         assert_ea_fixture("particle-template", 3);
         assert_ea_fixture("particle-emission", 9);

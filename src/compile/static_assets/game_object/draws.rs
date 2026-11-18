@@ -11,6 +11,7 @@ use std::sync::OnceLock;
 
 const SCRIPTED_MODEL_DRAW: u32 = 0x4ecf_2a4b;
 const TRUCK_DRAW: u32 = 0xa44c_2999;
+const TANK_DRAW: u32 = 0x8a81_1d3e;
 const MODEL_STATE: u32 = 0x953c_f093;
 const STRING: u32 = 0x1a29_33aa;
 const FLOAT: u32 = 0x6458_64f3;
@@ -51,7 +52,7 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
     material_float_names: &mut Vec<u32>,
-    truck_relocations: &mut Vec<(u32, u32)>,
+    derived_draw_relocations: &mut Vec<(u32, u32, u32)>,
 ) -> io::Result<Target> {
     let modules: Vec<_> = significant_children(group).collect();
     let list = data.allocate(0x1cc, 8)?;
@@ -60,22 +61,22 @@ pub(super) fn encode(
     for (index, node) in modules.into_iter().enumerate() {
         let pointer = pointers + index * 4;
         let (kind, module) = match node.tag_name().name() {
-            name @ ("ScriptedModelDraw" | "TruckDraw") if node.has_tag_name((SAGE_NS, name)) => (
-                if name == "TruckDraw" {
-                    TRUCK_DRAW
-                } else {
-                    SCRIPTED_MODEL_DRAW
-                },
-                scripted_model(
-                    node,
-                    pointer,
-                    data,
-                    references,
-                    reference_types,
-                    material_float_names,
-                    truck_relocations,
-                )?,
-            ),
+            name @ ("ScriptedModelDraw" | "TruckDraw" | "TankDraw")
+                if node.has_tag_name((SAGE_NS, name)) =>
+            {
+                (
+                    scripted_layout(name).0,
+                    scripted_model(
+                        node,
+                        pointer,
+                        data,
+                        references,
+                        reference_types,
+                        material_float_names,
+                        derived_draw_relocations,
+                    )?,
+                )
+            }
             "LaserDraw" if node.has_tag_name((SAGE_NS, "LaserDraw")) => (
                 super::laser_draw::KIND,
                 super::laser_draw::encode(
@@ -366,6 +367,53 @@ fn truck_fields(
     Ok((entries, particle_offset))
 }
 
+fn scripted_layout(name: &str) -> (u32, usize) {
+    match name {
+        "TruckDraw" => (TRUCK_DRAW, 0x18c),
+        "TankDraw" => (TANK_DRAW, 0xe4),
+        _ => (SCRIPTED_MODEL_DRAW, 0xd8),
+    }
+}
+
+fn tank_fields(
+    start: usize,
+    particles: bool,
+    bones: &[Node<'_, '_>],
+    data: &mut BinaryData<'_>,
+) -> io::Result<(Vec<Entry>, Option<usize>)> {
+    const FIELDS: [&str; 2] = ["ArticulationBoneName", "ArticulationHelperBoneName"];
+    let particle_offset = particles
+        .then(|| data.allocate(start + 0xd8, 4))
+        .transpose()?;
+    let count = start + 0xdc;
+    let first = data.list(count, bones.len(), 16)?;
+    let mut items = Vec::with_capacity(bones.len());
+    for (index, &bone) in bones.iter().enumerate() {
+        validate_attributes(bone, &FIELDS, data.path)?;
+        if has_content(bone) {
+            return Err(invalid(data.path, "unexpected ArticulationBone content"));
+        }
+        let offset = first + index * 16;
+        let mut entries = Vec::with_capacity(FIELDS.len());
+        for (index, name) in FIELDS.into_iter().enumerate() {
+            let field = offset + index * 8;
+            if let Some(value) = bone.attribute(name) {
+                data.string(field, value)?;
+            }
+            entries.push(Entry::named(name, 0x805d_25f4, Target::Data(field)));
+        }
+        items.push((0, Target::Table(Table::record(entries))));
+    }
+    Ok((
+        vec![Entry::named(
+            "ArticulationBone",
+            0xc403_7fcb,
+            Target::Table(Table::array(count, items)),
+        )],
+        particle_offset,
+    ))
+}
+
 fn scripted_model(
     node: Node<'_, '_>,
     pointer: usize,
@@ -373,9 +421,11 @@ fn scripted_model(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
     material_float_names: &mut Vec<u32>,
-    truck_relocations: &mut Vec<(u32, u32)>,
+    derived_draw_relocations: &mut Vec<(u32, u32, u32)>,
 ) -> io::Result<Table> {
-    let truck = node.has_tag_name((SAGE_NS, "TruckDraw"));
+    let (kind, size) = scripted_layout(node.tag_name().name());
+    let truck = kind == TRUCK_DRAW;
+    let tank = kind == TANK_DRAW;
     let allowed: Vec<_> = [
         "id",
         "ExtraPublicBone",
@@ -406,18 +456,21 @@ fn scripted_model(
     let mut animations = Vec::new();
     let mut tread_particles = None;
     let mut tread_maps = Vec::new();
+    let mut articulation_bones = Vec::new();
     for child in significant_children(node) {
         if child.has_tag_name((SAGE_NS, "ModelConditionState")) {
             states.push(child);
         } else if child.has_tag_name((SAGE_NS, "AnimationState")) {
             animations.push(child);
-        } else if truck
+        } else if (truck || tank)
             && child.has_tag_name((SAGE_NS, "TreadTerrainParticles"))
             && tread_particles.is_none()
         {
             tread_particles = Some(child);
         } else if truck && child.has_tag_name((SAGE_NS, "TreadScrollingMap")) {
             tread_maps.push(child);
+        } else if tank && child.has_tag_name((SAGE_NS, "ArticulationBone")) {
+            articulation_bones.push(child);
         } else {
             return Err(invalid(
                 data.path,
@@ -429,23 +482,28 @@ fn scripted_model(
         }
     }
 
-    let start = data.allocate(pointer, if truck { 0x18c } else { 0xd8 })?;
-    data.word(
-        start,
-        if truck {
-            TRUCK_DRAW
-        } else {
-            SCRIPTED_MODEL_DRAW
-        },
-    );
+    let start = data.allocate(pointer, size)?;
+    data.word(start, kind);
     data.word(start + 4, hash_name(required(node, "id", data.path)?));
-    let derived = if truck {
-        let entries = truck_fields(node, start, tread_particles.is_some(), &tread_maps, data)?;
-        truck_relocations.push((start as u32, data.payload.len() as u32));
-        Some(entries)
-    } else {
-        None
+    let derived = match kind {
+        TRUCK_DRAW => Some(truck_fields(
+            node,
+            start,
+            tread_particles.is_some(),
+            &tread_maps,
+            data,
+        )?),
+        TANK_DRAW => Some(tank_fields(
+            start,
+            tread_particles.is_some(),
+            &articulation_bones,
+            data,
+        )?),
+        _ => None,
     };
+    if derived.is_some() {
+        derived_draw_relocations.push((start as u32, size as u32, data.payload.len() as u32));
+    }
     for (offset, bits) in [
         (0x10, 0x3ecc_cccd),
         (0x14, 0x4040_0000),
@@ -633,7 +691,7 @@ fn scripted_model(
             Target::Null
         };
         entries.insert(
-            TRUCK_FIELDS.len(),
+            if truck { TRUCK_FIELDS.len() } else { 0 },
             Entry::named("TreadTerrainParticles", 0xa6ff_4551, particles),
         );
         entries.insert(0, super::behaviors_basic::base(SCRIPTED_MODEL_DRAW, table));

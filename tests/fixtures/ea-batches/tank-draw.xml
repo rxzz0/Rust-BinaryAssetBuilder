@@ -1,0 +1,15 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="TankDrawProbe">
+    <Draws>
+      <TankDraw id="ModuleTag_Default"/>
+      <TankDraw id="ModuleTag_Configured" Name="Tank" TrackMarks="ProbeTrack" WadingParticleSys="ProbeWade">
+        <ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name="ProbeModel"/></ModelConditionState>
+        <TreadTerrainParticles>ProbeTerrain</TreadTerrainParticles>
+        <ArticulationBone ArticulationBoneName="ROTOR" ArticulationHelperBoneName="HELPER"/>
+        <ArticulationBone ArticulationBoneName="Middle"/>
+        <ArticulationBone/>
+      </TankDraw>
+    </Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
