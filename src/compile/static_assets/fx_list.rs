@@ -1,3 +1,5 @@
+mod variants;
+
 use super::binary::BinaryData;
 use super::game_object::{audio_reference, optional_vector, write_model_conditions};
 use super::global_ui::{enum_value, filter_reference_types, object_filter};
@@ -101,24 +103,26 @@ fn encode_nugget(
     out: &mut Marshaled,
 ) -> io::Result<()> {
     let tag = node.tag_name().name();
-    let (kind, size, fields, flags) = match (node.tag_name().namespace(), tag) {
-        (Some(SAGE_NS), "ParticleSystem") => {
-            (0x2ccc_1572, 0x94, PARTICLE_ATTRIBUTES, PARTICLE_FLAGS)
-        }
-        (Some(SAGE_NS), "Sound") => (0x1e08_c8fb, 0x30, &["Value"][..], &[][..]),
-        (Some(SAGE_NS), "RayEffect") => (0x8e39_bc26, 0x48, &["Thing"][..], &[][..]),
-        (Some(SAGE_NS), "EvaEvent") => (
+    if node.tag_name().namespace() != Some(SAGE_NS) {
+        return Err(invalid(data.path, "unexpected FXList nugget namespace"));
+    }
+    let variant = variants::layout(tag);
+    let (kind, size, fields, flags) = match tag {
+        "ParticleSystem" => (0x2ccc_1572, 0x94, PARTICLE_ATTRIBUTES, PARTICLE_FLAGS),
+        "Sound" => (0x1e08_c8fb, 0x30, &["Value"][..], &[][..]),
+        "RayEffect" => (0x8e39_bc26, 0x48, &["Thing"][..], &[][..]),
+        "EvaEvent" => (
             0x907f_b364,
             0x38,
             &["EvaEventOwner", "EvaEventAlly", "EvaEventEnemy"][..],
             &[][..],
         ),
-        (Some(SAGE_NS), "ForceFeedback") => (0x260d_1436, 0x30, &["Event"][..], &[][..]),
+        "ForceFeedback" => (0x260d_1436, 0x30, &["Event"][..], &[][..]),
         _ => {
-            return Err(invalid(
-                data.path,
-                format!("unsupported FXList nugget {tag}"),
-            ));
+            let layout = variant
+                .as_ref()
+                .ok_or_else(|| invalid(data.path, format!("unsupported FXList nugget {tag}")))?;
+            (layout.kind, layout.size, &[][..], &[][..])
         }
     };
     let mut allowed = Vec::from(CONDITIONS);
@@ -126,6 +130,7 @@ fn encode_nugget(
     allowed.push("Weather");
     allowed.extend_from_slice(fields);
     allowed.extend_from_slice(flags);
+    allowed.extend(variant.iter().flat_map(variants::Layout::attributes));
     validate_attributes(node, &allowed, data.path)?;
     let start = data.allocate(pointer, size)?;
     data.word(start, kind);
@@ -191,7 +196,9 @@ fn encode_nugget(
             data,
             out,
         )?,
-        _ => unreachable!(),
+        _ => variant
+            .unwrap()
+            .encode(node, start, &mut children, data, out)?,
     }
     if let Some(child) = children.next() {
         return Err(invalid(
@@ -425,13 +432,18 @@ fn write_flags(
     data: &mut BinaryData<'_>,
 ) -> io::Result<()> {
     for (index, &name) in names.iter().enumerate() {
-        data.payload[start + index] = match node.attribute(name).unwrap_or("false").trim() {
-            "true" | "True" | "1" => 1,
-            "false" | "False" | "0" => 0,
-            value => return Err(invalid(data.path, format!("invalid {name} {value:?}"))),
-        };
+        data.payload[start + index] = boolean(node, name, false, data.path)?;
     }
     Ok(())
+}
+
+fn boolean(node: Node<'_, '_>, name: &str, default: bool, path: &Path) -> io::Result<u8> {
+    match node.attribute(name).map(str::trim) {
+        None => Ok(u8::from(default)),
+        Some("true" | "True" | "1") => Ok(1),
+        Some("false" | "False" | "0") => Ok(0),
+        Some(value) => Err(invalid(path, format!("invalid {name} {value:?}"))),
+    }
 }
 
 fn import(

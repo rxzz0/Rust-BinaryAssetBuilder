@@ -1023,6 +1023,11 @@ mod tests {
     }
 
     #[test]
+    fn fx_nugget_variants_match_ea_batch() {
+        assert_ea_fixture("fx-nugget-variants", 2);
+    }
+
+    #[test]
     fn fx_list_matches_ea_batch() {
         assert_ea_fixture("fx-list", 3);
     }

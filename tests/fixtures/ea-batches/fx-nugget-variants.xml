@@ -1,0 +1,22 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <FXList id="FxExtraDefaults">
+    <NuggetList>
+      <LightPulse/><DynamicDecal/><Laser/><CameraShakerVolume/><ViewShake Type="SUBTLE"/>
+      <AttachedModel/><TerrainScorch/><TintDrawable/><FXListAtBonePos/><FXParticleSysBone/>
+    </NuggetList>
+  </FXList>
+  <FXList id="FxExtraConfigured">
+    <NuggetList>
+      <LightPulse Radius="7" RadiusAsPercentOfObjectSize="40%" IncreaseTime="19" DecreaseTime="20"><Color R="0.1" G="0.2" B="0.3"/></LightPulse>
+      <DynamicDecal Decal="DecalProbe" Shader="ADDITIVE" Size="6" OrientToObject="false" OpacityStart="0.25" OpacityPeak="0.75" OpacityEnd="0.125" OpacityFadeTimeOne="1s" OpacityFadeTimeTwo="2s" OpacityPeakTime="3s" StartingDelay="4s" Lifetime="5s" AllowOnObjects="false"><Color R="10" G="20" B="30"/><Offset x="7" y="8"/></DynamicDecal>
+      <Laser LaserTemplate="LaserProbe" LaserBackwards="true"><Offset x="1" y="2" z="3"/></Laser>
+      <CameraShakerVolume Radius="5" Duration="6s" Amplitude="90d"/>
+      <ViewShake Type="SEVERE"/>
+      <AttachedModel Model="ModelProbe" RandomlyRotate="true" ExpireTimer="5s"/>
+      <TerrainScorch Type="SCORCH_3" Radius="5"><RandomRange Low="SCORCH_2" High="SCORCH_8"/></TerrainScorch>
+      <TintDrawable PreColorTime="3s" PostColorTime="4s" SustainedColorTime="5s" Frequency="6" Amplitude="7"><Color R="0.1" G="0.2" B="0.3"/></TintDrawable>
+      <FXListAtBonePos FX="FxExtraDefaults" Bone="muzzle"/>
+      <FXParticleSysBone Bone="turret" RequireFrequentUpdate="true" TriggerType="TREBUCHET_ROCK" HoldBetweenStateID="7" ActionType="SPAWN" Particle="ParticleProbe"><Offset x="4" y="5" z="6"/></FXParticleSysBone>
+    </NuggetList>
+  </FXList>
+</AssetDeclaration>
