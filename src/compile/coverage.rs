@@ -88,6 +88,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "SecondaryObjectListenerModule",
             "LiftObjectUpdate",
             "GarrisonContain",
+            "ContestableGarrisonContain",
             "OpenContain",
             "TransportContain",
             "InvisibilityBehavior",

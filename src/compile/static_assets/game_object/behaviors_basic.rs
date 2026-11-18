@@ -1176,7 +1176,11 @@ pub(super) fn encode(
     }
     if matches!(
         node.tag_name().name(),
-        "GarrisonContain" | "SlaughterHordeContain" | "OpenContain" | "TransportContain"
+        "GarrisonContain"
+            | "ContestableGarrisonContain"
+            | "SlaughterHordeContain"
+            | "OpenContain"
+            | "TransportContain"
     ) {
         return super::garrison::encode(node, pointer, data, references, reference_types).map(Some);
     }

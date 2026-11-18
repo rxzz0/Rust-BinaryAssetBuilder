@@ -16,6 +16,7 @@ use std::io;
 const TRANSPORT: u32 = 0x578c_272f;
 const OPEN: u32 = 0xd7cc_2e35;
 const GARRISON: u32 = 0xbae3_bc7d;
+const CONTESTABLE: u32 = 0x8c50_f0d7;
 const SLAUGHTER: u32 = 0xc194_7edc;
 const BOOL: u32 = 0x77e3_f4f7;
 const UINT: u32 = 0x7631_77a4;
@@ -67,6 +68,17 @@ const GARRISON_FLAGS: [(&str, u32, usize); 3] = [
     ("ResetInitialTeamOnCapture", BOOL, 0x9e),
 ];
 
+const CONTESTABLE_FIELDS: [(&str, u32, usize, &str); 3] = [
+    ("RequiredClearingObjectStatus", STATUS, 0xa0, ""),
+    (
+        "ForbiddenContainerObjectStatus",
+        STATUS,
+        0xbc,
+        "UNDER_IRON_CURTAIN",
+    ),
+    ("EjectSpeed", FLOAT, 0xd8, "1"),
+];
+
 const DURATION: u32 = 0x6f6d_1ae7;
 const STRING: u32 = 0x1a29_33aa;
 const KIND_OF: u32 = 0x9afc_9193;
@@ -107,6 +119,7 @@ pub(super) fn encode(
     let (kind, size) = match node.tag_name().name() {
         "OpenContain" => (OPEN, 0x94),
         "TransportContain" => (TRANSPORT, 0x14c),
+        "ContestableGarrisonContain" => (CONTESTABLE, 0xdc),
         "SlaughterHordeContain" => (SLAUGHTER, 0x144),
         _ => (GARRISON, 0xa0),
     };
@@ -115,8 +128,13 @@ pub(super) fn encode(
         .collect();
     match kind {
         TRANSPORT => allowed.extend(TRANSPORT_FIELDS.iter().map(|&(name, ..)| name)),
-        GARRISON | SLAUGHTER => allowed.extend(GARRISON_FLAGS.map(|(name, _, _)| name)),
+        GARRISON | CONTESTABLE | SLAUGHTER => {
+            allowed.extend(GARRISON_FLAGS.map(|(name, _, _)| name))
+        }
         _ => {}
+    }
+    if kind == CONTESTABLE {
+        allowed.extend(CONTESTABLE_FIELDS.map(|(name, ..)| name));
     }
     if kind == SLAUGHTER {
         allowed.extend([
@@ -141,7 +159,7 @@ pub(super) fn encode(
     } else {
         None
     };
-    let ordered_imports = matches!(kind, OPEN | TRANSPORT);
+    let ordered_imports = matches!(kind, OPEN | TRANSPORT | CONTESTABLE);
     if ordered_imports {
         contain_attribute_references(node, start, data, references, reference_types)?;
     }
@@ -365,6 +383,20 @@ pub(super) fn encode(
         Target::Table(roster),
     ));
     let garrison = Table::record(entries);
+    if kind == CONTESTABLE {
+        let mut entries = vec![base(GARRISON, garrison)];
+        for (name, field_type, offset, default) in CONTESTABLE_FIELDS {
+            let value = node.attribute(name).unwrap_or(default);
+            let field = start + offset;
+            if field_type == STATUS {
+                write_status_flags(value, field, data)?;
+            } else {
+                data.word(field, finite_number(value, name, path)?.to_bits());
+            }
+            entries.push(Entry::named(name, field_type, Target::Data(field)));
+        }
+        return Ok((kind, Table::record(entries)));
+    }
     Ok((
         kind,
         match slaughter {
