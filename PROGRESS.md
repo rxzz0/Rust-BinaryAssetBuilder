@@ -1,5 +1,5 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 239 adds ConvergingLaserState, SweepingLaserState, and StreamState, reusing the LaserState layout and preserving XML reference order. Both laser fixtures match EA byte for byte. All 230 tests and Clippy passed.
-- Checkpoint 238 encodes toggle ability AI settings and StateWeapon. Checkpoint 237 encodes inherited ScriptedModelDraw references and flags.
-- Surge Step 6 passes the Hammer Tank's laser states and reaches ObjectCreationUpgrade. Next task is encoding the upgrade and its spawn reference.
+- Checkpoint 240 adds ObjectCreationUpgrade and SlaveWatcherBehavior. The fixture covers both modules, inherited upgrade lists, and strong and weak references, and matches EA byte for byte. All 231 tests and Clippy passed.
+- Checkpoint 239 encodes laser-state variants and StreamState. Checkpoint 238 encodes toggle ability AI settings.
+- Surge Step 6 passes the Hammer Tank's spawn upgrade and reaches FireWeaponWhenDead WeaponFireProbability. Next task is encoding the probability entries and checking the death-module schema.

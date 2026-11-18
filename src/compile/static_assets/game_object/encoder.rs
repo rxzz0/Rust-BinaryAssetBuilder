@@ -265,7 +265,10 @@ pub(in crate::compile::static_assets) fn compile(
                     &mut references,
                     &mut reference_types,
                 )?;
-                if module.has_tag_name((SAGE_NS, "StealthDetectorUpdate")) {
+                if matches!(
+                    module.tag_name().name(),
+                    "StealthDetectorUpdate" | "ObjectCreationUpgrade"
+                ) {
                     derived_upgrade_modules.push((start, data.payload.len() as u32));
                 }
                 result

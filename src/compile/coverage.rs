@@ -113,6 +113,8 @@ const MODULES: &[(&str, &[&str])] = &[
             "RepairUpdate",
             "SecondaryDamageTracker",
             "SpawnBehavior",
+            "ObjectCreationUpgrade",
+            "SlaveWatcherBehavior",
             "StancesBehavior",
             "StructureSellUpdate",
             "StructureUnpackUpdate",
@@ -403,6 +405,11 @@ mod tests {
     fn laser_state_matches_ea_batch() {
         assert_ea_fixture("laser-state", 1);
         assert_ea_fixture("laser-state-variants", 1);
+    }
+
+    #[test]
+    fn upgrade_spawn_modules_match_ea() {
+        assert_ea_fixture("upgrade-spawn-modules", 1);
     }
 
     #[test]

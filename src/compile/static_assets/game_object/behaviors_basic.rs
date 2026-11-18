@@ -267,6 +267,159 @@ fn upgrade_parent<'a, 'input: 'a>(
     Ok(base(0xae60_ae98, Table::record(upgrade)))
 }
 
+fn object_creation_upgrade(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x69e2_cd6c;
+    const FIELDS: &[(&str, u32, usize)] = &[
+        ("UpgradeObject", 0x42e4_e9d1, 0x24),
+        ("Delay", 0x7631_77a4, 0x28),
+        ("RemoveUpgrade", 0x4aba_1f29, 0x2c),
+        ("GrantUpgrade", 0x4aba_1f29, 0x30),
+        ("ThingToSpawn", 0x148e_d75d, 0x34),
+        ("Angle", 0x4e16_ea4d, 0x38),
+        ("DestroyWhenSold", 0x77e3_f4f7, 0x44),
+        ("FadeInTime", 0x7631_77a4, 0x3c),
+        ("UseBuildingProduction", 0x77e3_f4f7, 0x45),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(
+            FIELDS
+                .iter()
+                .chain(super::spawn::UPGRADE)
+                .map(|&(name, ..)| name),
+        )
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let start = data.allocate(pointer, 0x48)?;
+    for attr in node.attributes() {
+        let value = attr.value();
+        let (kind, offset) = match attr.name() {
+            "UpgradeObject" => ("ObjectCreationList", 0x24),
+            "RemoveUpgrade" => ("UpgradeTemplate", 0x2c),
+            "GrantUpgrade" => ("UpgradeTemplate", 0x30),
+            "ThingToSpawn" if !value.trim().is_empty() => {
+                let value = value.split_once('\\').map_or(value, |(name, _)| name);
+                let id = asset_reference(value, "GameObject", path)?;
+                reference_types.push(id.type_id);
+                data.word(start + 0x34, id.instance_id);
+                continue;
+            }
+            _ => continue,
+        };
+        let ordinal =
+            super::passive_area::reference(value, kind, path, references, reference_types)?;
+        data.word(start + offset, ordinal);
+    }
+    for (name, offset) in [("Delay", 0x28), ("FadeInTime", 0x3c)] {
+        let value = node
+            .attribute(name)
+            .unwrap_or("0")
+            .trim()
+            .parse::<u32>()
+            .map_err(|_| invalid(path, format!("invalid {name}")))?;
+        data.word(start + offset, value);
+    }
+    if let Some(value) = node.attribute("Angle") {
+        data.word(
+            start + 0x38,
+            super::slow_death::angle(value, "Angle", data)?.to_bits(),
+        );
+    }
+    data.payload[start + 0x44] = boolean(node, "DestroyWhenSold", false, path)?;
+    data.payload[start + 0x45] = boolean(node, "UseBuildingProduction", false, path)?;
+
+    let offset = significant_children(node)
+        .last()
+        .filter(|child| child.has_tag_name((SAGE_NS, "Offset")));
+    let mut children = significant_children(node)
+        .filter(|child| Some(*child) != offset)
+        .peekable();
+    let offset = if let Some(child) = offset {
+        let axes = ["x", "y", "z"];
+        validate_attributes(child, &axes, path)?;
+        if has_content(child) {
+            return Err(invalid(
+                path,
+                "unexpected ObjectCreationUpgrade Offset content",
+            ));
+        }
+        let point = data.allocate(start + 0x40, 12)?;
+        for (axis, name) in axes.into_iter().enumerate() {
+            let value = finite_number(child.attribute(name).unwrap_or("0"), name, path)?;
+            data.word(point + axis * 4, value.to_bits());
+        }
+        Target::Data(point)
+    } else {
+        Target::Null
+    };
+    let parent = upgrade_parent(node, KIND, start, data, reference_types, &mut children)?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected ObjectCreationUpgrade child"));
+    }
+    let mut entries = vec![parent];
+    entries.extend(fields(start, FIELDS));
+    entries.push(Entry::named("Offset", 0x2936_8077, offset));
+    Ok((KIND, Table::record(entries)))
+}
+
+fn slave_watcher(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xbbac_8c1c;
+    const FIELDS: &[(&str, u32, usize)] = &[
+        ("GrantUpgrade", 0x4aba_1f29, 8),
+        ("RemoveUpgrade", 0x4aba_1f29, 12),
+        ("ShareUpgrades", 0x77e3_f4f7, 16),
+        ("LetSlaveLive", 0x77e3_f4f7, 17),
+    ];
+    let path = data.path;
+    validate_attributes(
+        node,
+        &[
+            "id",
+            "GrantUpgrade",
+            "RemoveUpgrade",
+            "ShareUpgrades",
+            "LetSlaveLive",
+        ],
+        path,
+    )?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected SlaveWatcherBehavior content"));
+    }
+    let start = data.allocate(pointer, 0x14)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    for attr in node.attributes() {
+        let offset = match attr.name() {
+            "GrantUpgrade" => 8,
+            "RemoveUpgrade" => 12,
+            _ => continue,
+        };
+        let ordinal = super::passive_area::reference(
+            attr.value(),
+            "UpgradeTemplate",
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + offset, ordinal);
+    }
+    data.payload[start + 16] = boolean(node, "ShareUpgrades", false, path)?;
+    data.payload[start + 17] = boolean(node, "LetSlaveLive", false, path)?;
+    entries.extend(fields(start, FIELDS));
+    Ok((KIND, Table::record(entries)))
+}
+
 fn lift_object(
     node: Node<'_, '_>,
     pointer: usize,
@@ -725,6 +878,12 @@ pub(super) fn encode(
         }
         entries.extend(fields(start, &FIELDS));
         return Ok(Some((KIND, Table::record(entries))));
+    }
+    if node.has_tag_name((SAGE_NS, "ObjectCreationUpgrade")) {
+        return object_creation_upgrade(node, pointer, data, references, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "SlaveWatcherBehavior")) {
+        return slave_watcher(node, pointer, data, references, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "LiftObjectUpdate")) {
         return lift_object(node, pointer, data, references, reference_types).map(Some);

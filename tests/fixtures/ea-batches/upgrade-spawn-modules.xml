@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="UpgradeSpawnProbe">
+    <Behaviors>
+      <ObjectCreationUpgrade id="CreateDefault"/>
+      <ObjectCreationUpgrade id="CreateConfigured" GrantUpgrade="Grant" ThingToSpawn="SpawnedUnit" UpgradeObject="CreateOCL" RemoveUpgrade="Revoke" Delay="21" Angle="30d" DestroyWhenSold="true" FadeInTime="320" UseBuildingProduction="true" RequiresAllTriggers="true">
+        <CustomAnimAndDuration AnimState="SOLD" Frames="30" Trigger="4"/>
+        <TriggeredBy>Trigger1</TriggeredBy>
+        <ConflictsWith>Conflict1</ConflictsWith>
+        <Offset x="7" y="10" z="-1"/>
+      </ObjectCreationUpgrade>
+      <SlaveWatcherBehavior id="WatchDefault"/>
+      <SlaveWatcherBehavior id="WatchConfigured" RemoveUpgrade="RemoveWhenLost" GrantUpgrade="GrantWhenAlive" ShareUpgrades="true" LetSlaveLive="true"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
