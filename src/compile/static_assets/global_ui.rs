@@ -11,6 +11,44 @@ use std::path::Path;
 const HEALTH_BAR: &str = "HealthBarTemplate";
 const MAPPING_WORDS: usize = 29;
 
+pub(super) fn button_single_state(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id"], path)?;
+    let mut children = significant_children(node);
+    let state = required_element(&mut children, "State", path)?;
+    validate_attributes(
+        state,
+        &["Image", "Title", "Description", "TypeDescription"],
+        path,
+    )?;
+    if children.next().is_some() || has_content(state) {
+        return Err(invalid(path, "unexpected ButtonSingleStateData content"));
+    }
+    let mut data = BinaryData {
+        payload: vec![0; 32],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    if let Some(image) = state
+        .attribute("Image")
+        .filter(|value| !value.trim().is_empty())
+    {
+        write_import(image, "PackedTextureImage", 4, &mut data, &mut result)?;
+        result.imports.push(u32::MAX);
+    }
+    for (name, offset) in [("Title", 8), ("Description", 16), ("TypeDescription", 24)] {
+        if let Some(value) = state.attribute(name) {
+            data.string(offset, value)?;
+        }
+    }
+    if !data.relocations.is_empty() {
+        data.relocations.push(u32::MAX);
+    }
+    result.payload = data.payload;
+    result.relocations = data.relocations;
+    Ok(result)
+}
+
 pub(super) fn unit_type_icon(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     validate_attributes(node, &["id", "Image"], path)?;
     let mut data = BinaryData {

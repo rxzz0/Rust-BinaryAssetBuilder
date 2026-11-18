@@ -1028,6 +1028,11 @@ mod tests {
     }
 
     #[test]
+    fn button_single_state_matches_ea_batch() {
+        assert_ea_fixture("button-state", 3);
+    }
+
+    #[test]
     fn single_sound_fields_match_ea_batch() {
         assert_ea_fixture("single-sound-fields", 6);
     }

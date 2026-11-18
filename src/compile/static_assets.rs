@@ -52,6 +52,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "HealthBarSettings" => (0xf62c_9169, 7, global_ui::health_bar_settings),
         "UnitIntro" => (0x5708_06d2, 8, unit_intro),
         "UnitTypeIcon" => (0xf9e6_8b56, 52, global_ui::unit_type_icon),
+        "ButtonSingleStateData" => (0xe15d_5b18, 62, global_ui::button_single_state),
         "PackedTextureImage" => (0xf8fc_ad30, 53, global_ui::packed_texture_image),
         "VideoEventList" => (0x96da_1c03, 9, video_events),
         "LogicCommandSet" => (0x8ae8_b68c, 11, logic_commands),

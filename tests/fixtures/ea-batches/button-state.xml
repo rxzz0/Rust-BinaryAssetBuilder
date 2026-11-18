@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <ButtonSingleStateData id="ButtonStateEmpty"><State/></ButtonSingleStateData>
+  <ButtonSingleStateData id="ButtonStateComplete">
+    <State Description="DESC:Test button" TypeDescription="TYPE:Test" Image="PreviewIcon" Title="NAME:Test button"/>
+  </ButtonSingleStateData>
+  <ButtonSingleStateData id="ButtonStateEmptyText"><State Title="" Description="DESC:Partial"/></ButtonSingleStateData>
+</AssetDeclaration>
