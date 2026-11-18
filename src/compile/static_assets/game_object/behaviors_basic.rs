@@ -948,6 +948,80 @@ pub(in crate::compile::static_assets) fn weapon_slot(
     )
 }
 
+fn bridge_builder(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xa2f6_9397;
+    const OBJECT_REF: u32 = 0xbfab_9075;
+    const FLOAT: u32 = 0x6458_64f3;
+    let path = data.path;
+    let fields = [
+        ("EndCap", OBJECT_REF, 8, false),
+        ("EndCap2", OBJECT_REF, 0xc, true),
+        ("EndCapLen", FLOAT, 0x10, false),
+        ("CenterPiece", OBJECT_REF, 0x14, false),
+        ("CenterPieceLen", FLOAT, 0x18, false),
+        ("CenterPieceB", OBJECT_REF, 0x1c, true),
+        ("CenterPieceBLen", FLOAT, 0x20, true),
+        ("Width", FLOAT, 0x24, false),
+        ("GateHouse", OBJECT_REF, 0x28, false),
+        ("GateHouse2", OBJECT_REF, 0x2c, true),
+        ("DamageNeighborSegementsAtHealthPercent", FLOAT, 0x30, false),
+    ];
+    let attributes: Vec<_> = ["id"]
+        .into_iter()
+        .chain(fields.map(|(name, _, _, _)| name))
+        .collect();
+    validate_attributes(node, &attributes, path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected BridgeBuilder content"));
+    }
+    let start = data.allocate(pointer, 0x34)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    for (name, field_type, offset, optional) in fields {
+        let value = if name == "DamageNeighborSegementsAtHealthPercent" {
+            node.attribute(name).or(Some("66.66666"))
+        } else if optional {
+            node.attribute(name)
+        } else {
+            Some(
+                node.attribute(name)
+                    .ok_or_else(|| invalid(path, format!("BridgeBuilder requires {name}")))?,
+            )
+        };
+        let target = if let Some(value) = value {
+            let word = match field_type {
+                OBJECT_REF => super::passive_area::reference(
+                    value,
+                    "GameObject",
+                    path,
+                    references,
+                    reference_types,
+                )?,
+                _ if name == "DamageNeighborSegementsAtHealthPercent" => {
+                    percentage(value, name, path)?.to_bits()
+                }
+                _ => finite_number(value, name, path)?.to_bits(),
+            };
+            let field = if optional {
+                data.allocate(start + offset, 4)?
+            } else {
+                start + offset
+            };
+            data.word(field, word);
+            Target::Data(field)
+        } else {
+            Target::Null
+        };
+        entries.push(Entry::named(name, field_type, target));
+    }
+    Ok((KIND, Table::record(entries)))
+}
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,
@@ -956,6 +1030,9 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
     match node.tag_name().name() {
+        "BridgeBuilder" => {
+            return bridge_builder(node, pointer, data, references, reference_types).map(Some);
+        }
         "AssistedPlacementInfoBehavior" => {
             return super::assisted_placement_info::encode(node, pointer, data, reference_types)
                 .map(Some);

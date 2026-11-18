@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 301 compiles BridgeBuilder references, lengths, optional pieces, and damage threshold. All five EA assets matched. All 294 tests and Clippy passed. Surge's official map reaches the GameObject Browser field.
 - Checkpoint 300 adds HighlanderBody, ManagedActiveBody, ManagedImmortalBody, and ManagerBody using the shared ActiveBody encoder. All eight EA fixtures matched. All 294 tests and Clippy passed. Surge's official map reaches BridgeBuilder.
 - Checkpoint 299 compiles TerrainTextureAtlas tile packing, wrapped borders, and DDS mip chains. Three EA fixtures matched tile layout, DDS headers, and level-zero normal bytes. Compression, some mip bytes, and instance hashes differ. All 294 tests and Clippy passed.
 - Checkpoint 298 compiles GameMap objects, world properties, and water analysis. All five EA assets matched. All 293 tests and Clippy passed.
