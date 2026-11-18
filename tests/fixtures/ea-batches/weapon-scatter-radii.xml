@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <WeaponTemplate id="WeaponScatterSimple">
+        <ScatterRadiusVsType><Filter/></ScatterRadiusVsType>
+    </WeaponTemplate>
+    <WeaponTemplate id="WeaponScatterConditions">
+        <Nuggets><DamageNugget Damage="7"/></Nuggets>
+        <ScatterRadiusVsType Radius="70" RequiredModelConditions="SHRINK_EFFECT">
+            <Filter Rule="ANY" Include="INFANTRY AIRCRAFT VEHICLE HUGE_VEHICLE"/>
+        </ScatterRadiusVsType>
+        <ScatterRadiusVsType Radius="45" RequiredModelConditions="DAMAGED REALLYDAMAGED">
+            <Filter Rule="NONE" Exclude="STRUCTURE"><IncludeThing>ProbeObject</IncludeThing></Filter>
+        </ScatterRadiusVsType>
+    </WeaponTemplate>
+</AssetDeclaration>

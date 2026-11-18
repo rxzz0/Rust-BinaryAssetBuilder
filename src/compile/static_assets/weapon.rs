@@ -63,6 +63,18 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             return Err(invalid(path, "weapon layout missing Nuggets"));
         }
     }
+    let mut scatter_radii = Vec::new();
+    while let Some(child) =
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "ScatterRadiusVsType")))
+    {
+        scatter_radii.push(child);
+    }
+    if !scatter_radii.is_empty() {
+        let radii = encode_scatter_radii(&scatter_radii, &mut data, &mut out)?;
+        if !table.replace_target("ScatterRadiusVsType", Target::Table(radii)) {
+            return Err(invalid(path, "weapon layout missing ScatterRadiusVsType"));
+        }
+    }
     if let Some(child) = children.next() {
         return Err(invalid(
             path,
@@ -85,6 +97,54 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
         data.relocations[first..end].rotate_left(derived - first);
     }
     tokenized::finish(table, data, out)
+}
+
+fn encode_scatter_radii(
+    nodes: &[Node<'_, '_>],
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+) -> io::Result<Table> {
+    use super::game_object::{encode_inline_object_filter, write_model_conditions};
+
+    const COUNT: usize = 0x110;
+    const ENTRY_SIZE: usize = 0xb0;
+    let path = data.path;
+    let start = data.list(COUNT, nodes.len(), ENTRY_SIZE)?;
+    let mut entries = Vec::with_capacity(nodes.len());
+    for (index, node) in nodes.iter().copied().enumerate() {
+        let record = start + index * ENTRY_SIZE;
+        validate_attributes(node, &["Radius", "RequiredModelConditions"], path)?;
+        let mut children = significant_children(node);
+        let filter = children
+            .next()
+            .filter(|child| child.has_tag_name((SAGE_NS, "Filter")))
+            .ok_or_else(|| invalid(path, "ScatterRadiusVsType requires Filter"))?;
+        if children.next().is_some() {
+            return Err(invalid(path, "unexpected ScatterRadiusVsType child"));
+        }
+        let radius = finite_number(node.attribute("Radius").unwrap_or("0"), "Radius", path)?;
+        data.word(record, radius.to_bits());
+        write_model_conditions(
+            node.attribute("RequiredModelConditions").unwrap_or(""),
+            record + 4,
+            data,
+        )?;
+        let filter =
+            encode_inline_object_filter(filter, record + 0x40, data, &mut out.reference_types)?;
+        entries.push((
+            0,
+            Target::Table(Table::record(vec![
+                Entry::named("Radius", 0x6458_64f3, Target::Data(record)),
+                Entry::named(
+                    "RequiredModelConditions",
+                    0x67db_bfc9,
+                    Target::Data(record + 4),
+                ),
+                Entry::named("Filter", 0xe46e_a3b2, Target::Table(filter)),
+            ])),
+        ));
+    }
+    Ok(Table::array(COUNT, entries))
 }
 
 fn encode_ai_hints(
