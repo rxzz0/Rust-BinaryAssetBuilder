@@ -1023,6 +1023,11 @@ mod tests {
     }
 
     #[test]
+    fn weapon_ai_hints_match_ea_batch() {
+        assert_ea_fixture("weapon-ai-hints", 2);
+    }
+
+    #[test]
     fn line_damage_nugget_matches_ea_batch() {
         assert_ea_fixture("line-damage-nugget", 1);
     }

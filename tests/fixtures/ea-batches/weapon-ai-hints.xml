@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="HintsDefault"><WeaponAiHintInfo/></WeaponTemplate>
+  <WeaponTemplate id="HintsConfigured">
+    <WeaponAiHintInfo IsAntiGarrisonWeapon="true" MaxSpeedOfTarget="12.5" UseLongLockOnTimeCode="true" UseAsWarheadForDamageCalculations="HintsDefault"/>
+    <Nuggets><DamageNugget Damage="2"/></Nuggets>
+  </WeaponTemplate>
+</AssetDeclaration>

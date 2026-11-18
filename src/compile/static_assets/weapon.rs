@@ -49,6 +49,13 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             }
         }
     }
+    if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, "WeaponAiHintInfo")))
+    {
+        let hints = encode_ai_hints(child, &mut data, &mut out)?;
+        if !table.replace_target("WeaponAiHintInfo", Target::Table(hints)) {
+            return Err(invalid(path, "weapon layout missing WeaponAiHintInfo"));
+        }
+    }
     if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, "Nuggets"))) {
         let nuggets = encode_nuggets(child, &mut data, &mut out)?;
         if !table.replace_target("Nuggets", Target::Table(nuggets)) {
@@ -66,6 +73,53 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
     }
     data.relocations.sort_unstable();
     tokenized::finish(table, data, out)
+}
+
+fn encode_ai_hints(
+    node: Node<'_, '_>,
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+) -> io::Result<Table> {
+    let path = data.path;
+    const WARHEAD: &str = "UseAsWarheadForDamageCalculations";
+    validate_attributes(
+        node,
+        &[
+            "IsAntiGarrisonWeapon",
+            "MaxSpeedOfTarget",
+            "UseLongLockOnTimeCode",
+            WARHEAD,
+        ],
+        path,
+    )?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected WeaponAiHintInfo content"));
+    }
+    let start = data.allocate(0xf8, 12)?;
+    let warhead = nugget_reference(node.attribute(WARHEAD), "WeaponTemplate", path, out)?;
+    data.word(start + 4, warhead);
+    data.payload[start + 8] = flag(node, "IsAntiGarrisonWeapon", false, path)?;
+    data.payload[start + 9] = flag(node, "UseLongLockOnTimeCode", false, path)?;
+    let speed = if let Some(value) = node.attribute("MaxSpeedOfTarget") {
+        let offset = data.allocate(start, 4)?;
+        data.word(
+            offset,
+            finite_number(value, "MaxSpeedOfTarget", path)?.to_bits(),
+        );
+        Target::Data(offset)
+    } else {
+        Target::Null
+    };
+    Ok(Table::record(vec![
+        Entry::named("IsAntiGarrisonWeapon", 0x77e3_f4f7, Target::Data(start + 8)),
+        Entry::named("MaxSpeedOfTarget", 0x6458_64f3, speed),
+        Entry::named(
+            "UseLongLockOnTimeCode",
+            0x77e3_f4f7,
+            Target::Data(start + 9),
+        ),
+        Entry::named(WARHEAD, 0xd046_dd22, Target::Data(start + 4)),
+    ]))
 }
 
 const WEAPON_SCHEMA: &str = include_str!("../../../schemas/ra3/xsd/AssetTypeWeaponTemplate.xsd");
