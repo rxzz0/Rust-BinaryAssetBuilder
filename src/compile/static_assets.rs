@@ -36,6 +36,7 @@ pub(super) mod game_object;
 mod game_script_list;
 mod global_ui;
 mod hotkeys;
+mod invisibility_template;
 mod joypad_buttons;
 mod locomotor;
 pub(super) mod music;
@@ -47,6 +48,7 @@ mod player_power_button;
 mod player_template;
 mod road;
 mod stance_template;
+pub(super) mod subsystem_settings;
 mod surface_mappings;
 mod system_settings;
 pub(super) mod targeting_compare;
@@ -120,6 +122,12 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "PathfindSettings" => (0x9cbc_f9f1, 83, system_settings::pathfind),
         "ResourceSettings" => (0x5cfb_bd27, 83, system_settings::resource),
         "InvisibilityManagerSettings" => (0x64a4_f893, 83, system_settings::invisibility),
+        "InvisibilityTemplate" => (0x18fc_f369, 83, invisibility_template::compile),
+        "NetworkSettings" => (0x7d07_7c96, 83, subsystem_settings::network),
+        "SkirmishSettings" => (0xe35d_b55b, 84, subsystem_settings::skirmish),
+        "BreezeInfo" => (0x3516_a119, 83, subsystem_settings::breeze),
+        "ModelSettings" => (0x9536_391f, 83, subsystem_settings::model),
+        "TerrainVisualSettings" => (0x4fad_3c13, 83, subsystem_settings::terrain),
         "GiftManagerSettings" => (0xc93f_a545, 83, system_settings::gift),
         "LocalBuildListMonitor" => (0xd544_a0d3, 83, system_settings::build_list_monitor),
         "TargetingDistanceCompare" => (0xc00c_41f3, 76, targeting_compare::distance),
@@ -1122,6 +1130,7 @@ fn write_import(
         let subtype = match ty {
             music_conditions::BASE => music_conditions::type_hash(target).is_some(),
             targeting_compare::BASE => targeting_compare::TYPES.contains(&target),
+            subsystem_settings::BASE => subsystem_settings::TYPES.contains(&target),
             _ => false,
         };
         let id = asset_reference(value, if subtype { target } else { ty }, data.path)?;

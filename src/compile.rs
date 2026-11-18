@@ -241,9 +241,11 @@ const RENDER_ASSET_TYPE: u32 = 0xb22f_87c9;
 
 impl AssetReference {
     fn candidate_ids(&self) -> impl Iterator<Item = AssetId> + '_ {
-        use static_assets::{music_conditions, targeting_compare};
+        use static_assets::{music_conditions, subsystem_settings, targeting_compare};
         static TARGETING_COMPARE_TYPE: std::sync::LazyLock<u32> =
             std::sync::LazyLock::new(|| fast_hash(targeting_compare::BASE.as_bytes()));
+        static SUBSYSTEM_SETTINGS_TYPE: std::sync::LazyLock<u32> =
+            std::sync::LazyLock::new(|| fast_hash(subsystem_settings::BASE.as_bytes()));
         let subtypes: &[&str] = match (self.id.type_id, self.external_type) {
             (RENDER_ASSET_TYPE, _) => &["W3DContainer", "W3DMesh", "W3DCollisionBox"],
             (AUDIO_ASSET_TYPE, _) | (_, Some(AUDIO_ASSET_TYPE)) => &[
@@ -254,6 +256,7 @@ impl AssetReference {
                 "MusicTrack",
             ],
             (kind, _) if kind == *TARGETING_COMPARE_TYPE => targeting_compare::TYPES,
+            (kind, _) if kind == *SUBSYSTEM_SETTINGS_TYPE => subsystem_settings::TYPES,
             _ => &[],
         };
         static MUSIC_CONDITION_TYPE: std::sync::LazyLock<u32> =
