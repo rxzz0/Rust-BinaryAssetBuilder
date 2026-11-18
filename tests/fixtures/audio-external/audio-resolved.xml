@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <Includes><Include type="reference" source="audio-library.xml"/></Includes>
+  <Multisound id="ConsumerImplicit"><Subsound>ExternalProbeEvent</Subsound><Subsound>ExternalProbeMulti</Subsound></Multisound>
+  <Multisound id="ConsumerExplicit"><Subsound>AudioEvent:ExternalProbeEvent</Subsound><Subsound>Multisound:ExternalProbeMulti</Subsound></Multisound>
+  <GameObject id="AudioTransportProbe">
+    <Behaviors>
+      <TransportContain id="ModuleTag_Contain" EnterSound="ExternalProbeEvent" ExitSound="ExternalProbeMulti"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

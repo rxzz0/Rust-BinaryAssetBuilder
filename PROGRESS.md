@@ -1,7 +1,7 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 290 strips schema reference ordinals before hashing references inherited from instance includes. The inherited stance fixture matches EA. All 283 tests and Clippy passed.
-- Checkpoints 288–289 link concrete render assets and compile assisted placement hints.
+- Checkpoint 291 emits concrete local and external audio IDs, including transport sounds. EA reference fixtures and Fix Assets agree. All 284 tests and Clippy passed.
+- Checkpoints 288–290 link concrete render assets, compile assisted placement hints, and resolve references inherited from instance includes.
 - Checkpoints 274–287 add locomotors, surface mappings, GameObject fields and behaviors, button variants, FX inheritance, and weapon damage arcs.
 
-- Surge Step 6 passed the inherited stance and reached an abstract audio reference in AlliedAntiAirVehicleTech1 after 8.53 seconds. Link concrete audio types next, then rerun Fix Assets and BIG packaging.
+- Surge's release Rust SDK commands compiled AptUI, globals, and all static XML, fixed 3,911 static assets, created two LoD streams, and packed the streams BIG in 16.50 seconds. Next tasks are native merging of 194 precompiled animation overrides and verification of the complete Studio build path.

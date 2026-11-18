@@ -172,16 +172,21 @@ impl From<AssetId> for AssetReference {
     }
 }
 
+const AUDIO_ASSET_TYPE: u32 = 0x4053_c714;
 const RENDER_ASSET_TYPE: u32 = 0xb22f_87c9;
 
 impl AssetReference {
     fn candidate_ids(&self) -> impl Iterator<Item = AssetId> + '_ {
-        let subtypes: &[&str] = if self.id.type_id == RENDER_ASSET_TYPE {
-            &["W3DContainer", "W3DMesh", "W3DCollisionBox"]
-        } else if self.external_type == Some(fast_hash(b"BaseAudioEventInfo")) {
-            &["Multisound", "AmbientStream", "DialogEvent", "MusicTrack"]
-        } else {
-            &[]
+        let subtypes: &[&str] = match (self.id.type_id, self.external_type) {
+            (RENDER_ASSET_TYPE, _) => &["W3DContainer", "W3DMesh", "W3DCollisionBox"],
+            (AUDIO_ASSET_TYPE, _) | (_, Some(AUDIO_ASSET_TYPE)) => &[
+                "AudioEvent",
+                "Multisound",
+                "AmbientStream",
+                "DialogEvent",
+                "MusicTrack",
+            ],
+            _ => &[],
         };
         std::iter::once(self.id).chain(subtypes.iter().map(|name| AssetId {
             type_id: fast_hash(name.as_bytes()),
@@ -194,11 +199,10 @@ impl AssetReference {
     }
 
     fn external_id(&self, ids: &HashSet<AssetId>) -> Option<AssetId> {
-        if self.id.type_id == RENDER_ASSET_TYPE {
-            return self.local_id(ids);
-        }
-        let declared = self.declared_id();
-        (ids.contains(&declared) || self.local_id(ids).is_some()).then_some(declared)
+        self.local_id(ids).or_else(|| {
+            let declared = self.declared_id();
+            ids.contains(&declared).then_some(declared)
+        })
     }
 
     fn declared_id(&self) -> AssetId {

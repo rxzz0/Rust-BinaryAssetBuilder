@@ -1122,7 +1122,7 @@ fn compiles_credits_with_ansi_strings_and_empty_lines() {
 }
 
 #[test]
-fn emits_the_sdk_external_audio_type_and_local_movie_import() {
+fn emits_the_concrete_external_audio_type_and_local_movie_import() {
     let root = scratch_root();
     let xml = root.join("sample.xml");
     let reference = root.join("baseline.xml");
@@ -1187,7 +1187,7 @@ fn emits_the_sdk_external_audio_type_and_local_movie_import() {
     assert_eq!(
         intro.references.iter().next(),
         Some(AssetId {
-            type_id: 0x4053_c714,
+            type_id: 0x844d_7b9f,
             instance_id: 0xface_2fcc,
         })
     );
@@ -1751,4 +1751,48 @@ fn inherited_stance_reference_omits_schema_ordinal() {
     let size = derived.chunk_sizes.instance as usize;
     let ea = include_bytes!("fixtures/inherited-stance/942fff2d.cb8d0980.e02eaed7.fd668405.asset");
     assert_eq!(&stream.files.bin[start..start + size], &ea[32..32 + size]);
+}
+
+#[test]
+fn polymorphic_audio_imports_match_ea_and_survive_fix_assets() {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio-external");
+    let input = fixtures.join("audio-resolved.xml");
+    let stream = compile_static(&input, &fixtures, &fixtures).unwrap();
+    let native = Manifest::parse(&stream.manifest).unwrap();
+    let ea = Manifest::parse(include_bytes!(
+        "fixtures/audio-external/audio-resolved.manifest"
+    ))
+    .unwrap();
+    assert_eq!(native.assets.len(), ea.assets.len());
+    for asset in &native.assets {
+        let expected = ea
+            .assets
+            .iter()
+            .find(|expected| expected.id == asset.id)
+            .unwrap();
+        assert!(
+            asset.references.iter().eq(expected.references.iter()),
+            "{}",
+            String::from_utf8_lossy(asset.name)
+        );
+    }
+    let root = scratch_root();
+    fs::copy(
+        fixtures.join("audio-library.manifest"),
+        root.join("audio-library.manifest"),
+    )
+    .unwrap();
+    fs::copy(
+        fixtures.join("audio-library.manifest"),
+        root.join("worldbuilder.manifest"),
+    )
+    .unwrap();
+    let output = root.join("streams");
+    binary_asset_builder::compile::write_compiled_stream(&input, &output, stream).unwrap();
+    let fixed = binary_asset_builder::fix_assets::fix_assets(
+        &output.join("audio-resolved.manifest"),
+        &root,
+    )
+    .unwrap();
+    assert_eq!(fixed.assets, ea.assets.len());
 }

@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AudioEvent id="ExternalProbeEvent"/>
+  <Multisound id="ExternalProbeMulti"/>
+</AssetDeclaration>
