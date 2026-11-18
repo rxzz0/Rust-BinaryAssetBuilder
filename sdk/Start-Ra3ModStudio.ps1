@@ -297,9 +297,21 @@ case 9:
     break;
 }
 '@
+$mapsSource = $source
+$source = Set-ModBuildStep $source 9 10 @'
+case 9:
+    onStepSuccess(stepId);
+    break;
+'@
+$source = [regex]::Replace($source, '(?m)^[\t ]*modGUIData\.Add\(new GUIElementData\("step9",[^\r\n]*\r?\n', '')
+$skipMaps = [regex]::new('(?m)^([\t ]*)if \(currentGUIData\.ContainsKey\("step" \+ stepId\)\)')
+if ($skipMaps.Matches($source).Count -ne 1) {
+    throw "Could not locate the ModStudio step selection in $sourcePath."
+}
+$source = $skipMaps.Replace($source, '${1}if (stepId == 9) return false;' + $lineEnding + '$0')
 
 if ($InstallDefault) {
-    $knownSources = @($source, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
+    $knownSources = @($source, $mapsSource, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
     if ($hasRustCheck -and $knownSources -cnotcontains $currentSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."
     }
