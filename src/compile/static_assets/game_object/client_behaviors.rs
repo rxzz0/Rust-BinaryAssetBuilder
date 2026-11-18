@@ -226,7 +226,10 @@ impl AudioEncoder<'_, '_> {
             validate_attributes(child, &["EvaEvent", "EvaType"], self.data.path)?;
             require_empty(child, self.data.path)?;
             let offset = first + index * 8;
-            let event = self.reference(required(child, "EvaEvent", self.data.path)?, "EvaEvent")?;
+            let value = child
+                .attribute("EvaEvent")
+                .ok_or_else(|| invalid(self.data.path, "EvaEntry requires EvaEvent"))?;
+            let event = self.reference(value, "EvaEvent")?;
             self.data.word(offset, event);
             self.data.word(
                 offset + 4,

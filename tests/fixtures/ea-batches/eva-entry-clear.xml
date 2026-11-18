@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ClearedEvaReference">
+    <Draws/><Behaviors/><AI/>
+    <Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+    <EvaEventArray>
+      <EvaEntry EvaEvent="" EvaType="productionComplete"/>
+      <EvaEntry EvaEvent="ProbeEvaEvent" EvaType="damagedOwner"/>
+    </EvaEventArray>
+  </GameObject>
+  <EvaEvent id="ProbeEvaEvent"/>
+</AssetDeclaration>

@@ -1335,6 +1335,11 @@ mod tests {
         assert_ea_fixture("jet-ai-update", 5);
     }
 
+    #[test]
+    fn cleared_eva_event_references_match_ea() {
+        assert_ea_fixture("eva-entry-clear", 2);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
