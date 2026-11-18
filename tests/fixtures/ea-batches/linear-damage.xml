@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeLinearDamageDefault">
+    <Draws/><Behaviors><LinearDamageUpdate id="LinearDefault"/></Behaviors><AI/>
+    <Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <GameObject id="ProbeLinearDamageCustom">
+    <Draws/><Behaviors>
+      <LinearDamageUpdate id="LinearCustom" FollowTerrain="false" SweepWeapon="ProbeSweepWeapon" Radius="25" SweepFXList="ProbeSweepFx" Length="300" StartDistanceOffset="-40" Speed="15">
+        <ObjectStatusValidation ForbiddenStatus="WEAPON_UPGRADED_01" RequiredStatus="CAN_ATTACK"/>
+      </LinearDamageUpdate>
+    </Behaviors><AI/>
+    <Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <FXList id="ProbeSweepFx"><NuggetList/></FXList>
+  <WeaponTemplate id="ProbeSweepWeapon"/>
+</AssetDeclaration>

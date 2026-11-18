@@ -51,6 +51,8 @@ const MODULES: &[(&str, &[&str])] = &[
             "AssignSlavesTargetObjectSpecialPower",
             "AttributeModifierUpgrade",
             "ModelConditionUpgrade",
+            "GeometryUpgrade",
+            "RemoveUpgradeUpgrade",
             "SlavedUpdate",
             "PassiveAreaEffectBehavior",
             "AttachUpdate",
@@ -91,6 +93,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "StoreTemplateIDBehavior",
             "BezierProjectile",
             "LineSegmentDamageUpdate",
+            "LinearDamageUpdate",
             "LifetimeUpdate",
             "SuckUpObjectsUpdate",
             "SqueezeFlingUpdate",
@@ -1288,6 +1291,16 @@ mod tests {
     #[test]
     fn terrain_particles_and_dynamic_contacts_match_ea() {
         assert_ea_fixture("terrain-contact-mappings", 6);
+    }
+
+    #[test]
+    fn linear_damage_updates_match_ea() {
+        assert_ea_fixture("linear-damage", 4);
+    }
+
+    #[test]
+    fn transform_upgrades_match_ea() {
+        assert_ea_fixture("transform-upgrades", 3);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

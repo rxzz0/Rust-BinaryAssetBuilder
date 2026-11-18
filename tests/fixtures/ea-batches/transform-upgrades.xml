@@ -1,0 +1,34 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="UpgradeTransformDefault">
+    <Behaviors>
+      <GeometryUpgrade id="ModuleTag_GeoDefault" />
+      <RemoveUpgradeUpgrade id="ModuleTag_RemovalDefault" />
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="UpgradeTransformConfigured">
+    <Behaviors>
+      <GeometryUpgrade id="ModuleTag_GeoSwap" ShowGeometry="air_geom upper_wing" HideGeometry="ship_geom lower_wing" RequiresAllTriggers="true" WaypointModeTerminal="false">
+        <CustomAnimAndDuration AnimState="SOLD" Frames="12" Trigger="3" />
+        <TriggeredBy>Upgrade_A</TriggeredBy>
+        <TriggeredBy>Upgrade_B</TriggeredBy>
+        <ConflictsWith>Upgrade_C</ConflictsWith>
+      </GeometryUpgrade>
+      <RemoveUpgradeUpgrade id="ModuleTag_Removal" UpradesGroupsToRemove="GroupA GroupB" RemoveFromAllPlayerObjects="true" SuppressEvaEventForRemoval="true" Permanent="true">
+        <CustomAnimAndDuration AnimState="SOLD" Frames="18" Trigger="6" />
+        <TriggeredBy>Upgrade_C</TriggeredBy>
+        <ConflictsWith>Upgrade_D</ConflictsWith>
+        <UpgradeToRemove>Upgrade_X</UpgradeToRemove>
+        <UpgradeToRemove>Upgrade_Y</UpgradeToRemove>
+      </RemoveUpgradeUpgrade>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="UpgradeTransformEmptyLists">
+    <Behaviors>
+      <GeometryUpgrade id="ModuleTag_GeoEmpty" ShowGeometry="" HideGeometry="" />
+      <RemoveUpgradeUpgrade id="ModuleTag_RemovalEmpty" UpradesGroupsToRemove="" />
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

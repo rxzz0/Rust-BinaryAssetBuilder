@@ -10,6 +10,7 @@ use super::draws::{boolean, fields, model_condition_index, write_model_condition
 use super::parking::encode_inline_filter;
 use super::recall::filter_table;
 use super::spawn::{UPGRADE, id_list, weak_reference};
+use super::transform_upgrades::TransformUpgrade;
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
@@ -38,8 +39,11 @@ pub(super) fn encode(
     let command = node.has_tag_name((SAGE_NS, "CommandSetUpgrade"));
     let modifier = node.has_tag_name((SAGE_NS, "AttributeModifierUpgrade"));
     let model = node.has_tag_name((SAGE_NS, "ModelConditionUpgrade"));
-    let basic = command || modifier || model;
-    let kind = if model {
+    let transform = TransformUpgrade::lookup(node.tag_name().name());
+    let basic = command || modifier || model || transform.is_some();
+    let kind = if let Some(transform) = transform {
+        transform.kind()
+    } else if model {
         0x4ddd_5c7f
     } else if modifier {
         0x74a2_4c45
@@ -56,6 +60,12 @@ pub(super) fn encode(
         .filter(|&name| !basic || name == "id")
         .chain(command.then_some("CommandSet"))
         .chain(modifier.then_some("AttributeModifier"))
+        .chain(
+            transform
+                .into_iter()
+                .flat_map(TransformUpgrade::attributes)
+                .copied(),
+        )
         .chain(
             MODEL_FIELDS
                 .iter()
@@ -105,13 +115,15 @@ pub(super) fn encode(
         }
     }
     let filter = children.next_if(|child| !basic && child.has_tag_name((SAGE_NS, "ObjectFilter")));
-    if children.next().is_some() {
+    if transform.is_none() && children.next().is_some() {
         return Err(invalid(path, "unexpected tech upgrade child"));
     }
 
     let start = data.allocate(
         pointer,
-        if model {
+        if let Some(transform) = transform {
+            transform.size()
+        } else if model {
             0xa4
         } else if basic {
             0x28
@@ -174,6 +186,9 @@ pub(super) fn encode(
         };
         Some((radius_y, filter))
     };
+    let transform_entries = transform
+        .map(|upgrade| upgrade.encode(node, children, start, data, reference_types))
+        .transpose()?;
     let anim = match anim {
         Some(node) => Target::Table(encode_anim(node, start + 8, data)?),
         None => Target::Null,
@@ -195,6 +210,10 @@ pub(super) fn encode(
     ]);
     let mut entries = vec![base(0xae60_ae98, Table::record(upgrade))];
     let Some((radius_y, filter)) = radius_y_and_filter else {
+        if let Some(transform_entries) = transform_entries {
+            entries.extend(transform_entries);
+            return Ok((kind, Table::record(entries)));
+        }
         if model {
             for &(name, _, offset) in &MODEL_FIELDS[..2] {
                 write_model_conditions(node.attribute(name).unwrap_or(""), start + offset, data)?;

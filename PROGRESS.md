@@ -1,6 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 276 adds TerrainParticleMapping and DynamicsContactTagMapping. All six EA fixture assets, 268 tests, and Clippy passed.
-- Checkpoints 267–275 add the remaining weapon nugget and root fields, DynamicsDraw, EVA events and settings, locomotor templates and bounce maps, and transformed GameObject display fields.
+- Checkpoint 277 adds GeometryUpgrade, RemoveUpgradeUpgrade, and LinearDamageUpdate. All seven EA fixture assets, 270 tests, and Clippy passed.
+- Checkpoints 274–276 add locomotor templates, bounce maps, transformed GameObject display fields, and terrain particle and contact mappings.
 
-- Surge Step 6 passes Giga-Fortress's transformed display fields and reaches GeometryUpgrade. Next task is the geometry and remove-upgrade behaviors.
+- Surge Step 6 passes Giga-Fortress's upgrade behaviors and reaches FireWeaponCollide on Grinder. Next task is the collision weapon behavior.

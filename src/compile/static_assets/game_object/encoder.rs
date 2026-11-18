@@ -227,6 +227,8 @@ pub(in crate::compile::static_assets) fn compile(
                     | "CommandSetUpgrade"
                     | "AttributeModifierUpgrade"
                     | "ModelConditionUpgrade"
+                    | "GeometryUpgrade"
+                    | "RemoveUpgradeUpgrade"
             ) {
                 let start = data.payload.len() as u32;
                 let result = super::tech_upgrade::encode(
@@ -236,7 +238,11 @@ pub(in crate::compile::static_assets) fn compile(
                     &mut references,
                     &mut reference_types,
                 )?;
-                upgrade_relocation_anchors.push((start, data.payload.len() as u32 - 1));
+                let anchor = match module.tag_name().name() {
+                    "GeometryUpgrade" | "RemoveUpgradeUpgrade" => start + 0x31,
+                    _ => data.payload.len() as u32 - 1,
+                };
+                upgrade_relocation_anchors.push((start, anchor));
                 Some(result)
             } else if module.has_tag_name((SAGE_NS, "SubObjectsUpgrade")) {
                 let start = data.payload.len() as u32;

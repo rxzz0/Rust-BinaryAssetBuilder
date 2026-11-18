@@ -23,6 +23,7 @@ mod infiltrator;
 mod laser_draw;
 mod laser_state;
 mod line_segment_damage;
+mod linear_damage;
 pub(super) mod material;
 mod parking;
 pub(super) use parking::encode_filter as encode_object_filter;
@@ -47,6 +48,7 @@ mod structures;
 mod subobjects;
 mod tech_upgrade;
 mod teleport_stored;
+mod transform_upgrades;
 
 pub(super) use behaviors_basic::weapon_slot;
 pub(super) use client_behaviors::audio_reference;
