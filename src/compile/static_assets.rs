@@ -47,6 +47,7 @@ mod player_template;
 mod road;
 mod stance_template;
 mod surface_mappings;
+mod system_settings;
 pub(super) mod targeting_compare;
 mod tokenized;
 mod upgrade;
@@ -111,6 +112,12 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "StaticGameLOD" => (0x4a93_fc61, 83, game_lod::static_lod),
         "DynamicGameLOD" => (0x692b_85b7, 83, game_lod::dynamic_lod),
         "AudioLOD" => (0x014c_bb53, 83, audio_settings::lod),
+        "BuildSystemSettings" => (0xf806_9076, 83, system_settings::build),
+        "PathfindSettings" => (0x9cbc_f9f1, 83, system_settings::pathfind),
+        "ResourceSettings" => (0x5cfb_bd27, 83, system_settings::resource),
+        "InvisibilityManagerSettings" => (0x64a4_f893, 83, system_settings::invisibility),
+        "GiftManagerSettings" => (0xc93f_a545, 83, system_settings::gift),
+        "LocalBuildListMonitor" => (0xd544_a0d3, 83, system_settings::build_list_monitor),
         "TargetingDistanceCompare" => (0xc00c_41f3, 76, targeting_compare::distance),
         "TargetingCombatChainCompare" => (0xb613_8c0d, 76, targeting_compare::marker),
         "TargetingInTurretArcCompare" => (0x5c98_6fb1, 76, targeting_compare::marker),
@@ -415,6 +422,16 @@ fn ai_budget(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
         relocations,
         ..Marshaled::default()
     })
+}
+
+fn money_transaction_categories() -> &'static [String] {
+    static CATEGORIES: std::sync::LazyLock<[Vec<String>; 1]> = std::sync::LazyLock::new(|| {
+        schema_enums(
+            include_str!("../../schemas/ra3/xsd/Includes/MoneyTransactionCategory.xsd"),
+            ["MoneyTransactionCategory"],
+        )
+    });
+    &CATEGORIES[0]
 }
 
 fn percentage(value: &str, field: &str, path: &Path) -> io::Result<f32> {

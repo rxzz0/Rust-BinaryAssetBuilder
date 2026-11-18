@@ -2,12 +2,14 @@ use super::super::ai_strategic::{enum_index, flags};
 use super::super::binary::BinaryData;
 use super::super::fx_list::validate_leaf;
 use super::super::tokenized::{Entry, Table, Target};
-use super::super::{sage_time, sage_uint, schema_enums, significant_children, validate_attributes};
+use super::super::{
+    money_transaction_categories, sage_time, sage_uint, significant_children, validate_attributes,
+};
 use super::behaviors_basic::module_base;
 use super::draws::{boolean, fields};
 use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::Node;
-use std::{io, sync::OnceLock};
+use std::io;
 
 const TRANSACTIONS: [&str; 3] = ["InitialCaptureBonus", "Deposit", "ResourceCap"];
 
@@ -25,7 +27,6 @@ pub(super) fn encode(
         ("TransactionCategory", 0x9e55_f778, 0x10),
     ];
     const FLAGS: [&str; 2] = ["NONE", "ACTIVE_WHEN_REPAIRING"];
-    static CATEGORY_VALUES: OnceLock<[Vec<String>; 1]> = OnceLock::new();
 
     let path = data.path;
     validate_attributes(
@@ -60,16 +61,10 @@ pub(super) fn encode(
             path,
         )?,
     );
-    let categories = CATEGORY_VALUES.get_or_init(|| {
-        schema_enums(
-            include_str!("../../../../schemas/ra3/xsd/Includes/MoneyTransactionCategory.xsd"),
-            ["MoneyTransactionCategory"],
-        )
-    });
     let category = enum_index(
         node.attribute("TransactionCategory")
             .unwrap_or("AUTO_DEPOSIT"),
-        &categories[0],
+        money_transaction_categories(),
         "TransactionCategory",
         path,
     )?;
