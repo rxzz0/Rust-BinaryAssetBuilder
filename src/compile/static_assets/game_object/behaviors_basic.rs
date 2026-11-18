@@ -1021,6 +1021,7 @@ pub(super) fn encode(
             | "SpecialPower"
             | "AssignSlavesTargetObjectSpecialPower"
             | "OCLSpecialPower"
+            | "ActivateModuleSpecialPower"
             | "PrematureDischargeSpecialPower"
             | "GiveProductionBonusSpecialPower"
             | "PlayerUpgradeSpecialPower"
@@ -1230,6 +1231,7 @@ pub(super) fn encode(
             | "WeaponFireSpecialAbilityUpdate"
             | "ToggleStatusSpecialAbilityUpdate"
             | "CaptureSpecialAbilityUpdate"
+            | "ActivateModuleSpecialAbilityUpdate"
     ) {
         return super::replace_self::encode(node, pointer, data, references, reference_types)
             .map(Some);

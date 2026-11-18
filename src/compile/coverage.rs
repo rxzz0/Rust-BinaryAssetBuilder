@@ -1023,6 +1023,11 @@ mod tests {
     }
 
     #[test]
+    fn module_activation_matches_ea_batch() {
+        assert_ea_fixture("module-activation", 1);
+    }
+
+    #[test]
     fn draw_particle_bools_match_ea_batch() {
         assert_ea_fixture("draw-particle-bools", 1);
     }

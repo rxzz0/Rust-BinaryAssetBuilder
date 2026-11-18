@@ -95,6 +95,7 @@ pub(super) fn encode(
     let path = data.path;
     const SPECIAL_POWER: u32 = 0xcefe_1113;
     const PRODUCTION_BONUS: u32 = 0x8ed3_3e53;
+    const ACTIVATE_MODULE: u32 = 0x4856_3167;
     const PLAYER_UPGRADE: u32 = 0x005b_408e;
     const BONUS_FIELDS: &[(&str, u32, usize)] = &[
         ("BuildCostBonus", REAL, 0x1c4),
@@ -112,6 +113,7 @@ pub(super) fn encode(
         "AssignSlavesTargetObjectSpecialPower" => (0x9daf_d38c, 0x1c4, &[][..]),
         "PrematureDischargeSpecialPower" => (0x8e22_e8c8, 0x1c4, &[][..]),
         "GiveProductionBonusSpecialPower" => (PRODUCTION_BONUS, 0x1dc, BONUS_FIELDS),
+        "ActivateModuleSpecialPower" => (ACTIVATE_MODULE, 0x1cc, &[][..]),
         "PlayerUpgradeSpecialPower" => (PLAYER_UPGRADE, 0x1cc, &[][..]),
         _ => (SPECIAL_POWER, 0x1c4, &[][..]),
     };
@@ -346,7 +348,7 @@ pub(super) fn encode(
         ));
     }
     power.push(Entry::named("InitiateSound", 0x1ae6_b6b7, Target::Null));
-    if !matches!(kind, OCL_POWER | PLAYER_UPGRADE)
+    if !matches!(kind, OCL_POWER | PLAYER_UPGRADE | ACTIVATE_MODULE)
         && let Some(child) = children.next()
     {
         return Err(invalid(
@@ -379,6 +381,16 @@ pub(super) fn encode(
         }
         let table = super::spawn::id_list(data, start + 0x1c4, upgrades)?;
         entries.push(Entry::named("Upgrade", 0x4aba_1f29, Target::Table(table)));
+    }
+    if kind == ACTIVATE_MODULE {
+        entries.push(super::replace_self::module_list(
+            children,
+            start + 0x1c4,
+            data,
+            "Modules",
+            true,
+        )?);
+        return Ok((kind, Table::record(entries)));
     }
     if kind == OCL_POWER {
         entries.extend(ocl_children(

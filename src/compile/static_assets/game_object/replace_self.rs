@@ -207,9 +207,11 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
+    const ACTIVATE_MODULE: u32 = 0xcd33_bcee;
     let (kind, size, variant) = match node.tag_name().name() {
         "WeaponFireSpecialAbilityUpdate" => (WEAPON, 0x110, WEAPON_FIELDS),
         "ToggleStatusSpecialAbilityUpdate" => (TOGGLE, 0xfc, TOGGLE_FIELDS),
+        "ActivateModuleSpecialAbilityUpdate" => (ACTIVATE_MODULE, 0xf8, &[][..]),
         "CaptureSpecialAbilityUpdate" => (CAPTURE, 0xf0, &[][..]),
         "ReplaceSelfSpecialAbility" => (KIND, 0x104, REPLACE_FIELDS),
         name => {
@@ -354,6 +356,16 @@ pub(super) fn encode(
         ));
         return Ok((kind, Table::record(entries)));
     }
+    if kind == ACTIVATE_MODULE {
+        entries.push(module_list(
+            children,
+            start + 0xf0,
+            data,
+            "SpecialPowerModules",
+            false,
+        )?);
+        return Ok((kind, Table::record(entries)));
+    }
     if matches!(kind, WEAPON | CAPTURE) {
         if children.next().is_some() {
             return Err(invalid(
@@ -477,9 +489,6 @@ fn toggle_state(
     else {
         return Err(invalid(path, "ToggleState requires SkirmishAiInfo"));
     };
-    if children.next().is_some() {
-        return Err(invalid(path, "unsupported additional ToggleState child"));
-    }
     let mut entries: Vec<_> = super::draws::fields(start, &fields).collect();
     entries.push(Entry::named(
         "SkirmishAiInfo",
@@ -492,12 +501,74 @@ fn toggle_state(
             reference_types,
         )?),
     ));
-    entries.push(Entry::named(
-        "Module",
-        0xada5_4d29,
-        Target::Table(Table::array(start + 0x110, [])),
-    ));
+    entries.push(module_list(children, start + 0x110, data, "Module", false)?);
     Ok(Table::record(entries))
+}
+
+pub(super) fn module_list<'a, 'input: 'a>(
+    children: impl Iterator<Item = Node<'a, 'input>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+    name: &str,
+    deactivation: bool,
+) -> io::Result<Entry> {
+    const MODULE_INFO: u32 = 0xada5_4d29;
+    const FIELDS: &[(&str, u32, usize)] = &[
+        ("ModuleId", 0xbdf0_7965, 0),
+        ("TriggerAtTargetPosition", 0x77e3_f4f7, 8),
+        ("TriggerType", 0x01c3_a3a2, 4),
+    ];
+    let path = data.path;
+    let children: Vec<_> = children.collect();
+    if children.len() > 4 {
+        return Err(invalid(path, format!("{name} allows at most four entries")));
+    }
+    let size = if deactivation { 16 } else { 12 };
+    let start = data.list(count, children.len(), size)?;
+    let mut items = Vec::with_capacity(children.len());
+    let allowed: Vec<_> = FIELDS
+        .iter()
+        .map(|&(name, ..)| name)
+        .chain(deactivation.then_some("Deactivate"))
+        .collect();
+    for (index, node) in children.into_iter().enumerate() {
+        if !node.has_tag_name((SAGE_NS, name)) || super::super::has_content(node) {
+            return Err(invalid(path, format!("expected {name} entry")));
+        }
+        validate_attributes(node, &allowed, path)?;
+        let offset = start + index * size;
+        if let Some(id) = node.attribute("ModuleId").filter(|id| !id.is_empty()) {
+            data.word(offset, super::super::hash_name(id));
+        }
+        let trigger = super::super::global_ui::enum_value(
+            node.attribute("TriggerType").unwrap_or("TARGET_POSITION"),
+            &["SELF_POSITION", "TARGET_POSITION", "TARGET_OBJECT"],
+            path,
+        )?;
+        data.word(offset + 4, trigger);
+        data.payload[offset + 8] = boolean(node, "TriggerAtTargetPosition", true, path)?;
+        let fields = Table::record(super::draws::fields(offset, FIELDS).collect());
+        let table = if deactivation {
+            data.payload[offset + 12] = boolean(node, "Deactivate", false, path)?;
+            Table::record(vec![
+                base(MODULE_INFO, fields),
+                Entry::named("Deactivate", 0x77e3_f4f7, Target::Data(offset + 12)),
+            ])
+        } else {
+            fields
+        };
+        items.push((0, Target::Table(table)));
+    }
+    let kind = if deactivation {
+        0x58f6_065c
+    } else {
+        MODULE_INFO
+    };
+    Ok(Entry::named(
+        name,
+        kind,
+        Target::Table(Table::array(count, items)),
+    ))
 }
 
 fn write_reference(

@@ -1,0 +1,23 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ModuleActivationProbe">
+    <Behaviors>
+      <ActivateModuleSpecialPower id="EmptyPower" SpecialPowerTemplate="ProbePower"/>
+      <ActivateModuleSpecialPower id="ConfiguredPower" SpecialPowerTemplate="ProbePower" AttributeModifier="ProbeModifier" AttributeModifierAffectsSelf="true">
+        <Modules/>
+        <Modules ModuleId="ProbeUpdate" TriggerAtTargetPosition="false" TriggerType="TARGET_OBJECT" Deactivate="true"/>
+      </ActivateModuleSpecialPower>
+      <ActivateModuleSpecialAbilityUpdate id="EmptyUpdate" SpecialPowerTemplate="ProbePower"/>
+      <ActivateModuleSpecialAbilityUpdate id="ConfiguredUpdate" SpecialPowerTemplate="ProbePower" UnpackTime="0.75s">
+        <SpecialPowerModules/>
+        <SpecialPowerModules ModuleId="ProbeUpdate" TriggerAtTargetPosition="false" TriggerType="SELF_POSITION"/>
+      </ActivateModuleSpecialAbilityUpdate>
+      <ToggleStatusSpecialAbilityUpdate id="Toggle" SpecialPowerTemplate="ProbePower">
+        <ToggleState>
+          <SkirmishAiInfo ToggleHint="TOGGLE_DEFAULT"/>
+          <Module ModuleId="ToggleModule" TriggerType="TARGET_OBJECT"/>
+        </ToggleState>
+      </ToggleStatusSpecialAbilityUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
