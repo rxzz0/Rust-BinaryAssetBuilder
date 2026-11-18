@@ -175,6 +175,7 @@ impl From<AssetId> for AssetReference {
     }
 }
 
+const BASE_ASSET_TYPE: u32 = 0x50c6_8ad4;
 const AUDIO_ASSET_TYPE: u32 = 0x4053_c714;
 const RENDER_ASSET_TYPE: u32 = 0xb22f_87c9;
 
@@ -198,6 +199,13 @@ impl AssetReference {
     }
 
     fn local_id(&self, ids: &HashSet<AssetId>) -> Option<AssetId> {
+        if self.id.type_id == BASE_ASSET_TYPE {
+            let mut matches = ids
+                .iter()
+                .filter(|id| id.instance_id == self.id.instance_id);
+            let first = matches.next().copied()?;
+            return matches.next().is_none().then_some(first);
+        }
         self.candidate_ids().find(|id| ids.contains(id))
     }
 

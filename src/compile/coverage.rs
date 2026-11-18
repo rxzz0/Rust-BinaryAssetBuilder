@@ -1349,6 +1349,11 @@ mod tests {
     }
 
     #[test]
+    fn game_maps_match_ea() {
+        assert_ea_fixture("game-map", 5);
+    }
+
+    #[test]
     fn roads_match_ea() {
         assert_ea_fixture("road", 2);
     }

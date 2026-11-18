@@ -1,0 +1,48 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="FixtureUnit"><Body><ActiveBody id="Body"/></Body></GameObject>
+  <Road id="FixtureRoad" RoadWidth="16"/>
+  <GameMap id="MapEmpty"/>
+  <GameMap id="MapObjects">
+    <Waypoint id="Player One Start" Flags="DRAWS_IN_MIRROR DONT_RENDER" Angle="0.25"><Position x="1" y="2" z="3"/></Waypoint>
+    <Structure id="Structure 1" ThingTemplate="FixtureUnit" Faction="PlyrOne/teamPlyrOne" Team="PlyrOne" Health="50" EventList="">
+      <Position x="4" y="5" z="6"/>
+    </Structure>
+    <Structure id="Structure 2" Team="" EventList="Events 2"><Position x="7" y="8" z="9"/></Structure>
+    <Unit ThingTemplate="GameObject:FixtureUnit" Faction="PlyrTwo/teamPlyrTwo" Team="PlyrTwo" Health="75" EventList="Events 3">
+      <Position x="10" y="11" z="12"/>
+    </Unit>
+    <Prop id="Terrain prop"><Position x="13" y="14" z="15"/></Prop>
+    <Audio id="Ambience" ThingTemplate="FixtureUnit"><Position x="16" y="17" z="18"/></Audio>
+    <Unknown Flags="ROAD_POINT1 ROAD_POINT2 OBSOLETE_BRIDGE_POINT1 OBSOLETE_BRIDGE_POINT2 ROAD_CORNER_TIGHT ROAD_JOIN">
+      <Position x="19" y="20" z="21"/>
+    </Unknown>
+    <Road id="FixtureRoad"/>
+    <MapMetaData Description="Ignored in runtime" Width="120" Height="120">
+      <StartPosition Name="First"><Position x="1" y="2" z="3"/></StartPosition>
+      <StartPosition Name="Second"><Position x="4" y="5" z="6"/></StartPosition>
+    </MapMetaData>
+    <EnvironmentData/>
+    <WorldDict/>
+    <PostEffect/>
+    <MapAnalysis CellsExamined="1200" GarrisonableStructures="5" TechStructures="2" WaterAreas="3" WaterCells="276">
+      <WaterAreaType>INTERIOR</WaterAreaType><WaterAreaType>EXTERIOR</WaterAreaType><WaterAreaType>EXTERIOR_PARTIAL</WaterAreaType>
+    </MapAnalysis>
+  </GameMap>
+  <GameMap id="MapProperties">
+    <WorldDict>
+      <StringProperty Key="Title" Value="Test area"/>
+      <AssetIdProperty Key="Template" Value="GameObject:FixtureUnit"/>
+      <BoolProperty Key="Skirmish" Value="true"/>
+      <IntProperty Key="Elevation" Value="-42"/>
+      <RealProperty Key="Ratio" Value="0.75"/>
+      <UnicodeStringProperty Key="Caption" Value="Café"/>
+      <AssetIdListProperty Key="Templates" Value="FixtureUnit FixtureRoad"/>
+      <BoolProperty Key="Unset"/>
+      <StringProperty Key="" Value=""/>
+      <AssetIdProperty Key="Implicit" Value="FixtureUnit"/>
+      <AssetIdProperty Key="Missing" Value=""/>
+      <AssetIdListProperty Key="No templates" Value=""/>
+    </WorldDict>
+    <MapAnalysis/>
+  </GameMap>
+</AssetDeclaration>

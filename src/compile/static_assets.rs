@@ -29,6 +29,7 @@ mod emotion;
 mod eva;
 mod experience_level;
 mod fx_list;
+mod game_map;
 pub(super) mod game_object;
 mod game_script_list;
 mod global_ui;
@@ -98,6 +99,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "StanceTemplate" => (0x4829_f362, 75, stance_template::compile),
         "GameScriptList" => (0xa268_995a, 76, game_script_list::compile),
         "Road" => (0x2bfd_2964, 77, road::compile),
+        "GameMap" => (0xf465_7c12, 78, game_map::compile),
         "W3DAnimation" => (0x5545_5fe8, 66, w3d_animation::compile),
         "W3DMesh" => (0xcd8a_089c, 35, w3d_mesh::compile),
         "W3DContainer" => (0x619d_a33f, 36, w3d_mesh::container),
