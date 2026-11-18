@@ -39,6 +39,7 @@ mod object_creation;
 mod particle_system;
 mod player_power_button;
 mod player_template;
+mod stance_template;
 mod surface_mappings;
 mod tokenized;
 mod upgrade;
@@ -92,6 +93,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "DynamicsContactTagMapping" => (0x358a_b09d, 72, surface_mappings::dynamics_contacts),
         "PlayerPowerButtonTemplate" => (0xa640_9dd2, 73, player_power_button::compile),
         "JoypadCommandBarButtonTemplate" => (0x2913_cc3c, 74, joypad_buttons::compile),
+        "StanceTemplate" => (0x4829_f362, 75, stance_template::compile),
         "W3DAnimation" => (0x5545_5fe8, 66, w3d_animation::compile),
         "W3DMesh" => (0xcd8a_089c, 35, w3d_mesh::compile),
         "W3DContainer" => (0x619d_a33f, 36, w3d_mesh::container),

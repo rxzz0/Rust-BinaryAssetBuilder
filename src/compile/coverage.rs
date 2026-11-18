@@ -1349,6 +1349,11 @@ mod tests {
     }
 
     #[test]
+    fn stance_templates_match_ea() {
+        assert_ea_fixture("stance-template", 5);
+    }
+
+    #[test]
     fn eject_passengers_matches_ea() {
         assert_ea_fixture("eject-passengers", 5);
     }

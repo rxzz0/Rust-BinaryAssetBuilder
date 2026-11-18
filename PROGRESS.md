@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 294 compiles StanceTemplate definitions and modifier references. All five EA assets matched. All 287 tests and Clippy passed.
 - Checkpoint 293 compiles EnableDynamicsCollide. Both EA assets matched. All 286 tests and Clippy passed.
 - Checkpoint 292 compiles EjectPassengersSpecialAbilityUpdate, including ejection bone offsets, animation, and inherited fields. All five EA assets matched. All 285 tests and Clippy passed.
 - Checkpoints 288–291 link concrete render and audio assets, compile assisted placement hints, and resolve inherited references.

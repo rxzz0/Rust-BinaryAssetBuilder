@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <StanceTemplate id="StanceTemplateEmpty"/>
+  <StanceTemplate id="StanceTemplateAll">
+    <StanceDefinition Type="HOLD_POSITION"/>
+    <StanceDefinition Type="AGGRESSIVE" AttributeModifier="Aggression"/>
+    <StanceDefinition Type="GUARD" AttributeModifier="AttributeModifier:Guard"/>
+    <StanceDefinition Type="HOLD_FIRE" AttributeModifier="Guard"/>
+  </StanceTemplate>
+  <StanceTemplate id="StanceAttributeBlank">
+    <StanceDefinition Type="HOLD_FIRE" AttributeModifier=""/>
+  </StanceTemplate>
+  <AttributeModifier id="Aggression" Duration="2s"/>
+  <AttributeModifier id="Guard" Duration="1s"/>
+</AssetDeclaration>
