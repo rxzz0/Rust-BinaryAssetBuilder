@@ -127,6 +127,7 @@ impl Compiler<'_> {
             relocations,
             imports: Vec::new(),
             references: Vec::new(),
+            weak_references: Vec::new(),
             custom_data: None,
             tokenized: false,
             sort_order: 79,

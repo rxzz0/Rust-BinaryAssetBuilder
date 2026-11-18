@@ -91,7 +91,7 @@ pub(super) fn object_filter_asset(node: Node<'_, '_>, path: &Path) -> io::Result
     })
 }
 
-use super::{asset_reference, compile_asset, declaration_id};
+use super::{asset_reference, declaration_id};
 use crate::compile::{
     CompiledAsset, Compiler, SAGE_NS, XML_NS, escape_xml, invalid, is_xml_whitespace,
 };
@@ -122,7 +122,7 @@ impl Compiler<'_> {
         let mut xml = String::new();
         result.write_xml(&mut xml, true);
         let document = Document::parse(&xml).map_err(|error| invalid(path, error))?;
-        compile_asset(document.root_element(), path, source)
+        self.compile_schema_leaf(document.root_element(), path, source)
     }
 
     fn schema_inherited_xml(

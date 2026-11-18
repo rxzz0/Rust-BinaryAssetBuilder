@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 310 includes SDK schema-declared weak dependencies and compiles MusicPalette and MusicScriptTrack. Five focused EA assets matched. Surge built all 171 shipped map assets, with 170 matching all linked chunks. Atlas bytes and some render reference type IDs differ. All 295 tests and Clippy passed.
 - Checkpoint 309 preserves XML order for GameMap environment references and import offsets. Surge's GameMap asset matched EA byte for byte, including its reference table. All 295 tests and Clippy passed.
 - Checkpoint 308 links map streams to WorldBuilder, resolves stock render models, and reconciles shared hashes. Surge produced a valid 159-asset stream with the shipped reference layout. Its shipped map still has 12 additional dependencies. All 295 tests and Clippy passed.
 - Checkpoint 307 compiles ToppleUpdate effects, stump IDs, physics settings, and flags. All six EA assets matched. All 294 tests and Clippy passed. Surge's official map reaches reference resolution.

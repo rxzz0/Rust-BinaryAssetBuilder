@@ -1698,6 +1698,21 @@ fn maps_link_worldbuilder_models_and_keep_local_overrides() {
     let map = root.join("map.xml");
     let assets = root.join("WorldBuilder.xml");
     fs::create_dir(root.join("Data")).unwrap();
+    fs::create_dir_all(root.join("Schemas/xsd")).unwrap();
+    fs::write(
+        root.join("Schemas/xsd/CnC3Types.xsd"),
+        r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xas="uri:ea.com:eala:asset:schema">
+        <xs:simpleType name="WeakReference"><xs:restriction base="xs:string"/></xs:simpleType>
+        <xs:simpleType name="GameObjectWeakRef" xas:refType="GameObject"><xs:restriction base="WeakReference"/></xs:simpleType>
+        <xs:complexType name="ToppleUpdateModuleData"><xs:attribute name="StumpId" type="GameObjectWeakRef"/></xs:complexType>
+        <xs:complexType name="GameObject"><xs:sequence>
+          <xs:element name="Behaviors"><xs:complexType><xs:choice>
+            <xs:element name="ToppleUpdate" type="ToppleUpdateModuleData"/>
+          </xs:choice></xs:complexType></xs:element>
+        </xs:sequence></xs:complexType>
+        </xs:schema>"#,
+    )
+    .unwrap();
     fs::write(
         &assets,
         r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
@@ -1713,8 +1728,11 @@ fn maps_link_worldbuilder_models_and_keep_local_overrides() {
         r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
         <GameObject id="Prop" EditorName="Map">
             <Draws><PropDraw id="Draw" Model="StockModel"/></Draws>
+            <Behaviors><ToppleUpdate id="Topple" StumpId="Stump"/></Behaviors>
             <Body><PropBody id="Body"/></Body>
         </GameObject>
+        <GameObject id="Stump"><Body><PropBody id="Body"/></Body></GameObject>
+        <MusicPalette id="Palette"/>
         </AssetDeclaration>"#,
     )
     .unwrap();
@@ -1722,7 +1740,10 @@ fn maps_link_worldbuilder_models_and_keep_local_overrides() {
         &map,
         r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
         <Includes><Include type="instance" source="DATA:props.xml"/></Includes>
-        <GameMap id="Map"><Prop ThingTemplate="Prop"><Position x="0" y="0" z="0"/></Prop></GameMap>
+        <GameMap id="Map">
+            <Prop ThingTemplate="Prop"><Position x="0" y="0" z="0"/></Prop>
+            <WorldDict><AssetIdProperty Key="musicZone" Value="Palette"/></WorldDict>
+        </GameMap>
         </AssetDeclaration>"#,
     )
     .unwrap();
@@ -1745,7 +1766,19 @@ fn maps_link_worldbuilder_models_and_keep_local_overrides() {
         .iter()
         .find(|a| a.id == stock_prop.id)
         .unwrap();
-    assert_eq!(actual.assets.len(), 2);
+    assert_eq!(actual.assets.len(), 4);
+    assert!(
+        actual
+            .assets
+            .iter()
+            .any(|asset| asset.name == b"GameObject:Stump")
+    );
+    assert!(
+        actual
+            .assets
+            .iter()
+            .any(|asset| asset.name == b"MusicPalette:Palette")
+    );
     assert_eq!(map_prop.instance_hash, stock_prop.instance_hash);
     assert_eq!(
         map_prop.references.iter().collect::<Vec<_>>(),

@@ -118,6 +118,12 @@ fn compile(
     } else {
         HashMap::new()
     };
+    let schema_root = root.join("Schemas/xsd");
+    let game_object_schema = if is_map && schema_root.join("CnC3Types.xsd").try_exists()? {
+        Some(static_assets::game_object::Schema::load(&schema_root)?)
+    } else {
+        None
+    };
     let mut compiler = Compiler {
         data_paths: paths("Data", "SageXml"),
         art_paths: paths("Art", "Art"),
@@ -133,7 +139,7 @@ fn compile(
         tentative: HashMap::new(),
         definitions: HashMap::new(),
         xml_fragments: HashMap::new(),
-        game_object_schema: None,
+        game_object_schema,
         music_headers: HashMap::new(),
         reference_directory,
         reference_mode,
@@ -206,6 +212,7 @@ struct CompiledAsset {
     relocations: Vec<u8>,
     imports: Vec<u8>,
     references: Vec<AssetReference>,
+    weak_references: Vec<AssetReference>,
     custom_data: Option<CustomData>,
     tokenized: bool,
     sort_order: u8,
@@ -467,17 +474,39 @@ impl Compiler<'_> {
         let mut index = 0;
         let mut pending = Vec::new();
         while index < self.assets.len() {
-            pending.extend(
-                self.assets[index]
-                    .references
-                    .iter()
-                    .filter(|reference| reference.local_id(&self.ids).is_none())
-                    .filter_map(|reference| {
+            let asset = &self.assets[index];
+            for reference in asset.references.iter().chain(&asset.weak_references) {
+                if reference.local_id(&self.ids).is_some() {
+                    continue;
+                }
+                if self.reference_mode == ReferenceMode::Map
+                    && reference.id.type_id == BASE_ASSET_TYPE
+                {
+                    let mut matches = self
+                        .tentative
+                        .keys()
+                        .copied()
+                        .filter(|id| id.instance_id == reference.id.instance_id);
+                    if let Some(id) = matches.next() {
+                        if matches.next().is_some() {
+                            return Err(invalid(
+                                &self.root,
+                                format!(
+                                    "ambiguous instance reference {:08x} in {}",
+                                    reference.id.instance_id, asset.name
+                                ),
+                            ));
+                        }
+                        pending.push(id);
+                    }
+                } else {
+                    pending.extend(
                         reference
                             .candidate_ids()
-                            .find(|id| self.tentative.contains_key(id))
-                    }),
-            );
+                            .find(|id| self.tentative.contains_key(id)),
+                    );
+                }
+            }
             for id in pending.drain(..) {
                 if self.ids.contains(&id) {
                     continue;
@@ -495,7 +524,7 @@ impl Compiler<'_> {
                     ));
                 };
                 let candidate = candidate.clone();
-                if self.external_ids.contains(&id) {
+                if self.reference_mode != ReferenceMode::Map && self.external_ids.contains(&id) {
                     return Err(invalid(
                         &candidate.path,
                         "instance and external reference resolve to the same asset ID",
@@ -555,8 +584,23 @@ impl Compiler<'_> {
                 self.compile_schema_inherited_asset(node, path, source)
             }
             "TerrainTextureAtlas" => self.compile_terrain_atlas(node, path, source),
-            _ => static_assets::compile_asset(node, path, source),
+            _ => self.compile_schema_leaf(node, path, source),
         }
+    }
+
+    fn compile_schema_leaf(
+        &self,
+        node: Node<'_, '_>,
+        path: &Path,
+        source: &str,
+    ) -> io::Result<CompiledAsset> {
+        let mut asset = static_assets::compile_asset(node, path, source)?;
+        if self.reference_mode == ReferenceMode::Map
+            && let Some(schema) = &self.game_object_schema
+        {
+            asset.weak_references = schema.weak_references(node, path)?;
+        }
+        Ok(asset)
     }
 
     fn resolve(&self, document: &Path, value: &str) -> io::Result<PathBuf> {
@@ -747,6 +791,7 @@ impl Compiler<'_> {
             relocations: RELOCATIONS.to_vec(),
             imports: Vec::new(),
             references: Vec::new(),
+            weak_references: Vec::new(),
             custom_data: None,
             tokenized: false,
             sort_order: 0,

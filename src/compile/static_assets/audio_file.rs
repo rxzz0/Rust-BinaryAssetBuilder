@@ -126,6 +126,7 @@ impl Compiler<'_> {
             relocations: encode_words(data.relocations),
             imports: Vec::new(),
             references: Vec::new(),
+            weak_references: Vec::new(),
             custom_data: Some(CustomData::Bytes(cdata)),
             tokenized: false,
             sort_order: 39,

@@ -1,4 +1,5 @@
-use crate::compile::invalid;
+use super::super::asset_reference;
+use crate::compile::{AssetReference, SAGE_NS, invalid};
 use roxmltree::{Document, Node};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -6,6 +7,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 const XSD: &str = "http://www.w3.org/2001/XMLSchema";
+const SAGE_SCHEMA: &str = "uri:ea.com:eala:asset:schema";
 
 #[derive(Default)]
 pub(in crate::compile) struct Schema {
@@ -16,6 +18,7 @@ pub(in crate::compile) struct Schema {
 #[derive(Default)]
 struct Type {
     base: Option<String>,
+    reference_target: Option<String>,
     fields: Vec<Field>,
     children: Vec<Field>,
     choice: bool,
@@ -29,6 +32,7 @@ pub(in crate::compile) struct Field {
     pub(in crate::compile) kind: String,
     pub(in crate::compile) default: Option<String>,
     pub(super) repeated: bool,
+    reference_target: Option<String>,
 }
 
 #[derive(Default)]
@@ -94,7 +98,10 @@ impl Schema {
     }
 
     fn read_type(&mut self, name: &str, node: Node<'_, '_>) {
-        let mut kind = Type::default();
+        let mut kind = Type {
+            reference_target: node.attribute((SAGE_SCHEMA, "refType")).map(str::to_owned),
+            ..Type::default()
+        };
         let content = node.children().find(|child| {
             child.has_tag_name((XSD, "complexContent"))
                 || child.has_tag_name((XSD, "simpleContent"))
@@ -163,6 +170,7 @@ impl Schema {
             kind,
             default: node.attribute("default").map(str::to_owned),
             repeated: repeated(node),
+            reference_target: node.attribute((SAGE_SCHEMA, "refType")).map(str::to_owned),
         })
     }
 
@@ -224,6 +232,85 @@ impl Schema {
         }
         false
     }
+
+    pub(in crate::compile) fn weak_references(
+        &self,
+        node: Node<'_, '_>,
+        path: &Path,
+    ) -> io::Result<Vec<AssetReference>> {
+        let mut references = Vec::new();
+        self.find_weak_references(node, node.tag_name().name(), path, &mut references)?;
+        Ok(references)
+    }
+
+    fn find_weak_references(
+        &self,
+        node: Node<'_, '_>,
+        kind: &str,
+        path: &Path,
+        references: &mut Vec<AssetReference>,
+    ) -> io::Result<()> {
+        if !self.types.contains_key(kind) {
+            return Ok(());
+        }
+        let shape = self.shape(kind, path)?;
+        for attribute in node.attributes().filter(|attr| attr.namespace().is_none()) {
+            if let Some(field) = shape
+                .fields
+                .iter()
+                .find(|field| field.name == attribute.name())
+                && let Some(target) = self.weak_reference_target(field)
+            {
+                add_weak_reference(attribute.value(), target, path, references)?;
+            }
+        }
+        for child in node
+            .children()
+            .filter(|child| child.tag_name().namespace() == Some(SAGE_NS))
+        {
+            let Some(field) = shape
+                .children
+                .iter()
+                .find(|field| field.name == child.tag_name().name())
+            else {
+                continue;
+            };
+            if let Some(target) = self.weak_reference_target(field) {
+                add_weak_reference(child.text().unwrap_or_default(), target, path, references)?;
+            } else {
+                self.find_weak_references(child, &field.kind, path, references)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn weak_reference_target<'a>(&'a self, field: &'a Field) -> Option<&'a str> {
+        let mut kind = field.kind.as_str();
+        let mut target = field.reference_target.as_deref();
+        for _ in 0..64 {
+            if kind == "WeakReference" {
+                return target;
+            }
+            let entry = self.types.get(kind)?;
+            target = target.or(entry.reference_target.as_deref());
+            kind = entry.base.as_deref()?;
+        }
+        None
+    }
+}
+
+fn add_weak_reference(
+    value: &str,
+    target: &str,
+    path: &Path,
+    references: &mut Vec<AssetReference>,
+) -> io::Result<()> {
+    let value = value.trim();
+    if !value.is_empty() {
+        let kind = value.split_once(':').map_or(target, |(kind, _)| kind);
+        references.push(asset_reference(value, kind, path)?.into());
+    }
+    Ok(())
 }
 
 fn is_type(node: Node<'_, '_>) -> bool {

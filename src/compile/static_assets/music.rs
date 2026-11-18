@@ -1,12 +1,14 @@
+use super::binary::BinaryData;
+use super::fx_list::{boolean, validate_leaf};
 use super::{
-    Marshaled, asset_reference, declaration_id, encode_words, significant_children, text_value,
-    validate_attributes,
+    Marshaled, asset_reference, declaration_id, encode_words, sage_int, sage_time,
+    significant_children, text_value, validate_attributes, write_import,
 };
 use crate::compile::{
     CompiledAsset, Compiler, FILE_HASH_BLOCK, SAGE_NS, escape_xml, has_content, hash_source_file,
     hash_xml, invalid, memory_stream_hash, required,
 };
-use crate::hash::fast_hash_with_seed;
+use crate::hash::{asset_string_hash, fast_hash_with_seed};
 use roxmltree::{Document, Node};
 use std::collections::HashMap;
 use std::fs;
@@ -16,6 +18,117 @@ use std::path::{Path, PathBuf};
 const EVENT: &str = "PathMusicEvent";
 const EVENT_HEADER: &str = "PathfinderEventHeader";
 const TRACK_HEADER: &str = "PathfinderTrackHeader";
+
+pub(super) fn palette(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "IsDefaultForNewMap"], path)?;
+    let tracks: Vec<_> = significant_children(node).collect();
+    let mut data = BinaryData {
+        payload: vec![0; 16],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    data.payload[12] = boolean(node, "IsDefaultForNewMap", false, path)?;
+    let start = data.list(4, tracks.len(), 4)?;
+    for (index, track) in tracks.into_iter().enumerate() {
+        if !track.has_tag_name((SAGE_NS, "Track")) {
+            return Err(invalid(path, "expected a MusicPalette Track"));
+        }
+        let value = text_value(track, path)?;
+        if !value.trim().is_empty() {
+            write_import(
+                value,
+                "MusicScriptTrack",
+                start + index * 4,
+                &mut data,
+                &mut result,
+            )?;
+        }
+    }
+    Ok(finish_music_script(result, data))
+}
+
+pub(super) fn script_track(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    let flags = [
+        ("ConditionsAreLatch", false),
+        ("FadeInTrack", false),
+        ("FadeOutLowerLevelTrack", true),
+    ];
+    let names = [
+        "id",
+        "TrackTypeKey",
+        "Level",
+        "Priority",
+        "Condition",
+        "Track",
+    ];
+    let names: Vec<_> = names
+        .into_iter()
+        .chain(flags.map(|(name, _)| name))
+        .collect();
+    validate_attributes(node, &names, path)?;
+    let mut data = BinaryData {
+        payload: vec![0; 36],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    if let Some(key) = node.attribute("TrackTypeKey").filter(|key| !key.is_empty()) {
+        let key = crate::compile::windows_1252(key)
+            .ok_or_else(|| invalid(path, "TrackTypeKey must use Windows-1252"))?;
+        data.word(4, asset_string_hash(&key));
+    }
+    for (name, offset) in [("Level", 8), ("Priority", 12)] {
+        data.word(offset, sage_int(required(node, name, path)?, name, path)?);
+    }
+    required(node, "Track", path)?;
+    for attribute in node.attributes() {
+        let value = attribute.value();
+        let (kind, offset) = match attribute.name() {
+            "Track" => ("BaseAudioEventInfo", 20),
+            "Condition" => ("MusicScriptConditionNuggetBase", data.allocate(16, 4)?),
+            _ => continue,
+        };
+        if !value.trim().is_empty() {
+            write_import(value, kind, offset, &mut data, &mut result)?;
+        }
+    }
+    let timeouts: Vec<_> = significant_children(node).collect();
+    let start = data.list(24, timeouts.len(), 8)?;
+    for (index, timeout) in timeouts.into_iter().enumerate() {
+        if !timeout.has_tag_name((SAGE_NS, "Timeout")) {
+            return Err(invalid(path, "expected a MusicScriptTrack Timeout"));
+        }
+        validate_leaf(timeout, &["Weight", "Duration"], path)?;
+        data.word(
+            start + index * 8,
+            sage_int(
+                timeout.attribute("Weight").unwrap_or("1000"),
+                "Weight",
+                path,
+            )?,
+        );
+        data.word(
+            start + index * 8 + 4,
+            sage_time(required(timeout, "Duration", path)?, "Duration", path)?.to_bits(),
+        );
+    }
+    for (index, (name, default)) in flags.into_iter().enumerate() {
+        data.payload[32 + index] = boolean(node, name, default, path)?;
+    }
+    Ok(finish_music_script(result, data))
+}
+
+fn finish_music_script(mut result: Marshaled, mut data: BinaryData<'_>) -> Marshaled {
+    for offsets in [&mut result.imports, &mut data.relocations] {
+        if !offsets.is_empty() {
+            offsets.push(u32::MAX);
+        }
+    }
+    result.payload = data.payload;
+    result.relocations = data.relocations;
+    result
+}
 
 pub(in crate::compile) struct Header {
     values: HashMap<String, u32>,
@@ -146,6 +259,7 @@ impl Compiler<'_> {
             relocations: encode_words(relocations),
             imports: Vec::new(),
             references: Vec::new(),
+            weak_references: Vec::new(),
             sort_order,
             custom_data,
             tokenized: false,

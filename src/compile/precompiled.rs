@@ -150,6 +150,7 @@ fn parse_asset(path: &Path, mut bytes: &[u8]) -> io::Result<CompiledAsset> {
         relocations: relocations.to_vec(),
         imports: imports.to_vec(),
         references,
+        weak_references: Vec::new(),
         custom_data: None,
         tokenized: false,
         sort_order: 66,
