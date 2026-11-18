@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="AbilityOpacityProbe">
+    <Behaviors>
+      <SpecialAbilityUpdate id="AbilityDefault" SpecialPowerTemplate="ProbePower"/>
+      <SpecialAbilityUpdate id="AbilityConfigured" SpecialPowerTemplate="ProbePower" Options="RECONSTITUTE_STORED_COMMAND"
+        SetObjectStatusOnTrigger="UNATTACKABLE" ClearObjectStatusOnExit="UNATTACKABLE"
+        PackTime=".5s" UnpackTime="2.5s"/>
+      <TimedOpacityUpdate id="OpacityDefault"/>
+      <TimedOpacityUpdate id="OpacityConfigured" Opacity="0.3" Duration="10s"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

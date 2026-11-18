@@ -1227,7 +1227,8 @@ pub(super) fn encode(
     }
     if matches!(
         node.tag_name().name(),
-        "ReplaceSelfSpecialAbility"
+        "SpecialAbilityUpdate"
+            | "ReplaceSelfSpecialAbility"
             | "WeaponFireSpecialAbilityUpdate"
             | "ToggleStatusSpecialAbilityUpdate"
             | "CaptureSpecialAbilityUpdate"
@@ -1235,6 +1236,24 @@ pub(super) fn encode(
     ) {
         return super::replace_self::encode(node, pointer, data, references, reference_types)
             .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "TimedOpacityUpdate")) {
+        const KIND: u32 = 0xfb57_ab87;
+        const FIELDS: &[(&str, u32, usize)] =
+            &[("Opacity", 0x6458_64f3, 8), ("Duration", 0x9986_69e8, 12)];
+        let path = data.path;
+        validate_attributes(node, &["id", "Opacity", "Duration"], path)?;
+        if has_content(node) {
+            return Err(invalid(path, "unexpected TimedOpacityUpdate content"));
+        }
+        let start = data.allocate(pointer, 16)?;
+        let mut entries = vec![module_base(node, KIND, start, data, true)?];
+        let opacity = finite_number(node.attribute("Opacity").unwrap_or("0.5"), "Opacity", path)?;
+        let duration = sage_time(node.attribute("Duration").unwrap_or("5s"), "Duration", path)?;
+        data.word(start + 8, opacity.to_bits());
+        data.word(start + 12, duration.to_bits());
+        entries.extend(fields(start, FIELDS));
+        return Ok(Some((KIND, Table::record(entries))));
     }
     let (kind, size, extra) = match node.tag_name().name() {
         "SubStructureBehavior" => (0x331e_6db8, 8, None),

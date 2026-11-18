@@ -15,6 +15,7 @@ use std::{io, sync::OnceLock};
 
 const KIND: u32 = 0x9122_2181;
 const TOGGLE: u32 = 0xed1a_e55c;
+const ABILITY: u32 = 0xac59_8f82;
 const CAPTURE: u32 = 0x3139_98b5;
 const WEAPON: u32 = 0x1e45_a393;
 const TOGGLE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[(
@@ -212,6 +213,7 @@ pub(super) fn encode(
         "WeaponFireSpecialAbilityUpdate" => (WEAPON, 0x110, WEAPON_FIELDS),
         "ToggleStatusSpecialAbilityUpdate" => (TOGGLE, 0xfc, TOGGLE_FIELDS),
         "ActivateModuleSpecialAbilityUpdate" => (ACTIVATE_MODULE, 0xf8, &[][..]),
+        "SpecialAbilityUpdate" => (ABILITY, 0xf0, &[][..]),
         "CaptureSpecialAbilityUpdate" => (CAPTURE, 0xf0, &[][..]),
         "ReplaceSelfSpecialAbility" => (KIND, 0x104, REPLACE_FIELDS),
         name => {
@@ -325,7 +327,13 @@ pub(super) fn encode(
         0x6b74_6af6,
         animation,
     ));
-    let mut entries = vec![base(0xac59_8f82, Table::record(ability))];
+    if kind == ABILITY {
+        if children.next().is_some() {
+            return Err(invalid(path, "unexpected SpecialAbilityUpdate child"));
+        }
+        return Ok((kind, Table::record(ability)));
+    }
+    let mut entries = vec![base(ABILITY, Table::record(ability))];
     entries.extend(derived);
     if kind == TOGGLE {
         let states: Vec<_> = children.collect();
