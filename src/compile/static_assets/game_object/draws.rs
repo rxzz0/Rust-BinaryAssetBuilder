@@ -942,8 +942,8 @@ pub(super) fn boolean(
 ) -> io::Result<u8> {
     match node.attribute(name) {
         None => Ok(u8::from(default)),
-        Some("true" | "1") => Ok(1),
-        Some("false" | "0") => Ok(0),
+        Some("true" | "True" | "1") => Ok(1),
+        Some("false" | "False" | "0") => Ok(0),
         Some(value) => Err(invalid(path, format!("invalid {name} {value}"))),
     }
 }

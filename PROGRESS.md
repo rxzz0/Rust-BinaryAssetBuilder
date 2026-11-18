@@ -1,5 +1,5 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 248 adds 13 weapon-effect variants through a shared field layout, including SpecialPowerNugget, suppression, secondary damage, terrain craters, and three activation types. Both fixtures match EA byte for byte. All 239 tests and Clippy passed.
-- Checkpoint 247 encodes ActivateLaserNugget and ActivateStreamNugget. Checkpoint 246 encodes WeaponAiHintInfo.
-- Surge Step 6 passes Natasha's weapon templates and reaches Shinobi's mixed-case FollowBone flag. Next task is fixing SageBool compatibility.
+- Checkpoint 249 accepts True and False in the shared GameObject boolean parser. A particle animation fixture with both spellings matches EA byte for byte. All 240 tests and Clippy passed.
+- Checkpoint 248 adds 13 weapon-effect variants through a shared layout. Checkpoint 247 encodes laser and stream activation.
+- Surge Step 6 passes Shinobi's FollowBone flag and reaches ActivateModuleSpecialPower. Next task is extending the special-power behavior encoder.

@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ParticleBooleanProbe">
+    <Draws><ScriptedModelDraw id="Draw">
+      <ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name=""/></ModelConditionState>
+      <AnimationState ParseCondStateType="PARSE_DEFAULT">
+        <Animation AnimationName="ProbeAnimation" AnimationMode="LOOP"/>
+        <ParticleSysBone BoneName="Root" FXParticleSystemTemplate="ProbeParticle" FollowBone="True" OnlyIfOnWater="False" OnlyIfOnLand="1"/>
+        <ParticleSysBone BoneName="Tip" FXParticleSystemTemplate="OtherParticle" FollowBone="0" OnlyIfOnWater="true" OnlyIfOnLand="false"/>
+      </AnimationState>
+    </ScriptedModelDraw></Draws>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

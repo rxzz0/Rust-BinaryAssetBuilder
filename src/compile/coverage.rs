@@ -1023,6 +1023,11 @@ mod tests {
     }
 
     #[test]
+    fn draw_particle_bools_match_ea_batch() {
+        assert_ea_fixture("draw-particle-bools", 1);
+    }
+
+    #[test]
     fn simple_weapon_effects_match_ea_batch() {
         assert_ea_fixture("simple-weapon-effects", 2);
     }
