@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ObjectSpecificVoiceProbe">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+    <AudioArrayVoice>
+      <AudioEntry Sound="StandardVoice" AudioType="voiceAttack"/>
+      <ObjectSpecificEntry Sound="AttackUnitVoice" AudioType="voiceAttackUnit" TargetObject="TargetUnit"/>
+      <ObjectSpecificEntry TargetObject="SourceFactory" AudioType="voiceFullyCreatedFrom" EvaEvent="CreatedEva"/>
+      <ObjectSpecificEntry AudioType="voiceEnterUnit" TargetObject="TargetTransport"/>
+      <ObjectSpecificEntry EvaEvent="EnteredEva" Sound="EnteredSound" TargetObject="TargetVehicle" AudioType="voiceEnterStateEnterUnit"/>
+      <NamedEntry Sound="CustomVoice" Name="CustomAction"/>
+    </AudioArrayVoice>
+  </GameObject>
+</AssetDeclaration>

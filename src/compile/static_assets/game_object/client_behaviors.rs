@@ -348,10 +348,13 @@ impl AudioEncoder<'_, '_> {
         };
         validate_attributes(node, &[], self.data.path)?;
         let mut children = Vec::new();
+        let mut object_specific = Vec::new();
         let mut named = Vec::new();
         for child in significant_children(node) {
             if child.has_tag_name((SAGE_NS, "AudioEntry")) {
                 children.push(child);
+            } else if voice && child.has_tag_name((SAGE_NS, "ObjectSpecificEntry")) {
+                object_specific.push(child);
             } else if voice && child.has_tag_name((SAGE_NS, "NamedEntry")) {
                 named.push(child);
             } else {
@@ -385,6 +388,14 @@ impl AudioEncoder<'_, '_> {
             items,
         )];
         if voice {
+            let first = self.data.list(start + 8, object_specific.len(), 16)?;
+            let mut items = Vec::with_capacity(object_specific.len());
+            for (index, child) in object_specific.into_iter().enumerate() {
+                let table = self.object_specific_voice_entry(child, first + index * 16)?;
+                items.push((0, Target::Table(table)));
+            }
+            fields.push(list("ObjectSpecificEntry", 0xaedf_c4cd, start + 8, items));
+
             let first = self.data.list(start + 16, named.len(), 12)?;
             let mut items = Vec::with_capacity(named.len());
             for (index, child) in named.into_iter().enumerate() {
@@ -402,10 +413,7 @@ impl AudioEncoder<'_, '_> {
                     ])),
                 ));
             }
-            fields.extend([
-                list("ObjectSpecificEntry", 0xaedf_c4cd, start + 8, []),
-                list("NamedEntry", 0xf8ed_487b, start + 16, items),
-            ]);
+            fields.push(list("NamedEntry", 0xf8ed_487b, start + 16, items));
         }
         Ok(Target::Table(Table::record(fields)))
     }
@@ -421,6 +429,48 @@ impl AudioEncoder<'_, '_> {
         Ok(Table::record(vec![
             base(0x1ae6_b6b7, parent),
             field("AudioType", 0x4da7_08b0, start + 8),
+        ]))
+    }
+
+    fn object_specific_voice_entry(
+        &mut self,
+        node: Node<'_, '_>,
+        start: usize,
+    ) -> io::Result<Table> {
+        let path = self.data.path;
+        validate_attributes(
+            node,
+            &["Sound", "EvaEvent", "AudioType", "TargetObject"],
+            path,
+        )?;
+        require_empty(node, path)?;
+        let target = required(node, "TargetObject", path)?;
+        let target = target.split_once('\\').map_or(target, |(name, _)| name);
+        let target = asset_reference(target, "GameObject", path)?;
+        self.data.word(
+            start + 8,
+            audio_type(node, AudioType::ObjectSpecificVoice, path)?,
+        );
+        self.data.word(start + 12, target.instance_id);
+
+        // EA gathers strong and weak references in XML attribute order.
+        let mut sound = Entry::named("Sound", SOUND, Target::Null);
+        for attribute in node.attributes() {
+            match attribute.name() {
+                "Sound" => sound = self.optional_sound(node, start)?,
+                "EvaEvent" => {
+                    let event = self.reference(attribute.value(), "EvaEvent")?;
+                    self.data.word(start + 4, event);
+                }
+                "TargetObject" => self.reference_types.push(target.type_id),
+                _ => {}
+            }
+        }
+        let parent = Table::record(vec![sound, field("EvaEvent", 0xc4ec_43b1, start + 4)]);
+        Ok(Table::record(vec![
+            base(0x1ae6_b6b7, parent),
+            field("AudioType", 0x94a6_9cb3, start + 8),
+            field("TargetObject", 0x148e_d75d, start + 12),
         ]))
     }
 
@@ -540,17 +590,25 @@ fn named_condition_fields(
 
 enum AudioType {
     Voice,
+    ObjectSpecificVoice,
     Sound,
     Eva,
 }
 
 fn audio_type(node: Node<'_, '_>, kind: AudioType, path: &Path) -> io::Result<u32> {
     static VOICE: OnceLock<Vec<String>> = OnceLock::new();
+    static OBJECT_SPECIFIC_VOICE: OnceLock<Vec<String>> = OnceLock::new();
     static SOUND: OnceLock<Vec<String>> = OnceLock::new();
     static EVA: OnceLock<Vec<String>> = OnceLock::new();
     let sound_types = include_str!("../../../../schemas/ra3/xsd/Includes/ObjectSoundTypes.xsd");
     let (cache, schema, type_name, attribute) = match kind {
         AudioType::Voice => (&VOICE, sound_types, "ThingTemplateVoiceType", "AudioType"),
+        AudioType::ObjectSpecificVoice => (
+            &OBJECT_SPECIFIC_VOICE,
+            sound_types,
+            "ThingTemplateObjectSpecificVoiceType",
+            "AudioType",
+        ),
         AudioType::Sound => (&SOUND, sound_types, "ThingTemplateSoundType", "AudioType"),
         AudioType::Eva => (
             &EVA,

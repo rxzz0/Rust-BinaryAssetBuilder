@@ -1023,6 +1023,11 @@ mod tests {
     }
 
     #[test]
+    fn object_specific_voice_matches_ea_batch() {
+        assert_ea_fixture("object-specific-voice", 1);
+    }
+
+    #[test]
     fn fx_nugget_variants_match_ea_batch() {
         assert_ea_fixture("fx-nugget-variants", 2);
     }
