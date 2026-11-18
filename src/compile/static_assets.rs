@@ -25,6 +25,7 @@ mod campaign;
 mod credits;
 mod damage_fx;
 mod emotion;
+mod fx_list;
 pub(super) mod game_object;
 mod global_ui;
 mod hotkeys;
@@ -84,6 +85,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "PlayerTechStoreTemplate" => (0x3a84_e115, 45, player_tech_store),
         "SpecialPowerTemplate" => (0x3aab_481c, 46, game_object::special_power::compile),
         "WeaponTemplate" => (0x0ce6_168e, 48, weapon::compile),
+        "FXList" => (0x9b13_1e26, 56, fx_list::compile),
         "GameObject" => (0xcb8d_0980, 10, game_object::compile),
         "PathMusicEventSet" => (0x6209_4424, 23, music::event_set),
         "MapMetaData" => (0x481d_a8e6, 24, campaign::map_metadata),

@@ -1,0 +1,26 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <FXList id="FxListEmpty"><NuggetList/></FXList>
+  <FXList id="FxListDefaults">
+    <NuggetList><ParticleSystem/><Sound/><RayEffect/><EvaEvent/><ForceFeedback/></NuggetList>
+  </FXList>
+  <FXList id="FxListConfigured" PlayEvenIfShrouded="true" Tailorable="true" CullTracking="2s" CullTrackingMin="3" CullTrackingMax="4">
+    <NuggetList>
+      <ParticleSystem Particle="ParticleProbe" Count="3" OrientToObject="true" Ricochet="true" CreateAtGroundHeight="true" CreateOverrideBone="muzzle" UseTarget="true" TargetOverrideBone="turret" TargetCoeff="1.25" SystemLife="3s" SetTargetMatrix="true" OnlyIfOnWater="true" Weather="RAINY" StopIfPlayed="true" OnlyIfOnLand="true" PlayIfSourceIsStealthed="true" RequiredSecondaryModelConditions="DAMAGED" ExcludedSecondaryModelConditions="REALLYDAMAGED" RequiredSourceModelConditions="DAMAGED" ExcludedSourceModelConditions="REALLYDAMAGED">
+        <SecondaryObjectFilter Rule="ANY"><IncludeThing>SecondProbe</IncludeThing></SecondaryObjectFilter>
+        <SourceObjectFilter Rule="ANY"><ExcludeThing>FirstProbe</ExcludeThing></SourceObjectFilter>
+        <SourceMustNotHaveBeenDisabledThisFrameByType>EMP</SourceMustNotHaveBeenDisabledThisFrameByType>
+        <SourceMustNotHaveBeenDisabledThisFrameByType>HELD</SourceMustNotHaveBeenDisabledThisFrameByType>
+        <Rotate X="90d" Y="180d" Z="270d"/>
+        <Offset x="1" y="2" z="3"/>
+        <TargetOffset x="4" y="5" z="6"/>
+        <Radius Low="7" High="8" Type="UNIFORM"/>
+        <Height Low="9" High="10"/>
+        <InitialDelay Low="11" High="12"/>
+      </ParticleSystem>
+      <Sound Value="SoundProbe"/>
+      <RayEffect Thing="ObjectProbe"><PrimaryOffset x="1" y="2" z="3"/><SecondaryOffset x="4" y="5" z="6"/></RayEffect>
+      <EvaEvent EvaEventOwner="OwnerProbe" EvaEventAlly="AllyProbe" EvaEventEnemy="EnemyProbe"/>
+      <ForceFeedback Event="EventProbe"/>
+    </NuggetList>
+  </FXList>
+</AssetDeclaration>

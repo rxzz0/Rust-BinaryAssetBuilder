@@ -1,6 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 254 encodes AttachNugget, StripMaxHealthPercentNugget and InformationWarfareNugget. Both fixtures match EA byte for byte. All 245 tests and Clippy passed.
-- Checkpoint 253 encodes projectile veterancy, barrel overrides and launch offsets. Checkpoint 252 adds weapon and damage tracking.
+- Checkpoint 255 adds native FXList encoding with five nugget types, including ParticleSystem, plus common filters, model conditions and weather rules. All three EA assets match byte for byte. All 246 tests and Clippy passed.
+- Checkpoint 254 encodes AttachNugget, StripMaxHealthPercentNugget and InformationWarfareNugget.
 
-- Surge Step 6 passes Tanya's weapon and reaches FXList in the Tesla Trooper. Next task is the native FXList encoder.
+- Surge Step 6 passes the Tesla Trooper's FXList and reaches ObjectSpecificEntry in AudioArrayVoice. Next tasks are the remaining FXList variants and the audio entry encoder.
