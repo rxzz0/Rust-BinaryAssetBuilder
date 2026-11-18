@@ -27,6 +27,7 @@ const MODULES: &[(&str, &[&str])] = &[
     (
         "ClientBehaviors",
         &[
+            "AnimationSoundClientBehavior",
             "ModelConditionAudioLoopClientBehavior",
             "ModelConditionSoundSelectorClientBehavior",
             "UpgradeSoundSelectorClientBehavior",
@@ -1301,6 +1302,11 @@ mod tests {
     #[test]
     fn transform_upgrades_match_ea() {
         assert_ea_fixture("transform-upgrades", 3);
+    }
+
+    #[test]
+    fn animation_sound_frame_and_reference_variants_match_ea() {
+        assert_ea_fixture("animation-sound-edge", 1);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="AnimationSoundEdgeProbe">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+    <ClientBehaviors>
+      <AnimationSoundClientBehavior id="ModuleTag_Edge" MaxUpdateRangeCap="1e2">
+        <Sound Frame="0x80000000 0xFFFFFFFF 0x00000004 +0 -17 +2147483647 -2147483648" Animation="ProbeUnload" RequiredMC="" ExcludedMC="" Sound="ProbeGrab"/>
+        <Sound Frame="3 -2 3 0" Sound="Multisound:ProbeMulti" Animation="ProbeEmpty" RequiredMC="MOVING DAMAGED" ExcludedMC="ATTACKING DYING"/>
+        <Sound Frame="0" Sound="AudioEvent:ProbeSound" Animation="ProbeAnim"/>
+      </AnimationSoundClientBehavior>
+    </ClientBehaviors>
+  </GameObject>
+</AssetDeclaration>

@@ -402,6 +402,18 @@ fn production_queue_type(value: &str, field: &str, path: &Path) -> io::Result<u3
         .ok_or_else(|| invalid(path, format!("invalid {field} {value}")))
 }
 
+fn sage_int(value: &str, name: &str, path: &Path) -> io::Result<u32> {
+    let value = value.trim();
+    let number = if let Some(hex) = value.strip_prefix("0x") {
+        i64::from_str_radix(hex, 16)
+    } else {
+        value.parse::<i64>()
+    };
+    number
+        .map(|value| value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32 as u32)
+        .map_err(|_| invalid(path, format!("invalid {name} {value:?}")))
+}
+
 fn finite_number(value: &str, field: &str, path: &Path) -> io::Result<f32> {
     value
         .trim()

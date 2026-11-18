@@ -1,6 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 277 adds GeometryUpgrade, RemoveUpgradeUpgrade, and LinearDamageUpdate. All seven EA fixture assets, 270 tests, and Clippy passed.
-- Checkpoints 274–276 add locomotor templates, bounce maps, transformed GameObject display fields, and terrain particle and contact mappings.
+- Checkpoint 278 extends AnimationSoundClientBehavior with hexadecimal frames and explicitly typed audio references. Both EA fixtures, 271 tests, and Clippy passed.
+- Checkpoints 274–277 add locomotor, terrain and contact mappings, transformed display fields, GeometryUpgrade, RemoveUpgradeUpgrade, and LinearDamageUpdate.
 
 - Surge Step 6 passes Giga-Fortress's upgrade behaviors and reaches FireWeaponCollide on Grinder. Next task is the collision weapon behavior.

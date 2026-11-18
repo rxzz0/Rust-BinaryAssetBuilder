@@ -3,8 +3,8 @@ use super::binary::BinaryData;
 use super::fx_list::boolean;
 use super::game_object::{write_model_conditions, write_status_flags};
 use super::{
-    Marshaled, SAGE_NS, finite_number, has_content, invalid, percentage, sage_angle, sage_time,
-    significant_children, text_value, validate_attributes, write_import,
+    Marshaled, SAGE_NS, finite_number, has_content, invalid, percentage, sage_angle, sage_int,
+    sage_time, significant_children, text_value, validate_attributes, write_import,
 };
 use roxmltree::{Document, Node};
 use std::io;
@@ -376,18 +376,6 @@ pub(super) fn bounce_kick_terrain_mapping(
 
 pub(super) fn terrain_class(value: &str, path: &Path) -> io::Result<u32> {
     enum_index(value, &schema().terrain, "TerrainClass", path)
-}
-
-fn sage_int(value: &str, name: &str, path: &Path) -> io::Result<u32> {
-    let value = value.trim();
-    let number = if let Some(hex) = value.strip_prefix("0x") {
-        i64::from_str_radix(hex, 16)
-    } else {
-        value.parse::<i64>()
-    };
-    number
-        .map(|value| value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32 as u32)
-        .map_err(|_| invalid(path, format!("invalid {name} {value:?}")))
 }
 
 fn finish_relocations(mut relocations: Vec<u32>) -> Vec<u32> {

@@ -1,7 +1,7 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, asset_reference, fast_hash, hash_name, significant_children,
+    AssetReference, asset_reference, fast_hash, hash_name, sage_int, significant_children,
     validate_attributes,
 };
 use super::draws::write_model_conditions;
@@ -171,14 +171,24 @@ impl AudioEncoder<'_, '_> {
             path,
         )?;
         require_empty(node, path)?;
-        let sound = super::passive_area::reference(
-            required(node, "Sound", path)?,
-            "BaseAudioEventInfo",
-            path,
-            self.references,
-            self.reference_types,
-        )?;
-        self.data.word(start, sound);
+        required(node, "Sound", path)?;
+        required(node, "Animation", path)?;
+        for attribute in node.attributes() {
+            let value = attribute.value();
+            match attribute.name() {
+                "Sound" => {
+                    let sound = self.reference(value, "BaseAudioEventInfo")?;
+                    self.data.word(start, sound);
+                }
+                "Animation" => {
+                    let plain = value.split_once('\\').map_or(value, |(name, _)| name);
+                    let animation = asset_reference(plain, "W3DAnimation", path)?;
+                    self.reference_types.push(animation.type_id);
+                    self.data.word(start + 12, animation.instance_id);
+                }
+                _ => {}
+            }
+        }
         let mut entries = vec![field("Sound", SOUND, start)];
         for (name, offset) in [("RequiredMC", 4), ("ExcludedMC", 8)] {
             let target = if let Some(value) = node.attribute(name) {
@@ -190,22 +200,16 @@ impl AudioEncoder<'_, '_> {
             };
             entries.push(Entry::named(name, 0x67db_bfc9, target));
         }
-        let value = required(node, "Animation", path)?;
-        let plain = value.split_once('\\').map_or(value, |(name, _)| name);
-        let animation = asset_reference(plain, "W3DAnimation", path)?;
-        self.reference_types.push(animation.type_id);
-        self.data.word(start + 12, animation.instance_id);
         entries.push(field("Animation", 0x2648_0425, start + 12));
         let frames = required(node, "Frame", path)?.split_ascii_whitespace();
         let count = start + 16;
-        let first = self.data.list(count, frames.clone().count(), 4)?;
-        let mut items = Vec::new();
+        let length = frames.clone().count();
+        let first = self.data.list(count, length, 4)?;
+        let mut items = Vec::with_capacity(length);
         for (index, frame) in frames.enumerate() {
-            let value = frame
-                .parse::<i32>()
-                .map_err(|_| invalid(path, "invalid animation sound frame"))?;
             let offset = first + 4 * index;
-            self.data.word(offset, value as u32);
+            self.data
+                .word(offset, sage_int(frame, "animation sound frame", path)?);
             items.push((0, Target::Data(offset)));
         }
         entries.push(list("Frame", 0x49ef_147d, count, items));
