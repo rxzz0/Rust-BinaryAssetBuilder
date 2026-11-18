@@ -173,9 +173,25 @@ impl From<AssetId> for AssetReference {
 }
 
 impl AssetReference {
+    fn local_id(&self, ids: &HashSet<AssetId>) -> Option<AssetId> {
+        if ids.contains(&self.id) {
+            return Some(self.id);
+        }
+        if self.external_type != Some(fast_hash(b"BaseAudioEventInfo")) {
+            return None;
+        }
+        ["Multisound", "AmbientStream", "DialogEvent", "MusicTrack"]
+            .into_iter()
+            .map(|name| AssetId {
+                type_id: fast_hash(name.as_bytes()),
+                instance_id: self.id.instance_id,
+            })
+            .find(|id| ids.contains(id))
+    }
+
     fn output_id(&self, local_ids: &HashSet<AssetId>) -> AssetId {
-        if local_ids.contains(&self.id) {
-            return self.id;
+        if let Some(id) = self.local_id(local_ids) {
+            return id;
         }
         AssetId {
             type_id: self.external_type.unwrap_or(self.id.type_id),
@@ -640,7 +656,8 @@ impl Compiler<'_> {
                 .iter()
                 .flat_map(|asset| &asset.references)
                 .any(|reference| {
-                    !self.ids.contains(&reference.id)
+                    reference.local_id(&self.ids).is_none()
+                        && reference.local_id(&self.external_ids).is_none()
                         && !self.external_ids.contains(&reference.output_id(&self.ids))
                 })
         {
@@ -680,12 +697,14 @@ impl Compiler<'_> {
             let mut resolved = Vec::with_capacity(asset.references.len());
             for reference in &asset.references {
                 let id = reference.id;
-                if self.ids.contains(&id) {
-                    resolved.push(id);
+                if let Some(local) = reference.local_id(&self.ids) {
+                    resolved.push(local);
                     continue;
                 }
                 let external = reference.output_id(&self.ids);
-                if !self.external_ids.contains(&id) && !self.external_ids.contains(&external) {
+                if reference.local_id(&self.external_ids).is_none()
+                    && !self.external_ids.contains(&external)
+                {
                     return Err(invalid(
                         &self.root,
                         format!(

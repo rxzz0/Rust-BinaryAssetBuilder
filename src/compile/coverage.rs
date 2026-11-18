@@ -1023,6 +1023,11 @@ mod tests {
     }
 
     #[test]
+    fn multisound_matches_ea_batch() {
+        assert_ea_fixture("multisound", 3);
+    }
+
+    #[test]
     fn object_specific_voice_matches_ea_batch() {
         assert_ea_fixture("object-specific-voice", 1);
     }

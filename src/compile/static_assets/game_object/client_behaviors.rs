@@ -543,7 +543,10 @@ pub(in crate::compile::static_assets) fn audio_reference(
         return Ok(0);
     }
     let reference = match name.trim().split_once(':') {
-        Some(("AudioEvent", _)) => asset_reference(name, "AudioEvent", path)?.into(),
+        Some((
+            kind @ ("AudioEvent" | "Multisound" | "AmbientStream" | "DialogEvent" | "MusicTrack"),
+            _,
+        )) => asset_reference(name, kind, path)?.into(),
         Some((_, plain)) => {
             let base = asset_reference(name, kind, path)?;
             AssetReference {

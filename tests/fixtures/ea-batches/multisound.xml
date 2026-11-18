@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <Multisound id="MultisoundEmpty"/>
+  <AudioEvent id="AudioEventProbe"/>
+  <Multisound id="MultisoundProbe" Control="LOOP PLAY_ONE">
+    <Subsound>AudioEventProbe</Subsound>
+    <Subsound>MultisoundEmpty</Subsound>
+    <Subsound Weight="9" PitchShiftLow="-0.5" PitchShiftHigh="1.25" Volume="40%" PlayPercent="60%" VolumeShift="20%">Multisound:MultisoundEmpty</Subsound>
+    <Subsound PitchShiftLow="0" Volume="0%" Weight="0">AudioEvent:AudioEventProbe</Subsound>
+  </Multisound>
+</AssetDeclaration>

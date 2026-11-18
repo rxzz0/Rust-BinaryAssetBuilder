@@ -75,6 +75,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "W3DContainer" => (0x619d_a33f, 36, w3d_mesh::container),
         "AmbientStream" => (0x6d16_24fb, 37, audio::single_sound),
         "AudioEvent" => (0x560c_2e45, 38, audio::single_sound),
+        "Multisound" => (0xf79c_5a89, 57, audio::multisound),
         "OnDemandTextureImage" => (0x13db_2fbc, 41, on_demand_image),
         "DamageFX" => (0x0b2e_b0ab, 42, damage_fx::compile),
         "EmotionTemplate" => (0x40da_32d1, 54, emotion::compile),

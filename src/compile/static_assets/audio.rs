@@ -1,5 +1,6 @@
 use super::binary::BinaryData;
 use super::global_ui::enum_value;
+use super::write_import;
 use super::{
     Marshaled, asset_reference, finite_number, percentage, significant_children,
     validate_attributes,
@@ -189,6 +190,86 @@ pub(super) fn single_sound(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
     if !result.imports.is_empty() {
         result.imports.push(u32::MAX);
     }
+    Ok(result)
+}
+
+pub(super) fn multisound(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "Control"], path)?;
+    let mut data = BinaryData {
+        payload: vec![0; 0x10],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    let mut control = 0;
+    for flag in node
+        .attribute("Control")
+        .unwrap_or("")
+        .split_ascii_whitespace()
+    {
+        control |= 1 << enum_value(flag, &["LOOP", "PLAY_ONE"], path)?;
+    }
+    data.word(4, control);
+    let sounds: Vec<_> = significant_children(node).collect();
+    let first = data.list(8, sounds.len(), 0x1c)?;
+    for (index, sound) in sounds.into_iter().enumerate() {
+        if !sound.has_tag_name((SAGE_NS, "Subsound")) {
+            return Err(invalid(path, "unexpected Multisound child"));
+        }
+        const OVERRIDES: [&str; 5] = [
+            "PitchShiftLow",
+            "PitchShiftHigh",
+            "Volume",
+            "PlayPercent",
+            "VolumeShift",
+        ];
+        validate_attributes(
+            sound,
+            &[
+                "Weight",
+                "PitchShiftLow",
+                "PitchShiftHigh",
+                "Volume",
+                "PlayPercent",
+                "VolumeShift",
+            ],
+            path,
+        )?;
+        let mut content = significant_children(sound);
+        let name = content
+            .next()
+            .filter(Node::is_text)
+            .and_then(|child| child.text());
+        let Some(name) = name.filter(|_| content.next().is_none()) else {
+            return Err(invalid(path, "expected Subsound reference text"));
+        };
+        let offset = first + index * 0x1c;
+        write_import(name, "BaseAudioEventInfo", offset, &mut data, &mut result)?;
+        let weight = sound
+            .attribute("Weight")
+            .unwrap_or("1000")
+            .trim()
+            .parse()
+            .map_err(|_| invalid(path, "invalid Subsound Weight"))?;
+        data.word(offset + 4, weight);
+        for (index, name) in OVERRIDES.into_iter().enumerate() {
+            if let Some(raw) = sound.attribute(name) {
+                let value = if index < 2 {
+                    finite_number(raw, name, path)?
+                } else {
+                    percentage(raw, name, path)?
+                };
+                data.optional_word(offset + 8 + index * 4, value.to_bits())?;
+            }
+        }
+    }
+    for offsets in [&mut data.relocations, &mut result.imports] {
+        if !offsets.is_empty() {
+            offsets.push(u32::MAX);
+        }
+    }
+    result.payload = data.payload;
+    result.relocations = data.relocations;
     Ok(result)
 }
 
