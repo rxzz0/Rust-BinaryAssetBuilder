@@ -22,7 +22,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "TruckDraw",
         ],
     ),
-    ("AI", &["AIUpdate"]),
+    ("AI", &["AIUpdate", "JetAIUpdate"]),
     ("Body", &["ActiveBody", "ImmortalBody", "PropBody"]),
     (
         "ClientBehaviors",
@@ -1328,6 +1328,11 @@ mod tests {
     #[test]
     fn automatic_resource_deposits_match_ea() {
         assert_ea_fixture("auto-deposit", 2);
+    }
+
+    #[test]
+    fn jet_ai_updates_match_ea() {
+        assert_ea_fixture("jet-ai-update", 5);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

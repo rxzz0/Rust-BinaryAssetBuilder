@@ -12,9 +12,21 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 const AI_UPDATE: u32 = 0x08db_c00e;
+const JET_AI_UPDATE: u32 = 0x4486_cf48;
 const TIME: u32 = 0x9986_69e8;
 const REAL: u32 = 0x6458_64f3;
 const BOOL: u32 = 0x77e3_f4f7;
+const JET_FIELDS: &[(&str, u32, usize)] = &[
+    ("OutOfAmmoDamagePerSecond", REAL, 0x4c),
+    ("OutOfAmmoDamageDelay", TIME, 0x50),
+    ("NeedsRunway", BOOL, 0x60),
+    ("ReturnToBaseWhenVictimDead", BOOL, 0x61),
+    ("KeepsParkingSpaceWhenAirborne", BOOL, 0x62),
+    ("ParkingOffset", REAL, 0x54),
+    ("CirclesForAttack", BOOL, 0x63),
+    ("UseForOutOfAmmoCheck", 0xd046_dd22, 0x58),
+    ("OutOfAmmoEvaEvent", 0xc4ec_43b1, 0x5c),
+];
 
 pub(super) fn encode(
     group: Node<'_, '_>,
@@ -30,14 +42,20 @@ pub(super) fn encode(
     let pointers = data.list(AI_LIST, modules.len(), 4)?;
     let mut items = Vec::with_capacity(modules.len());
     for (index, node) in modules.into_iter().enumerate() {
-        if !node.has_tag_name((SAGE_NS, "AIUpdate")) {
-            return Err(invalid(
-                data.path,
-                format!("unsupported AI module {}", node.tag_name().name()),
-            ));
-        }
+        let tag = node.tag_name();
+        let kind = match (tag.namespace(), tag.name()) {
+            (Some(SAGE_NS), "AIUpdate") => AI_UPDATE,
+            (Some(SAGE_NS), "JetAIUpdate") => JET_AI_UPDATE,
+            _ => {
+                return Err(invalid(
+                    data.path,
+                    format!("unsupported AI module {}", tag.name()),
+                ));
+            }
+        };
         let table = encode_update(
             node,
+            kind,
             pointers + index * 4,
             data,
             references,
@@ -47,7 +65,7 @@ pub(super) fn encode(
             0,
             Target::Table(Table::sequence(vec![Entry::new(
                 2,
-                AI_UPDATE,
+                kind,
                 Target::Table(table),
             )])),
         ));
@@ -57,6 +75,7 @@ pub(super) fn encode(
 
 fn encode_update(
     node: Node<'_, '_>,
+    kind: u32,
     pointer: usize,
     data: &mut BinaryData<'_>,
     references: &mut Vec<AssetReference>,
@@ -79,10 +98,14 @@ fn encode_update(
         ("StateMachine", 0xac6e_35e0, 0x3c),
         ("DefaultLocomotorSet", 0x845d_12b2, 0x40),
     ];
-    validate_fields(node, FIELDS, &["id"], data.path)?;
+    let jet = kind == JET_AI_UPDATE;
+    let extra: Vec<_> = std::iter::once("id")
+        .chain(JET_FIELDS.iter().filter(|_| jet).map(|&(name, _, _)| name))
+        .collect();
+    validate_fields(node, FIELDS, &extra, data.path)?;
     let chooser = optional_chooser(node, data.path)?;
-    let start = data.allocate(pointer, 0x4c)?;
-    data.word(start, AI_UPDATE);
+    let start = data.allocate(pointer, if jet { 0x64 } else { 0x4c })?;
+    data.word(start, kind);
     data.word(start + 4, hash_name(required(node, "id", data.path)?));
     if let Some(text) = node
         .attribute("AttackPriority")
@@ -130,6 +153,9 @@ fn encode_update(
     data.word(start + 0x40, locomotor_set(node, data.path)?);
     write_bool(node, "StandGround", false, start + 0x48, data)?;
     write_bool(node, "FadeOnPortals", false, start + 0x49, data)?;
+    if jet {
+        encode_jet_fields(node, start, data, references, reference_types)?;
+    }
 
     let points = node
         .attribute("SpecialContactPoints")
@@ -180,7 +206,49 @@ fn encode_update(
         0x243b_ef01,
         chooser,
     ));
-    Ok(Table::record(fields))
+    let table = Table::record(fields);
+    if jet {
+        let mut entries = vec![base(AI_UPDATE, table)];
+        entries.extend(super::draws::fields(start, JET_FIELDS));
+        Ok(Table::record(entries))
+    } else {
+        Ok(table)
+    }
+}
+
+fn encode_jet_fields(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<()> {
+    let damage = "OutOfAmmoDamagePerSecond";
+    let value = percentage(node.attribute(damage).unwrap_or("0"), damage, data.path)?;
+    data.word(start + 0x4c, value.to_bits());
+    write_time(node, "OutOfAmmoDamageDelay", "0s", start + 0x50, data)?;
+    write_real(node, "ParkingOffset", "0", start + 0x54, data)?;
+    for &(name, kind, offset) in JET_FIELDS {
+        if kind == BOOL {
+            write_bool(node, name, false, start + offset, data)?;
+        }
+    }
+    for attribute in node.attributes() {
+        let (target, offset) = match attribute.name() {
+            "UseForOutOfAmmoCheck" => ("WeaponTemplate", 0x58),
+            "OutOfAmmoEvaEvent" => ("EvaEvent", 0x5c),
+            _ => continue,
+        };
+        let index = super::passive_area::reference(
+            attribute.value(),
+            target,
+            data.path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + offset, index);
+    }
+    Ok(())
 }
 
 fn optional_chooser<'a, 'input>(

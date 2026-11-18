@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="JetAIDefault">
+    <Draws/><Behaviors/><AI><JetAIUpdate id="ModuleTag_Jet"/></AI><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <GameObject id="JetAIConfigured">
+    <Draws/><Behaviors/><AI><JetAIUpdate id="ModuleTag_Jet" OutOfAmmoEvaEvent="JetAmmoEva" UseForOutOfAmmoCheck="JetAmmoWeapon" ParkingOffset="-12.5" OutOfAmmoDamagePerSecond="13.3%" OutOfAmmoDamageDelay="2250ms" NeedsRunway="true" ReturnToBaseWhenVictimDead="true" KeepsParkingSpaceWhenAirborne="true" CirclesForAttack="true" AttackPriority="JetPriority" SpecialContactPoints="wing1 wing2" StateMachine="JetAIStateMachine" AutoAcquireEnemiesWhenIdle="NO"><UnitAITargetChooserData IdleScanDelay="0.5s" CheckVisionRange="true" TargetingCompareList="JetTargets"/></JetAIUpdate></AI><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <GameObject id="JetAIFlatRepresentations">
+    <Draws/><Behaviors/><AI><JetAIUpdate id="ModuleTag_Jet" OutOfAmmoDamagePerSecond="1.5" UseForOutOfAmmoCheck="" OutOfAmmoEvaEvent="" ParkingOffset="200"/></AI><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <EvaEvent id="JetAmmoEva"/>
+  <WeaponTemplate id="JetAmmoWeapon"/>
+</AssetDeclaration>
