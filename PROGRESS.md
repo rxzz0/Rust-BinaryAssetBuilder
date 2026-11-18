@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 305 compiles all four BuildingBehavior window names, including explicitly empty values. Both EA fixtures matched. All 294 tests and Clippy passed.
 - Checkpoint 304 compiles ContestableGarrisonContain through the shared garrison encoder. All three EA assets matched. All 294 tests and Clippy passed. Surge's official map reaches BuildingBehavior window fields.
 - Checkpoint 303 compiles inherited Body damage ranges, including thresholds and modifier references. All four EA assets matched. All 294 tests and Clippy passed.
 - Checkpoint 302 compiles GameObject Browser category lists. All three EA fixtures matched. All 294 tests and Clippy passed.

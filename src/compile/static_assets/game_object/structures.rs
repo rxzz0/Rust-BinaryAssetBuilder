@@ -8,6 +8,13 @@ use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
 
+const BUILDING_WINDOWS: [(&str, usize); 4] = [
+    ("NightWindowObject", 8),
+    ("FireWindowObject", 0x10),
+    ("GlowWindowObject", 0x18),
+    ("NightFireWindowObject", 0x20),
+];
+const BUILDING: u32 = 0x815a_9161;
 const DEFAULT_EXIT: u32 = 0x6a65_e73d;
 const QUEUE_EXIT: u32 = 0x9063_fb6c;
 const QUEUE_FIELDS: &[(&str, u32, usize)] = &[
@@ -28,7 +35,7 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
     let (kind, size, allowed): (u32, usize, &[&str]) = match node.tag_name().name() {
-        "BuildingBehavior" => (0x815a_9161, 0x28, &["id", "NightWindowObject"]),
+        "BuildingBehavior" => (BUILDING, 0x28, &[]),
         "DefaultProductionExit" => (DEFAULT_EXIT, 0x10, &["id"]),
         "QueueProductionExitUpdate" => (QUEUE_EXIT, 0x30, &[]),
         "StructureUnpackUpdate" => (
@@ -52,6 +59,15 @@ pub(super) fn encode(
         let allowed: Vec<_> = std::iter::once("id")
             .chain(QUEUE_FIELDS.iter().map(|&(name, _, _)| name))
             .collect();
+        validate_attributes(node, &allowed, data.path)?;
+    } else if kind == BUILDING {
+        let allowed = [
+            "id",
+            BUILDING_WINDOWS[0].0,
+            BUILDING_WINDOWS[1].0,
+            BUILDING_WINDOWS[2].0,
+            BUILDING_WINDOWS[3].0,
+        ];
         validate_attributes(node, &allowed, data.path)?;
     } else {
         validate_attributes(node, allowed, data.path)?;
@@ -77,15 +93,10 @@ pub(super) fn encode(
             entries.extend(production_exit(node, offset, kind == QUEUE_EXIT, data)?);
         }
         "BuildingBehavior" => {
-            if let Some(value) = node.attribute("NightWindowObject") {
-                data.string(offset + 8, value)?;
-            }
-            for (name, field) in [
-                ("NightWindowObject", 8),
-                ("FireWindowObject", 0x10),
-                ("GlowWindowObject", 0x18),
-                ("NightFireWindowObject", 0x20),
-            ] {
+            for (name, field) in BUILDING_WINDOWS {
+                if let Some(value) = node.attribute(name) {
+                    data.string(offset + field, value)?;
+                }
                 entries.push(Entry::named(
                     name,
                     0x805d_25f4,
