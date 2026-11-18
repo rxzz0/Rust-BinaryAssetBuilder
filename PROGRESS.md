@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 307 compiles ToppleUpdate effects, stump IDs, physics settings, and flags. All six EA assets matched. All 294 tests and Clippy passed. Surge's official map reaches reference resolution.
 - Checkpoint 306 compiles PropDraw and its optional model reference. All four EA assets matched. All 294 tests and Clippy passed. Surge's official map reaches ToppleUpdate.
 - Checkpoint 305 compiles all four BuildingBehavior window names, including explicitly empty values. Both EA fixtures matched. All 294 tests and Clippy passed.
 - Checkpoint 304 compiles ContestableGarrisonContain through the shared garrison encoder. All three EA assets matched. All 294 tests and Clippy passed. Surge's official map reaches BuildingBehavior window fields.

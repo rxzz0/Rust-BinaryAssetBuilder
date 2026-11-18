@@ -1022,6 +1022,90 @@ fn bridge_builder(
     Ok((KIND, Table::record(entries)))
 }
 
+fn topple_update(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x06de_2d62;
+    let references_fields = [
+        ("ToppleFX", 0x0d1c_8e83, 8),
+        ("BounceFX", 0x0d1c_8e83, 12),
+        ("StumpId", 0x148e_d75d, 16),
+    ];
+    let numbers = [
+        ("InitialVelocityPercent", "20%", 20),
+        ("InitialAccelPercent", "1%", 24),
+        ("BounceVelocityPercent", "20%", 28),
+        ("MinimumToppleSpeed", "0.5", 32),
+    ];
+    let flags = [
+        "KillWhenToppled",
+        "KillWhenStartToppled",
+        "KillStumpWhenToppled",
+        "ToppleLeftOrRightOnly",
+        "ReorientToppledRubble",
+    ];
+    let allowed: Vec<_> = ["id"]
+        .into_iter()
+        .chain(references_fields.map(|(name, _, _)| name))
+        .chain(numbers.map(|(name, _, _)| name))
+        .chain(flags)
+        .collect();
+    let path = data.path;
+    validate_attributes(node, &allowed, path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected ToppleUpdate content"));
+    }
+
+    let start = data.allocate(pointer, 0x2c)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    for attr in node.attributes() {
+        let value = attr.value();
+        let (offset, word) = match attr.name() {
+            "ToppleFX" => (
+                8,
+                super::passive_area::reference(value, "FXList", path, references, reference_types)?,
+            ),
+            "BounceFX" => (
+                12,
+                super::passive_area::reference(value, "FXList", path, references, reference_types)?,
+            ),
+            "StumpId" if !value.trim().is_empty() => {
+                let name = value.split_once('\\').map_or(value, |(name, _)| name);
+                let id = asset_reference(name, "GameObject", path)?;
+                reference_types.push(id.type_id);
+                (16, id.instance_id)
+            }
+            _ => continue,
+        };
+        data.word(start + offset, word);
+    }
+    entries.extend(fields(start, &references_fields));
+    for (name, default, offset) in numbers {
+        let value = node.attribute(name).unwrap_or(default);
+        let number = if name == "MinimumToppleSpeed" {
+            finite_number(value, name, path)?
+        } else {
+            percentage(value, name, path)?
+        };
+        data.word(start + offset, number.to_bits());
+        entries.push(Entry::named(
+            name,
+            0x6458_64f3,
+            Target::Data(start + offset),
+        ));
+    }
+    for (index, name) in flags.into_iter().enumerate() {
+        let offset = start + 36 + index;
+        data.payload[offset] = boolean(node, name, false, path)?;
+        entries.push(Entry::named(name, 0x77e3_f4f7, Target::Data(offset)));
+    }
+    Ok((KIND, Table::record(entries)))
+}
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,
@@ -1030,6 +1114,9 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
     match node.tag_name().name() {
+        "ToppleUpdate" => {
+            return topple_update(node, pointer, data, references, reference_types).map(Some);
+        }
         "BridgeBuilder" => {
             return bridge_builder(node, pointer, data, references, reference_types).map(Some);
         }

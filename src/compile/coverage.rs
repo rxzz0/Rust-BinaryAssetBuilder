@@ -49,6 +49,7 @@ const MODULES: &[(&str, &[&str])] = &[
         "Behaviors",
         &[
             "BridgeBuilder",
+            "ToppleUpdate",
             "WeaponSetUpdate",
             "LaserState",
             "ConvergingLaserState",
