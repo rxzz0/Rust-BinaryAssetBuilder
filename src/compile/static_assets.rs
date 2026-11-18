@@ -54,6 +54,7 @@ mod system_settings;
 pub(super) mod targeting_compare;
 mod tokenized;
 mod upgrade;
+mod visual_settings;
 mod w3d_animation;
 mod w3d_mesh;
 mod weapon;
@@ -128,6 +129,10 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "BreezeInfo" => (0x3516_a119, 83, subsystem_settings::breeze),
         "ModelSettings" => (0x9536_391f, 83, subsystem_settings::model),
         "TerrainVisualSettings" => (0x4fad_3c13, 83, subsystem_settings::terrain),
+        "LightingSettings" => (0x24bc_d59d, 84, visual_settings::lighting),
+        "DamageFXSettings" => (0x7a57_612c, 84, visual_settings::damage),
+        "DrawGroupInfo" => (0x466b_d19e, 83, visual_settings::draw_group),
+        "AutoParticleSystemSettings" => (0x4a58_1767, 83, visual_settings::auto_particles),
         "GiftManagerSettings" => (0xc93f_a545, 83, system_settings::gift),
         "LocalBuildListMonitor" => (0xd544_a0d3, 83, system_settings::build_list_monitor),
         "TargetingDistanceCompare" => (0xc00c_41f3, 76, targeting_compare::distance),

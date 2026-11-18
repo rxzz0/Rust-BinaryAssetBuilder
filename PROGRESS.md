@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 321 adds LightingSettings, DamageFXSettings, DrawGroupInfo and AutoParticleSystemSettings. All ten EA reference assets matched, and all 296 tests and Clippy passed. Installed the verified map-skipping ModStudio script with the Checkpoint 320 executable into the SDK. The user confirmed the Surge build worked.
 - Checkpoint 320 adds InvisibilityTemplate, NetworkSettings, SkirmishSettings, BreezeInfo, ModelSettings and TerrainVisualSettings. Supports qualified and unqualified subsystem load dependencies and preserves weak references. All 15 stock and fixture assets matched EA byte for byte. All 296 tests and Clippy passed.
 - Checkpoint 319 skips official map compilation in ModStudio. Existing maps still package as supplied and the standalone Rust map compiler remains available. The generated Surge commands built and packaged 3,911 assets in 24.92 seconds with the copied map version preserved.
 - Checkpoint 318 added native OrdersManagerSettings, ShaderOverride and ConnectionLineManager encoders. Reused the model-condition, material constant and shadow encoders. Eight SDK assets and three field variants matched EA byte for byte. All 296 tests and Clippy passed.
@@ -28,4 +29,4 @@
 - Checkpoint 295 adds native ModStudio Step 7 for precompiled W3D animations. All 194 Surge overrides produced byte-identical manifest, bin, relo, and imp files against EA. All 290 tests and Clippy passed.
 - Checkpoints 288–294 link concrete render and audio assets, fix inherited references, and add assisted placement, passenger ejection, dynamics collision, and stance templates.
 - The generated ModStudio commands ran Surge Steps 4–8 and 10–11 in 18.44 seconds using Rust. The build linked 3,911 static assets, wrote two LoD streams, and packaged both BIGs and the skudef.
-- Next, extend native coverage beyond Surge's active settings and validate generated maps in game.
+- Next, encode the SDK font settings. EA reference fixtures for all four types are ready.
