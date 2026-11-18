@@ -591,6 +591,7 @@ impl Compiler<'_> {
             | "EvaEvent"
             | "LocomotorTemplate"
             | "BounceKickTerrainMapping"
+            | "ConnectionLineManager"
             | "PathMusicGameDynamicState"
             | "TerrainParticleMapping"
             | "FXList"

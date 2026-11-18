@@ -41,6 +41,7 @@ mod locomotor;
 pub(super) mod music;
 pub(super) mod music_conditions;
 mod object_creation;
+mod order_display;
 mod particle_system;
 mod player_power_button;
 mod player_template;
@@ -112,6 +113,9 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "StaticGameLOD" => (0x4a93_fc61, 83, game_lod::static_lod),
         "DynamicGameLOD" => (0x692b_85b7, 83, game_lod::dynamic_lod),
         "AudioLOD" => (0x014c_bb53, 83, audio_settings::lod),
+        "ShaderOverride" => (0x3d5b_1d16, 83, order_display::shader_override),
+        "OrdersManagerSettings" => (0x80fc_f268, 84, order_display::orders),
+        "ConnectionLineManager" => (0x6b72_136f, 84, order_display::connection),
         "BuildSystemSettings" => (0xf806_9076, 83, system_settings::build),
         "PathfindSettings" => (0x9cbc_f9f1, 83, system_settings::pathfind),
         "ResourceSettings" => (0x5cfb_bd27, 83, system_settings::resource),

@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 318 added native OrdersManagerSettings, ShaderOverride and ConnectionLineManager encoders. Reused the model-condition, material constant and shadow encoders. Eight SDK assets and three field variants matched EA byte for byte. All 296 tests and Clippy passed.
 - Checkpoint 317 adds build placement, pathfinding, shared resources, camouflage detection, object gifts, and the local build-list monitor. All nine fixture and shipped settings assets matched EA. All 296 tests and Clippy passed.
 - Checkpoint 316 adds distance, combat-chain, and turret-arc target comparisons and polymorphic comparison lists. All five fixture assets and seven shipped SDK assets matched EA. All 296 tests and Clippy passed.
 - Checkpoint 315 adds GraphicsHardware, GameLODPreset, StaticGameLOD and DynamicGameLOD. All 18 assets in the shipped GameLOD stream match EA bytes, references and hashes. All 296 tests and Clippy passed.

@@ -65,15 +65,7 @@ pub(super) fn encode(
         let offset = start + offset;
         let value = node.attribute(name);
         match field_type {
-            TEXTURE => {
-                if let Some(value) = value.filter(|text| !text.trim().is_empty()) {
-                    let plain = value.split_once('\\').map_or(value, |(name, _)| name);
-                    let id = asset_reference(plain, "Texture", path)?;
-                    references.push(id.into());
-                    reference_types.push(id.type_id);
-                    data.word(offset, references.len() as u32);
-                }
-            }
+            TEXTURE => {}
             REAL => {
                 let default = match name {
                     "OpacityPeak" => "1",
@@ -95,7 +87,44 @@ pub(super) fn encode(
             _ => unreachable!(),
         }
     }
+    for (attribute, offset) in texture_fields(node, start) {
+        let id = asset_reference(attribute, "Texture", path)?;
+        references.push(id.into());
+        reference_types.push(id.type_id);
+        data.word(offset, references.len() as u32);
+    }
     Ok(Table::record(fields(start, FIELDS).collect()))
+}
+
+fn texture_fields<'a>(node: Node<'a, '_>, start: usize) -> impl Iterator<Item = (&'a str, usize)> {
+    node.attributes().filter_map(move |attribute| {
+        let offset = match attribute.name() {
+            "Texture" => start + 4,
+            "AdditionalTexture" => start + 8,
+            _ => return None,
+        };
+        (!attribute.value().trim().is_empty()).then_some((attribute.value(), offset))
+    })
+}
+
+pub(in crate::compile::static_assets) fn encode_settings_shadow(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    result: &mut super::super::Marshaled,
+) -> io::Result<()> {
+    let start = data.payload.len();
+    encode(
+        node,
+        pointer,
+        data,
+        &mut result.references,
+        &mut result.reference_types,
+    )?;
+    result
+        .imports
+        .extend(texture_fields(node, start).map(|(_, offset)| offset as u32));
+    Ok(())
 }
 
 #[cfg(test)]
