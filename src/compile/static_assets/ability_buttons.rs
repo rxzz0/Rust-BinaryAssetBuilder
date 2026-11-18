@@ -1,20 +1,28 @@
 use super::binary::BinaryData;
+use super::fx_list::validate_leaf;
 use super::{
     Marshaled, finite_number, required_element, significant_children, text_value,
     validate_attributes, write_import,
 };
-use crate::compile::{SAGE_NS, has_content, invalid, required};
-use roxmltree::Node;
+use crate::compile::{SAGE_NS, invalid, required};
+use roxmltree::{Attribute, Node};
 use std::{io, path::Path};
 
-const STATE_KIND: &str = "ButtonSingleStateData";
+pub(super) const STATE_KIND: &str = "ButtonSingleStateData";
+pub(super) const TARGET_ATTRIBUTES: [&str; 5] = [
+    "StateData",
+    "ValidTargetCursor",
+    "InvalidTargetCursor",
+    "RadiusCursor",
+    "ValidTargetOutline",
+];
 const TARGET_FIELDS: [(&str, &str, usize, Option<&str>); 4] = [
     ("StateData", STATE_KIND, 4, None),
     ("ValidTargetCursor", "MouseCursor", 8, Some("Arrow")),
     ("InvalidTargetCursor", "MouseCursor", 12, Some("Invalid")),
     ("RadiusCursor", "RadiusCursor", 16, None),
 ];
-const EXTRA_REFS: [(&str, &str, usize); 3] = [
+pub(super) const EXTRA_REFS: [(&str, &str, usize); 3] = [
     ("AdditionalSpecialPowerTemplate", "SpecialPowerTemplate", 28),
     ("AdditionalRadiusCursor", "RadiusCursor", 36),
     ("AdditionalValidTargetCursor", "MouseCursor", 44),
@@ -22,15 +30,7 @@ const EXTRA_REFS: [(&str, &str, usize); 3] = [
 
 pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     validate_attributes(node, &["id", "LogicCommand"], path)?;
-    let mut children = significant_children(node);
-    let wrapper = required_element(&mut children, "Data", path)?;
-    validate_attributes(wrapper, &[], path)?;
-    let mut variants = significant_children(wrapper);
-    let variant = variants
-        .next()
-        .filter(|child| child.tag_name().namespace() == Some(SAGE_NS))
-        .filter(|_| children.next().is_none() && variants.next().is_none())
-        .ok_or_else(|| invalid(path, "UnitAbilityButtonTemplate requires one Data variant"))?;
+    let variant = button_variant(node, path)?;
     let (kind, size) = match variant.tag_name().name() {
         "AssembleStructure" => (0x37be_b41d, 8),
         "BuildUnit" => (0x3ae9_97c4, 4),
@@ -92,6 +92,26 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
     Ok(out)
 }
 
+pub(super) fn button_variant<'a, 'input>(
+    node: Node<'a, 'input>,
+    path: &Path,
+) -> io::Result<Node<'a, 'input>> {
+    let mut children = significant_children(node);
+    let wrapper = required_element(&mut children, "Data", path)?;
+    validate_attributes(wrapper, &[], path)?;
+    let mut variants = significant_children(wrapper);
+    variants
+        .next()
+        .filter(|child| child.tag_name().namespace() == Some(SAGE_NS))
+        .filter(|_| children.next().is_none() && variants.next().is_none())
+        .ok_or_else(|| {
+            invalid(
+                path,
+                format!("{} requires one Data variant", node.tag_name().name()),
+            )
+        })
+}
+
 fn targeted(
     node: Node<'_, '_>,
     start: usize,
@@ -99,27 +119,36 @@ fn targeted(
     data: &mut BinaryData<'_>,
     out: &mut Marshaled,
 ) -> io::Result<()> {
-    let path = data.path;
-    validate_attributes(
-        node,
-        &[
-            "StateData",
-            "ValidTargetCursor",
-            "InvalidTargetCursor",
-            "RadiusCursor",
-            "ValidTargetOutline",
-        ],
-        path,
-    )?;
-    required(node, "StateData", path)?;
-    // EA assigns reference ordinals in XML attribute order, then adds defaults.
+    validate_attributes(node, &TARGET_ATTRIBUTES, data.path)?;
+    required(node, "StateData", data.path)?;
     for attr in node.attributes() {
-        if let Some(&(_, kind, offset, _)) =
-            TARGET_FIELDS.iter().find(|field| field.0 == attr.name())
-        {
-            write_import(attr.value(), kind, start + offset, data, out)?;
-        }
+        write_target_reference(attr, start, data, out)?;
     }
+    let refs = if multiple { &EXTRA_REFS[..] } else { &[] };
+    finish_targeted(node, start, refs, data, out)
+}
+
+// EA assigns reference ordinals in XML attribute order, then adds defaults.
+pub(super) fn write_target_reference(
+    attr: Attribute<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+) -> io::Result<()> {
+    if let Some(&(_, kind, offset, _)) = TARGET_FIELDS.iter().find(|field| field.0 == attr.name()) {
+        write_import(attr.value(), kind, start + offset, data, out)?;
+    }
+    Ok(())
+}
+
+pub(super) fn finish_targeted(
+    node: Node<'_, '_>,
+    start: usize,
+    extra_refs: &[(&str, &str, usize)],
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+) -> io::Result<()> {
+    let path = data.path;
     for (name, kind, offset, default) in TARGET_FIELDS {
         if let Some(value) = default.filter(|_| node.attribute(name).is_none()) {
             write_import(value, kind, start + offset, data, out)?;
@@ -146,14 +175,12 @@ fn targeted(
     data.word(start + 20, outline);
     let mut children = significant_children(node).peekable();
     let tint = children.next_if(|child| child.has_tag_name((SAGE_NS, "ValidTargetTintColor")));
-    if multiple {
-        for (name, kind, offset) in EXTRA_REFS {
-            let mut refs = Vec::new();
-            while let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, name))) {
-                refs.push(text_value(child, path)?);
-            }
-            write_refs(&refs, kind, start + offset, data, out)?;
+    for &(name, kind, offset) in extra_refs {
+        let mut refs = Vec::new();
+        while let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, name))) {
+            refs.push(text_value(child, path)?);
         }
+        write_refs(&refs, kind, start + offset, data, out)?;
     }
     if children.next().is_some() {
         return Err(invalid(
@@ -204,17 +231,6 @@ fn write_refs(
     let first = data.list(count, refs.len(), 4)?;
     for (index, value) in refs.iter().enumerate() {
         write_import(value, kind, first + index * 4, data, out)?;
-    }
-    Ok(())
-}
-
-fn validate_leaf(node: Node<'_, '_>, names: &[&str], path: &Path) -> io::Result<()> {
-    validate_attributes(node, names, path)?;
-    if has_content(node) {
-        return Err(invalid(
-            path,
-            format!("unexpected {} content", node.tag_name().name()),
-        ));
     }
     Ok(())
 }

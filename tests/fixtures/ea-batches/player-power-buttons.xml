@@ -1,0 +1,23 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <PlayerPowerButtonTemplate id="PlayerButtonPower" SpecialPower="PowerSimple"><Data><Power StateData="StateSimple"/></Data></PlayerPowerButtonTemplate>
+  <PlayerPowerButtonTemplate id="PlayerButtonTargeted" SpecialPower="PowerTarget"><Data><TargetedPower RadiusCursor="RadiusTarget" StateData="StateTarget"/></Data></PlayerPowerButtonTemplate>
+  <PlayerPowerButtonTemplate id="PlayerButtonMultipleTargets" SpecialPower="PowerMultipleTargets"><Data>
+    <MultipleTargetsTargetedPower TargetMarkerFXList="FXMarker" StateData="StateTargets" TargetMarkerTemplate="Marker" TargetCount="3" MinTargetDistance="12.5" RadiusCursor="MainRadius">
+      <ValidTargetTintColor R=".11" G=".22" B=".33"/>
+      <AdditionalRadiusCursor>Radius1</AdditionalRadiusCursor>
+      <AdditionalRadiusCursor>Radius2</AdditionalRadiusCursor>
+    </MultipleTargetsTargetedPower>
+  </Data></PlayerPowerButtonTemplate>
+  <PlayerPowerButtonTemplate id="PlayerButtonMultipleTargetsDefaults" SpecialPower="PowerMultipleTargetsDefaults"><Data><MultipleTargetsTargetedPower StateData="StateTargetsDefaults"/></Data></PlayerPowerButtonTemplate>
+  <PlayerPowerButtonTemplate id="PlayerButtonMultiplePowers" SpecialPower="PowerMultiplePowers"><Data>
+    <MultiplePowersTargetedPower StateData="StatePowers" RadiusCursor="RadiusPowers" ValidTargetCursor="ValidPowers" InvalidTargetCursor="InvalidPowers" ValidTargetOutline="HOVER_SELECT">
+      <ValidTargetTintColor R=".12" G=".34" B=".56"/>
+      <AdditionalSpecialPowerTemplate>Power1</AdditionalSpecialPowerTemplate>
+      <AdditionalSpecialPowerTemplate>Power2</AdditionalSpecialPowerTemplate>
+      <AdditionalRadiusCursor>Radius1</AdditionalRadiusCursor>
+      <AdditionalRadiusCursor>Radius2</AdditionalRadiusCursor>
+      <AdditionalValidTargetCursor>Cursor1</AdditionalValidTargetCursor>
+      <AdditionalValidTargetCursor>Cursor2</AdditionalValidTargetCursor>
+    </MultiplePowersTargetedPower>
+  </Data></PlayerPowerButtonTemplate>
+</AssetDeclaration>
