@@ -1,0 +1,21 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <W3DAnimation id="Delta4" Hierarchy="ProbeHierarchy" NumFrames="4" FrameRate="30">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true"/>
+    <Channels>
+      <ChannelScalar Pivot="5" Type="XTranslation" FirstFrame="0"><Frame>1</Frame><Frame>2</Frame><Frame>3</Frame><Frame>4</Frame></ChannelScalar>
+      <ChannelScalar Pivot="2" Type="Visibility" FirstFrame="1"><Frame BinaryMove="true">0</Frame><Frame>1</Frame></ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="Delta8" Hierarchy="ProbeHierarchy" NumFrames="6" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.01"/>
+    <Channels><ChannelScalar Pivot="6" Type="YTranslation" FirstFrame="0"><Frame>3</Frame><Frame>0</Frame><Frame>1.5</Frame><Frame>2.25</Frame><Frame>2</Frame><Frame>2.375</Frame></ChannelScalar></Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaQuaternion" NumFrames="3" FrameRate="33" Hierarchy="ProbeHierarchy">
+    <CompressionSettings AllowTimeCoded="false" MaxAdaptiveDeltaError="-0.001"/>
+    <Channels><ChannelQuaternion Pivot="0" Type="Orientation" FirstFrame="0"><Frame X="1" Y="2" Z="3" W="4"/><Frame X="2" Y="3" Z="3" W="4"/><Frame X="3" Y="3" Z="3" W="4"/></ChannelQuaternion></Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaConstant" Hierarchy="ProbeHierarchy" NumFrames="2" FrameRate="10">
+    <CompressionSettings AllowTimeCoded="false" MaxAdaptiveDeltaError="-0.001"/>
+    <Channels><ChannelScalar Pivot="1" Type="ZTranslation" FirstFrame="0"><Frame>5</Frame><Frame>5</Frame></ChannelScalar></Channels>
+  </W3DAnimation>
+</AssetDeclaration>

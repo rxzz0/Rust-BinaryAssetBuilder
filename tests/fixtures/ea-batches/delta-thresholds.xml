@@ -1,0 +1,597 @@
+<?xml version='1.0' encoding='utf-8'?>
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <W3DAnimation id="DeltaThreshold0" Hierarchy="ProbeHierarchy" NumFrames="6" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.007" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>3</Frame>
+        <Frame>0</Frame>
+        <Frame>1.5</Frame>
+        <Frame>2.25</Frame>
+        <Frame>2</Frame>
+        <Frame>2.375</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaRandomWalk0" Hierarchy="ProbeHierarchy" NumFrames="32" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="true" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.007" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0.00879</Frame>
+        <Frame>0.13147</Frame>
+        <Frame>0.31567</Frame>
+        <Frame>0.23152</Frame>
+        <Frame>0.33796</Frame>
+        <Frame>0.41965</Frame>
+        <Frame>0.4842</Frame>
+        <Frame>0.32826</Frame>
+        <Frame>0.13903</Frame>
+        <Frame>0.09269999999999999</Frame>
+        <Frame>0.19125999999999999</Frame>
+        <Frame>0.09220999999999999</Frame>
+        <Frame>0.09284999999999999</Frame>
+        <Frame>0.01981999999999999</Frame>
+        <Frame>0.15834999999999996</Frame>
+        <Frame>0.33642999999999995</Frame>
+        <Frame>0.29706999999999995</Frame>
+        <Frame>0.49644999999999995</Frame>
+        <Frame>0.32132999999999995</Frame>
+        <Frame>0.44637</Frame>
+        <Frame>0.5965</Frame>
+        <Frame>0.45687</Frame>
+        <Frame>0.5391</Frame>
+        <Frame>0.5626599999999999</Frame>
+        <Frame>0.74474</Frame>
+        <Frame>0.62874</Frame>
+        <Frame>0.64473</Frame>
+        <Frame>0.79771</Frame>
+        <Frame>0.85322</Frame>
+        <Frame>0.7768999999999999</Frame>
+        <Frame>0.6096499999999999</Frame>
+        <Frame>0.7855599999999999</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaThreshold1" Hierarchy="ProbeHierarchy" NumFrames="6" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.01" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>3</Frame>
+        <Frame>0</Frame>
+        <Frame>1.5</Frame>
+        <Frame>2.25</Frame>
+        <Frame>2</Frame>
+        <Frame>2.375</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaRandomWalk1" Hierarchy="ProbeHierarchy" NumFrames="32" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.01" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0.00879</Frame>
+        <Frame>0.13147</Frame>
+        <Frame>0.31567</Frame>
+        <Frame>0.23152</Frame>
+        <Frame>0.33796</Frame>
+        <Frame>0.41965</Frame>
+        <Frame>0.4842</Frame>
+        <Frame>0.32826</Frame>
+        <Frame>0.13903</Frame>
+        <Frame>0.09269999999999999</Frame>
+        <Frame>0.19125999999999999</Frame>
+        <Frame>0.09220999999999999</Frame>
+        <Frame>0.09284999999999999</Frame>
+        <Frame>0.01981999999999999</Frame>
+        <Frame>0.15834999999999996</Frame>
+        <Frame>0.33642999999999995</Frame>
+        <Frame>0.29706999999999995</Frame>
+        <Frame>0.49644999999999995</Frame>
+        <Frame>0.32132999999999995</Frame>
+        <Frame>0.44637</Frame>
+        <Frame>0.5965</Frame>
+        <Frame>0.45687</Frame>
+        <Frame>0.5391</Frame>
+        <Frame>0.5626599999999999</Frame>
+        <Frame>0.74474</Frame>
+        <Frame>0.62874</Frame>
+        <Frame>0.64473</Frame>
+        <Frame>0.79771</Frame>
+        <Frame>0.85322</Frame>
+        <Frame>0.7768999999999999</Frame>
+        <Frame>0.6096499999999999</Frame>
+        <Frame>0.7855599999999999</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaThreshold2" Hierarchy="ProbeHierarchy" NumFrames="6" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.02" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>3</Frame>
+        <Frame>0</Frame>
+        <Frame>1.5</Frame>
+        <Frame>2.25</Frame>
+        <Frame>2</Frame>
+        <Frame>2.375</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaRandomWalk2" Hierarchy="ProbeHierarchy" NumFrames="32" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="true" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.02" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0.00879</Frame>
+        <Frame>0.13147</Frame>
+        <Frame>0.31567</Frame>
+        <Frame>0.23152</Frame>
+        <Frame>0.33796</Frame>
+        <Frame>0.41965</Frame>
+        <Frame>0.4842</Frame>
+        <Frame>0.32826</Frame>
+        <Frame>0.13903</Frame>
+        <Frame>0.09269999999999999</Frame>
+        <Frame>0.19125999999999999</Frame>
+        <Frame>0.09220999999999999</Frame>
+        <Frame>0.09284999999999999</Frame>
+        <Frame>0.01981999999999999</Frame>
+        <Frame>0.15834999999999996</Frame>
+        <Frame>0.33642999999999995</Frame>
+        <Frame>0.29706999999999995</Frame>
+        <Frame>0.49644999999999995</Frame>
+        <Frame>0.32132999999999995</Frame>
+        <Frame>0.44637</Frame>
+        <Frame>0.5965</Frame>
+        <Frame>0.45687</Frame>
+        <Frame>0.5391</Frame>
+        <Frame>0.5626599999999999</Frame>
+        <Frame>0.74474</Frame>
+        <Frame>0.62874</Frame>
+        <Frame>0.64473</Frame>
+        <Frame>0.79771</Frame>
+        <Frame>0.85322</Frame>
+        <Frame>0.7768999999999999</Frame>
+        <Frame>0.6096499999999999</Frame>
+        <Frame>0.7855599999999999</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaThreshold3" Hierarchy="ProbeHierarchy" NumFrames="6" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.03" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>3</Frame>
+        <Frame>0</Frame>
+        <Frame>1.5</Frame>
+        <Frame>2.25</Frame>
+        <Frame>2</Frame>
+        <Frame>2.375</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaRandomWalk3" Hierarchy="ProbeHierarchy" NumFrames="32" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.03" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0.00879</Frame>
+        <Frame>0.13147</Frame>
+        <Frame>0.31567</Frame>
+        <Frame>0.23152</Frame>
+        <Frame>0.33796</Frame>
+        <Frame>0.41965</Frame>
+        <Frame>0.4842</Frame>
+        <Frame>0.32826</Frame>
+        <Frame>0.13903</Frame>
+        <Frame>0.09269999999999999</Frame>
+        <Frame>0.19125999999999999</Frame>
+        <Frame>0.09220999999999999</Frame>
+        <Frame>0.09284999999999999</Frame>
+        <Frame>0.01981999999999999</Frame>
+        <Frame>0.15834999999999996</Frame>
+        <Frame>0.33642999999999995</Frame>
+        <Frame>0.29706999999999995</Frame>
+        <Frame>0.49644999999999995</Frame>
+        <Frame>0.32132999999999995</Frame>
+        <Frame>0.44637</Frame>
+        <Frame>0.5965</Frame>
+        <Frame>0.45687</Frame>
+        <Frame>0.5391</Frame>
+        <Frame>0.5626599999999999</Frame>
+        <Frame>0.74474</Frame>
+        <Frame>0.62874</Frame>
+        <Frame>0.64473</Frame>
+        <Frame>0.79771</Frame>
+        <Frame>0.85322</Frame>
+        <Frame>0.7768999999999999</Frame>
+        <Frame>0.6096499999999999</Frame>
+        <Frame>0.7855599999999999</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaThreshold4" Hierarchy="ProbeHierarchy" NumFrames="6" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.04" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>3</Frame>
+        <Frame>0</Frame>
+        <Frame>1.5</Frame>
+        <Frame>2.25</Frame>
+        <Frame>2</Frame>
+        <Frame>2.375</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaRandomWalk4" Hierarchy="ProbeHierarchy" NumFrames="32" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="true" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.04" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0.00879</Frame>
+        <Frame>0.13147</Frame>
+        <Frame>0.31567</Frame>
+        <Frame>0.23152</Frame>
+        <Frame>0.33796</Frame>
+        <Frame>0.41965</Frame>
+        <Frame>0.4842</Frame>
+        <Frame>0.32826</Frame>
+        <Frame>0.13903</Frame>
+        <Frame>0.09269999999999999</Frame>
+        <Frame>0.19125999999999999</Frame>
+        <Frame>0.09220999999999999</Frame>
+        <Frame>0.09284999999999999</Frame>
+        <Frame>0.01981999999999999</Frame>
+        <Frame>0.15834999999999996</Frame>
+        <Frame>0.33642999999999995</Frame>
+        <Frame>0.29706999999999995</Frame>
+        <Frame>0.49644999999999995</Frame>
+        <Frame>0.32132999999999995</Frame>
+        <Frame>0.44637</Frame>
+        <Frame>0.5965</Frame>
+        <Frame>0.45687</Frame>
+        <Frame>0.5391</Frame>
+        <Frame>0.5626599999999999</Frame>
+        <Frame>0.74474</Frame>
+        <Frame>0.62874</Frame>
+        <Frame>0.64473</Frame>
+        <Frame>0.79771</Frame>
+        <Frame>0.85322</Frame>
+        <Frame>0.7768999999999999</Frame>
+        <Frame>0.6096499999999999</Frame>
+        <Frame>0.7855599999999999</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaThreshold5" Hierarchy="ProbeHierarchy" NumFrames="6" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.05" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>3</Frame>
+        <Frame>0</Frame>
+        <Frame>1.5</Frame>
+        <Frame>2.25</Frame>
+        <Frame>2</Frame>
+        <Frame>2.375</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaRandomWalk5" Hierarchy="ProbeHierarchy" NumFrames="32" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.05" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0.00879</Frame>
+        <Frame>0.13147</Frame>
+        <Frame>0.31567</Frame>
+        <Frame>0.23152</Frame>
+        <Frame>0.33796</Frame>
+        <Frame>0.41965</Frame>
+        <Frame>0.4842</Frame>
+        <Frame>0.32826</Frame>
+        <Frame>0.13903</Frame>
+        <Frame>0.09269999999999999</Frame>
+        <Frame>0.19125999999999999</Frame>
+        <Frame>0.09220999999999999</Frame>
+        <Frame>0.09284999999999999</Frame>
+        <Frame>0.01981999999999999</Frame>
+        <Frame>0.15834999999999996</Frame>
+        <Frame>0.33642999999999995</Frame>
+        <Frame>0.29706999999999995</Frame>
+        <Frame>0.49644999999999995</Frame>
+        <Frame>0.32132999999999995</Frame>
+        <Frame>0.44637</Frame>
+        <Frame>0.5965</Frame>
+        <Frame>0.45687</Frame>
+        <Frame>0.5391</Frame>
+        <Frame>0.5626599999999999</Frame>
+        <Frame>0.74474</Frame>
+        <Frame>0.62874</Frame>
+        <Frame>0.64473</Frame>
+        <Frame>0.79771</Frame>
+        <Frame>0.85322</Frame>
+        <Frame>0.7768999999999999</Frame>
+        <Frame>0.6096499999999999</Frame>
+        <Frame>0.7855599999999999</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaThreshold6" Hierarchy="ProbeHierarchy" NumFrames="6" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.075" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>3</Frame>
+        <Frame>0</Frame>
+        <Frame>1.5</Frame>
+        <Frame>2.25</Frame>
+        <Frame>2</Frame>
+        <Frame>2.375</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaRandomWalk6" Hierarchy="ProbeHierarchy" NumFrames="32" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="true" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.075" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0.00879</Frame>
+        <Frame>0.13147</Frame>
+        <Frame>0.31567</Frame>
+        <Frame>0.23152</Frame>
+        <Frame>0.33796</Frame>
+        <Frame>0.41965</Frame>
+        <Frame>0.4842</Frame>
+        <Frame>0.32826</Frame>
+        <Frame>0.13903</Frame>
+        <Frame>0.09269999999999999</Frame>
+        <Frame>0.19125999999999999</Frame>
+        <Frame>0.09220999999999999</Frame>
+        <Frame>0.09284999999999999</Frame>
+        <Frame>0.01981999999999999</Frame>
+        <Frame>0.15834999999999996</Frame>
+        <Frame>0.33642999999999995</Frame>
+        <Frame>0.29706999999999995</Frame>
+        <Frame>0.49644999999999995</Frame>
+        <Frame>0.32132999999999995</Frame>
+        <Frame>0.44637</Frame>
+        <Frame>0.5965</Frame>
+        <Frame>0.45687</Frame>
+        <Frame>0.5391</Frame>
+        <Frame>0.5626599999999999</Frame>
+        <Frame>0.74474</Frame>
+        <Frame>0.62874</Frame>
+        <Frame>0.64473</Frame>
+        <Frame>0.79771</Frame>
+        <Frame>0.85322</Frame>
+        <Frame>0.7768999999999999</Frame>
+        <Frame>0.6096499999999999</Frame>
+        <Frame>0.7855599999999999</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaThreshold7" Hierarchy="ProbeHierarchy" NumFrames="6" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.08" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>3</Frame>
+        <Frame>0</Frame>
+        <Frame>1.5</Frame>
+        <Frame>2.25</Frame>
+        <Frame>2</Frame>
+        <Frame>2.375</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaRandomWalk7" Hierarchy="ProbeHierarchy" NumFrames="32" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.08" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0.00879</Frame>
+        <Frame>0.13147</Frame>
+        <Frame>0.31567</Frame>
+        <Frame>0.23152</Frame>
+        <Frame>0.33796</Frame>
+        <Frame>0.41965</Frame>
+        <Frame>0.4842</Frame>
+        <Frame>0.32826</Frame>
+        <Frame>0.13903</Frame>
+        <Frame>0.09269999999999999</Frame>
+        <Frame>0.19125999999999999</Frame>
+        <Frame>0.09220999999999999</Frame>
+        <Frame>0.09284999999999999</Frame>
+        <Frame>0.01981999999999999</Frame>
+        <Frame>0.15834999999999996</Frame>
+        <Frame>0.33642999999999995</Frame>
+        <Frame>0.29706999999999995</Frame>
+        <Frame>0.49644999999999995</Frame>
+        <Frame>0.32132999999999995</Frame>
+        <Frame>0.44637</Frame>
+        <Frame>0.5965</Frame>
+        <Frame>0.45687</Frame>
+        <Frame>0.5391</Frame>
+        <Frame>0.5626599999999999</Frame>
+        <Frame>0.74474</Frame>
+        <Frame>0.62874</Frame>
+        <Frame>0.64473</Frame>
+        <Frame>0.79771</Frame>
+        <Frame>0.85322</Frame>
+        <Frame>0.7768999999999999</Frame>
+        <Frame>0.6096499999999999</Frame>
+        <Frame>0.7855599999999999</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaThreshold8" Hierarchy="ProbeHierarchy" NumFrames="6" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.1" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>3</Frame>
+        <Frame>0</Frame>
+        <Frame>1.5</Frame>
+        <Frame>2.25</Frame>
+        <Frame>2</Frame>
+        <Frame>2.375</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaRandomWalk8" Hierarchy="ProbeHierarchy" NumFrames="32" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="true" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.1" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0.00879</Frame>
+        <Frame>0.13147</Frame>
+        <Frame>0.31567</Frame>
+        <Frame>0.23152</Frame>
+        <Frame>0.33796</Frame>
+        <Frame>0.41965</Frame>
+        <Frame>0.4842</Frame>
+        <Frame>0.32826</Frame>
+        <Frame>0.13903</Frame>
+        <Frame>0.09269999999999999</Frame>
+        <Frame>0.19125999999999999</Frame>
+        <Frame>0.09220999999999999</Frame>
+        <Frame>0.09284999999999999</Frame>
+        <Frame>0.01981999999999999</Frame>
+        <Frame>0.15834999999999996</Frame>
+        <Frame>0.33642999999999995</Frame>
+        <Frame>0.29706999999999995</Frame>
+        <Frame>0.49644999999999995</Frame>
+        <Frame>0.32132999999999995</Frame>
+        <Frame>0.44637</Frame>
+        <Frame>0.5965</Frame>
+        <Frame>0.45687</Frame>
+        <Frame>0.5391</Frame>
+        <Frame>0.5626599999999999</Frame>
+        <Frame>0.74474</Frame>
+        <Frame>0.62874</Frame>
+        <Frame>0.64473</Frame>
+        <Frame>0.79771</Frame>
+        <Frame>0.85322</Frame>
+        <Frame>0.7768999999999999</Frame>
+        <Frame>0.6096499999999999</Frame>
+        <Frame>0.7855599999999999</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaThreshold9" Hierarchy="ProbeHierarchy" NumFrames="6" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.12" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>3</Frame>
+        <Frame>0</Frame>
+        <Frame>1.5</Frame>
+        <Frame>2.25</Frame>
+        <Frame>2</Frame>
+        <Frame>2.375</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="DeltaRandomWalk9" Hierarchy="ProbeHierarchy" NumFrames="32" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="false" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.12" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0.00879</Frame>
+        <Frame>0.13147</Frame>
+        <Frame>0.31567</Frame>
+        <Frame>0.23152</Frame>
+        <Frame>0.33796</Frame>
+        <Frame>0.41965</Frame>
+        <Frame>0.4842</Frame>
+        <Frame>0.32826</Frame>
+        <Frame>0.13903</Frame>
+        <Frame>0.09269999999999999</Frame>
+        <Frame>0.19125999999999999</Frame>
+        <Frame>0.09220999999999999</Frame>
+        <Frame>0.09284999999999999</Frame>
+        <Frame>0.01981999999999999</Frame>
+        <Frame>0.15834999999999996</Frame>
+        <Frame>0.33642999999999995</Frame>
+        <Frame>0.29706999999999995</Frame>
+        <Frame>0.49644999999999995</Frame>
+        <Frame>0.32132999999999995</Frame>
+        <Frame>0.44637</Frame>
+        <Frame>0.5965</Frame>
+        <Frame>0.45687</Frame>
+        <Frame>0.5391</Frame>
+        <Frame>0.5626599999999999</Frame>
+        <Frame>0.74474</Frame>
+        <Frame>0.62874</Frame>
+        <Frame>0.64473</Frame>
+        <Frame>0.79771</Frame>
+        <Frame>0.85322</Frame>
+        <Frame>0.7768999999999999</Frame>
+        <Frame>0.6096499999999999</Frame>
+        <Frame>0.7855599999999999</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="MixedChoice0" Hierarchy="ProbeHierarchy" NumFrames="4" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="true" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.04" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0</Frame>
+        <Frame>1</Frame>
+        <Frame>2</Frame>
+        <Frame>3</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="MixedChoice1" Hierarchy="ProbeHierarchy" NumFrames="4" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="true" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.04" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0</Frame>
+        <Frame>0.1</Frame>
+        <Frame>0.2</Frame>
+        <Frame>0.3</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="MixedChoice2" Hierarchy="ProbeHierarchy" NumFrames="4" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="true" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.04" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0</Frame>
+        <Frame>1</Frame>
+        <Frame>1</Frame>
+        <Frame>1</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="MixedChoice3" Hierarchy="ProbeHierarchy" NumFrames="4" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="true" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.04" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>1</Frame>
+        <Frame>1</Frame>
+        <Frame>1</Frame>
+        <Frame>1</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="MixedChoice4" Hierarchy="ProbeHierarchy" NumFrames="4" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="true" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.04" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0</Frame>
+        <Frame>0</Frame>
+        <Frame>0</Frame>
+        <Frame>0</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="MixedChoice5" Hierarchy="ProbeHierarchy" NumFrames="2" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="true" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.04" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>1</Frame>
+        <Frame>2</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+  <W3DAnimation id="MixedChoice6" Hierarchy="ProbeHierarchy" NumFrames="3" FrameRate="20">
+    <CompressionSettings AllowTimeCoded="true" AllowAdaptiveDelta="true" MaxAdaptiveDeltaError="0.04" />
+    <Channels>
+      <ChannelScalar Pivot="6" Type="XTranslation" FirstFrame="0">
+        <Frame>0.1</Frame>
+        <Frame>0.0</Frame>
+        <Frame>0.2</Frame>
+      </ChannelScalar>
+    </Channels>
+  </W3DAnimation>
+</AssetDeclaration>

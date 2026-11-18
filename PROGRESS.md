@@ -1,6 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 265 adds native RadiusCursor using the shared radius decal encoder and fixes the default alpha of a present Color element. Both EA fixtures match byte for byte. All 257 tests and Clippy passed.
-- Checkpoint 264 adds ExperienceLevelTemplate and schema-based rank inheritance. Checkpoint 263 adds all eleven unit ability button variants.
+- Checkpoint 266 adds native W3DAnimation with adaptive delta and timecoded compression for scalar and quaternion channels. All 43 EA fixture assets, 258 tests, and Clippy passed.
+- Checkpoint 265 adds RadiusCursor and fixes the default alpha for decals. Checkpoints 263–264 add ability button variants and inherited experience ranks.
 
-- Surge Step 6 passes Archer Maiden's radius cursor and reaches W3DAnimation in EXJAPANARROWGEO.w3x. Next task is the native W3D animation encoder and channel layouts.
+- Surge Step 6 compiles EXJAPANARROWGEO.w3x and now reaches WeaponTemplate ScatterRadiusVsType in Archer Maiden's weapon data. Next task is the per-target scatter radius encoder.

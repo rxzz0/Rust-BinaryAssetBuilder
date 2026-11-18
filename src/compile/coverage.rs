@@ -1223,6 +1223,20 @@ mod tests {
         assert_ea_fixture("weapon-nugget-filters", 5);
     }
 
+    #[test]
+    fn w3d_animation_compression_matches_ea() {
+        for (fixture, count) in [
+            ("animation-runtime", 3),
+            ("timecoded", 3),
+            ("timecoded-details", 2),
+            ("animation-delta", 4),
+            ("delta-thresholds", 27),
+            ("delta-special", 4),
+        ] {
+            assert_ea_fixture(fixture, count);
+        }
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();

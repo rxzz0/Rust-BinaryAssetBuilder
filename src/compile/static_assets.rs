@@ -37,6 +37,7 @@ mod particle_system;
 mod player_template;
 mod tokenized;
 mod upgrade;
+mod w3d_animation;
 mod w3d_mesh;
 mod weapon;
 
@@ -78,6 +79,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "AttributeModifier" => (0xf901_fe9b, 51, attribute_modifier::compile),
         "ArmorTemplate" => (0x641a_d32e, 33, armor::compile),
         "UpgradeTemplate" => (0x4f8d_2969, 34, upgrade::compile),
+        "W3DAnimation" => (0x5545_5fe8, 66, w3d_animation::compile),
         "W3DMesh" => (0xcd8a_089c, 35, w3d_mesh::compile),
         "W3DContainer" => (0x619d_a33f, 36, w3d_mesh::container),
         "AmbientStream" => (0x6d16_24fb, 37, audio::single_sound),
@@ -138,7 +140,9 @@ pub(super) fn compile_asset(
     let (type_hash, sort_order, marshal) = encoder(type_name)
         .ok_or_else(|| invalid(path, format!("unsupported static asset type {type_name}")))?;
     let data = marshal(node, path)?;
-    let processing_hash = if type_name == "W3DMesh" {
+    let processing_hash = if type_name == "W3DAnimation" {
+        0xd650_5ce9
+    } else if type_name == "W3DMesh" {
         // RA3's render plugin uses its compiler version XOR the runtime type hash.
         type_hash ^ 8
     } else if data.tokenized {

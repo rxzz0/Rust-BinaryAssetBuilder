@@ -1,0 +1,20 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+ <W3DAnimation id="TimecodedDetails" Hierarchy="ProbeSkeleton" NumFrames="5" FrameRate="30">
+  <CompressionSettings AllowAdaptiveDelta="false" MaxTranslationError="1.1" MaxRotationError="0.5"/>
+  <Channels>
+   <ChannelScalar Type="XTranslation" Pivot="1"><Frame>1</Frame><Frame>2</Frame><Frame>3</Frame><Frame>4</Frame><Frame>5</Frame></ChannelScalar>
+   <ChannelScalar Type="YTranslation" Pivot="2"><Frame>1</Frame><Frame BinaryMove="true">1</Frame><Frame>1</Frame><Frame>1</Frame><Frame>1</Frame></ChannelScalar>
+   <ChannelScalar Type="ZTranslation" Pivot="3"><Frame BinaryMove="true">1</Frame><Frame>1</Frame><Frame BinaryMove="true">1</Frame><Frame>1</Frame><Frame>1</Frame></ChannelScalar>
+   <ChannelQuaternion Type="Orientation" Pivot="4"><Frame X="0" Y="0" Z="0" W="1"/><Frame X="0" Y="0" Z=".1" W=".9949874"/><Frame X="0" Y="0" Z="0" W="1"/><Frame BinaryMove="true" X="0" Y="0" Z="0" W="1"/><Frame BinaryMove="true" X="0" Y="0" Z="0" W="1"/></ChannelQuaternion>
+  </Channels>
+ </W3DAnimation>
+ <W3DAnimation id="TimecodedForce" Hierarchy="ProbeSkeleton" NumFrames="5" FrameRate="30">
+  <CompressionSettings AllowAdaptiveDelta="false" MaxTranslationError=".01" ForceReductionRate=".5"/>
+  <Channels>
+   <ChannelScalar Type="XTranslation" Pivot="5"><Frame>1</Frame><Frame>7</Frame><Frame>3</Frame><Frame>5</Frame><Frame>9</Frame></ChannelScalar>
+   <ChannelScalar Type="XTranslation" Pivot="6"><Frame BinaryMove="true">1</Frame><Frame BinaryMove="true">7</Frame><Frame BinaryMove="true">3</Frame><Frame BinaryMove="true">5</Frame><Frame BinaryMove="true">9</Frame></ChannelScalar>
+   <ChannelScalar Type="YTranslation" Pivot="7"><Frame>1</Frame><Frame>2</Frame><Frame>3</Frame><Frame>4</Frame><Frame>5</Frame></ChannelScalar>
+   <ChannelQuaternion Type="Orientation" Pivot="8"><Frame X="0" Y="0" Z="0" W="1"/><Frame X="1" Y="0" Z="0" W="0"/><Frame X="0" Y="1" Z="0" W="0"/><Frame X="0" Y="0" Z="1" W="0"/><Frame X="1" Y="0" Z="0" W="0"/></ChannelQuaternion>
+  </Channels>
+ </W3DAnimation>
+</AssetDeclaration>
