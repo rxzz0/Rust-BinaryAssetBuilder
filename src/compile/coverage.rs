@@ -1023,6 +1023,11 @@ mod tests {
     }
 
     #[test]
+    fn simple_weapon_effects_match_ea_batch() {
+        assert_ea_fixture("simple-weapon-effects", 2);
+    }
+
+    #[test]
     fn weapon_activation_nuggets_match_ea_batch() {
         assert_ea_fixture("weapon-activation-nuggets", 1);
     }

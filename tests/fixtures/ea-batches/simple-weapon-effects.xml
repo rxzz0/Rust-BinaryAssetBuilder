@@ -1,0 +1,27 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="SimpleEffectsDefault">
+    <Nuggets>
+      <SpecialPowerNugget/><ActivateLiftObjectNugget/><ActivateLinearDamageNugget/><ActivateCircularDamageNugget/>
+      <SlavesAttackNugget/><ReportWeaponFiredStatNugget/><ContainedObjectAttackNugget/>
+      <TerrainCraterNugget/><ScatterProjectileNugget/><InformTargetNugget/>
+      <SuppressionNugget/><SecondaryDamageNugget Amount="0"/><SpendStolenTiberiumNugget/>
+    </Nuggets>
+  </WeaponTemplate>
+  <WeaponTemplate id="SimpleEffectsConfigured">
+    <Nuggets>
+      <SpecialPowerNugget SpecialPowerTemplate="PowerProbe"><SpecialObjectFilter Rule="ANY"><IncludeThing>TargetProbe</IncludeThing></SpecialObjectFilter></SpecialPowerNugget>
+      <ActivateLiftObjectNugget Lifetime="1.5s"/>
+      <ActivateLinearDamageNugget Lifetime="2.5s"/>
+      <ActivateCircularDamageNugget Lifetime="3.5s"/>
+      <SlavesAttackNugget Radius="4"/>
+      <ReportWeaponFiredStatNugget Radius="5"/>
+      <ContainedObjectAttackNugget Radius="6"/>
+      <TerrainCraterNugget Depth="7" Lift="25%"/>
+      <ScatterProjectileNugget ScatterMin="8" ScatterMax="9"/>
+      <InformTargetNugget MinTimeToImpactFudgeFactor="0.5" MaxTimeToImpactFudgeFactor="1.5"/>
+      <SuppressionNugget Suppression="3" DurationSeconds="4s" SuppressionTaperOff="5" SuppressionArc="90d" SuppressionArcInverted="true"/>
+      <SecondaryDamageNugget Amount="11" DamageTaperOff="3" PercentDamageToContained="30%"/>
+      <SpendStolenTiberiumNugget AmountToSpend="14"/>
+    </Nuggets>
+  </WeaponTemplate>
+</AssetDeclaration>
