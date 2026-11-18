@@ -28,6 +28,17 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
     encode_root_attributes(node, &mut table, &mut data, &mut out)?;
     let mut children = significant_children(node).peekable();
     for (name, offset) in [
+        ("OverrideVoiceAttackSound", 0xe0),
+        ("OverrideVoiceEnterStateAttackSound", 0xe4),
+    ] {
+        if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, name))) {
+            let sound = encode_voice_override(child, offset, &mut data, &mut out)?;
+            if !table.replace_target(name, Target::Table(sound)) {
+                return Err(invalid(path, format!("weapon layout missing {name}")));
+            }
+        }
+    }
+    for (name, offset) in [
         ("PreAttackDelay", 0xe8),
         ("FiringDuration", 0xec),
         ("CoolDownDelayBetweenShots", 0xf0),
@@ -66,6 +77,23 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             return Err(invalid(path, "weapon layout missing Nuggets"));
         }
     }
+    for (name, offset) in [
+        ("SurpriseAttackObjectFilter", 0x104),
+        ("CombinedAttackObjectFilter", 0x108),
+        ("HitStoredObjectFilter", 0x10c),
+    ] {
+        if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, name))) {
+            let filter = super::game_object::encode_object_filter(
+                child,
+                offset,
+                &mut data,
+                &mut out.reference_types,
+            )?;
+            if !table.replace_target(name, Target::Table(filter)) {
+                return Err(invalid(path, format!("weapon layout missing {name}")));
+            }
+        }
+    }
     let mut scatter_radii = Vec::new();
     while let Some(child) =
         children.next_if(|child| child.has_tag_name((SAGE_NS, "ScatterRadiusVsType")))
@@ -76,6 +104,34 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
         let radii = encode_scatter_radii(&scatter_radii, &mut data, &mut out)?;
         if !table.replace_target("ScatterRadiusVsType", Target::Table(radii)) {
             return Err(invalid(path, "weapon layout missing ScatterRadiusVsType"));
+        }
+    }
+    let mut modifiers = Vec::new();
+    while let Some(child) =
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "IncompatibleAttributeModifier")))
+    {
+        let value = super::text_value(child, path)?;
+        modifiers.push(nugget_reference(
+            Some(value),
+            "AttributeModifier",
+            path,
+            &mut out,
+        )?);
+    }
+    if !modifiers.is_empty() {
+        const COUNT: usize = 0x118;
+        let start = data.list(COUNT, modifiers.len(), 4)?;
+        let items = modifiers.into_iter().enumerate().map(|(index, ordinal)| {
+            let offset = start + index * 4;
+            data.word(offset, ordinal);
+            (0, Target::Data(offset))
+        });
+        let modifiers = Table::array(COUNT, items);
+        if !table.replace_target("IncompatibleAttributeModifier", Target::Table(modifiers)) {
+            return Err(invalid(
+                path,
+                "weapon layout missing IncompatibleAttributeModifier",
+            ));
         }
     }
     if let Some(child) = children.next() {
@@ -98,6 +154,39 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
         data.relocations[first..end].rotate_left(derived - first);
     }
     tokenized::finish(table, data, out)
+}
+
+fn encode_voice_override(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+) -> io::Result<Table> {
+    let path = data.path;
+    validate_attributes(node, &["Sound", "EvaEvent"], path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected weapon voice override content"));
+    }
+    let start = data.allocate(pointer, 8)?;
+    let sound = if let Some(value) = node.attribute("Sound") {
+        let ordinal = super::game_object::audio_reference(
+            value,
+            path,
+            &mut out.references,
+            &mut out.reference_types,
+        )?;
+        let offset = data.allocate(start, 4)?;
+        data.word(offset, ordinal);
+        Target::Data(offset)
+    } else {
+        Target::Null
+    };
+    let event = nugget_reference(node.attribute("EvaEvent"), "EvaEvent", path, out)?;
+    data.word(start + 4, event);
+    Ok(Table::record(vec![
+        Entry::named("Sound", 0x63d7_b468, sound),
+        Entry::named("EvaEvent", 0xc4ec_43b1, Target::Data(start + 4)),
+    ]))
 }
 
 fn encode_scatter_radii(

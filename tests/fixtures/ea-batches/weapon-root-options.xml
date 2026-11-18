@@ -1,0 +1,29 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <WeaponTemplate id="WeaponVoiceFilterDefaults">
+        <OverrideVoiceAttackSound/>
+        <OverrideVoiceEnterStateAttackSound/>
+        <SurpriseAttackObjectFilter/>
+        <CombinedAttackObjectFilter/>
+        <HitStoredObjectFilter/>
+    </WeaponTemplate>
+    <WeaponTemplate id="WeaponVoiceFilterConfigured" FireSound="WeaponProbeFireSound">
+        <OverrideVoiceAttackSound Sound="WeaponProbeVoice" EvaEvent="WeaponProbeEva"/>
+        <OverrideVoiceEnterStateAttackSound EvaEvent="WeaponProbeState"/>
+        <PreAttackDelay MinSeconds="1s" MaxSeconds="2s"/>
+        <Nuggets><DamageNugget Damage="8"/></Nuggets>
+        <SurpriseAttackObjectFilter Rule="ANY" StatusBitFlags="NO_COLLISIONS"><IncludeThing>WeaponProbeTarget</IncludeThing></SurpriseAttackObjectFilter>
+        <CombinedAttackObjectFilter Rule="ALL" Include="STRUCTURE"/>
+        <HitStoredObjectFilter Rule="NONE" Exclude="VEHICLE"/>
+        <ScatterRadiusVsType Radius="25"><Filter/></ScatterRadiusVsType>
+        <IncompatibleAttributeModifier>WeaponProbeModifier</IncompatibleAttributeModifier>
+        <IncompatibleAttributeModifier>WeaponSecondModifier</IncompatibleAttributeModifier>
+    </WeaponTemplate>
+    <WeaponTemplate id="WeaponRootExplicitEmpty">
+        <OverrideVoiceAttackSound Sound="" EvaEvent=""/>
+        <OverrideVoiceEnterStateAttackSound Sound="AudioEvent:WeaponProbeExplicitSound"/>
+    </WeaponTemplate>
+    <WeaponTemplate id="WeaponRootDuplicateModifier">
+        <IncompatibleAttributeModifier>WeaponProbeModifier</IncompatibleAttributeModifier>
+        <IncompatibleAttributeModifier>WeaponProbeModifier</IncompatibleAttributeModifier>
+    </WeaponTemplate>
+</AssetDeclaration>

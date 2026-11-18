@@ -1265,6 +1265,11 @@ mod tests {
         assert_ea_fixture("dynamics-draw", 3);
     }
 
+    #[test]
+    fn weapon_root_options_match_ea() {
+        assert_ea_fixture("weapon-root-options", 4);
+    }
+
     fn assert_ea_fixture(name: &str, count: usize) {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ea-batches");
         let mut report = Vec::new();
