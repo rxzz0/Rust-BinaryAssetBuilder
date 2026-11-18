@@ -252,9 +252,18 @@ impl AssetReference {
             ],
             _ => &[],
         };
-        std::iter::once(self.id).chain(subtypes.iter().map(|name| AssetId {
-            type_id: fast_hash(name.as_bytes()),
-            instance_id: self.id.instance_id,
+        use static_assets::music_conditions;
+        static MUSIC_CONDITION_TYPE: std::sync::LazyLock<u32> =
+            std::sync::LazyLock::new(|| fast_hash(music_conditions::BASE.as_bytes()));
+        let music_subtypes = (self.id.type_id == *MUSIC_CONDITION_TYPE)
+            .then(music_conditions::types)
+            .into_iter()
+            .flatten();
+        std::iter::once(self.id).chain(subtypes.iter().copied().chain(music_subtypes).map(|name| {
+            AssetId {
+                type_id: fast_hash(name.as_bytes()),
+                instance_id: self.id.instance_id,
+            }
         }))
     }
 

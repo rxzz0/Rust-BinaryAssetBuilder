@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 312 adds all 18 MusicScript condition types, with inline filters, weak references, and compound conditions. All 24 EA fixture assets matched, and the native stream linked successfully. All 296 tests and Clippy passed.
 - Checkpoint 311 runs official map builds in ModStudio Step 9 and packages the native patch streams and map version. Generated ModStudio Steps 4–11 built and packaged Surge in 32.34 seconds, including 1.09 seconds for maps. Verified the packaged map files and linked streams. All 296 tests and Clippy passed.
 - Checkpoint 310 includes SDK schema-declared weak dependencies and compiles MusicPalette and MusicScriptTrack. Five focused EA assets matched. Surge built all 171 shipped map assets, with 170 matching all linked chunks. Atlas bytes and some render reference type IDs differ. All 295 tests and Clippy passed.
 - Checkpoint 309 preserves XML order for GameMap environment references and import offsets. Surge's GameMap asset matched EA byte for byte, including its reference table. All 295 tests and Clippy passed.

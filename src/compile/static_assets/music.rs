@@ -74,9 +74,7 @@ pub(super) fn script_track(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
     };
     let mut result = Marshaled::default();
     if let Some(key) = node.attribute("TrackTypeKey").filter(|key| !key.is_empty()) {
-        let key = crate::compile::windows_1252(key)
-            .ok_or_else(|| invalid(path, "TrackTypeKey must use Windows-1252"))?;
-        data.word(4, asset_string_hash(&key));
+        data.word(4, script_string_hash(key, "TrackTypeKey", path)?);
     }
     for (name, offset) in [("Level", 8), ("Priority", 12)] {
         data.word(offset, sage_int(required(node, name, path)?, name, path)?);
@@ -86,7 +84,7 @@ pub(super) fn script_track(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
         let value = attribute.value();
         let (kind, offset) = match attribute.name() {
             "Track" => ("BaseAudioEventInfo", 20),
-            "Condition" => ("MusicScriptConditionNuggetBase", data.allocate(16, 4)?),
+            "Condition" => (super::music_conditions::BASE, data.allocate(16, 4)?),
             _ => continue,
         };
         if !value.trim().is_empty() {
@@ -119,7 +117,13 @@ pub(super) fn script_track(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
     Ok(finish_music_script(result, data))
 }
 
-fn finish_music_script(mut result: Marshaled, mut data: BinaryData<'_>) -> Marshaled {
+pub(super) fn script_string_hash(value: &str, field: &str, path: &Path) -> io::Result<u32> {
+    let bytes = crate::compile::windows_1252(value)
+        .ok_or_else(|| invalid(path, format!("{field} must use Windows-1252")))?;
+    Ok(asset_string_hash(&bytes))
+}
+
+pub(super) fn finish_music_script(mut result: Marshaled, mut data: BinaryData<'_>) -> Marshaled {
     for offsets in [&mut result.imports, &mut data.relocations] {
         if !offsets.is_empty() {
             offsets.push(u32::MAX);

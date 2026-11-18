@@ -37,6 +37,7 @@ mod hotkeys;
 mod joypad_buttons;
 mod locomotor;
 pub(super) mod music;
+pub(super) mod music_conditions;
 mod object_creation;
 mod particle_system;
 mod player_power_button;
@@ -129,7 +130,11 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "MissionTemplate" => (0xd299_ec3a, 25, campaign::mission),
         "CampaignTemplate" => (0xd0c4_5a63, 26, campaign::campaign),
         "CampaignEnumerator" => (0x0714_c282, 27, campaign_enumerator),
-        _ => return None,
+        _ => (
+            music_conditions::type_hash(type_name)?,
+            78,
+            music_conditions::compile,
+        ),
     };
     Some(encoder)
 }
@@ -1075,12 +1080,13 @@ fn write_import(
             &mut result.reference_types,
         )?
     } else {
-        let id = asset_reference(
-            value.split_once('\\').map_or(value, |(name, _)| name),
-            ty,
-            data.path,
-        )?;
-        result.reference_types.push(id.type_id);
+        let target = value.trim().split_once(':').map_or(ty, |(kind, _)| kind);
+        let id = if ty == music_conditions::BASE && music_conditions::type_hash(target).is_some() {
+            asset_reference(value, target, data.path)?
+        } else {
+            asset_reference(value, ty, data.path)?
+        };
+        result.reference_types.push(fast_hash(ty.as_bytes()));
         result.references.push(id.into());
         result.references.len() as u32
     };
