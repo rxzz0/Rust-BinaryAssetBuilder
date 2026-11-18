@@ -1023,6 +1023,11 @@ mod tests {
     }
 
     #[test]
+    fn projectile_variants_match_ea_batch() {
+        assert_ea_fixture("projectile-variants", 1);
+    }
+
+    #[test]
     fn damage_tracking_matches_ea_batch() {
         assert_ea_fixture("damage-tracking", 1);
     }

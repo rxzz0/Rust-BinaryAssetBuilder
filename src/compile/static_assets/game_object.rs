@@ -3,6 +3,7 @@ mod ai_update;
 mod animation;
 mod attack_assist;
 mod behaviors_basic;
+pub(super) use behaviors_basic::optional_vector;
 mod bezier_projectile;
 mod building_destruction;
 pub(super) mod children;

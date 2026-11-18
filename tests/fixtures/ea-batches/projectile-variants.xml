@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="ProjectileVariantsProbe">
+    <Nuggets>
+      <ProjectileNugget/>
+      <ProjectileNugget ProjectileTemplate="ProjectileBase" WarheadTemplate="ProbeWarhead" WeaponLaunchBoneSlotOverride="SECONDARY_WEAPON">
+        <SpecialObjectFilter Rule="ANY"><IncludeThing>TargetUnit</IncludeThing></SpecialObjectFilter>
+        <AttackOffset x="1.5" y="-1" z="3"/>
+        <VeterancyProjectiles VeterancyLevel="HEROIC" ProjectileTemplate="HeroicProjectile"/>
+        <VeterancyProjectiles ProjectileTemplate="VeteranProjectile" VeterancyLevel="VETERAN"/>
+        <VeterancyProjectiles/>
+        <VeterancyProjectiles VeterancyLevel="INVALID"/>
+        <SpecificBarrelOverride>3</SpecificBarrelOverride>
+      </ProjectileNugget>
+    </Nuggets>
+  </WeaponTemplate>
+</AssetDeclaration>

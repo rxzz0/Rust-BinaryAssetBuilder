@@ -267,7 +267,7 @@ fn upgrade_parent<'a, 'input: 'a>(
     Ok(base(0xae60_ae98, Table::record(upgrade)))
 }
 
-pub(super) fn optional_vector(
+pub(in crate::compile::static_assets) fn optional_vector(
     node: Option<Node<'_, '_>>,
     pointer: usize,
     data: &mut BinaryData<'_>,

@@ -56,8 +56,9 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             return Err(invalid(path, "weapon layout missing WeaponAiHintInfo"));
         }
     }
+    let mut projectile_starts = Vec::new();
     if let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, "Nuggets"))) {
-        let nuggets = encode_nuggets(child, &mut data, &mut out)?;
+        let nuggets = encode_nuggets(child, &mut data, &mut out, &mut projectile_starts)?;
         if !table.replace_target("Nuggets", Target::Table(nuggets)) {
             return Err(invalid(path, "weapon layout missing Nuggets"));
         }
@@ -72,6 +73,17 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
         ));
     }
     data.relocations.sort_unstable();
+    // The projectile layout emits its direct pointers before inherited effect pointers.
+    for start in projectile_starts {
+        let first = data.relocations.partition_point(|&offset| offset < start);
+        let derived = data
+            .relocations
+            .partition_point(|&offset| offset < start + 0x28);
+        let end = data
+            .relocations
+            .partition_point(|&offset| offset < start + 0x44);
+        data.relocations[first..end].rotate_left(derived - first);
+    }
     tokenized::finish(table, data, out)
 }
 
@@ -283,6 +295,7 @@ fn encode_nuggets(
     node: Node<'_, '_>,
     data: &mut BinaryData<'_>,
     out: &mut Marshaled,
+    projectile_starts: &mut Vec<u32>,
 ) -> io::Result<Table> {
     validate_attributes(node, &[], data.path)?;
     let children: Vec<_> = significant_children(node).collect();
@@ -316,10 +329,13 @@ fn encode_nuggets(
                 0xe3c2_d15b,
                 attribute_modifier_nugget(child, pointer, data, out)?,
             ),
-            (Some(SAGE_NS), "ProjectileNugget") => (
-                0x87c7_bdcc,
-                simple_reference_nugget(child, pointer, data, out, true)?,
-            ),
+            (Some(SAGE_NS), "ProjectileNugget") => {
+                projectile_starts.push(data.payload.len() as u32);
+                (
+                    0x87c7_bdcc,
+                    simple_reference_nugget(child, pointer, data, out, true)?,
+                )
+            }
             (Some(SAGE_NS), "WeaponOCLNugget") => (
                 0xc606_7c3f,
                 simple_reference_nugget(child, pointer, data, out, false)?,
@@ -954,7 +970,11 @@ fn simple_reference_nugget(
     let allowed: Vec<_> = refs
         .iter()
         .map(|&(name, ..)| name)
-        .chain((!projectile).then_some("TargetAsPrimaryObject"))
+        .chain([if projectile {
+            "WeaponLaunchBoneSlotOverride"
+        } else {
+            "TargetAsPrimaryObject"
+        }])
         .collect();
     validate_effect_attributes(node, &allowed, path)?;
     let start = data.allocate(pointer, if projectile { 0x44 } else { 0x30 })?;
@@ -973,31 +993,49 @@ fn simple_reference_nugget(
             data.word(start + offset, out.references.len() as u32);
         }
     }
-    let mut children = significant_children(node).peekable();
+    let mut children: Vec<_> = significant_children(node).collect();
+    let projectile_entries = if projectile {
+        let slot = super::game_object::weapon_slot(
+            node.attribute("WeaponLaunchBoneSlotOverride")
+                .unwrap_or("NO_WEAPON"),
+            path,
+        )?;
+        data.word(start + 0x30, slot);
+        let first = children
+            .iter()
+            .position(|child| {
+                child.tag_name().namespace() == Some(SAGE_NS)
+                    && matches!(
+                        child.tag_name().name(),
+                        "AttackOffset" | "VeterancyProjectiles" | "SpecificBarrelOverride"
+                    )
+            })
+            .unwrap_or(children.len());
+        let mut derived = children.drain(first..).peekable();
+        let type_start = out.reference_types.len();
+        let entries = projectile_children(&mut derived, start, data, out)?;
+        if let Some(child) = derived.next() {
+            return Err(invalid(
+                path,
+                format!(
+                    "unexpected ProjectileNugget child {}",
+                    child.tag_name().name()
+                ),
+            ));
+        }
+        Some((entries, out.reference_types.split_off(type_start)))
+    } else {
+        None
+    };
+    let mut children = children.into_iter().peekable();
     let mut entries = vec![encode_effect(node, start, data, out, &mut children)?];
-    if children.next().is_some() {
-        return Err(invalid(path, "unexpected weapon nugget child"));
-    }
     entries
         .extend(refs.iter().map(|&(name, kind, offset, _)| {
             Entry::named(name, kind, Target::Data(start + offset))
         }));
-    if projectile {
-        data.word(start + 0x30, 5);
-        entries.extend([
-            Entry::named(
-                "WeaponLaunchBoneSlotOverride",
-                0x1848_c549,
-                Target::Data(start + 0x30),
-            ),
-            Entry::named("AttackOffset", 0x2936_8077, Target::Null),
-            Entry::named(
-                "VeterancyProjectiles",
-                0x4185_7548,
-                Target::Table(Table::array(start + 0x38, [])),
-            ),
-            Entry::named("SpecificBarrelOverride", 0x23e6_50b8, Target::Null),
-        ]);
+    if let Some((fields, reference_types)) = projectile_entries {
+        entries.extend(fields);
+        out.reference_types.extend(reference_types);
     } else {
         data.payload[start + 0x2c] = flag(node, "TargetAsPrimaryObject", false, path)?;
         entries.push(Entry::named(
@@ -1006,7 +1044,97 @@ fn simple_reference_nugget(
             Target::Data(start + 0x2c),
         ));
     }
+    if let Some(child) = children.next() {
+        return Err(invalid(
+            path,
+            format!(
+                "unexpected {} child {}",
+                node.tag_name().name(),
+                child.tag_name().name()
+            ),
+        ));
+    }
     Ok(Table::record(entries))
+}
+
+fn projectile_children<'a, 'input: 'a>(
+    children: &mut std::iter::Peekable<impl Iterator<Item = Node<'a, 'input>>>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    out: &mut Marshaled,
+) -> io::Result<[Entry; 4]> {
+    let path = data.path;
+    let offset = children.next_if(|child| child.has_tag_name((SAGE_NS, "AttackOffset")));
+    let offset = super::game_object::optional_vector(offset, start + 0x34, data)?;
+    let mut projectiles = Vec::new();
+    while let Some(child) =
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "VeterancyProjectiles")))
+    {
+        validate_attributes(child, &["VeterancyLevel", "ProjectileTemplate"], path)?;
+        if has_content(child) {
+            return Err(invalid(path, "unexpected VeterancyProjectiles content"));
+        }
+        let level = match child.attribute("VeterancyLevel").unwrap_or("REGULAR") {
+            "INVALID" => u32::MAX,
+            value => super::global_ui::enum_value(
+                value,
+                &["REGULAR", "VETERAN", "ELITE", "HEROIC"],
+                path,
+            )?,
+        };
+        let ordinal = nugget_reference(
+            child.attribute("ProjectileTemplate"),
+            "GameObject",
+            path,
+            out,
+        )?;
+        projectiles.push((level, ordinal));
+    }
+    let count = start + 0x38;
+    let first = data.list(count, projectiles.len(), 8)?;
+    let items = projectiles
+        .into_iter()
+        .enumerate()
+        .map(|(index, (level, ordinal))| {
+            let index = first + index * 8;
+            data.word(index, level);
+            data.word(index + 4, ordinal);
+            (
+                0,
+                Target::Table(Table::record(vec![
+                    Entry::named("VeterancyLevel", 0xfb9f_bd6f, Target::Data(index)),
+                    Entry::named("ProjectileTemplate", 0xbfab_9075, Target::Data(index + 4)),
+                ])),
+            )
+        })
+        .collect::<Vec<_>>();
+    let barrel = if let Some(child) =
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "SpecificBarrelOverride")))
+    {
+        let value = super::text_value(child, path)?
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| invalid(path, "invalid SpecificBarrelOverride"))?;
+        let offset = data.allocate(start + 0x40, 4)?;
+        data.word(offset, value as u32);
+        Target::Data(offset)
+    } else {
+        Target::Null
+    };
+    Ok([
+        Entry::named(
+            "WeaponLaunchBoneSlotOverride",
+            0x1848_c549,
+            Target::Data(start + 0x30),
+        ),
+        Entry::named("AttackOffset", 0x2936_8077, offset),
+        Entry::named(
+            "VeterancyProjectiles",
+            0x4185_7548,
+            Target::Table(Table::array(count, items)),
+        ),
+        Entry::named("SpecificBarrelOverride", 0x23e6_50b8, barrel),
+    ])
 }
 
 fn schema_enums<const N: usize>(schema: &str, names: &[&str; N]) -> [Vec<String>; N] {
