@@ -1,5 +1,9 @@
 use binary_asset_builder::{
-    compile::{CustomData, compile_map, compile_sdk_global, compile_sdk_static, compile_static},
+    compile::{
+        CustomData, compile_map, compile_sdk_global, compile_sdk_maps, compile_sdk_static,
+        compile_static,
+    },
+    linked_stream::check_linked_files,
     manifest::{AssetEntry, AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest},
 };
 use std::fs;
@@ -1790,6 +1794,41 @@ fn maps_link_worldbuilder_models_and_keep_local_overrides() {
         actual.referenced_manifests[0].path,
         b"worldbuilder.11.manifest"
     );
+}
+
+#[test]
+fn sdk_map_publishing_preserves_sources_and_previous_stream_on_failure() {
+    let root = scratch_root();
+    let official = root.join("Mods/Test/Misc/Data/Maps/Official");
+    let map = official.join("MapOne");
+    let source = map.join("map.xml");
+    let xml = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameMap id="MapOne"/></AssetDeclaration>"#;
+    fs::create_dir_all(&map).unwrap();
+    fs::write(&source, xml).unwrap();
+    let stock = compile_static(&source, &root, &root).unwrap();
+    fs::write(root.join("worldbuilder.manifest"), &stock.manifest).unwrap();
+    fs::write(map.join("MapOne.map"), b"terrain").unwrap();
+    fs::create_dir(official.join("PrecompiledMap")).unwrap();
+
+    for _ in 0..2 {
+        assert_eq!(
+            compile_sdk_maps(&official, &root, &root, &official).unwrap(),
+            1
+        );
+    }
+    let path = map.join("map_mod.manifest");
+    let prior = fs::read(&path).unwrap();
+    check_linked_files(&path, &Manifest::parse(&prior).unwrap()).unwrap();
+    assert_eq!(fs::read(map.join("map.version")).unwrap(), b"_mod\r\n");
+    assert_eq!(fs::read(map.join("MapOne.map")).unwrap(), b"terrain");
+    assert_eq!(fs::read_to_string(&source).unwrap(), xml);
+    assert!(!official.join("PrecompiledMap/map.version").exists());
+
+    fs::write(&source, "<invalid").unwrap();
+    assert!(compile_sdk_maps(&official, &root, &root, &official).is_err());
+    assert_eq!(fs::read(&path).unwrap(), prior);
+    assert_eq!(fs::read(map.join("map.version")).unwrap(), b"_mod\r\n");
+    check_linked_files(&path, &Manifest::parse(&prior).unwrap()).unwrap();
 }
 
 #[test]

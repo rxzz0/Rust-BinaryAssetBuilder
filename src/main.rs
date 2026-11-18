@@ -3,8 +3,8 @@
 use binary_asset_builder::big::pack_big;
 use binary_asset_builder::compile::{
     CompiledStream, compile_apt_ui, compile_apt_ui_directory, compile_map, compile_sdk_global,
-    compile_sdk_static, compile_static, merge_assets, sdk_coverage, verify_ea_batch,
-    write_compiled_stream,
+    compile_sdk_maps, compile_sdk_static, compile_static, merge_assets, sdk_coverage,
+    verify_ea_batch, write_compiled_stream,
 };
 use binary_asset_builder::fix_assets::fix_assets;
 use binary_asset_builder::linked_stream::{check_linked_files, link_assets};
@@ -22,6 +22,7 @@ Usage
   binary-asset-builder compile-aptui <input-directory> --data-root <directory> --output <directory>
   binary-asset-builder compile-static <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-map <file.xml> --data-root <directory> --references <directory> --output <new-directory>
+  binary-asset-builder compile-maps-sdk <official-maps-directory> --sdk-root <directory> --references <builtmods-directory> --output <official-maps-directory>
   binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory>
   binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory>
   binary-asset-builder merge-assets <file.manifest> --assets <directory>
@@ -138,6 +139,30 @@ fn main() -> ExitCode {
                     ExitCode::FAILURE
                 }
             }
+        }
+        [
+            command,
+            input,
+            sdk_flag,
+            sdk,
+            references_flag,
+            references,
+            output_flag,
+            output,
+        ] if command == "compile-maps-sdk"
+            && sdk_flag == "--sdk-root"
+            && references_flag == "--references"
+            && output_flag == "--output" =>
+        {
+            diagnostic(
+                compile_sdk_maps(
+                    Path::new(input),
+                    Path::new(sdk),
+                    Path::new(references),
+                    Path::new(output),
+                )
+                .map(|count| println!("Compiled {count} official maps with Rust")),
+            )
         }
         [
             command,

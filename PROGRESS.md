@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 311 runs official map builds in ModStudio Step 9 and packages the native patch streams and map version. Generated ModStudio Steps 4–11 built and packaged Surge in 32.34 seconds, including 1.09 seconds for maps. Verified the packaged map files and linked streams. All 296 tests and Clippy passed.
 - Checkpoint 310 includes SDK schema-declared weak dependencies and compiles MusicPalette and MusicScriptTrack. Five focused EA assets matched. Surge built all 171 shipped map assets, with 170 matching all linked chunks. Atlas bytes and some render reference type IDs differ. All 295 tests and Clippy passed.
 - Checkpoint 309 preserves XML order for GameMap environment references and import offsets. Surge's GameMap asset matched EA byte for byte, including its reference table. All 295 tests and Clippy passed.
 - Checkpoint 308 links map streams to WorldBuilder, resolves stock render models, and reconciles shared hashes. Surge produced a valid 159-asset stream with the shipped reference layout. Its shipped map still has 12 additional dependencies. All 295 tests and Clippy passed.
@@ -18,4 +19,4 @@
 - Checkpoint 295 adds native ModStudio Step 7 for precompiled W3D animations. All 194 Surge overrides produced byte-identical manifest, bin, relo, and imp files against EA. All 290 tests and Clippy passed.
 - Checkpoints 288–294 link concrete render and audio assets, fix inherited references, and add assisted placement, passenger ejection, dynamics collision, and stance templates.
 - The generated ModStudio commands ran Surge Steps 4–8 and 10–11 in 18.44 seconds using Rust. The build linked 3,911 static assets, wrote two LoD streams, and packaged both BIGs and the skudef.
-- Next, extend native coverage beyond Surge's active settings. Step 9 still needs the official map compiler.
+- Next, extend native coverage beyond Surge's active settings and validate generated maps in game.

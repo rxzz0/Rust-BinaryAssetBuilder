@@ -281,8 +281,25 @@ case 10:
     break;
 '@
 
+$preMapsSource = $source
+$source = Set-ModBuildStep $source 9 10 @'
+case 9:
+{
+    BuildHelper.DisplayLine("Step 9: Compiling official maps with Rust");
+    RunExecutableArguments argsRustMaps = new RunExecutableArguments(Cmd);
+    const string mapsFolder = @"Data\Maps\Official";
+    argsRustMaps.Arguments = String.Format(
+        "/C (@echo off) & (\"{0}\" compile-maps-sdk \"{1}\" --sdk-root \"{2}\" --references \"{3}\" --output \"{4}\" 2>&1)"
+        + " || (echo Critical: Build Official Maps failed. & exit /b 1)",
+        RUST_EXE, Path.Combine(Path.Combine(ModPath, "Misc"), mapsFolder), SDKDirectory, BuiltModsPath,
+        Path.Combine(ModAdditionalFilesPath, mapsFolder));
+    BuildHelper.RunStep(StepType.RunExecutable, argsRustMaps);
+    break;
+}
+'@
+
 if ($InstallDefault) {
-    $knownSources = @($source, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
+    $knownSources = @($source, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
     if ($hasRustCheck -and $knownSources -cnotcontains $currentSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."
     }

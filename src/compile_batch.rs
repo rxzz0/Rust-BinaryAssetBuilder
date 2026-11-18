@@ -1,6 +1,6 @@
 use crate::compile::{CompiledStream, CustomData, compile_apt_ui, hash_source_file};
 use std::collections::HashSet;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -61,7 +61,7 @@ pub(crate) fn compile_streams(
         }
         println!("Compiling XML with Rust {}", source.display());
         let stream = compile(source)?;
-        stream_outputs(&stem, stream, &mut outputs);
+        stream_outputs(&stem, &stem, stream, &mut outputs);
         outputs.push((
             with_suffix(&stem, ".version"),
             Contents::Bytes(version.to_vec()),
@@ -70,7 +70,12 @@ pub(crate) fn compile_streams(
     Ok(outputs)
 }
 
-fn stream_outputs(stem: &OsString, stream: CompiledStream, outputs: &mut Vec<Output>) {
+fn stream_outputs(
+    stem: &OsStr,
+    custom_data_stem: &OsStr,
+    stream: CompiledStream,
+    outputs: &mut Vec<Output>,
+) {
     for (suffix, bytes) in [
         (".bin", stream.files.bin),
         (".relo", stream.files.relo),
@@ -80,13 +85,36 @@ fn stream_outputs(stem: &OsString, stream: CompiledStream, outputs: &mut Vec<Out
         outputs.push((with_suffix(stem, suffix), Contents::Bytes(bytes)));
     }
     outputs.push((
-        Path::new(stem).join("cdata").into_os_string(),
+        Path::new(custom_data_stem).join("cdata").into_os_string(),
         Contents::CustomData(stream.custom_data),
     ));
 }
 
-fn with_suffix(stem: &OsString, suffix: &str) -> OsString {
-    let mut name = stem.clone();
+pub(crate) fn publish_map_stream(
+    output: &Path,
+    compile: impl FnOnce() -> io::Result<CompiledStream>,
+) -> io::Result<()> {
+    publish_prepared(
+        output,
+        || {
+            let mut outputs = Vec::new();
+            // Map versions select the linked stream suffix. The compiler's
+            // custom-data directory still uses the original map stream name.
+            stream_outputs(
+                OsStr::new("map_mod"),
+                OsStr::new("map"),
+                compile()?,
+                &mut outputs,
+            );
+            outputs.push(("map.version".into(), Contents::Bytes(b"_mod\r\n".to_vec())));
+            Ok(outputs)
+        },
+        |_| false,
+    )
+}
+
+fn with_suffix(stem: &OsStr, suffix: &str) -> OsString {
+    let mut name = stem.to_os_string();
     name.push(suffix);
     name
 }
@@ -102,7 +130,7 @@ pub fn write_compiled_stream(
         .to_ascii_lowercase();
     fs::create_dir(output)?;
     let mut outputs = Vec::new();
-    stream_outputs(&stem, stream, &mut outputs);
+    stream_outputs(&stem, &stem, stream, &mut outputs);
     if let Err(error) = publish(output, outputs, |_| false) {
         let _ = fs::remove_dir(output);
         return Err(error);

@@ -19,6 +19,7 @@ mod coverage;
 mod expressions;
 mod merge_assets;
 mod precompiled;
+mod sdk_maps;
 mod sdk_static;
 mod static_assets;
 mod terrain_atlas;
@@ -28,6 +29,7 @@ mod xinclude;
 pub use crate::compile_batch::{compile_apt_ui_directory, write_compiled_stream};
 pub use coverage::{sdk_coverage, verify_ea_batch};
 pub use merge_assets::merge_assets;
+pub use sdk_maps::compile_sdk_maps;
 pub use sdk_static::{compile_sdk_global, compile_sdk_static};
 
 const SAGE_NS: &str = "uri:ea.com:eala:asset";
