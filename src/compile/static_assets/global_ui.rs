@@ -11,6 +11,30 @@ use std::path::Path;
 const HEALTH_BAR: &str = "HealthBarTemplate";
 const MAPPING_WORDS: usize = 29;
 
+pub(super) fn radius_cursor(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id"], path)?;
+    let mut children = significant_children(node);
+    let template = required_element(&mut children, "DecalTemplate", path)?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected RadiusCursor child"));
+    }
+    let mut data = BinaryData {
+        payload: vec![0; 12],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    super::experience_level::radius_decal(template, 4, &mut data, &mut result)?;
+    for offsets in [&mut data.relocations, &mut result.imports] {
+        if !offsets.is_empty() {
+            offsets.push(u32::MAX);
+        }
+    }
+    result.payload = data.payload;
+    result.relocations = data.relocations;
+    Ok(result)
+}
+
 pub(super) fn button_single_state(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     validate_attributes(node, &["id"], path)?;
     let mut children = significant_children(node);

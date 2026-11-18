@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <RadiusCursor id="CursorEmpty"><DecalTemplate/></RadiusCursor>
+  <RadiusCursor id="CursorFilled">
+    <DecalTemplate>
+      <Component/>
+      <Component Texture2="SecondTex" Texture="FirstTex" Style="ADDITIVE_DECAL" OpacityMin="50" OpacityMax="80%" OpacityPulsesPerSecond="2" RotationMin="3" RotationMax="4" RotationDegreesPerSecond="5" MinRadius="6" MaxRadius="7" RadiusPulsesPerSecond="8" PositionOffsetMin="9" PositionOffsetMax="10" PositionOffsetPulsesPerSecond="11"><Color R="1" G="2" B="3" A="4"/></Component>
+      <Component Style="MERGE_DECAL"><Color/></Component>
+    </DecalTemplate>
+  </RadiusCursor>
+</AssetDeclaration>

@@ -265,7 +265,11 @@ pub(super) fn radius_decal(
             if !color.has_tag_name((SAGE_NS, "Color")) || children.next().is_some() {
                 return Err(invalid(path, "unexpected RadiusDecalComponent child"));
             }
-            data.word(start + 0x3c, color4(color, path)?);
+            let mut rgba = color4(color, path)?;
+            if color.attribute("A").is_none() {
+                rgba |= 0xff00_0000;
+            }
+            data.word(start + 0x3c, rgba);
         }
     }
     Ok(())

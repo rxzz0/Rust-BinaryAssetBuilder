@@ -1028,6 +1028,11 @@ mod tests {
     }
 
     #[test]
+    fn radius_cursor_matches_ea_batch() {
+        assert_ea_fixture("radius-cursor", 2);
+    }
+
+    #[test]
     fn experience_level_matches_ea_batch() {
         assert_ea_fixture("experience-level", 4);
     }

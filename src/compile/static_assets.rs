@@ -57,6 +57,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "ButtonSingleStateData" => (0xe15d_5b18, 62, global_ui::button_single_state),
         "UnitAbilityButtonTemplate" => (0xb087_4c15, 63, ability_buttons::compile),
         "ExperienceLevelTemplate" => (0x20d1_6b26, 64, experience_level::compile),
+        "RadiusCursor" => (0xa0af_5530, 65, global_ui::radius_cursor),
         "PackedTextureImage" => (0xf8fc_ad30, 53, global_ui::packed_texture_image),
         "VideoEventList" => (0x96da_1c03, 9, video_events),
         "LogicCommandSet" => (0x8ae8_b68c, 11, logic_commands),
