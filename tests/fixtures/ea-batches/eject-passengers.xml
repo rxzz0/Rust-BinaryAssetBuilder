@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="EjectPassengersDefaults">
+    <Draws/><Behaviors><EjectPassengersSpecialAbilityUpdate id="ModuleTag_Eject"/></Behaviors><AI/><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <GameObject id="EjectPassengersConfigured">
+    <Draws/><Behaviors><EjectPassengersSpecialAbilityUpdate id="ModuleTag_Eject" TimePerPassenger="2.75s" Speed="11.5" Radius="23.5" Height="125.5" ApexHeight="9.75" EjectionFX="ProbeEjectionFX" EjectionBoneName="BoneEject" RunOffMapWhenDone="true" IgnoreTargetLocation="true" SpecialPowerTemplate="ProbeEjectAbility" StartAbilityRange="250" ContactPointOverride="BaseBone">
+      <CustomAnimAndDuration AnimState="MOVING" Frames="12" Trigger="3"/>
+      <EjectionBoneOffset x="1.25" y="-2.5" z="3.75"/>
+    </EjectPassengersSpecialAbilityUpdate></Behaviors><AI/><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <GameObject id="EjectPassengersEmpty">
+    <Draws/><Behaviors><EjectPassengersSpecialAbilityUpdate id="ModuleTag_Eject" EjectionFX="" EjectionBoneName="" IgnoreTargetLocation="1"><EjectionBoneOffset/></EjectPassengersSpecialAbilityUpdate></Behaviors><AI/><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <FXList id="ProbeEjectionFX"><NuggetList/></FXList>
+  <SpecialPowerTemplate id="ProbeEjectAbility" TargetType="NONE"/>
+</AssetDeclaration>

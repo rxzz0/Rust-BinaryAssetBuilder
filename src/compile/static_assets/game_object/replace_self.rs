@@ -6,6 +6,7 @@ use super::super::{
 };
 use super::behaviors_basic::{base, module_base};
 use super::draws::{boolean, model_condition_index};
+use super::eject_passengers;
 use super::secondary_damage::write_status_flags;
 use super::spawn::{id_list, weak_reference};
 use super::tech_upgrade::encode_anim;
@@ -215,6 +216,11 @@ pub(super) fn encode(
         "ActivateModuleSpecialAbilityUpdate" => (ACTIVATE_MODULE, 0xf8, &[][..]),
         "SpecialAbilityUpdate" => (ABILITY, 0xf0, &[][..]),
         "CaptureSpecialAbilityUpdate" => (CAPTURE, 0xf0, &[][..]),
+        "EjectPassengersSpecialAbilityUpdate" => (
+            eject_passengers::KIND,
+            eject_passengers::SIZE,
+            eject_passengers::FIELDS,
+        ),
         "ReplaceSelfSpecialAbility" => (KIND, 0x104, REPLACE_FIELDS),
         name => {
             return Err(invalid(
@@ -230,6 +236,16 @@ pub(super) fn encode(
         .collect();
     validate_attributes(node, &allowed, path)?;
     let start = data.allocate(pointer, size)?;
+    let mut children = significant_children(node).peekable();
+    let animation_node =
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "CustomAnimAndDuration")));
+    let ejection = if kind == eject_passengers::KIND {
+        let offset =
+            children.next_if(|child| child.has_tag_name((SAGE_NS, eject_passengers::BONE_OFFSET)));
+        Some(eject_passengers::nested(node, offset, start, data)?)
+    } else {
+        None
+    };
     let mut ability = vec![module_base(node, kind, start, data, true)?];
     let mut derived = Vec::new();
     // Reference ordinals follow the source attribute order.
@@ -262,7 +278,7 @@ pub(super) fn encode(
         let value = node.attribute(name).unwrap_or(default);
         let offset = start + offset;
         match storage {
-            "ref" | "weak" | "audio" => {}
+            "ref" | "weak" | "audio" | "preencoded" => {}
             "string" => {
                 if let Some(value) = node.attribute(name) {
                     data.string(offset, value)?;
@@ -316,12 +332,10 @@ pub(super) fn encode(
         }
     }
 
-    let mut children = significant_children(node).peekable();
-    let animation =
-        match children.next_if(|child| child.has_tag_name((SAGE_NS, "CustomAnimAndDuration"))) {
-            Some(child) => Target::Table(encode_anim(child, start + 0xe8, data)?),
-            None => Target::Null,
-        };
+    let animation = match animation_node {
+        Some(child) => Target::Table(encode_anim(child, start + 0xe8, data)?),
+        None => Target::Null,
+    };
     ability.push(Entry::named(
         "CustomAnimAndDuration",
         0x6b74_6af6,
@@ -335,6 +349,7 @@ pub(super) fn encode(
     }
     let mut entries = vec![base(ABILITY, Table::record(ability))];
     entries.extend(derived);
+    entries.extend(ejection);
     if kind == TOGGLE {
         let states: Vec<_> = children.collect();
         if states.is_empty() {
@@ -374,7 +389,7 @@ pub(super) fn encode(
         )?);
         return Ok((kind, Table::record(entries)));
     }
-    if matches!(kind, WEAPON | CAPTURE) {
+    if matches!(kind, WEAPON | CAPTURE | eject_passengers::KIND) {
         if children.next().is_some() {
             return Err(invalid(
                 path,

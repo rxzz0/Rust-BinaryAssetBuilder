@@ -66,6 +66,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "TeleportStoredObjectsUpdate",
             "MonitorSpecialPowerTimerUpdate",
             "WeaponFireSpecialAbilityUpdate",
+            "EjectPassengersSpecialAbilityUpdate",
             "OCLSpecialPower",
             "SquishCollide",
             "WallBuilderBehavior",
@@ -1339,6 +1340,11 @@ mod tests {
     #[test]
     fn cleared_eva_event_references_match_ea() {
         assert_ea_fixture("eva-entry-clear", 2);
+    }
+
+    #[test]
+    fn eject_passengers_matches_ea() {
+        assert_ea_fixture("eject-passengers", 5);
     }
 
     #[test]

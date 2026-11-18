@@ -161,6 +161,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut references = Vec::new();
     let mut material_float_names = Vec::new();
     let mut create_object_modules = Vec::new();
+    let mut eject_passenger_modules = Vec::new();
     let mut spawn_modules = Vec::new();
     let mut upgrade_relocation_anchors = Vec::new();
     let mut chooser_relocations = Vec::new();
@@ -269,6 +270,9 @@ pub(in crate::compile::static_assets) fn compile(
                     slaughter_modules.push(data.payload.len() as u32);
                 }
                 let start = data.payload.len() as u32;
+                if module.has_tag_name((SAGE_NS, "EjectPassengersSpecialAbilityUpdate")) {
+                    eject_passenger_modules.push(start);
+                }
                 let result = behaviors_basic::encode(
                     module,
                     pointer,
@@ -410,6 +414,15 @@ pub(in crate::compile::static_assets) fn compile(
         // Model draw extensions emit derived pointers before inherited pointers.
         if let Some(key) = derived_draw_relocations.key(pointer) {
             return key;
+        }
+        // EjectPassengers allocates its bone fields before inherited ability pointers.
+        let index = eject_passenger_modules.partition_point(|&start| start <= pointer);
+        if index > 0 {
+            let start = eject_passenger_modules[index - 1];
+            let offset = pointer - start;
+            if matches!(offset, 0x44 | 0xc8 | 0xe8) {
+                return (start + 0x110, offset);
+            }
         }
         // EA emits the inherited status pointers after the two upgrade lists.
         let index = create_object_modules.partition_point(|&start| start <= pointer);

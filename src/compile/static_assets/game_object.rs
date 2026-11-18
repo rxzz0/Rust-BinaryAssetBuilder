@@ -14,6 +14,7 @@ mod client_updates;
 mod create_object_die;
 mod draws;
 mod dynamics;
+mod eject_passengers;
 pub(in crate::compile) use draws::SCRIPTED_FLAGS;
 mod attach;
 mod encoder;

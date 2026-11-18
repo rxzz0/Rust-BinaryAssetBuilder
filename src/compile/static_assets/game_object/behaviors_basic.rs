@@ -1379,6 +1379,7 @@ pub(super) fn encode(
         "SpecialAbilityUpdate"
             | "ReplaceSelfSpecialAbility"
             | "WeaponFireSpecialAbilityUpdate"
+            | "EjectPassengersSpecialAbilityUpdate"
             | "ToggleStatusSpecialAbilityUpdate"
             | "CaptureSpecialAbilityUpdate"
             | "ActivateModuleSpecialAbilityUpdate"
