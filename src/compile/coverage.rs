@@ -110,6 +110,9 @@ const MODULES: &[(&str, &[&str])] = &[
             "FXListBehavior",
             "FireWeaponWhenDead",
             "FireWeaponCollide",
+            "MonitorConditionUpdate",
+            "OreMinerBehavior",
+            "OreNodeBehavior",
             "InfiltratorContain",
             "LUAEventList",
             "ObjectDefectionHelper",
@@ -1313,6 +1316,12 @@ mod tests {
     #[test]
     fn fire_weapon_collide_matches_ea() {
         assert_ea_fixture("collision-weapon", 3);
+    }
+
+    #[test]
+    fn ore_collection_and_deposit_match_ea() {
+        assert_ea_fixture("ore-behaviors", 9);
+        assert_ea_fixture("monitor-condition", 3);
     }
 
     fn assert_ea_fixture(name: &str, count: usize) {

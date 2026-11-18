@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="MonitorConditionDefault">
+    <Draws/><Behaviors><MonitorConditionUpdate id="MonitorDefault"/></Behaviors><AI/>
+    <Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <GameObject id="MonitorConditionConfigured">
+    <Draws/><Behaviors>
+      <MonitorConditionUpdate id="MonitorConfigured" ModelConditionFlags="CARRYING WEAPONSTATE_ONE" ActionsOnTriggered="DUMP_ORE" OCL="ProbeDropOre" PreDelay="0.5s" PostDelay="5s"/>
+    </Behaviors><AI/>
+    <Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <ObjectCreationList id="ProbeDropOre"/>
+</AssetDeclaration>

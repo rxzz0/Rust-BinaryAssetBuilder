@@ -25,6 +25,7 @@ mod laser_state;
 mod line_segment_damage;
 mod linear_damage;
 pub(super) mod material;
+mod ore;
 mod parking;
 pub(super) use parking::encode_filter as encode_object_filter;
 pub(super) use parking::encode_inline_filter as encode_inline_object_filter;

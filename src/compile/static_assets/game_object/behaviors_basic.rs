@@ -41,6 +41,61 @@ pub(super) fn module_base(
     })
 }
 
+fn monitor_condition(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x0fec_21cb;
+    const FIELDS: [(&str, u32, usize); 5] = [
+        ("ModelConditionFlags", 0x67db_bfc9, 8),
+        ("OCL", 0x42e4_e9d1, 0x44),
+        ("PreDelay", 0x9986_69e8, 0x48),
+        ("PostDelay", 0x9986_69e8, 0x4c),
+        ("ActionsOnTriggered", 0x85cc_1219, 0x50),
+    ];
+    let path = data.path;
+    let allowed = ["id"]
+        .into_iter()
+        .chain(FIELDS.map(|(name, _, _)| name))
+        .collect::<Vec<_>>();
+    validate_attributes(node, &allowed, path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected MonitorConditionUpdate content"));
+    }
+    let start = data.allocate(pointer, 0x54)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    if let Some(flags) = node.attribute("ModelConditionFlags") {
+        super::draws::write_model_conditions(flags, start + 8, data)?;
+    }
+    if let Some(ocl) = node.attribute("OCL") {
+        let ordinal = super::passive_area::reference(
+            ocl,
+            "ObjectCreationList",
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + 0x44, ordinal);
+    }
+    for (name, offset) in [("PreDelay", 0x48), ("PostDelay", 0x4c)] {
+        if let Some(time) = node.attribute(name) {
+            data.word(start + offset, sage_time(time, name, path)?.to_bits());
+        }
+    }
+    let actions = super::super::ai_strategic::flags(
+        node.attribute("ActionsOnTriggered").unwrap_or(""),
+        &["DUMP_ORE"],
+        "ActionsOnTriggered",
+        path,
+    )?;
+    data.word(start + 0x50, actions);
+    entries.extend(fields(start, &FIELDS));
+    Ok((KIND, Table::record(entries)))
+}
+
 fn fire_weapon_collide(
     node: Node<'_, '_>,
     pointer: usize,
@@ -900,6 +955,16 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
+    match node.tag_name().name() {
+        "OreMinerBehavior" => return super::ore::miner(node, pointer, data).map(Some),
+        "OreNodeBehavior" => {
+            return super::ore::deposit(node, pointer, data, references, reference_types).map(Some);
+        }
+        "MonitorConditionUpdate" => {
+            return monitor_condition(node, pointer, data, references, reference_types).map(Some);
+        }
+        _ => {}
+    }
     if node.has_tag_name((SAGE_NS, "FireWeaponCollide")) {
         return fire_weapon_collide(node, pointer, data, references, reference_types).map(Some);
     }

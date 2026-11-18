@@ -1,6 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 279 adds FireWeaponCollide with its weapon, status masks, fire location, and collision flags. All three EA fixtures, 272 tests, and Clippy passed.
-- Checkpoints 274–278 add locomotor and surface mappings, transformed display and upgrade fields, LinearDamageUpdate, and animation-sound parser coverage.
+- Checkpoint 280 adds OreMinerBehavior, OreNodeBehavior, and MonitorConditionUpdate. All 12 EA fixture assets, 273 tests, and Clippy passed.
+- Checkpoints 274–279 add locomotor and surface mappings, transformed display and upgrade fields, sweeping damage, expanded animation sound support, and FireWeaponCollide.
 
-- Surge Step 6 passes Grinder's collision weapon and reaches JetAIUpdate on Harbinger Gunship. Next task is the jet AI layout. The ore behaviors are ready for integration.
+- Surge Step 6 passes Grinder's collision weapon and reaches JetAIUpdate on Harbinger Gunship. Next tasks are the jet AI layout and automatic income.

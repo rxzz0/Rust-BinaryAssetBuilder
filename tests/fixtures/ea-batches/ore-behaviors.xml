@@ -1,0 +1,19 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="OreMinerDefaults">
+    <Draws/><Behaviors><OreMinerBehavior id="ModuleTag_Miner"/></Behaviors><AI/><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <GameObject id="OreMinerConfigured">
+    <Draws/><Behaviors><OreMinerBehavior id="ModuleTag_Miner" DeliveryTime="2.75s" DeliveryCapacity="1701"><ObjectStatusValidation RequiredStatus="NO_COLLISIONS" ForbiddenStatus="IS_ATTACKING CAN_ATTACK"/></OreMinerBehavior></Behaviors><AI/><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <GameObject id="OreNodeDefaults">
+    <Draws/><Behaviors><OreNodeBehavior id="ModuleTag_Node" LowNotificationPercentage="0%" LowNotificationEvaEventRef="" DepletedNotificationEvaEventRef="" DepletedNotificationAudioEventInfoRef=""/></Behaviors><AI/><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <GameObject id="OreNodeConfigured">
+    <Draws/><Behaviors><OreNodeBehavior id="ModuleTag_Node" DepletedNotificationAudioEventInfoRef="AudioEvent:OreDepletedSound" LowNotificationEvaEventRef="OreLowEva" DepletedNotificationEvaEventRef="OreDepletedEva" LowNotificationPercentage="13.3%" MaximumGatheredValue="43210" DeliveryAmount="2200" DeliveryAmountWhenEmpty="331" CashMultiplier="121%" MoveToExtractTime="2s" ExtractTime="3.25s" MoveToDeliverTime="4.5s" DeliveryTime="5.75s" ExtractAnimation="DOCKING_EXTRACT" DeliveryAnimation="DOCKING_ACTIVE" ReturnAnimation="DOCKING_RETURN" MoveBackAnimation="DOCKING_MOVEBACK"/></Behaviors><AI/><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body>
+  </GameObject>
+  <EvaEvent id="OreLowEva"/>
+  <EvaEvent id="OreDepletedEva"/>
+  <AudioEvent id="OreDepletedSound"/>
+  <GameObject id="OreEdgeUnsigned"><Draws /><Behaviors><OreMinerBehavior id="ModuleTag_Miner" DeliveryCapacity="0xFFFFFFFF" DeliveryTime="250ms"><ObjectStatusValidation /></OreMinerBehavior></Behaviors><AI /><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100" /></Body></GameObject>
+  <GameObject id="OreEdgeConditions"><Draws /><Behaviors><OreNodeBehavior id="ModuleTag_Node" MaximumGatheredValue="0.0" DeliveryAmount="0x200" ExtractAnimation="INVALID" LowNotificationPercentage="27.5%" LowNotificationEvaEventRef="OreLowEva" DepletedNotificationEvaEventRef="OreLowEva" DepletedNotificationAudioEventInfoRef="OreDepletedSound" /></Behaviors><AI /><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100" /></Body></GameObject>
+</AssetDeclaration>
