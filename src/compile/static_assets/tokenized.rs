@@ -136,6 +136,27 @@ impl Table {
         }
     }
 
+    pub(super) fn derive_variant(&mut self, name: &str, kind: u32, bases: &[u32]) -> bool {
+        let name = fast_hash(name.as_bytes());
+        let Some(Target::Table(variants)) = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.name == name)
+            .map(|entry| &mut entry.target)
+        else {
+            return false;
+        };
+        let [variant] = variants.entries.as_mut_slice() else {
+            return false;
+        };
+        variant.kind = kind;
+        for &base in bases {
+            let target = std::mem::replace(&mut variant.target, Target::Null);
+            variant.target = Target::Table(Self::record(vec![Entry::new(1, base, target)]));
+        }
+        true
+    }
+
     pub(super) fn shift_data_from(&mut self, threshold: usize, amount: usize) {
         for entry in &mut self.entries {
             match &mut entry.target {

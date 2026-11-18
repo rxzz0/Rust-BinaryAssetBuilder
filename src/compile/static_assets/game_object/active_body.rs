@@ -6,8 +6,23 @@ use std::path::Path;
 
 pub(super) const TOKEN_LAYOUT: &[u8; 0x79c] = include_bytes!("active_body_tokens.bin");
 pub(super) const SIZE: usize = 0x4c;
+pub(super) const KIND: u32 = 0x5a0e_3d9b;
+pub(super) const IMMORTAL: u32 = 0x88e9_4f7a;
+pub(super) const MANAGED_ACTIVE: u32 = 0xee0d_6e31;
 
-pub(super) fn encode(node: Node<'_, '_>, path: &Path) -> io::Result<[u8; SIZE]> {
+pub(super) fn variant(name: &str) -> Option<(u32, &'static [u32])> {
+    Some(match name {
+        "ActiveBody" => (KIND, &[]),
+        "ImmortalBody" => (IMMORTAL, &[KIND]),
+        "HighlanderBody" => (0x6f0f_9f52, &[KIND]),
+        "ManagedActiveBody" => (MANAGED_ACTIVE, &[KIND]),
+        "ManagedImmortalBody" => (0xe48b_f32c, &[KIND, MANAGED_ACTIVE]),
+        "ManagerBody" => (0x7198_2eac, &[KIND, IMMORTAL]),
+        _ => return None,
+    })
+}
+
+pub(super) fn encode(node: Node<'_, '_>, kind: u32, path: &Path) -> io::Result<[u8; SIZE]> {
     validate_attributes(
         node,
         &[
@@ -34,7 +49,7 @@ pub(super) fn encode(node: Node<'_, '_>, path: &Path) -> io::Result<[u8; SIZE]> 
     let time = |name| sage_time(node.attribute(name).unwrap_or("0s"), name, path);
     let mut body = [0; SIZE];
     for (offset, value) in [
-        (0, 0x5a0e_3d9b),
+        (0, kind),
         (4, hash_name(id)),
         (8, real("MaxHealth", "0")?.to_bits()),
         (
@@ -81,7 +96,7 @@ mod tests {
             .find(|item| item.tag_name().name() == "ActiveBody")
             .unwrap();
         assert_eq!(&oracle[4..4 + TOKEN_LAYOUT.len()], TOKEN_LAYOUT);
-        let body = encode(node, Path::new("active.xml")).unwrap();
+        let body = encode(node, KIND, Path::new("active.xml")).unwrap();
         assert_eq!(&oracle[oracle.len() - SIZE..], &body);
     }
 }

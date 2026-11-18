@@ -23,7 +23,18 @@ const MODULES: &[(&str, &[&str])] = &[
         ],
     ),
     ("AI", &["AIUpdate", "JetAIUpdate"]),
-    ("Body", &["ActiveBody", "ImmortalBody", "PropBody"]),
+    (
+        "Body",
+        &[
+            "ActiveBody",
+            "HighlanderBody",
+            "ImmortalBody",
+            "ManagedActiveBody",
+            "ManagedImmortalBody",
+            "ManagerBody",
+            "PropBody",
+        ],
+    ),
     (
         "ClientBehaviors",
         &[

@@ -5,12 +5,12 @@
 
 use super::super::binary::BinaryData;
 use super::super::tokenized::{self, Entry, Table, Target};
-use super::super::{Marshaled, hash_name, significant_children, validate_attributes};
+use super::super::{Marshaled, significant_children, validate_attributes};
 use super::{
     active_body, ai_update, behaviors_basic, children, client_behaviors, client_updates, draws,
     fields, physics, structures,
 };
-use crate::compile::{SAGE_NS, has_content, invalid, required};
+use crate::compile::{SAGE_NS, has_content, invalid};
 use roxmltree::Node;
 use std::io;
 use std::path::Path;
@@ -54,18 +54,6 @@ const ROOT_DEFAULTS: &[(usize, u32)] = &[
     (0x240, 0x100),
     (0x248, 0x10100),
 ];
-
-const BODY_DEFAULTS: &[(usize, u32)] = &[
-    (0, 0x88e9_4f7a),
-    (0xc, 0x3f2a_aaaa),
-    (0x10, 0x3eaa_aaaa),
-    (0x14, 0xbf80_0000),
-    (0x38, 0x4348_0000),
-];
-
-fn word(bytes: &mut [u8], offset: usize, value: u32) {
-    bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
-}
 
 pub(in crate::compile::static_assets) fn compile(
     node: Node<'_, '_>,
@@ -136,14 +124,20 @@ pub(in crate::compile::static_assets) fn compile(
     if modules.next().is_some() || module.tag_name().namespace() != Some(SAGE_NS) {
         return Err(invalid(path, "Body requires a single supported module"));
     }
-    let (tokens, body_bytes): (&[u8], [u8; BODY_SIZE]) = match module.tag_name().name() {
-        "ActiveBody" => (
+    let body_name = module.tag_name().name();
+    let variant = active_body::variant(body_name);
+    let (tokens, body_bytes): (&[u8], [u8; BODY_SIZE]) = match variant {
+        Some((kind, _)) => (
             active_body::TOKEN_LAYOUT,
-            active_body::encode(module, path)?,
+            active_body::encode(module, kind, path)?,
         ),
-        "ImmortalBody" => (TOKENS, immortal_body(module, path)?),
-        "PropBody" => (TOKENS, [0; BODY_SIZE]),
-        kind => return Err(invalid(path, format!("unsupported Body module {kind}"))),
+        None if body_name == "PropBody" => (TOKENS, [0; BODY_SIZE]),
+        None => {
+            return Err(invalid(
+                path,
+                format!("unsupported Body module {body_name}"),
+            ));
+        }
     };
 
     let mut data = BinaryData {
@@ -157,6 +151,11 @@ pub(in crate::compile::static_assets) fn compile(
     let mut template_data = data.payload.clone();
     template_data.extend_from_slice(&body_bytes);
     let mut table = Table::from_layout(tokens, &template_data, path)?;
+    if let Some((kind, bases)) = variant
+        && !table.derive_variant("Body", kind, bases)
+    {
+        return Err(invalid(path, "GameObject layout is missing Body variant"));
+    }
     let mut reference_types = Vec::new();
     let mut references = Vec::new();
     let mut material_float_names = Vec::new();
@@ -554,27 +553,4 @@ pub(in crate::compile::static_assets) fn compile(
             ..Marshaled::default()
         },
     )
-}
-
-fn immortal_body(module: Node<'_, '_>, path: &Path) -> io::Result<[u8; BODY_SIZE]> {
-    validate_attributes(module, &["id", "MaxHealth"], path)?;
-    if has_content(module) {
-        return Err(invalid(path, "ImmortalBody cannot contain content"));
-    }
-    let module_id = required(module, "id", path)?;
-    let health = module
-        .attribute("MaxHealth")
-        .unwrap_or("0")
-        .parse::<f32>()
-        .map_err(|_| invalid(path, "invalid MaxHealth"))?;
-    if !health.is_finite() {
-        return Err(invalid(path, "invalid MaxHealth"));
-    }
-    let mut body = [0; BODY_SIZE];
-    for &(offset, value) in BODY_DEFAULTS {
-        word(&mut body, offset, value);
-    }
-    word(&mut body, 4, hash_name(module_id));
-    word(&mut body, 8, health.to_bits());
-    Ok(body)
 }
