@@ -451,3 +451,120 @@ fn hash_bytes(bytes: &[u8], length: u32) -> u32 {
         .chunks(FILE_HASH_BLOCK)
         .fold(length, fast_hash_with_seed)
 }
+
+const DYNAMIC_STATE: &str = "PathMusicGameDynamicState";
+const DYNAMIC_TRANSITION: &str = "PathMusicGameDynamicTransition";
+
+pub(super) fn dynamic_state(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "EnterEvent", "ExitEvent"], path)?;
+    let mut data = BinaryData {
+        payload: vec![0; 20],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    let mut offsets = [0; 2];
+    let events = ["EnterEvent", "ExitEvent"];
+    for (index, (event, pointer)) in events.into_iter().zip([4, 8]).enumerate() {
+        if node.attribute(event).is_some() {
+            offsets[index] = data.allocate(pointer, 4)?;
+        }
+    }
+    for attribute in node.attributes() {
+        if let Some(index) = events.iter().position(|name| *name == attribute.name())
+            && !attribute.value().trim().is_empty()
+        {
+            write_import(
+                attribute.value(),
+                EVENT,
+                offsets[index],
+                &mut data,
+                &mut result,
+            )?;
+        }
+    }
+    write_reference_list(
+        node,
+        "Transition",
+        DYNAMIC_TRANSITION,
+        12,
+        &mut data,
+        &mut result,
+    )?;
+    result.imports.sort_unstable();
+    Ok(finish_music_script(result, data))
+}
+
+pub(super) fn dynamic_state_set(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "Category"], path)?;
+    let mut data = BinaryData {
+        payload: vec![0; 16],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    let category = super::global_ui::enum_value(
+        required(node, "Category", path)?,
+        &["STANDARD", "SCRIPTED"],
+        path,
+    )?;
+    data.word(4, category);
+    write_reference_list(node, "State", DYNAMIC_STATE, 8, &mut data, &mut result)?;
+    Ok(finish_music_script(result, data))
+}
+
+pub(super) fn dynamic_transition(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "DestinationState"], path)?;
+    let state = asset_reference(
+        required(node, "DestinationState", path)?,
+        DYNAMIC_STATE,
+        path,
+    )?;
+    let mut data = BinaryData {
+        payload: vec![0; 12],
+        relocations: Vec::new(),
+        path,
+    };
+    data.word(4, state.instance_id);
+    let mut result = Marshaled::default();
+    result.reference_types.push(state.type_id);
+    let mut children = significant_children(node);
+    let condition = children
+        .next()
+        .filter(|child| child.has_tag_name((SAGE_NS, "Condition")))
+        .filter(|_| children.next().is_none())
+        .ok_or_else(|| invalid(path, "expected one Pathfinder transition Condition"))?;
+    write_import(
+        text_value(condition, path)?,
+        super::music_conditions::BASE,
+        8,
+        &mut data,
+        &mut result,
+    )?;
+    Ok(finish_music_script(result, data))
+}
+
+fn write_reference_list(
+    node: Node<'_, '_>,
+    name: &str,
+    target: &str,
+    offset: usize,
+    data: &mut BinaryData<'_>,
+    result: &mut Marshaled,
+) -> io::Result<()> {
+    let children: Vec<_> = significant_children(node).collect();
+    let start = data.list(offset, children.len(), 4)?;
+    for (index, child) in children.into_iter().enumerate() {
+        if !child.has_tag_name((SAGE_NS, name)) {
+            return Err(invalid(data.path, format!("expected a Pathfinder {name}")));
+        }
+        write_import(
+            text_value(child, data.path)?,
+            target,
+            start + 4 * index,
+            data,
+            result,
+        )?;
+    }
+    Ok(())
+}

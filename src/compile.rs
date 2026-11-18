@@ -588,6 +588,7 @@ impl Compiler<'_> {
             | "EvaEvent"
             | "LocomotorTemplate"
             | "BounceKickTerrainMapping"
+            | "PathMusicGameDynamicState"
             | "TerrainParticleMapping"
             | "FXList"
                 if node.attribute("inheritFrom").is_some() =>
