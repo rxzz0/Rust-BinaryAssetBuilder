@@ -956,6 +956,10 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
     match node.tag_name().name() {
+        "AssistedPlacementInfoBehavior" => {
+            return super::assisted_placement_info::encode(node, pointer, data, reference_types)
+                .map(Some);
+        }
         "AutoDepositUpdate" => return super::auto_deposit::encode(node, pointer, data).map(Some),
         "OreMinerBehavior" => return super::ore::miner(node, pointer, data).map(Some),
         "OreNodeBehavior" => {

@@ -1,0 +1,28 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="AssistedPlacementInfoDefaults">
+    <Behaviors><AssistedPlacementInfoBehavior id="Default"><SuggestedOffset/></AssistedPlacementInfoBehavior></Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="AssistedPlacementInfoConfigured">
+    <Behaviors>
+      <AssistedPlacementInfoBehavior id="OreNodeHint" AllowShrouded="false">
+        <HintObject HintDisplayObject="NeutralRefineryPlacementHint" HintOpacity="1.0">
+          <ObjectFilter Rule="ANY" Include="REFINERY"><IncludeThing>RefineryProbe</IncludeThing></ObjectFilter>
+        </HintObject>
+        <HintObject HintDisplayObject="AlliedRefinery" PlayerTemplate="Allies" HintOpacity="0.45" HintUsesShaders="true"/>
+        <HintObject PlayerTemplate="Soviet" HintDisplayObject="SovietRefinery" HintUsesShaders="true">
+          <ObjectFilter/>
+        </HintObject>
+        <PlacementRestriction FilterRadius="5.0">
+          <RestrictedObjectFilter Rule="ANY" Include="REFINERY" Relationship="ALLIES"><ExcludeThing>ForbiddenProbe</ExcludeThing></RestrictedObjectFilter>
+        </PlacementRestriction>
+        <SuggestedOffset x="180.0" y="-4.25" z="0.125"/>
+      </AssistedPlacementInfoBehavior>
+      <AssistedPlacementInfoBehavior id="EmptyRestriction">
+        <HintObject PlayerTemplate="" HintDisplayObject=""/><PlacementRestriction/>
+        <SuggestedOffset z="4"/>
+      </AssistedPlacementInfoBehavior>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

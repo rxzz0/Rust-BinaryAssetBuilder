@@ -59,6 +59,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "AttachUpdate",
             "QueueDockBehavior",
             "AssistedPlacementBehavior",
+            "AssistedPlacementInfoBehavior",
             "StructurePlacementBehavior",
             "TeleportStoredObjectsSpecialPower",
             "StoreObjectsSpecialPower",
@@ -1338,6 +1339,11 @@ mod tests {
     #[test]
     fn cleared_eva_event_references_match_ea() {
         assert_ea_fixture("eva-entry-clear", 2);
+    }
+
+    #[test]
+    fn assisted_placement_info_matches_ea() {
+        assert_ea_fixture("assisted-placement-info", 2);
     }
 
     #[test]

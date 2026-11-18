@@ -1,6 +1,7 @@
 mod active_body;
 mod ai_update;
 mod animation;
+mod assisted_placement_info;
 mod attack_assist;
 mod auto_deposit;
 mod behaviors_basic;

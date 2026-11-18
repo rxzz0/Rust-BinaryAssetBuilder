@@ -1,7 +1,7 @@
 # Rust BinaryAssetBuilder progress
 
-- Checkpoint 288 links abstract render references to concrete local, instance, and external W3D assets. Linked model IDs and payload match EA. All 281 tests and Clippy passed.
-- Checkpoint 287 encodes weapon damage arcs. Checkpoints 284–286 add player power and joypad buttons and link inherited FX lists.
+- Checkpoint 289 adds AssistedPlacementInfoBehavior, including hint objects, optional filter references, and placement restrictions. Both fixtures match EA. All 282 tests and Clippy passed.
+- Checkpoint 288 links abstract render references to concrete local and external W3D assets. Checkpoints 284–287 add button variants, inherited FX lists, and weapon damage arcs.
 - Checkpoints 274–283 add locomotor and surface mappings, transformed display and upgrade fields, sweeping damage, animation sound support, collision, ore, JetAIUpdate, and cleared EVA events.
 
-- The release SDK run compiled AptUI and global streams in 1.00 seconds combined. Step 6 passed Allied Airfield's model and reached 9684c743:69a56da8 in AlliedAntiAirVehicleTech1 after 8.29 seconds. Resolve that reference next.
+- Surge release Step 6 reached an inherited StanceTemplate reference on AlliedAntiAirVehicleTech1. Reference indexing appends an ordinal that the stance encoder was hashing into the asset name. Resolve that reference next.
