@@ -597,6 +597,7 @@ impl Compiler<'_> {
             | "FormationAssistantTemplate"
             | "FormationAssistantUnitDefinition"
             | "FormationSelectionTemplate"
+            | "ImageSequence"
             | "EvaEvent"
             | "LocomotorTemplate"
             | "BounceKickTerrainMapping"

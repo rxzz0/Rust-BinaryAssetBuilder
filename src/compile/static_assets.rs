@@ -55,6 +55,7 @@ mod surface_mappings;
 mod system_settings;
 pub(super) mod targeting_compare;
 mod tokenized;
+mod ui_media;
 mod upgrade;
 mod visual_settings;
 mod w3d_animation;
@@ -143,6 +144,9 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "FormationAssistantTemplate" => (0x0953_9ecb, 84, formation::template),
         "FormationAssistantUnitDefinition" => (0x63ae_b1a5, 84, formation::unit),
         "FormationSelectionTemplate" => (0x0531_8e41, 84, formation::selection),
+        "MouseCursor" => (0x13ed_4b89, 83, ui_media::cursor),
+        "BasicMouseCursors" => (0x5a79_6288, 84, ui_media::basic_cursors),
+        "ImageSequence" => (0xa1fb_baf4, 84, ui_media::image_sequence),
         "GiftManagerSettings" => (0xc93f_a545, 83, system_settings::gift),
         "LocalBuildListMonitor" => (0xd544_a0d3, 83, system_settings::build_list_monitor),
         "TargetingDistanceCompare" => (0xc00c_41f3, 76, targeting_compare::distance),
