@@ -96,12 +96,27 @@ pub(super) fn tactical(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled>
     Ok(finish(data, words))
 }
 
-pub(super) fn defaults(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+pub(super) fn general(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    const FIELDS: &[&str] = &["TakeScreenShot", "ReloadRapidIterationFeature"];
+    super::fx_list::validate_leaf(node, &["id", FIELDS[0], FIELDS[1]], path)?;
+    let mut data = Marshaled::default();
+    let mut words = vec![0; 3];
+    for attribute in node.attributes() {
+        if let Some(index) = FIELDS.iter().position(|name| *name == attribute.name()) {
+            let word = index + 1;
+            data.reference_types.push(fast_hash(SLOT.as_bytes()));
+            words[word] = import(&mut data, attribute.value(), SLOT, word as u32 * 4, path)?;
+        }
+    }
+    Ok(finish(data, words))
+}
+
+pub(super) fn map(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     validate_attributes(node, &["id"], path)?;
     let mut children = significant_children(node);
     let map = required_element(&mut children, "Map", path)?;
     if children.next().is_some() {
-        return Err(invalid(path, "unexpected content in DefaultHotKeys"));
+        return Err(invalid(path, "unexpected content after hotkey Map"));
     }
     validate_attributes(map, &[], path)?;
     let mut data = Marshaled::default();
@@ -111,22 +126,24 @@ pub(super) fn defaults(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled>
             return Err(invalid(path, "expected an empty HotKey element"));
         }
         validate_attributes(hotkey, &["Slot", "Key", "Modifiers"], path)?;
+        required(hotkey, "Slot", path)?;
+        required(hotkey, "Key", path)?;
+        let start = words.len();
+        words.extend([0, 0]);
         for attribute in hotkey.attributes() {
-            match attribute.name() {
-                "Slot" => data.reference_types.push(fast_hash(SLOT.as_bytes())),
-                "Key" => data.reference_types.push(fast_hash(KEY.as_bytes())),
-                _ => {}
-            }
-        }
-        for (field, target) in [("Slot", SLOT), ("Key", KEY)] {
-            let value = required(hotkey, field, path)?;
-            words.push(import(
+            let (offset, target) = match attribute.name() {
+                "Slot" => (start, SLOT),
+                "Key" => (start + 1, KEY),
+                _ => continue,
+            };
+            data.reference_types.push(fast_hash(target.as_bytes()));
+            words[offset] = import(
                 &mut data,
-                value,
+                attribute.value(),
                 target,
-                words.len() as u32 * 4,
+                offset as u32 * 4,
                 path,
-            )?);
+            )?;
         }
         let modifiers = hotkey
             .attribute("Modifiers")
