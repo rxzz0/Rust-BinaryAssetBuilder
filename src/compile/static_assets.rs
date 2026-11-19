@@ -25,6 +25,7 @@ mod audio_file;
 mod audio_settings;
 mod binary;
 mod campaign;
+pub(super) mod conquer_cards;
 mod credits;
 mod damage_fx;
 mod emotion;
@@ -187,6 +188,10 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "PlayerTechStoreTemplate" => (0x3a84_e115, 45, player_tech_store),
         "SpecialPowerTemplate" => (0x3aab_481c, 46, game_object::special_power::compile),
         "WeaponTemplate" => (0x0ce6_168e, 48, weapon::compile),
+        "ConquerCardDefinitionUnit" => (0xda31_6c85, 87, conquer_cards::definition),
+        "ConquerCardDefinitionStructure" => (0xca29_96f8, 87, conquer_cards::definition),
+        "ConquerCardDefinitionPower" => (0x22ff_8476, 87, conquer_cards::definition),
+        "ConquerCardPrebuiltDeck" => (0x3032_92a7, 88, conquer_cards::deck),
         "ForceFeedbackEvent" => (0xe1fe_71e8, 55, joypad_buttons::force_feedback),
         "FXList" => (0x9b13_1e26, 56, fx_list::compile),
         "GameObject" => (0xcb8d_0980, 10, game_object::compile),
@@ -1162,6 +1167,7 @@ fn write_import(
         let subtype = match ty {
             music_conditions::BASE => music_conditions::type_hash(target).is_some(),
             targeting_compare::BASE => targeting_compare::TYPES.contains(&target),
+            conquer_cards::BASE => conquer_cards::TYPES.contains(&target),
             subsystem_settings::BASE => subsystem_settings::TYPES.contains(&target),
             _ => false,
         };
