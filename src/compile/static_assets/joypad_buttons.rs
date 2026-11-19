@@ -3,12 +3,35 @@ use super::fx_list::validate_leaf;
 use super::game_object::encode_inline_object_filter;
 use super::global_ui::enum_value;
 use super::{
-    Marshaled, asset_reference, finite_number, production_queue_type, required_element, sage_uint,
-    significant_children, text_value, validate_attributes, write_import,
+    Marshaled, asset_reference, encode_words, finite_number, percentage, production_queue_type,
+    required_element, sage_time, sage_uint, significant_children, text_value, validate_attributes,
+    write_import,
 };
 use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::Node;
 use std::{io, path::Path};
+
+pub(super) fn force_feedback(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    const LEFT: &str = "LeftMotorUse";
+    const RIGHT: &str = "RightMotorUse";
+    const DURATION: &str = "Duration";
+    const COUNT: &str = "PlayCount";
+    validate_leaf(node, &["id", LEFT, RIGHT, DURATION, COUNT], path)?;
+    let left = percentage(required(node, LEFT, path)?, LEFT, path)?;
+    let right = percentage(required(node, RIGHT, path)?, RIGHT, path)?;
+    let duration = sage_time(required(node, DURATION, path)?, DURATION, path)?;
+    let count = finite_number(node.attribute(COUNT).unwrap_or("1"), COUNT, path)?;
+    Ok(Marshaled {
+        payload: encode_words([
+            0,
+            left.to_bits(),
+            right.to_bits(),
+            duration.to_bits(),
+            count.to_bits(),
+        ]),
+        ..Marshaled::default()
+    })
+}
 
 const STATE: &str = "ButtonSingleStateData";
 const COMMAND: &str = "LogicCommand";

@@ -186,6 +186,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "PlayerTechStoreTemplate" => (0x3a84_e115, 45, player_tech_store),
         "SpecialPowerTemplate" => (0x3aab_481c, 46, game_object::special_power::compile),
         "WeaponTemplate" => (0x0ce6_168e, 48, weapon::compile),
+        "ForceFeedbackEvent" => (0xe1fe_71e8, 55, joypad_buttons::force_feedback),
         "FXList" => (0x9b13_1e26, 56, fx_list::compile),
         "GameObject" => (0xcb8d_0980, 10, game_object::compile),
         "PathMusicGameDynamicState" => (0xe2e2_4da7, 80, music::dynamic_state),

@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 331 encodes ForceFeedbackEvent including motor percentages, duration, play count, and SDK inheritance. All 17 direct and 2 linked inheritance fixtures matched EA. All 296 tests and strict Clippy passed.
 - Checkpoint 330 encodes all 28 SDK choices in shared AI heuristic lists, including six nested weighted variants. All 35 EA fixtures matched, and 296 tests and strict Clippy passed.
 - Checkpoint 329 adds native AIStateDefinition and AIStrategicStateName using the shared heuristic encoder and schema inheritance. All 74 direct EA assets and three linked inheritance assets matched, including stock strategic-state names, empty names, and Windows-1252 text. All 296 tests and strict Clippy passed.
 - Checkpoint 328 adds native GameplayConditionData and GameplayAchievementTriggerData with object filters, death criteria, weak upgrade references, and strong condition imports. All eight new EA assets matched in direct and linked output. The eight earlier achievement assets still matched. All 296 tests and strict Clippy passed.
@@ -38,4 +39,4 @@
 - Checkpoint 295 adds native ModStudio Step 7 for precompiled W3D animations. All 194 Surge overrides produced byte-identical manifest, bin, relo, and imp files against EA. All 290 tests and Clippy passed.
 - Checkpoints 288–294 link concrete render and audio assets, fix inherited references, and add assisted placement, passenger ejection, dynamics collision, and stance templates.
 - The generated ModStudio commands ran Surge Steps 4–8 and 10–11 in 18.44 seconds using Rust. The build linked 3,911 static assets, wrote two LoD streams, and packaged both BIGs and the skudef.
-- Next, encode SDK controller feedback events and boot display sequences.
+- Next, encode SDK boot display sequences.

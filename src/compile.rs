@@ -600,6 +600,7 @@ impl Compiler<'_> {
             | "ImageSequence"
             | "DebugHotKeys"
             | "AIStateDefinition"
+            | "ForceFeedbackEvent"
             | "EvaEvent"
             | "LocomotorTemplate"
             | "BounceKickTerrainMapping"
