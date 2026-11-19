@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 325 adds native UnitAISettings with typed tuning values, capture conditions, strong targeting-list imports and both victory-condition object filters. The stock settings and populated/default fixtures matched EA across all five assets. All 296 tests and strict Clippy passed.
 - Checkpoint 324 adds MouseCursor, BasicMouseCursors and ImageSequence, including sparse cursor mappings and repeated image references. All 62 SDK and fixture assets matched EA. All 296 tests and Clippy passed.
 - Checkpoint 323 adds FormationAssistant, FormationAssistantTemplate, FormationAssistantUnitDefinition and FormationSelectionTemplate. All 28 stock and custom assets matched EA, including nested object filters, weak previews and strong formation links. All 296 tests and Clippy passed.
 - Checkpoint 322 adds FontDirectory, FontTranslation, FontDefaultSetting and FontSubstitution. Fourteen direct assets and four assets in an inheritance stream matched EA. All 296 tests and Clippy passed.
@@ -32,4 +33,4 @@
 - Checkpoint 295 adds native ModStudio Step 7 for precompiled W3D animations. All 194 Surge overrides produced byte-identical manifest, bin, relo, and imp files against EA. All 290 tests and Clippy passed.
 - Checkpoints 288–294 link concrete render and audio assets, fix inherited references, and add assisted placement, passenger ejection, dynamics collision, and stance templates.
 - The generated ModStudio commands ran Surge Steps 4–8 and 10–11 in 18.44 seconds using Rust. The build linked 3,911 static assets, wrote two LoD streams, and packaged both BIGs and the skudef.
-- Next, encode UnitAISettings and its victory conditions.
+- Next, finish the SDK hotkey family with DebugHotKeys and GeneralHotKeySlots.

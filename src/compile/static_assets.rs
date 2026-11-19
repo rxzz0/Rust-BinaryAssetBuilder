@@ -123,6 +123,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "OrdersManagerSettings" => (0x80fc_f268, 84, order_display::orders),
         "ConnectionLineManager" => (0x6b72_136f, 84, order_display::connection),
         "BuildSystemSettings" => (0xf806_9076, 83, system_settings::build),
+        "UnitAISettings" => (0xf170_6644, 84, system_settings::unit_ai),
         "PathfindSettings" => (0x9cbc_f9f1, 83, system_settings::pathfind),
         "ResourceSettings" => (0x5cfb_bd27, 83, system_settings::resource),
         "InvisibilityManagerSettings" => (0x64a4_f893, 83, system_settings::invisibility),
