@@ -29,6 +29,7 @@ mod damage_fx;
 mod emotion;
 mod eva;
 mod experience_level;
+mod fonts;
 mod fx_list;
 mod game_lod;
 mod game_map;
@@ -133,6 +134,10 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "DamageFXSettings" => (0x7a57_612c, 84, visual_settings::damage),
         "DrawGroupInfo" => (0x466b_d19e, 83, visual_settings::draw_group),
         "AutoParticleSystemSettings" => (0x4a58_1767, 83, visual_settings::auto_particles),
+        "FontDirectory" => (0xd799_3143, 83, fonts::directory),
+        "FontTranslation" => (0x6c31_5185, 83, fonts::translation),
+        "FontDefaultSetting" => (0x0bc9_66d0, 83, fonts::settings),
+        "FontSubstitution" => (0xa63e_49f9, 83, fonts::substitution),
         "GiftManagerSettings" => (0xc93f_a545, 83, system_settings::gift),
         "LocalBuildListMonitor" => (0xd544_a0d3, 83, system_settings::build_list_monitor),
         "TargetingDistanceCompare" => (0xc00c_41f3, 76, targeting_compare::distance),

@@ -591,6 +591,8 @@ impl Compiler<'_> {
             | "SpecialPowerTemplate"
             | "WeaponTemplate"
             | "ExperienceLevelTemplate"
+            | "FontDefaultSetting"
+            | "FontSubstitution"
             | "EvaEvent"
             | "LocomotorTemplate"
             | "BounceKickTerrainMapping"
