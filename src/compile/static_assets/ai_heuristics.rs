@@ -1,7 +1,9 @@
+use super::ai_strategic::flags;
 use super::binary::BinaryData;
 use super::global_ui::{filter_reference_types, kind_of_flags, object_filter};
 use super::{
-    asset_reference, fast_hash, finite_number, sage_time, significant_children, validate_attributes,
+    asset_reference, fast_hash, finite_number, percentage, required_element, sage_int, sage_time,
+    sage_uint, significant_children, validate_attributes,
 };
 use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::Node;
@@ -104,6 +106,45 @@ fn write_heuristic(
                 ],
                 None,
             ),
+            (Some(SAGE_NS), "OpeningMoveHeuristic") => (8, &["Complete"], None),
+            (Some(SAGE_NS), "HarvesterCapHeuristic") => (8, &["MaxHarvesters"], None),
+            (Some(SAGE_NS), "ResourceNodeShareHeuristic" | "TechBuildingShareHeuristic") => {
+                (12, &["PercentOfFairShare", "Above"], None)
+            }
+            (Some(SAGE_NS), "MoneyHeuristic") => (16, &["Money", "Account", "Above"], None),
+            (Some(SAGE_NS), "IsBuildingHeuristic") => (44, &["KindOf", "PassIfBuilding"], None),
+            (
+                Some(SAGE_NS),
+                "AllNearbyNodesFullHeuristic"
+                | "OpponentFundsHeuristic"
+                | "ProductionAdvantageHeuristic",
+            ) => (4, &[], None),
+            (Some(SAGE_NS), "GarrisonHeuristic") => {
+                (16, &["NumGarrisons", "Relationship", "Above"], None)
+            }
+            (Some(SAGE_NS), "StructureOrHarvesterUnderAttackHeuristic") => {
+                (12, &["TimeSinceAttacked", "UnderAttack"], None)
+            }
+            (Some(SAGE_NS), "BridgeExistsHeuristic") => (
+                12,
+                &[
+                    "BridgeHealthMinimumPercentage",
+                    "BridgeHealthMaximumPercentage",
+                ],
+                None,
+            ),
+            (Some(SAGE_NS), "CanBuildBuildingsOnSurfaceHeuristic") => (
+                16,
+                &["MinPlacementGridCells", "MaxPlacementGridCells", "Surfaces"],
+                None,
+            ),
+            (Some(SAGE_NS), "ScriptedFlagHeuristic") => (12, &["FlagName"], None),
+            (Some(SAGE_NS), "BeaconExistsHeuristic") => (12, &["Type", "Exists"], None),
+            (Some(SAGE_NS), "StrategicDirectiveHeuristic") => (12, &["Directive", "On"], None),
+            (Some(SAGE_NS), "RedAlertHeuristic") => (8, &["On"], None),
+            (Some(SAGE_NS), "LinearCombinationHeuristic") => {
+                return write_linear_combination(node, pointer, binary, references);
+            }
             _ => {
                 return Err(invalid(
                     path,
@@ -122,11 +163,18 @@ fn write_heuristic(
     }
 
     let offset = binary.allocate(pointer, size)?;
-    binary.word(offset, fast_hash(format!("AIState{name}").as_bytes()));
+    let type_name = match name {
+        "BeaconExistsHeuristic" => "AIAlliedBeaconExistsHeuristic".to_owned(),
+        "StrategicDirectiveHeuristic" | "RedAlertHeuristic" => format!("AI{name}"),
+        _ => format!("AIState{name}"),
+    };
+    binary.word(offset, fast_hash(type_name.as_bytes()));
     let value = |field, default| node.attribute(field).unwrap_or(default).trim();
     let float =
         |field, default| finite_number(value(field, default), field, path).map(f32::to_bits);
     let time = |field, default| sage_time(value(field, default), field, path).map(f32::to_bits);
+    let percent = |field, default| percentage(value(field, default), field, path).map(f32::to_bits);
+    let uint = |field, default| sage_uint(value(field, default), field, path);
     let flag = |field, default| match node.attribute(field).map(str::trim) {
         None => Ok(u32::from(default)),
         Some("true" | "1") => Ok(1),
@@ -226,7 +274,168 @@ fn write_heuristic(
                     | flag("IncludeEnemyDefenses", true)? << 16,
             );
         }
+        "OpeningMoveHeuristic" => binary.word(offset + 4, flag("Complete", true)?),
+        "HarvesterCapHeuristic" => binary.word(offset + 4, uint("MaxHarvesters", "5")?),
+        "ResourceNodeShareHeuristic" | "TechBuildingShareHeuristic" => {
+            binary.word(offset + 4, percent("PercentOfFairShare", "100%")?);
+            binary.word(offset + 8, flag("Above", false)?);
+        }
+        "MoneyHeuristic" => {
+            binary.word(offset + 4, uint("Money", "1000")?);
+            binary.word(offset + 8, uint("Account", "0")?);
+            binary.word(offset + 12, flag("Above", true)?);
+        }
+        "IsBuildingHeuristic" => {
+            for (index, word) in kind_of_flags(value("KindOf", ""), path)?
+                .into_iter()
+                .enumerate()
+            {
+                binary.word(offset + 4 + 4 * index, word);
+            }
+            binary.word(offset + 40, flag("PassIfBuilding", true)?);
+        }
+        "AllNearbyNodesFullHeuristic"
+        | "OpponentFundsHeuristic"
+        | "ProductionAdvantageHeuristic" => {}
+        "GarrisonHeuristic" => {
+            binary.word(offset + 4, uint("NumGarrisons", "0")?);
+            binary.word(
+                offset + 8,
+                enum_value(
+                    value("Relationship", "SAME_PLAYER"),
+                    &["ALLIES", "ENEMIES", "NEUTRAL", "SAME_PLAYER"],
+                    path,
+                )?,
+            );
+            binary.word(offset + 12, flag("Above", true)?);
+        }
+        "StructureOrHarvesterUnderAttackHeuristic" => {
+            binary.word(offset + 4, time("TimeSinceAttacked", "4s")?);
+            binary.word(offset + 8, flag("UnderAttack", true)?);
+        }
+        "BridgeExistsHeuristic" => {
+            binary.word(offset + 4, percent("BridgeHealthMinimumPercentage", "50%")?);
+            binary.word(
+                offset + 8,
+                percent("BridgeHealthMaximumPercentage", "100%")?,
+            );
+        }
+        "CanBuildBuildingsOnSurfaceHeuristic" => {
+            binary.word(
+                offset + 4,
+                sage_int(
+                    value("MinPlacementGridCells", "1"),
+                    "MinPlacementGridCells",
+                    path,
+                )?,
+            );
+            if let Some(maximum) = node.attribute("MaxPlacementGridCells") {
+                binary.optional_word(
+                    offset + 8,
+                    sage_int(maximum, "MaxPlacementGridCells", path)?,
+                )?;
+            }
+            let surfaces = node
+                .attribute("Surfaces")
+                .ok_or_else(|| invalid(path, "expected Surfaces attribute"))?;
+            binary.word(
+                offset + 12,
+                flags(surfaces, &["LAND", "WATER", "DEEP_WATER"], "Surfaces", path)?,
+            );
+        }
+        "ScriptedFlagHeuristic" => {
+            if let Some(name) = node.attribute("FlagName") {
+                binary.string(offset + 4, name)?;
+            }
+        }
+        "BeaconExistsHeuristic" => {
+            binary.word(
+                offset + 4,
+                enum_value(
+                    value("Type", "Assault"),
+                    &["Invalid", "Assault", "HoldPosition", "HoldObject"],
+                    path,
+                )?
+                .wrapping_sub(1),
+            );
+            binary.word(offset + 8, flag("Exists", false)?);
+        }
+        "StrategicDirectiveHeuristic" => {
+            binary.word(
+                offset + 4,
+                enum_value(
+                    value("Directive", "Normal"),
+                    &[
+                        "Invalid",
+                        "Normal",
+                        "Assault",
+                        "HoldPosition",
+                        "HoldObject",
+                        "Help",
+                    ],
+                    path,
+                )?
+                .wrapping_sub(1),
+            );
+            binary.word(offset + 8, flag("On", false)?);
+        }
+        "RedAlertHeuristic" => binary.word(offset + 4, flag("On", true)?),
         _ => unreachable!("validated AI state heuristic"),
+    }
+    Ok(())
+}
+
+fn write_linear_combination(
+    node: Node<'_, '_>,
+    pointer: usize,
+    binary: &mut BinaryData<'_>,
+    references: &mut Vec<u32>,
+) -> io::Result<()> {
+    let path = binary.path;
+    validate_attributes(node, &[], path)?;
+    let weights: Vec<_> = significant_children(node).collect();
+    if weights.len() < 2 {
+        return Err(invalid(
+            path,
+            "LinearCombinationHeuristic requires at least two WeightedHeuristic elements",
+        ));
+    }
+    let offset = binary.allocate(pointer, 12)?;
+    binary.word(offset, fast_hash(b"AIStateLinearCombinationHeuristic"));
+    let first = binary.list(offset + 4, weights.len(), 8)?;
+    for (index, weighted) in weights.into_iter().enumerate() {
+        if !weighted.has_tag_name((SAGE_NS, "WeightedHeuristic")) {
+            return Err(invalid(path, "expected WeightedHeuristic"));
+        }
+        validate_attributes(weighted, &["Weight"], path)?;
+        let mut children = significant_children(weighted);
+        let heuristic = required_element(&mut children, "Heuristic", path)?;
+        validate_attributes(heuristic, &[], path)?;
+        let mut choices = significant_children(heuristic);
+        let choice = choices.next().filter(|choice| {
+            matches!(
+                choice.tag_name().name(),
+                "TimerHeuristic"
+                    | "ConstantHeuristic"
+                    | "PowerAdvantageHeuristic"
+                    | "OpponentFundsHeuristic"
+                    | "ProductionAdvantageHeuristic"
+                    | "BridgeExistsHeuristic"
+            )
+        });
+        let choice =
+            choice.ok_or_else(|| invalid(path, "expected a weighted AI state heuristic"))?;
+        if children.next().is_some() || choices.next().is_some() {
+            return Err(invalid(path, "unexpected content in WeightedHeuristic"));
+        }
+        let entry = first + index * 8;
+        let weight = finite_number(
+            weighted.attribute("Weight").unwrap_or("0.5").trim(),
+            "Weight",
+            path,
+        )?;
+        binary.word(entry, weight.to_bits());
+        write_heuristic(choice, entry + 4, binary, references)?;
     }
     Ok(())
 }
