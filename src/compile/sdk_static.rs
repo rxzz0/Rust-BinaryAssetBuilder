@@ -1,4 +1,4 @@
-use super::{compile_static, invalid};
+use super::{ReferenceMode, compile, invalid};
 use crate::compile_batch::{compile_streams, is_generated, publish, xml_sources};
 use std::fs;
 use std::io;
@@ -14,7 +14,7 @@ pub fn compile_sdk_static(input: &Path, sdk_root: &Path, output: &Path) -> io::R
         .file_stem()
         .ok_or_else(|| invalid(&input, "expected a static XML file"))?;
     let outputs = compile_streams(std::slice::from_ref(&input), b"\r\n", |source| {
-        compile_static(source, sdk_root, output)
+        compile(source, sdk_root, Some(output), ReferenceMode::SdkStatic)
     })?;
     publish(&output.join(directory), outputs, |path| {
         is_generated(path)

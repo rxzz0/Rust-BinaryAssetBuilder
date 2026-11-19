@@ -202,7 +202,7 @@ case 8:
     BuildHelper.DisplayLine("Step 8: Fixing linked assets with Rust");
     RunExecutableArguments argsRustFix = new RunExecutableArguments(Cmd);
     argsRustFix.Arguments = String.Format(
-        "/C (@echo off) & (\"{0}\" fix-assets \"{1}\" --references \"{2}\" 2>&1)"
+        "/C (@echo off) & (\"{0}\" fix-assets \"{1}\" --references \"{2}\" --allow-missing-references 2>&1)"
         + " || (echo ERROR Fix Assets failed. & exit /b 1)",
         RUST_EXE, Path.Combine(BuiltModDataPath, "mod.manifest"), BuiltModsPath);
     BuildHelper.RunStep(StepType.RunExecutable, argsRustFix);
@@ -232,7 +232,7 @@ $source = $source.Replace('String.Format("Build failed on step {0}", BuildHelper
 $legacySource = $source
 $source = $source.Replace(
     'String.Format(" && (\"{0}\" \"{1}\\mod.manifest\" /f)", LoDStreamBuilder, BuiltModDataPath)',
-    ('String.Format(" && (\"{0}\" fix-assets \"{1}\" --references \"{2}\" 2>&1)", ' + $rustExpression + ', Path.Combine(BuiltModDataPath, "mod.manifest"), BuiltModsPath)')
+    ('String.Format(" && (\"{0}\" fix-assets \"{1}\" --references \"{2}\" --allow-missing-references 2>&1)", ' + $rustExpression + ', Path.Combine(BuiltModDataPath, "mod.manifest"), BuiltModsPath)')
 )
 $source = Set-ModBuildStep $source 7 8 @'
 case 7:
@@ -258,7 +258,7 @@ case 7:
     if (!(bool)currentGUIData["step8"])
     {
         argsRustMerge.Arguments += String.Format(
-            " & (if exist \"{1}\" (\"{0}\" fix-assets \"{1}\" --references \"{2}\" 2>&1 || (echo Critical: Fix Assets failed. & exit /b 1)))",
+            " & (if exist \"{1}\" (\"{0}\" fix-assets \"{1}\" --references \"{2}\" --allow-missing-references 2>&1 || (echo Critical: Fix Assets failed. & exit /b 1)))",
             rustMerge, modManifest, BuiltModsPath);
     }
     BuildHelper.RunStep(StepType.RunExecutable, argsRustMerge);
@@ -312,6 +312,7 @@ $source = $skipMaps.Replace($source, '${1}if (stepId == 9) return false;' + $lin
 
 if ($InstallDefault) {
     $knownSources = @($source, $mapsSource, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
+    $knownSources += @($knownSources | ForEach-Object { $_.Replace(' --allow-missing-references 2>&1', ' 2>&1') })
     if ($hasRustCheck -and $knownSources -cnotcontains $currentSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."
     }

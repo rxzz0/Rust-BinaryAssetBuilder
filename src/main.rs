@@ -6,7 +6,7 @@ use binary_asset_builder::compile::{
     compile_sdk_maps, compile_sdk_static, compile_static, merge_assets, sdk_coverage,
     verify_ea_batch, write_compiled_stream,
 };
-use binary_asset_builder::fix_assets::fix_assets;
+use binary_asset_builder::fix_assets::{fix_assets, fix_assets_allow_missing};
 use binary_asset_builder::linked_stream::{check_linked_files, link_assets};
 use binary_asset_builder::manifest::{ByteOrder, Manifest};
 use std::env;
@@ -26,7 +26,7 @@ Usage
   binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory>
   binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory>
   binary-asset-builder merge-assets <file.manifest> --assets <directory>
-  binary-asset-builder fix-assets <mod.manifest> --references <builtmods-directory>
+  binary-asset-builder fix-assets <mod.manifest> --references <builtmods-directory> [--allow-missing-references]
   binary-asset-builder pack-big <directory> --output <file.big>
   binary-asset-builder relink <file.manifest> --assets <directory> --output <new-directory>
   binary-asset-builder sdk-coverage <schema-directory>
@@ -68,9 +68,19 @@ fn main() -> ExitCode {
                 println!("Merged {count} precompiled assets into {}", input.display());
             }))
         }
-        [command, input, flag, references] if command == "fix-assets" && flag == "--references" => {
+        [command, input, flag, references, options @ ..]
+            if command == "fix-assets"
+                && flag == "--references"
+                && (options.is_empty()
+                    || matches!(options, [option] if option == "--allow-missing-references")) =>
+        {
             let input = Path::new(input);
-            match fix_assets(input, Path::new(references)) {
+            let fix = if options.is_empty() {
+                fix_assets
+            } else {
+                fix_assets_allow_missing
+            };
+            match fix(input, Path::new(references)) {
                 Ok(result) => {
                     println!(
                         "Verified {} assets, reconciled {} hashes, and built 2 LoD streams",

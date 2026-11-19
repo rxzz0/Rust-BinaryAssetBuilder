@@ -372,6 +372,44 @@ fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
 }
 
 #[test]
+fn sdk_static_preserves_references_to_assets_in_commented_includes() {
+    let root = scratch_root();
+    let data = root.join("Mods/Example/Data");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    let input = data.join("Mod.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes><!-- <Include type="all" source="Media.xml" /> --></Includes>
+            <VideoEventList id="intro"><EventList><Movie MovieAsset="unavailable" /></EventList></VideoEventList>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    assert!(
+        compile_static(&input, &root, &built)
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("unresolved reference")
+    );
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let path = built.join("mods/example/data/mod.manifest");
+    let bytes = fs::read(&path).unwrap();
+    let manifest = Manifest::parse(&bytes).unwrap();
+    assert_eq!(manifest.assets.len(), 1);
+    assert_eq!(
+        manifest.assets[0].references.iter().collect::<Vec<_>>(),
+        [AssetId {
+            type_id: binary_asset_builder::hash::fast_hash(b"Video"),
+            instance_id: binary_asset_builder::hash::fast_hash(b"unavailable"),
+        }]
+    );
+    check_linked_files(&path, &manifest).unwrap();
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_static_builds_and_fixes_a_mod_with_only_sdk_references() {
     let root = scratch_root();
     let data = root.join("Mods/Test/Data");

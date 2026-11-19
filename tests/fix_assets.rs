@@ -130,6 +130,21 @@ fn fixes_override_hashes_and_reorders_chunks_before_publishing_lods() {
             .contains("unresolved asset")
     );
     assert_eq!(fs::read(&input).unwrap(), invalid);
-    assert_eq!(fs::read(patch_path).unwrap(), patch_before);
+    assert_eq!(fs::read(&patch_path).unwrap(), patch_before);
+    binary_asset_builder::fix_assets::fix_assets_allow_missing(&input, &root).unwrap();
+    let bytes = fs::read(&input).unwrap();
+    let manifest = Manifest::parse(&bytes).unwrap();
+    assert_eq!(
+        manifest
+            .assets
+            .iter()
+            .find(|asset| asset.id == consumer)
+            .unwrap()
+            .references
+            .iter()
+            .collect::<Vec<_>>(),
+        missing
+    );
+    check_linked_files(&input, &manifest).unwrap();
     fs::remove_dir_all(root).unwrap();
 }

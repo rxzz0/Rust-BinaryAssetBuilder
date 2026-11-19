@@ -20,6 +20,15 @@ pub struct FixResult {
 
 /// Reconciles WorldBuilder overrides, orders local dependencies, and writes LoD patches.
 pub fn fix_assets(input: &Path, references: &Path) -> io::Result<FixResult> {
+    fix_assets_impl(input, references, false)
+}
+
+/// Fixes an SDK build while preserving unresolved references as EA does at its default error level.
+pub fn fix_assets_allow_missing(input: &Path, references: &Path) -> io::Result<FixResult> {
+    fix_assets_impl(input, references, true)
+}
+
+fn fix_assets_impl(input: &Path, references: &Path, allow_missing: bool) -> io::Result<FixResult> {
     let name = input
         .file_name()
         .and_then(|name| name.to_str())
@@ -62,7 +71,7 @@ pub fn fix_assets(input: &Path, references: &Path) -> io::Result<FixResult> {
             }
             check_linked_files(input, &manifest)?;
             let external = external_ids(&manifest, directory, references)?;
-            let order = dependency_order(&manifest, &external)?;
+            let order = dependency_order(&manifest, &external, allow_missing)?;
             if !manifest.assets.is_empty() {
                 let hashes = worldbuilder_hashes(references)?;
                 for asset in &mut manifest.assets {
@@ -179,6 +188,7 @@ pub(crate) fn worldbuilder_hashes(references: &Path) -> io::Result<HashMap<Asset
 fn dependency_order(
     manifest: &Manifest<'_>,
     external: &HashSet<AssetId>,
+    allow_missing: bool,
 ) -> io::Result<Vec<usize>> {
     let mut positions = HashMap::with_capacity(manifest.assets.len());
     for (index, asset) in manifest.assets.iter().enumerate() {
@@ -191,18 +201,29 @@ fn dependency_order(
     }
     let mut dependents = vec![Vec::new(); manifest.assets.len()];
     let mut remaining = vec![0; manifest.assets.len()];
+    let mut missing = HashSet::new();
     for (index, asset) in manifest.assets.iter().enumerate() {
         for reference in asset.references.iter() {
             if let Some(&dependency) = positions.get(&reference) {
                 dependents[dependency].push(index);
                 remaining[index] += 1;
             } else if !external.contains(&reference) {
-                return Err(invalid(format!(
-                    "{} references unresolved asset {:08x}:{:08x}",
-                    String::from_utf8_lossy(asset.name),
-                    reference.type_id,
-                    reference.instance_id
-                )));
+                if !allow_missing {
+                    return Err(invalid(format!(
+                        "{} references unresolved asset {:08x}:{:08x}",
+                        String::from_utf8_lossy(asset.name),
+                        reference.type_id,
+                        reference.instance_id
+                    )));
+                }
+                if missing.insert(reference) {
+                    eprintln!(
+                        "Warning: {} references unresolved asset {:08x}:{:08x}",
+                        String::from_utf8_lossy(asset.name),
+                        reference.type_id,
+                        reference.instance_id
+                    );
+                }
             }
         }
     }

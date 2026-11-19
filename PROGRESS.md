@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 335 preserves unresolved asset references as warnings in SDK static builds and keeps those references through Fix Assets. With Surge Units.xml commented, EA and Rust matched on all 39 missing IDs across the same 65 asset-reference pairs. The installed SDK compiler passed isolated global and static compiles, merge, Fix Assets, and BIG packaging. All 298 tests and strict Clippy passed.
 - Checkpoint 334 compiles reference-only static streams with the EA zero checksum and lets Fix Assets generate their LoD streams. The SDK Test mod's base manifest and three linked files matched EA byte for byte. Fix Assets, linked checks, BIG packaging, all 297 tests and strict Clippy passed.
 - Checkpoint 333 encodes the three Conquer card definition types and prebuilt decks, including upgrades, veterancy, and type-qualified or unqualified card references. Both linked fixtures matched EA byte for byte across 20 assets. All 296 tests and strict Clippy passed.
 - Checkpoint 332 encodes BootupDisplaySequence with ordered screen and movie items, texture imports, and Windows-1252 movie names. All three linked sequences matched EA binary data and references, with source hash differences on the two stock sequences. All 296 tests and strict Clippy passed.

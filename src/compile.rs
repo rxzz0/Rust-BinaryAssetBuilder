@@ -85,6 +85,7 @@ pub fn compile_map(
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ReferenceMode {
     Explicit,
+    SdkStatic,
     Implicit,
     Map,
 }
@@ -894,6 +895,17 @@ impl Compiler<'_> {
                     .external_id(&self.external_ids)
                     .or_else(|| reference.external_id(&worldbuilder_ids))
                 else {
+                    if self.reference_mode == ReferenceMode::SdkStatic {
+                        let id = reference.declared_id();
+                        resolved.push(id);
+                        if deferred.insert(id) {
+                            eprintln!(
+                                "Warning: Unknown asset {:08x}:{:08x} referenced from {} in {}",
+                                id.type_id, id.instance_id, asset.name, asset.source
+                            );
+                        }
+                        continue;
+                    }
                     // Map placements can reference assets supplied by the game's active streams.
                     if self.reference_mode == ReferenceMode::Map
                         && asset.name.starts_with("GameMap:")
