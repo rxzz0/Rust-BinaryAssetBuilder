@@ -599,6 +599,7 @@ impl Compiler<'_> {
             | "FormationSelectionTemplate"
             | "ImageSequence"
             | "DebugHotKeys"
+            | "AIStateDefinition"
             | "EvaEvent"
             | "LocomotorTemplate"
             | "BounceKickTerrainMapping"

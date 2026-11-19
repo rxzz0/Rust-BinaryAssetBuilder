@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 329 adds native AIStateDefinition and AIStrategicStateName using the shared heuristic encoder and schema inheritance. All 74 direct EA assets and three linked inheritance assets matched, including stock strategic-state names, empty names, and Windows-1252 text. All 296 tests and strict Clippy passed.
 - Checkpoint 328 adds native GameplayConditionData and GameplayAchievementTriggerData with object filters, death criteria, weak upgrade references, and strong condition imports. All eight new EA assets matched in direct and linked output. The eight earlier achievement assets still matched. All 296 tests and strict Clippy passed.
 - Checkpoint 327 adds native AchievementEvent, MapNameToAchievementEventMapping, and AIPersonalityToAchievementEventMapping. Eight EA fixtures matched in both direct and linked output, covering every action, default values, empty and Windows-1252 map names, and qualified personality imports. All 296 tests and strict Clippy passed.
 - Checkpoint 326 adds native DebugHotKeys and GeneralHotKeySlots with shared Map encoding, source-order imports, and schema inheritance for DebugHotKeys. The stock debug map and custom cases matched EA across 222 direct assets and seven linked inheritance-fixture assets. All 296 tests and strict Clippy passed.
@@ -36,4 +37,4 @@
 - Checkpoint 295 adds native ModStudio Step 7 for precompiled W3D animations. All 194 Surge overrides produced byte-identical manifest, bin, relo, and imp files against EA. All 290 tests and Clippy passed.
 - Checkpoints 288–294 link concrete render and audio assets, fix inherited references, and add assisted placement, passenger ejection, dynamics collision, and stance templates.
 - The generated ModStudio commands ran Surge Steps 4–8 and 10–11 in 18.44 seconds using Rust. The build linked 3,911 static assets, wrote two LoD streams, and packaged both BIGs and the skudef.
-- Next, cover AIStateDefinition and AIStrategicStateName.
+- Next, expand the shared AI heuristics and cover controller feedback and bootup sequences.

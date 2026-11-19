@@ -1,5 +1,6 @@
 use super::ai_heuristics::write_heuristics;
 use super::binary::BinaryData;
+use super::fx_list::validate_leaf;
 use super::global_ui::{filter_reference_types, kind_of_flags, object_filter};
 use super::{
     Marshaled, asset_reference, finite_number, hash_name, required_element, sage_time,
@@ -31,6 +32,47 @@ const TACTICS: [&str; 15] = [
     "NullTactic",
 ];
 const DIFFICULTIES: [&str; 4] = ["EASY", "MEDIUM", "HARD", "BRUTAL"];
+
+pub(super) fn state(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id"], path)?;
+    let mut children = significant_children(node);
+    let heuristic = required_element(&mut children, "Heuristic", path)?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected AIStateDefinition child"));
+    }
+    let mut data = BinaryData {
+        payload: vec![0; 12],
+        relocations: Vec::new(),
+        path,
+    };
+    let reference_types = write_heuristics(heuristic, 4, &mut data)?;
+    Ok(data.finish(Marshaled {
+        reference_types,
+        ..Marshaled::default()
+    }))
+}
+
+pub(super) fn state_name(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_leaf(node, &["id", "State", "Name"], path)?;
+    let name = node
+        .attribute("Name")
+        .ok_or_else(|| invalid(path, "expected Name attribute"))?;
+    let mut binary = BinaryData {
+        payload: vec![0; 16],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut data = Marshaled::default();
+    write_import(
+        &mut binary,
+        &mut data,
+        4,
+        required(node, "State", path)?,
+        "AIStrategicStateDefinition",
+    )?;
+    binary.string(8, name)?;
+    Ok(binary.finish(data))
+}
 
 pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     validate_attributes(
