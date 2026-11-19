@@ -53,24 +53,25 @@ pub fn fix_assets(input: &Path, references: &Path) -> io::Result<FixResult> {
             let mut manifest = Manifest::parse(&bytes).map_err(invalid)?;
             if manifest.version != 6
                 || manifest.byte_order != ByteOrder::Little
-                || manifest.assets.is_empty()
                 || manifest
                     .referenced_manifests
                     .iter()
                     .any(|reference| reference.is_patch)
             {
-                return Err(invalid("expected a nonempty base RA3 PC stream"));
+                return Err(invalid("expected a base RA3 PC stream"));
             }
             check_linked_files(input, &manifest)?;
             let external = external_ids(&manifest, directory, references)?;
             let order = dependency_order(&manifest, &external)?;
-            let hashes = worldbuilder_hashes(references)?;
-            for asset in &mut manifest.assets {
-                if let Some(&hash) = hashes.get(&asset.id)
-                    && asset.instance_hash != hash
-                {
-                    asset.instance_hash = hash;
-                    stats.hashes_fixed += 1;
+            if !manifest.assets.is_empty() {
+                let hashes = worldbuilder_hashes(references)?;
+                for asset in &mut manifest.assets {
+                    if let Some(&hash) = hashes.get(&asset.id)
+                        && asset.instance_hash != hash
+                    {
+                        asset.instance_hash = hash;
+                        stats.hashes_fixed += 1;
+                    }
                 }
             }
             stats.assets = manifest.assets.len();

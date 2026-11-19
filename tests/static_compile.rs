@@ -372,6 +372,61 @@ fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
 }
 
 #[test]
+fn sdk_static_builds_and_fixes_a_mod_with_only_sdk_references() {
+    let root = scratch_root();
+    let data = root.join("Mods/Test/Data");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    fs::create_dir_all(&built).unwrap();
+    let sdk_xml = root.join("static.xml");
+    fs::write(
+        &sdk_xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Video id="example" Filename="example" />
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let sdk_stream = compile_static(&sdk_xml, &root, &built).unwrap();
+    fs::write(built.join("static.manifest"), sdk_stream.manifest).unwrap();
+    let input = data.join("Mod.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Tags />
+            <Includes><Include type="reference" source="DATA:static.xml" /></Includes>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let output = built.join("mods/test/data");
+    let base = output.join("mod.manifest");
+    let bytes = fs::read(&base).unwrap();
+    let manifest = Manifest::parse(&bytes).unwrap();
+    assert!(manifest.assets.is_empty());
+    assert_eq!(manifest.stream_checksum, 0);
+    assert_eq!(manifest.referenced_manifests.len(), 1);
+    assert_eq!(manifest.referenced_manifests[0].path, b"static.manifest");
+    check_linked_files(&base, &manifest).unwrap();
+
+    let fixed = binary_asset_builder::fix_assets::fix_assets(&base, &built).unwrap();
+    assert_eq!(fixed.assets, 0);
+    assert_eq!(fixed.hashes_fixed, 0);
+    assert_eq!(fs::read(base).unwrap(), bytes);
+    for name in ["mod_l", "mod_m"] {
+        let path = output.join(format!("{name}.manifest"));
+        let bytes = fs::read(&path).unwrap();
+        let patch = Manifest::parse(&bytes).unwrap();
+        assert!(patch.assets.is_empty());
+        assert_eq!(patch.referenced_manifests.len(), 1);
+        assert!(patch.referenced_manifests[0].is_patch);
+        assert_eq!(patch.referenced_manifests[0].path, b"mod.manifest");
+        check_linked_files(&path, &patch).unwrap();
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn compiles_armor_with_sdk_token_tables_and_absolute_relocations() {
     let root = scratch_root();
     let input = root.join("armor.xml");

@@ -833,7 +833,9 @@ impl Compiler<'_> {
     }
 
     fn finish(mut self) -> io::Result<CompiledStream> {
-        if self.assets.is_empty() {
+        if self.assets.is_empty()
+            && (self.reference_directory.is_none() || self.reference_mode == ReferenceMode::Map)
+        {
             return Err(invalid(&self.root, "input contains no supported assets"));
         }
         if self.reference_mode == ReferenceMode::Implicit
@@ -960,7 +962,11 @@ impl Compiler<'_> {
                 }
             })
             .collect();
-        let stream_checksum = memory_stream_hash(checksums);
+        let stream_checksum = if checksums.is_empty() {
+            0
+        } else {
+            memory_stream_hash(checksums)
+        };
         for output in [&mut files.bin, &mut files.relo, &mut files.imp] {
             output[..4].copy_from_slice(&stream_checksum.to_le_bytes());
         }
