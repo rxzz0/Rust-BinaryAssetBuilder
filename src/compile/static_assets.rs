@@ -30,6 +30,7 @@ mod emotion;
 mod eva;
 mod experience_level;
 mod fonts;
+mod formation;
 mod fx_list;
 mod game_lod;
 mod game_map;
@@ -138,6 +139,10 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "FontTranslation" => (0x6c31_5185, 83, fonts::translation),
         "FontDefaultSetting" => (0x0bc9_66d0, 83, fonts::settings),
         "FontSubstitution" => (0xa63e_49f9, 83, fonts::substitution),
+        "FormationAssistant" => (0x3f42_c35d, 84, formation::assistant),
+        "FormationAssistantTemplate" => (0x0953_9ecb, 84, formation::template),
+        "FormationAssistantUnitDefinition" => (0x63ae_b1a5, 84, formation::unit),
+        "FormationSelectionTemplate" => (0x0531_8e41, 84, formation::selection),
         "GiftManagerSettings" => (0xc93f_a545, 83, system_settings::gift),
         "LocalBuildListMonitor" => (0xd544_a0d3, 83, system_settings::build_list_monitor),
         "TargetingDistanceCompare" => (0xc00c_41f3, 76, targeting_compare::distance),
