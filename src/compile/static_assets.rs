@@ -9,6 +9,7 @@ use std::io;
 use std::path::Path;
 
 mod ability_buttons;
+mod achievements;
 mod ai_build;
 mod ai_command;
 mod ai_heuristics;
@@ -126,6 +127,9 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "ConnectionLineManager" => (0x6b72_136f, 84, order_display::connection),
         "BuildSystemSettings" => (0xf806_9076, 83, system_settings::build),
         "UnitAISettings" => (0xf170_6644, 84, system_settings::unit_ai),
+        "AchievementEvent" => (0xaadb_bfb3, 83, achievements::event),
+        "MapNameToAchievementEventMapping" => (0x404d_9e5d, 84, achievements::map_name),
+        "AIPersonalityToAchievementEventMapping" => (0x8ec2_496a, 84, achievements::personality),
         "PathfindSettings" => (0x9cbc_f9f1, 83, system_settings::pathfind),
         "ResourceSettings" => (0x5cfb_bd27, 83, system_settings::resource),
         "InvisibilityManagerSettings" => (0x64a4_f893, 83, system_settings::invisibility),
