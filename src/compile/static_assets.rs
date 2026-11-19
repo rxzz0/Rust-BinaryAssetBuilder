@@ -128,6 +128,8 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "BuildSystemSettings" => (0xf806_9076, 83, system_settings::build),
         "UnitAISettings" => (0xf170_6644, 84, system_settings::unit_ai),
         "AchievementEvent" => (0xaadb_bfb3, 83, achievements::event),
+        "GameplayConditionData" => (0xbd5c_0d6e, 83, achievements::condition),
+        "GameplayAchievementTriggerData" => (0x1c88_a92d, 84, achievements::trigger),
         "MapNameToAchievementEventMapping" => (0x404d_9e5d, 84, achievements::map_name),
         "AIPersonalityToAchievementEventMapping" => (0x8ec2_496a, 84, achievements::personality),
         "PathfindSettings" => (0x9cbc_f9f1, 83, system_settings::pathfind),

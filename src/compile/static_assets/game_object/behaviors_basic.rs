@@ -2564,7 +2564,7 @@ fn die_parent(
     ))
 }
 
-pub(super) fn encode_die_mux(
+pub(in crate::compile::static_assets) fn encode_die_mux(
     node: Node<'_, '_>,
     start: usize,
     data: &mut BinaryData<'_>,

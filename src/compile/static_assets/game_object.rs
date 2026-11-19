@@ -57,7 +57,7 @@ mod tech_upgrade;
 mod teleport_stored;
 mod transform_upgrades;
 
-pub(super) use behaviors_basic::weapon_slot;
+pub(super) use behaviors_basic::{encode_die_mux, weapon_slot};
 pub(super) use client_behaviors::audio_reference;
 pub(super) use draws::{model_condition_index, write_model_conditions};
 pub(super) use encoder::compile;
