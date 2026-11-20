@@ -752,6 +752,7 @@ mod tests {
     #[test]
     fn w3d_mesh_matches_ea_batch() {
         assert_ea_fixture("w3d-mesh", 1);
+        assert_ea_fixture("mesh-layout", 1);
     }
 
     #[test]

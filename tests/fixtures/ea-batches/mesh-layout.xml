@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <W3DMesh id="MeshProbe" CastShadow="true" GeometryType="Skin">
+    <BoundingBox><Min X="0" Y="0" Z="0"/><Max X="1" Y="1" Z="0"/></BoundingBox>
+    <BoundingSphere Radius="1"><Center X=".5" Y=".5" Z="0"/></BoundingSphere>
+    <Vertices><V X="0" Y="0" Z="0"/><V X="1" Y="0" Z="0"/><V X="0" Y="1" Z="0"/></Vertices><Vertices><V X="0" Y="0" Z="0"/><V X="1" Y="0" Z="0"/><V X="0" Y="1" Z="0"/></Vertices>
+    <Normals><N X="0" Y="0" Z="1"/><N X="0" Y="0" Z="1"/><N X="0" Y="0" Z="1"/></Normals><Normals><N X="0" Y="0" Z="1"/><N X="0" Y="0" Z="1"/><N X="0" Y="0" Z="1"/></Normals>
+    <Tangents><T X="1" Y="0" Z="0"/><T X="1" Y="0" Z="0"/><T X="1" Y="0" Z="0"/></Tangents><Binormals><B X="0" Y="1" Z="0"/><B X="0" Y="1" Z="0"/><B X="0" Y="1" Z="0"/></Binormals><VertexColors><C R=".51" G=".4" B=".1" A="1"/><C R="1" G="0" B=".5" A=".7"/><C R=".004" G=".006" B=".55" A="1"/></VertexColors><TexCoords><T X="0" Y="0"/><T X="1" Y="0"/><T X="0" Y="1"/></TexCoords><BoneInfluences><I Bone="2" Weight=".5"/><I Bone="2" Weight=".2"/><I Bone="2" Weight=".8"/></BoneInfluences><BoneInfluences><I Bone="3" Weight=".5"/><I Bone="3" Weight=".2"/><I Bone="3" Weight=".1"/></BoneInfluences>
+    <Triangles><T><V>0</V><V>1</V><V>2</V><Nrm X="0" Y="0" Z="1"/><Dist>0</Dist></T></Triangles>
+    <FXShader ShaderName="Infantry.fx"><Constants><Texture Name="DiffuseTexture"><Value>ArtProbeTexture</Value></Texture><Float Name="ProbeFloat"><Value>0.25</Value></Float></Constants></FXShader>
+  </W3DMesh>
+</AssetDeclaration>

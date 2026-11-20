@@ -359,10 +359,7 @@ fn write_vertices(nodes: &[Node<'_, '_>], data: &mut BinaryData<'_>) -> io::Resu
             let mut packed = Vec::with_capacity(count * 4);
             for color in colors {
                 let rgba = components(color, ["R", "G", "B", "A"], path)?;
-                packed.extend(
-                    [rgba[2], rgba[1], rgba[0], rgba[3]]
-                        .map(|value| (f64::from(value) * 255.0) as u8),
-                );
+                packed.extend(rgba.map(|value| (value * 255.0).round() as u8));
             }
             packed
         }
@@ -375,7 +372,7 @@ fn write_vertices(nodes: &[Node<'_, '_>], data: &mut BinaryData<'_>) -> io::Resu
         packed,
         width: 4,
     });
-    for (stream, item, usage) in [(tangent, "T", 'a'), (binormal, "B", 'b')] {
+    for (stream, item, usage) in [(tangent, "T", 'g'), (binormal, "B", 'b')] {
         if let Some(stream) = stream.filter(|_| tangent.is_some() && binormal.is_some()) {
             ordered.push(vector_stream(
                 stream,
@@ -533,18 +530,17 @@ fn append_skin(
         width: 4,
     });
     if used > 1 {
-        let mut weights = Vec::with_capacity(count * 8);
-        for vertex in 0..count {
-            for group in &groups[..used] {
-                weights.extend(group[vertex].1.to_le_bytes());
-            }
+        let mut weights = Vec::with_capacity(count * 4);
+        for &(_, weight) in &groups[0] {
+            let first = (weight * 255.0).round() as u8;
+            weights.extend([first, 255 - first, 0, 0]);
         }
         streams.push(VertexStream {
             usage: 'w',
             index: 0,
-            format: "2f32",
+            format: "4u8n",
             packed: weights,
-            width: 8,
+            width: 4,
         });
     }
     Ok(bones)
