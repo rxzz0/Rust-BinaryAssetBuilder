@@ -80,6 +80,7 @@ Five alternating pairs used identical Surge sources and four workers per configu
 ## Acceptance and checkpoint policy
 
 - Use new output directories with identical source inputs for comparisons. Run the baseline and candidate on the same PC and drive. Report which stages, settings, and tools the timing covers.
+- Keep the two most recent verified Surge benchmark builds under `.scratch/parallel-baseline`. After checking links and output hashes, register each build with `sdk/Keep-BenchmarkBuilds.ps1` and supply the separate package root for cross-drive runs. The script archives the phase logs and removes older build and package outputs. Keep the timing reports and reference hashes for future comparisons.
 - Require repeatable byte-for-byte parity between Rust worker settings. Use existing EA fixtures for differences that the project already tracks independently of parallelism.
 - Run `cargo fmt --check`, `cargo test --all-targets`, `cargo clippy --all-targets -- -D warnings`, and `cargo build --release` before rollout. Verify the test package with `check-linked` and exercise ModStudio and the game as separate checks.
 - Commit each independently verified step on `parallel`. Record the commit, timing, parity result, and next step in `PROGRESS.md`. Keep the experiment on `parallel` until the correctness and performance results are reviewed.
