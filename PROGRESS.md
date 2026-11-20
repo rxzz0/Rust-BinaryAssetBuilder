@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 353 reports missing schema-typed weak references by name during SDK static builds. It checks local assets and available reference manifests and respects Hide Rust warnings. Surge's five static outputs matched Checkpoint 352 byte for byte and passed linked validation. All 302 tests and strict Clippy passed. Next, carry readable names into existing strong-reference warnings.
 - Checkpoint 352 adds native `GrapplingHookUpdate`. Three GameObject fixtures covering defaults, weapon references, status validation, and filters matched EA byte for byte. The SDK static build passed linked checks. All 301 tests and strict Clippy passed. Next, rerun the tester's full mod build.
 - Checkpoint 351 adds native `ArmorTemplate` inheritance. The stock SDK's 154 armor assets, including `JapanEngineerArmor`, matched EA hashes, payloads, relocations, and imports. The SDK static build passed linked checks. All 301 tests and strict Clippy passed. Next, verify the tester's full mod build.
 - Checkpoint 350 installs a bundled ModStudio script and preserves the original in the SDK's `defaultscript` folder. Verified the tester's 10-step script, an unrelated layout, legacy upgrade, reinstall, and rollback on a locked script. The bundled script compiled against EALABuild. Next, isolate serial work in static traversal.

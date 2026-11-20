@@ -372,6 +372,107 @@ fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
 }
 
 #[test]
+fn sdk_warns_for_missing_weak_asset_names_without_changing_streams() {
+    let root = scratch_root();
+    let data = root.join("Mods/Example/Data");
+    let built = root.join("BuiltMods");
+    fs::create_dir_all(&data).unwrap();
+    fs::create_dir_all(&built).unwrap();
+    let stock_xml = root.join("Stock.xml");
+    fs::write(
+        &stock_xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <GameObject id="StockOnly"><Body><ActiveBody id="Body" MaxHealth="100"/></Body></GameObject>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stock = compile_static(&stock_xml, &root, &built).unwrap();
+    fs::write(built.join("static.manifest"), stock.manifest).unwrap();
+    let schemas = root.join("Schemas/xsd");
+    fs::create_dir_all(&schemas).unwrap();
+    fs::write(
+        schemas.join("CnC3Types.xsd"),
+        r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                      xmlns:xas="uri:ea.com:eala:asset:schema">
+            <xs:simpleType name="WeakReference"><xs:restriction base="xs:string"/></xs:simpleType>
+            <xs:simpleType name="GameObjectWeakRef" xas:refType="GameObject">
+                <xs:restriction base="WeakReference"/>
+            </xs:simpleType>
+            <xs:simpleType name="LogicCommandSetWeakRef" xas:refType="LogicCommandSet">
+                <xs:restriction base="WeakReference"/>
+            </xs:simpleType>
+            <xs:complexType name="GameObject">
+                <xs:sequence>
+                    <xs:element name="EquivalentTo" type="GameObjectWeakRef" minOccurs="0" maxOccurs="unbounded"/>
+                    <xs:element name="Body" type="BodyModule"/>
+                </xs:sequence>
+                <xs:attribute name="CommandSet" type="LogicCommandSetWeakRef"/>
+            </xs:complexType>
+            <xs:complexType name="BodyModule"><xs:choice>
+                <xs:element name="ActiveBody" type="ActiveBodyModuleData"/>
+            </xs:choice></xs:complexType>
+            <xs:complexType name="ActiveBodyModuleData">
+                <xs:attribute name="MaxHealth" type="SageReal" use="required"/>
+            </xs:complexType>
+        </xs:schema>"#,
+    )
+    .unwrap();
+    let input = data.join("Mod.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <GameObject id="LocalOnly"><Body><ActiveBody id="Body" MaxHealth="100"/></Body></GameObject>
+            <GameObject id="Owner" CommandSet="MissingCommands">
+                <EquivalentTo>LocalOnly</EquivalentTo>
+                <EquivalentTo>stockonly</EquivalentTo>
+                <EquivalentTo>MissingUnit</EquivalentTo>
+                <EquivalentTo>MissingUnit</EquivalentTo>
+                <Body><ActiveBody id="Body" MaxHealth="100"/></Body>
+            </GameObject>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let compile = |silence| {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_binary-asset-builder"))
+            .arg("compile-static-sdk")
+            .arg(&input)
+            .arg("--sdk-root")
+            .arg(&root)
+            .arg("--output")
+            .arg(&built)
+            .env("BAB_NO_WARNINGS", if silence { "1" } else { "0" })
+            .output()
+            .unwrap();
+        let warnings = String::from_utf8(output.stderr).unwrap();
+        assert!(output.status.success(), "{warnings}");
+        warnings
+    };
+    let warnings = compile(false);
+    let missing = warnings
+        .lines()
+        .filter(|line| line.starts_with("Warning: Unknown asset "))
+        .collect::<Vec<_>>();
+    assert_eq!(missing.len(), 2, "{warnings}");
+    for name in ["LogicCommandSet:MissingCommands", "GameObject:MissingUnit"] {
+        assert!(
+            missing
+                .iter()
+                .any(|line| line.contains(&format!("'{name}' referenced from 'GameObject:Owner'"))),
+            "{warnings}"
+        );
+    }
+    let output = built.join("mods/example/data");
+    let read_stream = || {
+        ["manifest", "bin", "relo", "imp"]
+            .map(|ext| fs::read(output.join(format!("mod.{ext}"))).unwrap())
+    };
+    let stream = read_stream();
+    assert!(compile(true).is_empty());
+    assert_eq!(read_stream(), stream);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_schema_reports_required_errors_and_keeps_building_after_optional_warnings() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data");

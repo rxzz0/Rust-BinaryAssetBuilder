@@ -1,5 +1,5 @@
 use super::super::asset_reference;
-use crate::compile::{AssetReference, SAGE_NS, invalid};
+use crate::compile::{SAGE_NS, WeakReference, invalid};
 use roxmltree::{Document, Node};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -289,9 +289,10 @@ impl Schema {
         &self,
         node: Node<'_, '_>,
         path: &Path,
-    ) -> io::Result<Vec<AssetReference>> {
+        map: bool,
+    ) -> io::Result<Vec<WeakReference>> {
         let mut references = Vec::new();
-        self.find_weak_references(node, node.tag_name().name(), path, &mut references)?;
+        self.find_weak_references(node, node.tag_name().name(), path, map, &mut references)?;
         Ok(references)
     }
 
@@ -300,7 +301,8 @@ impl Schema {
         node: Node<'_, '_>,
         kind: &str,
         path: &Path,
-        references: &mut Vec<AssetReference>,
+        map: bool,
+        references: &mut Vec<WeakReference>,
     ) -> io::Result<()> {
         if !self.types.contains_key(kind) {
             return Ok(());
@@ -311,9 +313,9 @@ impl Schema {
                 .fields
                 .iter()
                 .find(|field| field.name == attribute.name())
-                && let Some(target) = self.weak_reference_target(field)
+                && let Some(target) = self.weak_reference_target(field, map)
             {
-                add_weak_reference(attribute.value(), target, path, references)?;
+                add_weak_reference(attribute.value(), target, path, map, references)?;
             }
         }
         for child in node
@@ -327,21 +329,32 @@ impl Schema {
             else {
                 continue;
             };
-            if let Some(target) = self.weak_reference_target(field) {
-                add_weak_reference(child.text().unwrap_or_default(), target, path, references)?;
+            if let Some(target) = self.weak_reference_target(field, map) {
+                add_weak_reference(
+                    child.text().unwrap_or_default(),
+                    target,
+                    path,
+                    map,
+                    references,
+                )?;
             } else {
-                self.find_weak_references(child, &field.kind, path, references)?;
+                self.find_weak_references(child, &field.kind, path, map, references)?;
             }
         }
         Ok(())
     }
 
-    fn weak_reference_target<'a>(&'a self, field: &'a Field) -> Option<&'a str> {
+    fn weak_reference_target<'a>(&'a self, field: &'a Field, map: bool) -> Option<&'a str> {
         let mut kind = field.kind.as_str();
         let mut target = field.reference_target.as_deref();
         for _ in 0..64 {
             if kind == "WeakReference" {
-                return target;
+                return target.filter(|target| {
+                    map || matches!(
+                        *target,
+                        "GameObject" | "LogicCommandSet" | "PackedTextureImage" | "UpgradeTemplate"
+                    )
+                });
             }
             let entry = self.types.get(kind)?;
             target = target.or(entry.reference_target.as_deref());
@@ -355,12 +368,24 @@ fn add_weak_reference(
     value: &str,
     target: &str,
     path: &Path,
-    references: &mut Vec<AssetReference>,
+    map: bool,
+    references: &mut Vec<WeakReference>,
 ) -> io::Result<()> {
     let value = value.trim();
     if !value.is_empty() {
         let kind = value.split_once(':').map_or(target, |(kind, _)| kind);
-        references.push(asset_reference(value, kind, path)?.into());
+        match asset_reference(value, kind, path) {
+            Ok(id) => {
+                let plain = value.split_once('\\').map_or(value, |(name, _)| name);
+                let name = plain.split_once(':').map_or(plain, |(_, name)| name);
+                references.push(WeakReference {
+                    reference: id.into(),
+                    name: format!("{kind}:{name}"),
+                });
+            }
+            Err(error) if map => return Err(error),
+            Err(_) => {}
+        }
     }
     Ok(())
 }

@@ -254,7 +254,7 @@ struct CompiledAsset {
     relocations: Vec<u8>,
     imports: Vec<u8>,
     references: Vec<AssetReference>,
-    weak_references: Vec<AssetReference>,
+    weak_references: Vec<WeakReference>,
     custom_data: Option<CustomData>,
     tokenized: bool,
     sort_order: u8,
@@ -264,6 +264,11 @@ struct CompiledAsset {
 struct AssetReference {
     id: AssetId,
     external_type: Option<u32>,
+}
+
+struct WeakReference {
+    reference: AssetReference,
+    name: String,
 }
 
 impl From<AssetId> for AssetReference {
@@ -620,7 +625,10 @@ impl Compiler<'_> {
         let mut pending = Vec::new();
         while index < self.assets.len() {
             let asset = &self.assets[index];
-            for reference in asset.references.iter().chain(&asset.weak_references) {
+            let weak = asset.weak_references.iter().filter_map(|weak| {
+                (self.reference_mode == ReferenceMode::Map).then_some(&weak.reference)
+            });
+            for reference in asset.references.iter().chain(weak) {
                 if reference.local_id(&self.ids).is_some() {
                     continue;
                 }
@@ -780,10 +788,14 @@ impl Compiler<'_> {
         source: &str,
     ) -> io::Result<CompiledAsset> {
         let mut asset = static_assets::compile_asset(node, path, source)?;
-        if self.reference_mode == ReferenceMode::Map
-            && let Some(schema) = &self.game_object_schema
-        {
-            asset.weak_references = schema.weak_references(node, path)?;
+        if let Some(schema) = &self.game_object_schema {
+            if self.reference_mode == ReferenceMode::Map {
+                asset.weak_references = schema.weak_references(node, path, true)?;
+            } else if self.reference_mode == ReferenceMode::SdkStatic && warnings_enabled() {
+                asset.weak_references = schema
+                    .weak_references(node, path, false)
+                    .unwrap_or_default();
+            }
         }
         Ok(asset)
     }
@@ -983,6 +995,52 @@ impl Compiler<'_> {
         })
     }
 
+    fn warn_missing_weak_references(&self) {
+        let unresolved = self.assets.iter().flat_map(|asset| {
+            asset.weak_references.iter().filter_map(move |weak| {
+                let reference = &weak.reference;
+                (reference.local_id(&self.ids).is_none()
+                    && reference.external_id(&self.external_ids).is_none())
+                .then_some((asset, weak))
+            })
+        });
+        let mut unresolved = unresolved.peekable();
+        if unresolved.peek().is_none() {
+            return;
+        }
+
+        let directory = self.reference_directory.unwrap();
+        let mut stock = HashSet::new();
+        for name in [
+            "audio.manifest",
+            "global.manifest",
+            "static.manifest",
+            "sagexml/worldbuilder.manifest",
+            "worldbuilder.manifest",
+        ] {
+            // These catalogs supplement the declared references for diagnostics only.
+            if let Ok(bytes) = fs::read(directory.join(name))
+                && let Ok(manifest) = Manifest::parse(&bytes)
+                && manifest.version == 6
+                && manifest.byte_order == ByteOrder::Little
+                && manifest.all_types_hash == RA3_ALL_TYPES_HASH
+            {
+                stock.extend(manifest.assets.iter().map(|asset| asset.id));
+            }
+        }
+        let mut reported = HashSet::new();
+        for (asset, weak) in unresolved {
+            let reference = &weak.reference;
+            if reference.external_id(&stock).is_none() && reported.insert((asset.id, reference.id))
+            {
+                warning(format_args!(
+                    "Unknown asset '{}' referenced from '{}' in '{}'",
+                    weak.name, asset.name, asset.source
+                ));
+            }
+        }
+    }
+
     fn finish(mut self) -> io::Result<CompiledStream> {
         if self.assets.is_empty()
             && (self.reference_directory.is_none() || self.reference_mode == ReferenceMode::Map)
@@ -1019,6 +1077,9 @@ impl Compiler<'_> {
         }
         self.assets
             .sort_by_cached_key(|asset| (asset.sort_order, asset_name_order(&asset.name)));
+        if self.reference_mode == ReferenceMode::SdkStatic {
+            self.warn_missing_weak_references();
+        }
         let mut files = LinkedFiles {
             bin: vec![0; 4],
             relo: vec![0; 4],
@@ -1454,8 +1515,12 @@ fn cleaned_node<'a, 'input: 'a>(
     })
 }
 
+fn warnings_enabled() -> bool {
+    std::env::var_os("BAB_NO_WARNINGS").is_none_or(|value| value != "1")
+}
+
 pub(crate) fn warning(message: std::fmt::Arguments<'_>) {
-    if std::env::var_os("BAB_NO_WARNINGS").is_some_and(|value| value == "1") {
+    if !warnings_enabled() {
         return;
     }
     let line = format!("Warning: {message}\n");
