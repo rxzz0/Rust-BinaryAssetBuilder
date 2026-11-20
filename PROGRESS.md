@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 340 moves the EA compiler checkbox to the top and Hide Rust warnings beside the BIG and Skudef options. Verified C# compilation and SDK installation.
 - Checkpoint 339 adds a ModStudio checkbox to switch between the native Rust build and the original EA build. Rust remains the default. Compiled the generated C# against EALABuild, tested repeat installation, and verified the installed SDK script.
 - Checkpoint 338 matches EA W3D mesh tangent declarations, RGBA vertex colors, and packed blend weights. All 130 Surge mesh payloads, relocations, imports, and reference lists matched EA. All 299 tests and strict Clippy passed. Surge static compilation, precompiled asset merge, Fix Assets, linked checks, and test BIG packaging took 10.98 seconds. The unit-spawn crash still needs an in-game retest.
 - Checkpoint 337 adds the Hide Rust warnings checkbox in ModStudio and the BAB_NO_WARNINGS=1 command-line setting. Quiet mode keeps build errors visible. The installed quiet Surge static build emitted no warnings and matched the verified stream. All 299 tests and strict Clippy passed.

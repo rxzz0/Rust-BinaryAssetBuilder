@@ -92,6 +92,26 @@ EA_CASES
     })
 }
 
+function Move-CompilerOptions([string] $script) {
+    foreach ($placement in @(
+        @{ Option = 'useEaCompiler'; Anchor = 'step1'; Before = $true }
+        @{ Option = 'hideRustWarnings'; Anchor = 'step11'; Before = $false }
+    )) {
+        $option = [regex]::new('(?m)^[\t ]*modGUIData\.Add\(new GUIElementData\("' + $placement.Option + '",[^\r\n]*\r?\n')
+        $anchor = [regex]::new('(?m)^[\t ]*modGUIData\.Add\(new GUIElementData\("' + $placement.Anchor + '",[^\r\n]*\r?\n')
+        if ($option.Matches($script).Count -ne 1 -or $anchor.Matches($script).Count -ne 1) {
+            throw "Could not position the ModStudio option $($placement.Option)."
+        }
+        $line = $option.Match($script).Value
+        $script = $option.Replace($script, '')
+        $position = $anchor.Match($script)
+        $index = $position.Index
+        if (!$placement.Before) { $index += $position.Length }
+        $script = $script.Insert($index, $line)
+    }
+    return $script
+}
+
 $SdkRoot = (Get-Item -LiteralPath $SdkRoot).FullName
 $studio = Get-Item -LiteralPath (Join-Path $SdkRoot 'EALAModStudio.exe')
 $repository = Split-Path -Parent $PSScriptRoot
@@ -408,9 +428,11 @@ $beforeWarningOption = $source
 $source = Add-RustWarningOption $source
 $warningSource = $source
 $source = Add-CompilerOption $source $originalSource
+$beforeOptionMove = $source
+$source = Move-CompilerOptions $source
 
 if ($InstallDefault) {
-    $knownSources = @($source, $warningSource, $beforeWarningOption, $mapsSource, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
+    $knownSources = @($source, $beforeOptionMove, $warningSource, $beforeWarningOption, $mapsSource, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
     $knownSources += @($knownSources | ForEach-Object { $_.Replace(' --allow-missing-references 2>&1', ' 2>&1') })
     if ($hasRustCheck -and $knownSources -cnotcontains $currentSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."
