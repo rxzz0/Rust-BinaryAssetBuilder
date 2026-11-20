@@ -5,6 +5,7 @@ use crate::linked_stream::LinkedFiles;
 use crate::manifest::{
     AssetEntry, AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest, ReferencedManifest,
 };
+use crate::sdk_references::{AUDIO_BASE, AUDIO_PATCH, is_stock_audio_catalog};
 use expressions::{Definitions, expand_assets, merge_definitions, read_definitions};
 use roxmltree::{Document, Node, NodeId};
 use std::borrow::Cow;
@@ -40,7 +41,7 @@ pub use sdk_static::{compile_sdk_global, compile_sdk_static};
 const SAGE_NS: &str = "uri:ea.com:eala:asset";
 const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
 const FILE_HASH_BLOCK: usize = 0x100000;
-const RA3_ALL_TYPES_HASH: u32 = 0x54ee_e764;
+pub(crate) const RA3_ALL_TYPES_HASH: u32 = 0x54ee_e764;
 const RELOCATIONS: [u8; 8] = [4, 0, 0, 0, 255, 255, 255, 255];
 
 pub struct CompiledStream {
@@ -922,12 +923,23 @@ impl Compiler<'_> {
         let manifest = Manifest::parse(&bytes).map_err(|error| invalid(path, error))?;
         if manifest.version != 6
             || manifest.byte_order != ByteOrder::Little
-            || manifest.all_types_hash != RA3_ALL_TYPES_HASH
+            || (manifest.all_types_hash != RA3_ALL_TYPES_HASH
+                && !is_stock_audio_catalog(path, &manifest))
         {
             return Err(invalid(path, "reference must be an RA3 PC manifest"));
         }
         self.external_ids
             .extend(manifest.assets.iter().map(|asset| asset.id));
+        if path
+            .file_name()
+            .is_some_and(|name| name.eq_ignore_ascii_case(AUDIO_BASE))
+            && is_stock_audio_catalog(Path::new(AUDIO_BASE), &manifest)
+        {
+            let patch = path.with_file_name(AUDIO_PATCH);
+            if patch.is_file() {
+                self.read_reference_manifest(&patch)?;
+            }
+        }
         Ok(())
     }
 
@@ -1042,18 +1054,21 @@ impl Compiler<'_> {
         let directory = self.reference_directory.unwrap();
         let mut stock = HashSet::new();
         for name in [
-            "audio.manifest",
+            AUDIO_BASE,
+            AUDIO_PATCH,
             "global.manifest",
             "static.manifest",
             "sagexml/worldbuilder.manifest",
             "worldbuilder.manifest",
         ] {
             // These catalogs supplement the declared references for diagnostics only.
-            if let Ok(bytes) = fs::read(directory.join(name))
+            let path = directory.join(name);
+            if let Ok(bytes) = fs::read(&path)
                 && let Ok(manifest) = Manifest::parse(&bytes)
                 && manifest.version == 6
                 && manifest.byte_order == ByteOrder::Little
-                && manifest.all_types_hash == RA3_ALL_TYPES_HASH
+                && (manifest.all_types_hash == RA3_ALL_TYPES_HASH
+                    || is_stock_audio_catalog(&path, &manifest))
             {
                 stock.extend(manifest.assets.iter().map(|asset| asset.id));
             }

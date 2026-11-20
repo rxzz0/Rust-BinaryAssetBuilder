@@ -605,8 +605,8 @@ namespace EALABuild
 				    BuildHelper.DisplayLine("Step 5: Compiling global XML with Rust");
 				    RunExecutableArguments argsRustGlobal = new RunExecutableArguments(Cmd);
 				    argsRustGlobal.Arguments = String.Format(
-				        "/C (@echo off) & (if exist \"{1}\" (\"{0}\" compile-global-sdk \"{1}\" --sdk-root \"{2}\" --output \"{3}\" 2>&1))",
-				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), Path.Combine(ModDataPath, "additionalmaps"), SDKDirectory, BuiltModsPath);
+				        "/C (@echo off) & (if exist \"{1}\" (\"{0}\" compile-global-sdk \"{1}\" --sdk-root \"{2}\" --output \"{3}\" --game-data \"{4}\" 2>&1))",
+				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), Path.Combine(ModDataPath, "additionalmaps"), SDKDirectory, BuiltModsPath, RA3DataDir);
 				    argsRustGlobal.Arguments += " || (echo Critical: Build Global Data failed. & exit /b 1)";
 				    RunRustBuildStep(argsRustGlobal);
 				    break;
@@ -625,8 +625,8 @@ namespace EALABuild
 				    }
 				    string rustSdkRoot = Path.Combine(SDKDirectory, ".");
 				    argsRustStatic.Arguments = String.Format(
-				        "/C (@echo off) & (\"{0}\" compile-static-sdk \"{1}\" --sdk-root \"{2}\" --output \"{3}\" 2>&1)",
-				        rustStatic, ModXml, rustSdkRoot, BuiltModsPath);
+				        "/C (@echo off) & (\"{0}\" compile-static-sdk \"{1}\" --sdk-root \"{2}\" --output \"{3}\" --game-data \"{4}\" 2>&1)",
+				        rustStatic, ModXml, rustSdkRoot, BuiltModsPath, RA3DataDir);
 				    if (!(bool)currentGUIData["step7"] && !(bool)currentGUIData["step8"])
 				    {
 				        argsRustStatic.Arguments += String.Format(" && (\"{0}\" fix-assets \"{1}\" --references \"{2}\" --allow-missing-references 2>&1)", rustStatic, Path.Combine(BuiltModDataPath, "mod.manifest"), BuiltModsPath);

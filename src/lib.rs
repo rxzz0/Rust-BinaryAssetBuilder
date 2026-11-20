@@ -7,3 +7,4 @@ pub mod fix_assets;
 pub mod hash;
 pub mod linked_stream;
 pub mod manifest;
+pub mod sdk_references;

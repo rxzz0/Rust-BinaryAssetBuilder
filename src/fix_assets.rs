@@ -3,6 +3,7 @@
 use crate::compile_batch::{Contents, publish_prepared};
 use crate::linked_stream::check_linked_files;
 use crate::manifest::{AssetId, ByteOrder, Manifest};
+use crate::sdk_references::{AUDIO_BASE, AUDIO_PATCH, is_stock_audio_catalog};
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::ffi::OsString;
@@ -156,6 +157,17 @@ fn external_ids(
         let bytes = fs::read(&path)?;
         let manifest = Manifest::parse(&bytes)
             .map_err(|error| invalid(format!("{} ({error})", path.display())))?;
+        if path
+            .file_name()
+            .is_some_and(|name| name.eq_ignore_ascii_case(AUDIO_BASE))
+            && is_stock_audio_catalog(Path::new(AUDIO_BASE), &manifest)
+            && path.with_file_name(AUDIO_PATCH).is_file()
+        {
+            pending.push((
+                path.parent().unwrap_or(references).to_path_buf(),
+                AUDIO_PATCH.as_bytes().to_vec(),
+            ));
+        }
         ids.extend(manifest.assets.into_iter().map(|asset| asset.id));
         let parent = path.parent().unwrap_or(references);
         pending.extend(

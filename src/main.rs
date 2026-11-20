@@ -9,6 +9,7 @@ use binary_asset_builder::compile::{
 use binary_asset_builder::fix_assets::{fix_assets, fix_assets_allow_missing};
 use binary_asset_builder::linked_stream::{check_linked_files, link_assets};
 use binary_asset_builder::manifest::{ByteOrder, Manifest};
+use binary_asset_builder::sdk_references::prepare_references;
 use std::env;
 use std::error::Error;
 use std::fs;
@@ -23,8 +24,8 @@ Usage
   binary-asset-builder compile-static <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-map <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-maps-sdk <official-maps-directory> --sdk-root <directory> --references <builtmods-directory> --output <official-maps-directory>
-  binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory>
-  binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory>
+  binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory> [--game-data <directory>]
+  binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory> [--game-data <directory>]
   binary-asset-builder merge-assets <file.manifest> --assets <directory>
   binary-asset-builder fix-assets <mod.manifest> --references <builtmods-directory> [--allow-missing-references]
   binary-asset-builder pack-big <directory> --output <file.big> [--reuse <previous.big>]
@@ -137,14 +138,31 @@ fn main() -> ExitCode {
                 }
             }
         }
-        [command, input, sdk_flag, sdk, output_flag, output]
-            if (command == "compile-static-sdk" || command == "compile-global-sdk")
-                && sdk_flag == "--sdk-root"
-                && output_flag == "--output" =>
+        [
+            command,
+            input,
+            sdk_flag,
+            sdk,
+            output_flag,
+            output,
+            options @ ..,
+        ] if (command == "compile-static-sdk" || command == "compile-global-sdk")
+            && sdk_flag == "--sdk-root"
+            && output_flag == "--output"
+            && (options.is_empty() || matches!(options, [flag, _] if flag == "--game-data")) =>
         {
             let input = Path::new(input);
             let sdk = Path::new(sdk);
             let output = Path::new(output);
+            if let [_, game_data] = options {
+                match prepare_references(output, Path::new(game_data)) {
+                    Ok(0) => {}
+                    Ok(count) => {
+                        println!("Prepared {count} stock reference manifests from Red Alert 3")
+                    }
+                    Err(error) => return diagnostic(Err(error)),
+                }
+            }
             let result = if command == "compile-global-sdk" {
                 compile_sdk_global(input, sdk, output)
             } else {
