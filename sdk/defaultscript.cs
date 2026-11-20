@@ -100,17 +100,18 @@ namespace EALABuild
 			// Personal Directory
 			PersonalDirectory = Environment.ExpandEnvironmentVariables(Registry.GetValue("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders", "Personal", "").ToString());
 
-			// SDK Directory
-			Reg = Registry.GetValue("HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{F6A3F605-7B10-4939-8D3D-4594332C1649}", "InstallLocation", null);
-			if (Reg == null) {
-				Reg = Registry.GetValue("HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{F6A3F605-7B10-4939-8D3D-4594332C1649}", "InstallLocation", null);
-				if (Reg == null) {
-					SDKDirectory = StaticPaths.CurrentDirectory;
-				} else {
-					SDKDirectory = Reg.ToString();
-				}
+			// The running Studio belongs to this SDK, even if an older copy is registered.
+			string studioPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "EALAModStudio.exe");
+			if (File.Exists(studioPath)) {
+				SDKDirectory = Path.GetDirectoryName(studioPath);
 			} else {
-				SDKDirectory = Reg.ToString();
+				const string uninstallKey = "\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{F6A3F605-7B10-4939-8D3D-4594332C1649}";
+				object installed = Registry.GetValue("HKEY_LOCAL_MACHINE\\Software" + uninstallKey, "InstallLocation", null)
+					?? Registry.GetValue("HKEY_LOCAL_MACHINE\\Software\\Wow6432Node" + uninstallKey, "InstallLocation", null);
+				string registeredPath = installed as string;
+				SDKDirectory = !String.IsNullOrEmpty(registeredPath) && Directory.Exists(registeredPath)
+					? Path.GetDirectoryName(Path.Combine(Path.GetFullPath(registeredPath), "EALAModStudio.exe"))
+					: StaticPaths.CurrentDirectory;
 			}
 
 			// Game Install Dir
@@ -407,7 +408,17 @@ namespace EALABuild
             {
                 args.Arguments = args.Arguments.Insert(3, "(set \"BAB_NO_WARNINGS=1\") & ");
             }
+            args.Arguments = "/D /V:OFF " + args.Arguments;
             BuildHelper.RunStep(StepType.RunExecutable, args);
+        }
+
+        private static string StaticBuildPathError(string compiler, string modXml)
+        {
+            if (!File.Exists(compiler))
+                return "Rust compiler missing at '" + compiler + "'. Run Install-RustCompiler.cmd and select this SDK folder.";
+            if (!File.Exists(modXml))
+                return "Mod XML missing at '" + modXml + "'. Check the selected mod's Data folder.";
+            return null;
         }
 
         private bool UseEaCompiler()
@@ -600,18 +611,30 @@ namespace EALABuild
 				    RunRustBuildStep(argsRustGlobal);
 				    break;
 				case 6:
+				{
 				    BuildHelper.DisplayLine("Step 6: Compiling static XML with Rust");
+				    string rustStatic = Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe");
 				    RunExecutableArguments argsRustStatic = new RunExecutableArguments(Cmd);
+				    string pathError = StaticBuildPathError(rustStatic, ModXml);
+				    if (pathError != null)
+				    {
+				        BuildHelper.DisplayLine("Critical: Build Static Data failed. " + pathError);
+				        argsRustStatic.Arguments = "/D /C exit /b 1";
+				        BuildHelper.RunStep(StepType.RunExecutable, argsRustStatic);
+				        break;
+				    }
+				    string rustSdkRoot = Path.Combine(SDKDirectory, ".");
 				    argsRustStatic.Arguments = String.Format(
 				        "/C (@echo off) & (\"{0}\" compile-static-sdk \"{1}\" --sdk-root \"{2}\" --output \"{3}\" 2>&1)",
-				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), ModXml, SDKDirectory, BuiltModsPath);
+				        rustStatic, ModXml, rustSdkRoot, BuiltModsPath);
 				    if (!(bool)currentGUIData["step7"] && !(bool)currentGUIData["step8"])
 				    {
-				        argsRustStatic.Arguments += String.Format(" && (\"{0}\" fix-assets \"{1}\" --references \"{2}\" --allow-missing-references 2>&1)", Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), Path.Combine(BuiltModDataPath, "mod.manifest"), BuiltModsPath);
+				        argsRustStatic.Arguments += String.Format(" && (\"{0}\" fix-assets \"{1}\" --references \"{2}\" --allow-missing-references 2>&1)", rustStatic, Path.Combine(BuiltModDataPath, "mod.manifest"), BuiltModsPath);
 				    }
 				    argsRustStatic.Arguments += " || (echo Critical: Build Static Data failed. & exit /b 1)";
 				    RunRustBuildStep(argsRustStatic);
 				    break;
+				}
 				case 7:
 				{
 				    BuildHelper.DisplayLine("Step 7: Merging precompiled assets with Rust");
