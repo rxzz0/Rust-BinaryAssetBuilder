@@ -1125,6 +1125,10 @@ pub(super) fn encode(
                 .map(Some);
         }
         "AutoDepositUpdate" => return super::auto_deposit::encode(node, pointer, data).map(Some),
+        "GrapplingHookUpdate" => {
+            return super::grappling_hook::encode(node, pointer, data, references, reference_types)
+                .map(Some);
+        }
         "OreMinerBehavior" => return super::ore::miner(node, pointer, data).map(Some),
         "OreNodeBehavior" => {
             return super::ore::deposit(node, pointer, data, references, reference_types).map(Some);

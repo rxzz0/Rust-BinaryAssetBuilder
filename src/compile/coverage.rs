@@ -89,6 +89,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "StatusBitsUpgrade",
             "SecondaryObjectListenerModule",
             "LiftObjectUpdate",
+            "GrapplingHookUpdate",
             "GarrisonContain",
             "ContestableGarrisonContain",
             "OpenContain",

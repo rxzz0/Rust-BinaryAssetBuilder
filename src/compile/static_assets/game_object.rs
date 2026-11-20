@@ -30,6 +30,7 @@ mod line_segment_damage;
 mod linear_damage;
 pub(super) mod material;
 pub(super) use material::encode_render_material;
+mod grappling_hook;
 mod ore;
 mod parking;
 pub(super) use parking::encode_filter as encode_object_filter;
