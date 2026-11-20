@@ -149,6 +149,18 @@ BinaryAssetBuilder implementation for Kane's Wrath in .Net
 * [ ] UIJoypadCommandBarTopMenu
 * [ ] UIJoypadCommandBarMgTopMenu
 
+### Install in RA3 ModStudio
+
+Close ModStudio and run the PowerShell installer with the path to the SDK folder that contains `EALAModStudio.exe`.
+
+```powershell
+.\sdk\Start-Ra3ModStudio.ps1 -SdkRoot 'X:\RA3 MOD SDK' -InstallDefault
+```
+
+The installer activates the bundled script and saves the original at `defaultscript\defaultscript.cs` inside the SDK. Reinstalling preserves that backup. Existing build script customizations are stored in the backup. To restore them, close ModStudio and copy the backed-up file to the SDK root as `defaultscript.cs`.
+
+After switching from an older script, review the **Create BIG Files** and **Create Skudef File** checkboxes before the first build.
+
 ### RA3 SDK coverage and EA verification
 
 Run these from the repository root after building the Rust release.
