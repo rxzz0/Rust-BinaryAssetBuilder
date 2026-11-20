@@ -1339,6 +1339,9 @@ fn cleaned_node<'a, 'input: 'a>(
 }
 
 pub(crate) fn warning(message: std::fmt::Arguments<'_>) {
+    if std::env::var_os("BAB_NO_WARNINGS").is_some_and(|value| value == "1") {
+        return;
+    }
     // Mod Studio combines both output streams and can interleave partial writes.
     let _ = io::stderr()
         .lock()

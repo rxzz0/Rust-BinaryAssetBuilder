@@ -11,6 +11,31 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Add-RustWarningOption([string] $script) {
+    $checkbox = [regex]::new('(?m)^([\t ]*)(modGUIData\.Add\(new GUIElementData\("step8",[^\r\n]*\);)')
+    $executeStep = [regex]::new('(?m)^[\t ]*private void executeModBuildStep\(int stepId\)')
+    $runRust = [regex]::new('BuildHelper\.RunStep\(StepType\.RunExecutable, (argsRust[A-Z]\w*|argsBig)\);')
+    if ($checkbox.Matches($script).Count -ne 1 -or $executeStep.Matches($script).Count -ne 1 -or $runRust.Matches($script).Count -ne 6) {
+        throw 'Could not add the Rust warnings option to this Mod Studio script.'
+    }
+    $lineEnd = if ($script.Contains([string][char]13 + [char]10)) { [string][char]13 + [char]10 } else { [string][char]10 }
+    $script = $checkbox.Replace($script, '$0' + $lineEnd + '            modGUIData.Add(new GUIElementData("hideRustWarnings", "Hide Rust warnings", GUIElementData.CheckBoxType, ScriptIndex.ModScript));')
+    $script = $runRust.Replace($script, 'RunRustBuildStep($1);')
+    $helper = @"
+        private void RunRustBuildStep(RunExecutableArguments args)
+        {
+            object hideWarnings;
+            if (currentGUIData.TryGetValue("hideRustWarnings", out hideWarnings) && hideWarnings is bool && (bool)hideWarnings)
+            {
+                args.Arguments = args.Arguments.Insert(3, "(set \"BAB_NO_WARNINGS=1\") & ");
+            }
+            BuildHelper.RunStep(StepType.RunExecutable, args);
+        }
+"@
+    $helper = ($helper -split '\r?\n') -join $lineEnd
+    return $executeStep.Replace($script, $helper + $lineEnd + $lineEnd + '$0')
+}
 $SdkRoot = (Get-Item -LiteralPath $SdkRoot).FullName
 $studio = Get-Item -LiteralPath (Join-Path $SdkRoot 'EALAModStudio.exe')
 $repository = Split-Path -Parent $PSScriptRoot
@@ -310,8 +335,11 @@ if ($skipMaps.Matches($source).Count -ne 1) {
 }
 $source = $skipMaps.Replace($source, '${1}if (stepId == 9) return false;' + $lineEnding + '$0')
 
+$beforeWarningOption = $source
+$source = Add-RustWarningOption $source
+
 if ($InstallDefault) {
-    $knownSources = @($source, $mapsSource, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
+    $knownSources = @($source, $beforeWarningOption, $mapsSource, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
     $knownSources += @($knownSources | ForEach-Object { $_.Replace(' --allow-missing-references 2>&1', ' 2>&1') })
     if ($hasRustCheck -and $knownSources -cnotcontains $currentSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."

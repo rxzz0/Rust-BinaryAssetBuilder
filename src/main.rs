@@ -32,7 +32,9 @@ Usage
   binary-asset-builder sdk-coverage <schema-directory>
   binary-asset-builder verify-ea-batch <file.xml> <ea.manifest> <ea-assets-directory>
   binary-asset-builder inspect <file.manifest>
-  binary-asset-builder check-linked <file.manifest>";
+  binary-asset-builder check-linked <file.manifest>
+
+Set BAB_NO_WARNINGS=1 to hide warnings. Build errors remain visible.";
 
 fn diagnostic(result: io::Result<()>) -> ExitCode {
     match result {

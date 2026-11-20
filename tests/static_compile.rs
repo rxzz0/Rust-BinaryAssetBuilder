@@ -409,7 +409,7 @@ fn sdk_schema_reports_required_errors_and_keeps_building_after_optional_warnings
     )
     .unwrap();
     let input = data.join("Mod.xml");
-    let compile = |body| {
+    let compile = |body, hide_warnings| {
         fs::write(
             &input,
             format!(
@@ -426,14 +426,14 @@ fn sdk_schema_reports_required_errors_and_keeps_building_after_optional_warnings
             .arg(&root)
             .arg("--output")
             .arg(&built)
+            .env("BAB_NO_WARNINGS", if hide_warnings { "1" } else { "0" })
             .output()
             .unwrap()
     };
 
-    let valid = compile(
-        r#"<Body><ActiveBody id="Body" MaxHealth="100" InitialHealth="bad"/></Body>
-           <Behaviors><Typo id="Unknown"/></Behaviors>"#,
-    );
+    let optional_issues = r#"<Body><ActiveBody id="Body" MaxHealth="100" InitialHealth="bad"/></Body>
+           <Behaviors><Typo id="Unknown"/></Behaviors>"#;
+    let valid = compile(optional_issues, false);
     let warnings = String::from_utf8(valid.stderr).unwrap();
     assert!(valid.status.success(), "{warnings}");
     for message in [
@@ -451,7 +451,12 @@ fn sdk_schema_reports_required_errors_and_keeps_building_after_optional_warnings
             "{warnings}"
         );
     }
-    assert!(built.join("mods/example/data/mod.manifest").is_file());
+    let path = built.join("mods/example/data/mod.manifest");
+    let manifest = fs::read(&path).unwrap();
+    let quiet = compile(optional_issues, true);
+    assert!(quiet.status.success());
+    assert!(quiet.stderr.is_empty());
+    assert_eq!(fs::read(path).unwrap(), manifest);
 
     for (body, message) in [
         ("", "Missing required element 'Body'"),
@@ -470,7 +475,7 @@ fn sdk_schema_reports_required_errors_and_keeps_building_after_optional_warnings
             "Invalid value '-1' for attribute 'MaxHealth'",
         ),
     ] {
-        let failed = compile(body);
+        let failed = compile(body, true);
         let error = String::from_utf8(failed.stderr).unwrap();
         assert!(!failed.status.success());
         assert!(error.contains(message), "{error}");
