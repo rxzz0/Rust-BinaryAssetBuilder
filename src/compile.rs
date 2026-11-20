@@ -254,7 +254,7 @@ struct CompiledAsset {
     relocations: Vec<u8>,
     imports: Vec<u8>,
     references: Vec<AssetReference>,
-    weak_references: Vec<WeakReference>,
+    weak_references: Vec<AssetReference>,
     custom_data: Option<CustomData>,
     tokenized: bool,
     sort_order: u8,
@@ -264,11 +264,7 @@ struct CompiledAsset {
 struct AssetReference {
     id: AssetId,
     external_type: Option<u32>,
-}
-
-struct WeakReference {
-    reference: AssetReference,
-    name: String,
+    name: Option<Box<str>>,
 }
 
 impl From<AssetId> for AssetReference {
@@ -276,6 +272,7 @@ impl From<AssetId> for AssetReference {
         Self {
             id,
             external_type: None,
+            name: None,
         }
     }
 }
@@ -345,6 +342,16 @@ impl AssetReference {
         AssetId {
             type_id: self.external_type.unwrap_or(self.id.type_id),
             instance_id: self.id.instance_id,
+        }
+    }
+
+    fn diagnostic_name(&self) -> std::borrow::Cow<'_, str> {
+        match &self.name {
+            Some(name) => std::borrow::Cow::Borrowed(name),
+            None => {
+                let id = self.declared_id();
+                format!("{:08x}:{:08x}", id.type_id, id.instance_id).into()
+            }
         }
     }
 
@@ -625,9 +632,10 @@ impl Compiler<'_> {
         let mut pending = Vec::new();
         while index < self.assets.len() {
             let asset = &self.assets[index];
-            let weak = asset.weak_references.iter().filter_map(|weak| {
-                (self.reference_mode == ReferenceMode::Map).then_some(&weak.reference)
-            });
+            let weak = asset
+                .weak_references
+                .iter()
+                .filter(|_| self.reference_mode == ReferenceMode::Map);
             for reference in asset.references.iter().chain(weak) {
                 if reference.local_id(&self.ids).is_some() {
                     continue;
@@ -997,11 +1005,10 @@ impl Compiler<'_> {
 
     fn warn_missing_weak_references(&self) {
         let unresolved = self.assets.iter().flat_map(|asset| {
-            asset.weak_references.iter().filter_map(move |weak| {
-                let reference = &weak.reference;
+            asset.weak_references.iter().filter_map(move |reference| {
                 (reference.local_id(&self.ids).is_none()
                     && reference.external_id(&self.external_ids).is_none())
-                .then_some((asset, weak))
+                .then_some((asset, reference))
             })
         });
         let mut unresolved = unresolved.peekable();
@@ -1029,13 +1036,14 @@ impl Compiler<'_> {
             }
         }
         let mut reported = HashSet::new();
-        for (asset, weak) in unresolved {
-            let reference = &weak.reference;
+        for (asset, reference) in unresolved {
             if reference.external_id(&stock).is_none() && reported.insert((asset.id, reference.id))
             {
                 warning(format_args!(
                     "Unknown asset '{}' referenced from '{}' in '{}'",
-                    weak.name, asset.name, asset.source
+                    reference.diagnostic_name(),
+                    asset.name,
+                    asset.source
                 ));
             }
         }
@@ -1111,8 +1119,10 @@ impl Compiler<'_> {
                         resolved.push(id);
                         if deferred.insert(id) {
                             warning(format_args!(
-                                "Unknown asset '{:08x}:{:08x}' referenced from '{}' in '{}'",
-                                id.type_id, id.instance_id, asset.name, asset.source
+                                "Unknown asset '{}' referenced from '{}' in '{}'",
+                                reference.diagnostic_name(),
+                                asset.name,
+                                asset.source
                             ));
                         }
                         continue;

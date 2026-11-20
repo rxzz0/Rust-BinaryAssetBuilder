@@ -836,7 +836,12 @@ fn unit_intro(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     }
     let video = asset_reference(required(node, "Video", path)?, "VideoEventList", path)?;
     let audio = required(node, "Audio", path)?;
-    let audio_id = asset_reference(audio, "AudioEvent", path)?;
+    let audio_reference = asset_reference(audio, "AudioEvent", path)?;
+    let audio_reference = if audio.contains(':') {
+        audio_reference.into()
+    } else {
+        audio_reference.with_external_type("BaseAudioEventInfo")
+    };
     let base_audio_type = fast_hash(b"BaseAudioEventInfo");
     let reference_types = node
         .attributes()
@@ -849,10 +854,7 @@ fn unit_intro(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     Ok(Marshaled {
         payload: encode_words([0, video.instance_id, 1]),
         imports: vec![8, u32::MAX],
-        references: vec![AssetReference {
-            id: audio_id,
-            external_type: (!audio.contains(':')).then_some(base_audio_type),
-        }],
+        references: vec![audio_reference],
         reference_types,
         ..Marshaled::default()
     })
@@ -1184,7 +1186,46 @@ fn write_import(
     Ok(())
 }
 
-fn asset_reference(value: &str, target_type: &str, path: &Path) -> io::Result<AssetId> {
+#[derive(Clone, Copy)]
+struct ParsedReference<'a> {
+    type_id: u32,
+    instance_id: u32,
+    kind: &'a str,
+    name: &'a str,
+}
+
+impl ParsedReference<'_> {
+    fn id(&self) -> AssetId {
+        AssetId {
+            type_id: self.type_id,
+            instance_id: self.instance_id,
+        }
+    }
+
+    fn with_external_type(self, kind: &str) -> AssetReference {
+        AssetReference {
+            id: self.id(),
+            external_type: Some(fast_hash(kind.as_bytes())),
+            name: Some(format!("{kind}:{}", self.name).into_boxed_str()),
+        }
+    }
+}
+
+impl From<ParsedReference<'_>> for AssetReference {
+    fn from(reference: ParsedReference<'_>) -> Self {
+        Self {
+            id: reference.id(),
+            external_type: None,
+            name: Some(format!("{}:{}", reference.kind, reference.name).into_boxed_str()),
+        }
+    }
+}
+
+fn asset_reference<'a>(
+    value: &'a str,
+    target_type: &'a str,
+    path: &Path,
+) -> io::Result<ParsedReference<'a>> {
     let value = value.trim();
     // Inherited XML can carry a reference ordinal appended by the schema materializer.
     let value = value.split_once('\\').map_or(value, |(name, _)| name);
@@ -1195,9 +1236,11 @@ fn asset_reference(value: &str, target_type: &str, path: &Path) -> io::Result<As
             format!("invalid {target_type} reference {value:?}"),
         ));
     }
-    Ok(AssetId {
+    Ok(ParsedReference {
         type_id: fast_hash(kind.as_bytes()),
         instance_id: hash_name(name),
+        kind,
+        name,
     })
 }
 

@@ -267,7 +267,7 @@ impl Compiler<'_> {
         let Some(base) = node.attribute("inheritFrom") else {
             return Ok(None);
         };
-        let id = asset_reference(base, EVENT, path)?;
+        let id = asset_reference(base, EVENT, path)?.id();
         let Some([candidate]) = self.tentative.get(&id).map(Vec::as_slice) else {
             return Err(invalid(
                 path,

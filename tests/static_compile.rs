@@ -372,7 +372,7 @@ fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
 }
 
 #[test]
-fn sdk_warns_for_missing_weak_asset_names_without_changing_streams() {
+fn sdk_warns_with_strong_and_weak_asset_names_without_changing_streams() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data");
     let built = root.join("BuiltMods");
@@ -422,6 +422,7 @@ fn sdk_warns_for_missing_weak_asset_names_without_changing_streams() {
         &input,
         r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
             <GameObject id="LocalOnly"><Body><ActiveBody id="Body" MaxHealth="100"/></Body></GameObject>
+            <LogicCommandSet id="TestCommands"><Cmd>LogicCommand:MissingAction</Cmd></LogicCommandSet>
             <GameObject id="Owner" CommandSet="MissingCommands">
                 <EquivalentTo>LocalOnly</EquivalentTo>
                 <EquivalentTo>stockonly</EquivalentTo>
@@ -452,12 +453,16 @@ fn sdk_warns_for_missing_weak_asset_names_without_changing_streams() {
         .lines()
         .filter(|line| line.starts_with("Warning: Unknown asset "))
         .collect::<Vec<_>>();
-    assert_eq!(missing.len(), 2, "{warnings}");
-    for name in ["LogicCommandSet:MissingCommands", "GameObject:MissingUnit"] {
+    assert_eq!(missing.len(), 3, "{warnings}");
+    for (name, owner) in [
+        ("LogicCommandSet:MissingCommands", "GameObject:Owner"),
+        ("GameObject:MissingUnit", "GameObject:Owner"),
+        ("LogicCommand:MissingAction", "LogicCommandSet:TestCommands"),
+    ] {
         assert!(
             missing
                 .iter()
-                .any(|line| line.contains(&format!("'{name}' referenced from 'GameObject:Owner'"))),
+                .any(|line| line.contains(&format!("'{name}' referenced from '{owner}'"))),
             "{warnings}"
         );
     }

@@ -1,5 +1,5 @@
 use super::super::asset_reference;
-use crate::compile::{SAGE_NS, WeakReference, invalid};
+use crate::compile::{AssetReference, SAGE_NS, invalid};
 use roxmltree::{Document, Node};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -290,7 +290,7 @@ impl Schema {
         node: Node<'_, '_>,
         path: &Path,
         map: bool,
-    ) -> io::Result<Vec<WeakReference>> {
+    ) -> io::Result<Vec<AssetReference>> {
         let mut references = Vec::new();
         self.find_weak_references(node, node.tag_name().name(), path, map, &mut references)?;
         Ok(references)
@@ -302,7 +302,7 @@ impl Schema {
         kind: &str,
         path: &Path,
         map: bool,
-        references: &mut Vec<WeakReference>,
+        references: &mut Vec<AssetReference>,
     ) -> io::Result<()> {
         if !self.types.contains_key(kind) {
             return Ok(());
@@ -369,20 +369,13 @@ fn add_weak_reference(
     target: &str,
     path: &Path,
     map: bool,
-    references: &mut Vec<WeakReference>,
+    references: &mut Vec<AssetReference>,
 ) -> io::Result<()> {
     let value = value.trim();
     if !value.is_empty() {
         let kind = value.split_once(':').map_or(target, |(kind, _)| kind);
         match asset_reference(value, kind, path) {
-            Ok(id) => {
-                let plain = value.split_once('\\').map_or(value, |(name, _)| name);
-                let name = plain.split_once(':').map_or(plain, |(_, name)| name);
-                references.push(WeakReference {
-                    reference: id.into(),
-                    name: format!("{kind}:{name}"),
-                });
-            }
+            Ok(reference) => references.push(reference.into()),
             Err(error) if map => return Err(error),
             Err(_) => {}
         }

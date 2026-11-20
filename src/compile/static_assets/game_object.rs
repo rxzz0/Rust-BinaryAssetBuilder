@@ -190,7 +190,7 @@ impl Compiler<'_> {
         use_base: impl FnOnce(Node<'_, '_>, &Path, bool) -> io::Result<T>,
     ) -> io::Result<T> {
         let kind = node.tag_name().name();
-        let parent_id = asset_reference(inherit_from, kind, path)?;
+        let parent_id = asset_reference(inherit_from, kind, path)?.id();
         let declaration = node.document().root_element();
         if let Some(parent) = declaration.children().find(|candidate| {
             *candidate != node

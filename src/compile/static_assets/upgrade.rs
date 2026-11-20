@@ -155,7 +155,11 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
     Ok(result)
 }
 
-fn reference(value: &str, kind: &str, path: &Path) -> io::Result<crate::manifest::AssetId> {
+fn reference<'a>(
+    value: &'a str,
+    kind: &'a str,
+    path: &Path,
+) -> io::Result<super::ParsedReference<'a>> {
     let name = value.split_once('\\').map_or(value, |(name, _)| name);
     asset_reference(name, kind, path)
 }

@@ -555,16 +555,10 @@ pub(in crate::compile::static_assets) fn audio_reference(
             _,
         )) => asset_reference(name, kind, path)?.into(),
         Some((_, plain)) => {
-            let base = asset_reference(name, kind, path)?;
-            AssetReference {
-                id: asset_reference(plain, "AudioEvent", path)?,
-                external_type: Some(base.type_id),
-            }
+            asset_reference(name, kind, path)?;
+            asset_reference(plain, "AudioEvent", path)?.with_external_type(kind)
         }
-        None => AssetReference {
-            id: asset_reference(name, "AudioEvent", path)?,
-            external_type: Some(super::super::fast_hash(kind.as_bytes())),
-        },
+        None => asset_reference(name, "AudioEvent", path)?.with_external_type(kind),
     };
     references.push(reference);
     reference_types.push(super::super::fast_hash(kind.as_bytes()));
