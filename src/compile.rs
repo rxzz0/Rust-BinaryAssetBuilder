@@ -95,6 +95,19 @@ enum ReferenceMode {
     Map,
 }
 
+const SDK_BASE_MANIFESTS: [&str; 3] = ["audio.manifest", "global.manifest", "static.manifest"];
+
+fn sdk_manifest_path(directory: &Path, relative: &Path, name: &str) -> PathBuf {
+    let path = directory.join(relative);
+    if SDK_BASE_MANIFESTS.contains(&name) && !path.is_file() {
+        let nested = directory.join("sagexml").join(relative);
+        if nested.is_file() {
+            return nested;
+        }
+    }
+    path
+}
+
 impl ReferenceMode {
     fn validates_schema(self) -> bool {
         self != Self::Map
@@ -893,18 +906,28 @@ impl Compiler<'_> {
         if self.referenced_manifests.contains(&name) {
             return Ok(());
         }
-        let path = self.reference_directory.unwrap().join(relative);
-        let bytes = read_with_context(&path, fs::read)?;
-        let manifest = Manifest::parse(&bytes).map_err(|error| invalid(&path, error))?;
+        let directory = self.reference_directory.unwrap();
+        let path = if self.reference_mode == ReferenceMode::SdkStatic {
+            sdk_manifest_path(directory, &relative, &name)
+        } else {
+            directory.join(relative)
+        };
+        self.read_reference_manifest(&path)?;
+        self.referenced_manifests.push(name);
+        Ok(())
+    }
+
+    fn read_reference_manifest(&mut self, path: &Path) -> io::Result<()> {
+        let bytes = read_with_context(path, fs::read)?;
+        let manifest = Manifest::parse(&bytes).map_err(|error| invalid(path, error))?;
         if manifest.version != 6
             || manifest.byte_order != ByteOrder::Little
             || manifest.all_types_hash != RA3_ALL_TYPES_HASH
         {
-            return Err(invalid(&path, "reference must be an RA3 PC manifest"));
+            return Err(invalid(path, "reference must be an RA3 PC manifest"));
         }
         self.external_ids
             .extend(manifest.assets.iter().map(|asset| asset.id));
-        self.referenced_manifests.push(name);
         Ok(())
     }
 
@@ -1066,20 +1089,10 @@ impl Compiler<'_> {
                 })
         {
             let root = self.reference_directory.unwrap();
-            for file in ["audio.manifest", "global.manifest", "static.manifest"] {
-                let path = root.join(file);
+            for file in SDK_BASE_MANIFESTS {
+                let path = sdk_manifest_path(root, Path::new(file), file);
                 if path.is_file() {
-                    let bytes = read_with_context(&path, fs::read)?;
-                    let manifest =
-                        Manifest::parse(&bytes).map_err(|error| invalid(&path, error))?;
-                    if manifest.version != 6
-                        || manifest.byte_order != ByteOrder::Little
-                        || manifest.all_types_hash != RA3_ALL_TYPES_HASH
-                    {
-                        return Err(invalid(&path, "expected an RA3 PC reference stream"));
-                    }
-                    self.external_ids
-                        .extend(manifest.assets.iter().map(|asset| asset.id));
+                    self.read_reference_manifest(&path)?;
                 }
             }
         }
@@ -1105,7 +1118,6 @@ impl Compiler<'_> {
         for asset in &self.assets {
             let mut resolved = Vec::with_capacity(asset.references.len());
             for reference in &asset.references {
-                let id = reference.id;
                 if let Some(local) = reference.local_id(&self.ids) {
                     resolved.push(local);
                     continue;
@@ -1141,13 +1153,21 @@ impl Compiler<'_> {
                         }
                         continue;
                     }
-                    return Err(invalid(
-                        &self.root,
-                        format!(
-                            "unresolved reference {:08x}:{:08x} in {}",
-                            id.type_id, id.instance_id, asset.name
-                        ),
-                    ));
+                    let mut message = format!(
+                        "unresolved reference {} in {} ({})",
+                        reference.diagnostic_name(),
+                        asset.name,
+                        asset.source
+                    );
+                    if self.reference_mode == ReferenceMode::Implicit {
+                        let directory = self.reference_directory.unwrap();
+                        message.push_str(&format!(
+                            ". Check that the base SDK manifests are present and current in '{}' or '{}'",
+                            directory.display(),
+                            directory.join("sagexml").display()
+                        ));
+                    }
+                    return Err(invalid(&self.root, message));
                 };
                 resolved.push(external);
             }

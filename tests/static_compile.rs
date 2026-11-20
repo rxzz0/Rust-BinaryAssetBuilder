@@ -966,6 +966,72 @@ fn static_art_includes_accept_only_empty_namespace_free_xml_placeholders() {
 }
 
 #[test]
+fn sdk_builds_resolve_base_manifests_under_sagexml() {
+    let root = scratch_root();
+    let data = root.join("Mods/Example/Data");
+    let global = data.join("AdditionalMaps");
+    let built = root.join("BuiltMods");
+    let nested = built.join("sagexml");
+    fs::create_dir_all(&global).unwrap();
+    fs::create_dir_all(&nested).unwrap();
+    let stock_xml = root.join("static.xml");
+    fs::write(
+        &stock_xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <OnDemandTextureImage id="Giles"><Dimensions/><Coords/><TextureDimensions/></OnDemandTextureImage>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stock = compile_static(&stock_xml, &root, &built).unwrap();
+    let mission = r#"<MissionTemplate id="Allies_1">
+            <AICommander Faction="Allies" Portrait="Giles"/>
+            <IntroMovie FileName="Intro"/>
+        </MissionTemplate>"#;
+    fs::write(
+        global.join("MapMetaData_Campaign.xml"),
+        format!(r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">{mission}</AssetDeclaration>"#),
+    )
+    .unwrap();
+    let error = compile_sdk_global(&global, &root, &built)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("OnDemandTextureImage:Giles in MissionTemplate:Allies_1"),
+        "{error}"
+    );
+    assert!(
+        error.contains("base SDK manifests") && error.contains("sagexml"),
+        "{error}"
+    );
+
+    let primary = built.join("static.manifest");
+    fs::write(&primary, &stock.manifest).unwrap();
+    compile_sdk_global(&global, &root, &built).unwrap();
+    let output = built.join("mods/example/data/additionalmaps/mapmetadata_campaign.manifest");
+    let expected = fs::read(&output).unwrap();
+    fs::rename(primary, nested.join("static.manifest")).unwrap();
+    compile_sdk_global(&global, &root, &built).unwrap();
+    assert_eq!(fs::read(output).unwrap(), expected);
+
+    let input = data.join("Mod.xml");
+    fs::write(
+        &input,
+        format!(
+            r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+                <Includes><Include type="reference" source="DATA:static.xml"/></Includes>
+                {mission}
+            </AssetDeclaration>"#
+        ),
+    )
+    .unwrap();
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let manifest = fs::read(built.join("mods/example/data/mod.manifest")).unwrap();
+    let manifest = Manifest::parse(&manifest).unwrap();
+    assert_eq!(manifest.referenced_manifests[0].path, b"static.manifest");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_global_compiles_multiplayer_colors_with_the_sdk_layout() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data/AdditionalMaps");
