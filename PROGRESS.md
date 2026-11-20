@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 342 measures a 16.70-second median across five clean Surge builds. Two profiled runs show W3DAnimation and AudioFile take about 5.4 seconds together and Misc packaging spends most of its measured I/O time writing. All seven runs matched across 1,358 output files. Next, separate preparation from encoding for animation and audio with one worker.
 - Checkpoint 341 records the parallel build plan, the 15.95-second clean Surge baseline, and verification gates. Next, capture repeated baseline timings and profile static compilation and Misc packaging.
 - Checkpoint 340 moves the EA compiler checkbox to the top and Hide Rust warnings beside the BIG and Skudef options. Verified C# compilation and SDK installation.
 - Checkpoint 339 adds a ModStudio checkbox to switch between the native Rust build and the original EA build. Rust remains the default. Compiled the generated C# against EALABuild, tested repeat installation, and verified the installed SDK script.
