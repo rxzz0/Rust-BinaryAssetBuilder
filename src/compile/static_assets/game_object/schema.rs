@@ -6,6 +6,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+mod validation;
+
 const XSD: &str = "http://www.w3.org/2001/XMLSchema";
 const SAGE_SCHEMA: &str = "uri:ea.com:eala:asset:schema";
 
@@ -23,8 +25,14 @@ struct Type {
     children: Vec<Field>,
     choice: bool,
     repeated_choice: bool,
+    choice_min: usize,
+    choice_max: usize,
     list_item: Option<String>,
-    enumeration: bool,
+    enumerators: Vec<String>,
+    length: Option<usize>,
+    min_length: Option<usize>,
+    min_value: Option<f64>,
+    max_value: Option<f64>,
 }
 
 pub(in crate::compile) struct Field {
@@ -32,6 +40,9 @@ pub(in crate::compile) struct Field {
     pub(in crate::compile) kind: String,
     pub(in crate::compile) default: Option<String>,
     pub(super) repeated: bool,
+    minimum: usize,
+    maximum: usize,
+    explicitly_optional: bool,
     reference_target: Option<String>,
 }
 
@@ -41,6 +52,14 @@ pub(in crate::compile) struct Shape<'a> {
     pub(in crate::compile) children: Vec<&'a Field>,
     pub(super) choice: bool,
     pub(super) repeated_choice: bool,
+    choice_min: usize,
+    choice_max: usize,
+}
+
+impl Shape<'_> {
+    pub(super) fn optional_choice(&self) -> bool {
+        self.choice_min == 0
+    }
 }
 
 impl Schema {
@@ -125,6 +144,10 @@ impl Schema {
                 (Some(XSD), "sequence" | "choice" | "all") => {
                     kind.choice = child.has_tag_name((XSD, "choice"));
                     kind.repeated_choice = kind.choice && repeated(child);
+                    if kind.choice {
+                        kind.choice_min = occurs(child, "minOccurs");
+                        kind.choice_max = occurs(child, "maxOccurs");
+                    }
                     for entry in child
                         .children()
                         .filter(|entry| entry.has_tag_name((XSD, "element")))
@@ -133,12 +156,27 @@ impl Schema {
                             kind.children.push(field);
                         }
                     }
+                    if kind.choice && kind.children.iter().any(|field| field.minimum == 0) {
+                        kind.choice_min = 0;
+                    }
                 }
                 (Some(XSD), "restriction") => {
                     kind.base = child.attribute("base").map(type_name);
-                    kind.enumeration = child
+                    let facet = |name| {
+                        child
+                            .children()
+                            .find(|facet| facet.has_tag_name((XSD, name)))
+                            .and_then(|facet| facet.attribute("value"))
+                    };
+                    kind.length = facet("length").and_then(|value| value.parse().ok());
+                    kind.min_length = facet("minLength").and_then(|value| value.parse().ok());
+                    kind.min_value = facet("minInclusive").and_then(|value| value.parse().ok());
+                    kind.max_value = facet("maxInclusive").and_then(|value| value.parse().ok());
+                    kind.enumerators = child
                         .children()
-                        .any(|facet| facet.has_tag_name((XSD, "enumeration")));
+                        .filter(|facet| facet.has_tag_name((XSD, "enumeration")))
+                        .filter_map(|facet| facet.attribute("value").map(str::to_owned))
+                        .collect();
                 }
                 (Some(XSD), "list") => {
                     kind.list_item = child.attribute("itemType").map(type_name);
@@ -170,6 +208,14 @@ impl Schema {
             kind,
             default: node.attribute("default").map(str::to_owned),
             repeated: repeated(node),
+            minimum: if node.has_tag_name((XSD, "attribute")) {
+                usize::from(node.attribute("use") == Some("required"))
+            } else {
+                occurs(node, "minOccurs")
+            },
+            maximum: occurs(node, "maxOccurs"),
+            explicitly_optional: node.attribute("use") == Some("optional")
+                || node.attribute("minOccurs") == Some("0"),
             reference_target: node.attribute((SAGE_SCHEMA, "refType")).map(str::to_owned),
         })
     }
@@ -203,6 +249,12 @@ impl Schema {
                 shape.children.extend(&entry.children);
                 shape.choice = entry.choice;
                 shape.repeated_choice = entry.repeated_choice;
+                shape.choice_min = entry.choice_min;
+                shape.choice_max = if entry.children.iter().any(|field| field.repeated) {
+                    usize::MAX
+                } else {
+                    entry.choice_max
+                };
             }
         }
         Ok(shape)
@@ -213,7 +265,7 @@ impl Schema {
             .get(kind)
             .and_then(|kind| kind.list_item.as_deref())
             .and_then(|item| self.types.get(item))
-            .is_some_and(|item| item.enumeration)
+            .is_some_and(|item| !item.enumerators.is_empty())
     }
 
     pub(super) fn is_reference(&self, kind: &str) -> bool {
@@ -315,6 +367,14 @@ fn add_weak_reference(
 
 fn is_type(node: Node<'_, '_>) -> bool {
     node.has_tag_name((XSD, "complexType")) || node.has_tag_name((XSD, "simpleType"))
+}
+
+fn occurs(node: Node<'_, '_>, attribute: &str) -> usize {
+    match node.attribute(attribute) {
+        Some("unbounded") => usize::MAX,
+        Some(value) => value.parse().unwrap_or(1),
+        None => 1,
+    }
 }
 
 fn repeated(node: Node<'_, '_>) -> bool {

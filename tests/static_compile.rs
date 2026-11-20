@@ -372,6 +372,113 @@ fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
 }
 
 #[test]
+fn sdk_schema_reports_required_errors_and_keeps_building_after_optional_warnings() {
+    let root = scratch_root();
+    let data = root.join("Mods/Example/Data");
+    let built = root.join("builtmods");
+    let schemas = root.join("Schemas/xsd");
+    fs::create_dir_all(&data).unwrap();
+    fs::create_dir_all(&schemas).unwrap();
+    fs::write(
+        schemas.join("CnC3Types.xsd"),
+        r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="AssetDeclaration"><xs:complexType><xs:choice>
+                <xs:element name="GameObject" type="GameObject"/>
+            </xs:choice></xs:complexType></xs:element>
+            <xs:complexType name="GameObject"><xs:sequence>
+                <xs:element name="Body" type="BodyModule" minOccurs="1"/>
+                <xs:element name="Behaviors" type="BehaviorModules" minOccurs="0"/>
+                <xs:element name="AI" type="BehaviorModules" minOccurs="0"/>
+            </xs:sequence></xs:complexType>
+            <xs:complexType name="BodyModule"><xs:choice>
+                <xs:element name="ActiveBody" type="ActiveBodyModuleData"/>
+            </xs:choice></xs:complexType>
+            <xs:complexType name="BehaviorModules"><xs:choice minOccurs="0" maxOccurs="unbounded">
+                <xs:element name="Simple" type="SimpleModuleData"/>
+            </xs:choice></xs:complexType>
+            <xs:complexType name="SimpleModuleData"/>
+            <xs:simpleType name="Health">
+                <xs:restriction base="SageReal"><xs:minInclusive value="0"/></xs:restriction>
+            </xs:simpleType>
+            <xs:complexType name="ActiveBodyModuleData">
+                <xs:attribute name="MaxHealth" type="Health" use="required"/>
+                <xs:attribute name="InitialHealth" type="SageReal" use="optional"/>
+                <xs:attribute name="CheerRadius" type="SageReal" use="optional"/>
+            </xs:complexType>
+        </xs:schema>"#,
+    )
+    .unwrap();
+    let input = data.join("Mod.xml");
+    let compile = |body| {
+        fs::write(
+            &input,
+            format!(
+                r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+                    <GameObject id="Example">{body}</GameObject>
+                </AssetDeclaration>"#
+            ),
+        )
+        .unwrap();
+        std::process::Command::new(env!("CARGO_BIN_EXE_binary-asset-builder"))
+            .arg("compile-static-sdk")
+            .arg(&input)
+            .arg("--sdk-root")
+            .arg(&root)
+            .arg("--output")
+            .arg(&built)
+            .output()
+            .unwrap()
+    };
+
+    let valid = compile(
+        r#"<Body><ActiveBody id="Body" MaxHealth="100" InitialHealth="bad"/></Body>
+           <Behaviors><Typo id="Unknown"/></Behaviors>"#,
+    );
+    let warnings = String::from_utf8(valid.stderr).unwrap();
+    assert!(valid.status.success(), "{warnings}");
+    for message in [
+        "Invalid value 'bad' for attribute 'InitialHealth'",
+        "ActiveBody.CheerRadius",
+        "Unexpected module 'Typo' in 'Behaviors'",
+        "AI module section",
+    ] {
+        assert!(
+            warnings.lines().any(|line| {
+                line.starts_with("Warning: ")
+                    && line.contains(message)
+                    && line.contains("GameObject:Example")
+            }),
+            "{warnings}"
+        );
+    }
+    assert!(built.join("mods/example/data/mod.manifest").is_file());
+
+    for (body, message) in [
+        ("", "Missing required element 'Body'"),
+        ("<Body><Typo/></Body>", "Unexpected module 'Typo' in 'Body'"),
+        ("<Body/>", "Missing required entry in 'Body'"),
+        (
+            r#"<Body><ActiveBody id="Body"/></Body>"#,
+            "Missing required attribute 'MaxHealth'",
+        ),
+        (
+            r#"<Body><ActiveBody id="Body" MaxHealth="bad"/></Body>"#,
+            "Invalid value 'bad' for attribute 'MaxHealth'",
+        ),
+        (
+            r#"<Body><ActiveBody id="Body" MaxHealth="-1"/></Body>"#,
+            "Invalid value '-1' for attribute 'MaxHealth'",
+        ),
+    ] {
+        let failed = compile(body);
+        let error = String::from_utf8(failed.stderr).unwrap();
+        assert!(!failed.status.success());
+        assert!(error.contains(message), "{error}");
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_static_preserves_references_to_assets_in_commented_includes() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data");

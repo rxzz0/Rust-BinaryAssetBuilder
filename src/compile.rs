@@ -90,6 +90,12 @@ enum ReferenceMode {
     Map,
 }
 
+impl ReferenceMode {
+    fn validates_schema(self) -> bool {
+        self != Self::Map
+    }
+}
+
 fn compile(
     input: &Path,
     data_root: &Path,
@@ -122,11 +128,12 @@ fn compile(
         HashMap::new()
     };
     let schema_root = root.join("Schemas/xsd");
-    let game_object_schema = if is_map && schema_root.join("CnC3Types.xsd").try_exists()? {
-        Some(static_assets::game_object::Schema::load(&schema_root)?)
-    } else {
-        None
-    };
+    let game_object_schema =
+        if reference_directory.is_some() && schema_root.join("CnC3Types.xsd").try_exists()? {
+            Some(static_assets::game_object::Schema::load(&schema_root)?)
+        } else {
+            None
+        };
     let mut compiler = Compiler {
         data_paths: paths("Data", "SageXml"),
         art_paths: paths("Art", "Art"),
@@ -573,6 +580,13 @@ impl Compiler<'_> {
         path: &Path,
         source: &str,
     ) -> io::Result<CompiledAsset> {
+        let cleaned = if node.attribute("inheritFrom").is_none() {
+            self.schema_cleaned_xml(node, path)?
+        } else {
+            None
+        };
+        let document = reparse_cleaned(cleaned.as_deref(), path)?;
+        let node = cleaned_node(node, document.as_ref());
         match node.tag_name().name() {
             "AudioFile" => self.compile_audio_file(node, path, source),
             "OnDemandTexture" | "Texture" => self.compile_texture(node, path, source),
@@ -621,6 +635,26 @@ impl Compiler<'_> {
             "TerrainTextureAtlas" => self.compile_terrain_atlas(node, path, source),
             _ => self.compile_schema_leaf(node, path, source),
         }
+    }
+
+    fn schema_cleaned_xml(&self, node: Node<'_, '_>, path: &Path) -> io::Result<Option<String>> {
+        if let Some(schema) = &self.game_object_schema
+            && self.reference_mode.validates_schema()
+        {
+            return schema.validate(node, path);
+        }
+        Ok(None)
+    }
+
+    fn compile_effective_asset(
+        &self,
+        node: Node<'_, '_>,
+        path: &Path,
+        source: &str,
+    ) -> io::Result<CompiledAsset> {
+        let cleaned = self.schema_cleaned_xml(node, path)?;
+        let document = reparse_cleaned(cleaned.as_deref(), path)?;
+        self.compile_schema_leaf(cleaned_node(node, document.as_ref()), path, source)
     }
 
     fn compile_schema_leaf(
@@ -899,10 +933,10 @@ impl Compiler<'_> {
                         let id = reference.declared_id();
                         resolved.push(id);
                         if deferred.insert(id) {
-                            eprintln!(
-                                "Warning: Unknown asset {:08x}:{:08x} referenced from {} in {}",
+                            warning(format_args!(
+                                "Unknown asset '{:08x}:{:08x}' referenced from '{}' in '{}'",
                                 id.type_id, id.instance_id, asset.name, asset.source
-                            );
+                            ));
                         }
                         continue;
                     }
@@ -1284,6 +1318,31 @@ fn memory_stream_hash(mut bytes: Vec<u8>) -> u32 {
     // EA hashes the MemoryStream capacity, including the unused zero bytes.
     bytes.resize(bytes.len().next_power_of_two().max(256), 0);
     fast_hash(&bytes)
+}
+
+fn reparse_cleaned<'a>(xml: Option<&'a str>, path: &Path) -> io::Result<Option<Document<'a>>> {
+    xml.map(Document::parse)
+        .transpose()
+        .map_err(|error| invalid(path, error))
+}
+
+fn cleaned_node<'a, 'input: 'a>(
+    node: Node<'a, 'input>,
+    document: Option<&'a Document<'input>>,
+) -> Node<'a, 'input> {
+    document.map_or(node, |document| {
+        document
+            .descendants()
+            .find(|cleaned| cleaned.is_element() && cleaned.range().start == node.range().start)
+            .expect("schema validation preserves the asset element")
+    })
+}
+
+pub(crate) fn warning(message: std::fmt::Arguments<'_>) {
+    // Mod Studio combines both output streams and can interleave partial writes.
+    let _ = io::stderr()
+        .lock()
+        .write_all(format!("Warning: {message}\n").as_bytes());
 }
 
 fn invalid(path: &Path, error: impl std::fmt::Display) -> io::Error {

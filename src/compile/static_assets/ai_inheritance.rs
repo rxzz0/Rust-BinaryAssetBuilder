@@ -1,6 +1,6 @@
 use super::ai_personality::{CHILDREN, CRITERIA, FILTER, IN_TROUBLE, child_index, reference_name};
 use super::ai_settings::MICRO_SCHEMA;
-use super::{compile_asset, declaration_id, significant_children};
+use super::{declaration_id, significant_children};
 use crate::compile::{CompiledAsset, Compiler, SAGE_NS, escape_xml, invalid, is_xml_whitespace};
 use crate::manifest::AssetId;
 use roxmltree::{Document, Node};
@@ -33,7 +33,7 @@ impl Compiler<'_> {
         let mut xml = String::new();
         element.write_xml(&mut xml, true);
         let document = Document::parse(&xml).map_err(|error| invalid(path, error))?;
-        compile_asset(document.root_element(), path, source)
+        self.compile_effective_asset(document.root_element(), path, source)
     }
 
     fn inherited_ai_xml(

@@ -124,7 +124,7 @@ impl Compiler<'_> {
         let mut xml = String::new();
         result.write_xml(&mut xml, true);
         let document = Document::parse(&xml).map_err(|error| invalid(path, error))?;
-        self.compile_schema_leaf(document.root_element(), path, source)
+        self.compile_effective_asset(document.root_element(), path, source)
     }
 
     fn schema_inherited_xml(
@@ -134,7 +134,11 @@ impl Compiler<'_> {
         schema: &Schema,
         chain: &mut Vec<(PathBuf, AssetId)>,
     ) -> io::Result<Element> {
-        let overlay = Element::read(node, path)?;
+        let mut overlay = Element::read(node, path)?;
+        if self.reference_mode.validates_schema() && overlay.name == "GameObject" {
+            let asset = format!("GameObject:{}", node.attribute("id").unwrap_or_default());
+            overlay.remove_unknown_optional_modules(schema, "GameObject", &asset, path)?;
+        }
         let Some(inherit_from) = node.attribute("inheritFrom") else {
             return Ok(overlay);
         };
@@ -328,6 +332,36 @@ impl Element {
             .iter()
             .find(|(key, _)| key == name)
             .map(|(_, value)| value.as_str())
+    }
+
+    fn remove_unknown_optional_modules(
+        &mut self,
+        schema: &Schema,
+        kind: &str,
+        asset: &str,
+        path: &Path,
+    ) -> io::Result<()> {
+        let shape = schema.shape(kind, path)?;
+        if shape.is_module_choice() && shape.optional_choice() {
+            self.children.retain(|child| {
+                if shape.children.iter().any(|field| field.name == child.name) {
+                    return true;
+                }
+                crate::compile::warning(format_args!(
+                    "Unexpected module '{}' in '{}' for '{asset}' in '{}'",
+                    child.name,
+                    self.name,
+                    path.display()
+                ));
+                false
+            });
+        }
+        for child in &mut self.children {
+            if let Some(field) = shape.children.iter().find(|field| field.name == child.name) {
+                child.remove_unknown_optional_modules(schema, &field.kind, asset, path)?;
+            }
+        }
+        Ok(())
     }
 
     fn merge(

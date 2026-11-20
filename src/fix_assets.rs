@@ -217,12 +217,12 @@ fn dependency_order(
                     )));
                 }
                 if missing.insert(reference) {
-                    eprintln!(
-                        "Warning: {} references unresolved asset {:08x}:{:08x}",
-                        String::from_utf8_lossy(asset.name),
+                    crate::compile::warning(format_args!(
+                        "Unknown asset '{:08x}:{:08x}' referenced from '{}' while fixing assets",
                         reference.type_id,
-                        reference.instance_id
-                    );
+                        reference.instance_id,
+                        String::from_utf8_lossy(asset.name)
+                    ));
                 }
             }
         }

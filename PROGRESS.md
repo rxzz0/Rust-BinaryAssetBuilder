@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 336 validates required attributes and module elements from the SDK XSD during static and global builds. Invalid optional values and module choices warn, and omissions are grouped by asset. Surge built through BIG packaging with an identical static stream to Checkpoint 335. All 299 tests and strict Clippy passed.
 - Checkpoint 335 preserves unresolved asset references as warnings in SDK static builds and keeps those references through Fix Assets. With Surge Units.xml commented, EA and Rust matched on all 39 missing IDs across the same 65 asset-reference pairs. The installed SDK compiler passed isolated global and static compiles, merge, Fix Assets, and BIG packaging. All 298 tests and strict Clippy passed.
 - Checkpoint 334 compiles reference-only static streams with the EA zero checksum and lets Fix Assets generate their LoD streams. The SDK Test mod's base manifest and three linked files matched EA byte for byte. Fix Assets, linked checks, BIG packaging, all 297 tests and strict Clippy passed.
 - Checkpoint 333 encodes the three Conquer card definition types and prebuilt decks, including upgrades, veterancy, and type-qualified or unqualified card references. Both linked fixtures matched EA byte for byte across 20 assets. All 296 tests and strict Clippy passed.
