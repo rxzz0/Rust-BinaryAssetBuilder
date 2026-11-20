@@ -890,6 +890,40 @@ fn sdk_global_compiles_multiplayer_colors_with_the_sdk_layout() {
     );
     let relocations = fs::read(output.join("mapmetadata_colors.relo")).unwrap();
     assert_eq!(&relocations[4..], &[20, 0, 0, 0, 255, 255, 255, 255]);
+
+    // A failed batch must keep the previous output and report its first error.
+    for name in ["MapMetaData_FirstError.xml", "MapMetaData_SecondError.xml"] {
+        fs::write(data.join(name), "<Invalid/>").unwrap();
+    }
+    let compile = |workers: &str| {
+        std::process::Command::new(env!("CARGO_BIN_EXE_binary-asset-builder"))
+            .arg("compile-global-sdk")
+            .arg(&data)
+            .arg("--sdk-root")
+            .arg(&root)
+            .arg("--output")
+            .arg(&built)
+            .env("BAB_ASSET_WORKERS", workers)
+            .output()
+            .unwrap()
+    };
+    let serial = compile("1");
+    let parallel = compile("4");
+    assert!(!serial.status.success());
+    assert_eq!(serial.status, parallel.status);
+    assert_eq!(serial.stdout, parallel.stdout);
+    assert_eq!(serial.stderr, parallel.stderr);
+    assert!(
+        String::from_utf8(serial.stderr)
+            .unwrap()
+            .contains("MapMetaData_FirstError.xml")
+    );
+    assert_eq!(
+        fs::read(output.join("mapmetadata_colors.bin")).unwrap(),
+        binary
+    );
+    assert!(!output.join("mapmetadata_firsterror.manifest").exists());
+    assert!(!output.join(".rust-streams").exists());
     fs::remove_dir_all(root).unwrap();
 }
 

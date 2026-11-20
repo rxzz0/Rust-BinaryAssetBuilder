@@ -8,6 +8,7 @@ use crate::manifest::{
 use expressions::{Definitions, expand_assets, merge_definitions, read_definitions};
 use roxmltree::{Document, Node, NodeId};
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
@@ -18,7 +19,7 @@ use std::sync::{Arc, mpsc};
 
 use asset_workers::Encoders;
 
-mod asset_workers;
+pub(crate) mod asset_workers;
 mod coverage;
 mod expressions;
 mod merge_assets;
@@ -1456,10 +1457,30 @@ pub(crate) fn warning(message: std::fmt::Arguments<'_>) {
     if std::env::var_os("BAB_NO_WARNINGS").is_some_and(|value| value == "1") {
         return;
     }
+    let line = format!("Warning: {message}\n");
+    STREAM_WARNINGS.with_borrow_mut(|warnings| {
+        if let Some(warnings) = warnings {
+            warnings.extend_from_slice(line.as_bytes());
+        } else {
+            write_warnings(line.as_bytes());
+        }
+    });
+}
+
+thread_local! {
+    static STREAM_WARNINGS: RefCell<Option<Vec<u8>>> = const { RefCell::new(None) };
+}
+
+// Used on a dedicated stream worker that terminates when compilation finishes.
+pub(crate) fn capture_stream_warnings<T>(compile: impl FnOnce() -> T) -> (T, Vec<u8>) {
+    STREAM_WARNINGS.set(Some(Vec::new()));
+    let result = compile();
+    (result, STREAM_WARNINGS.take().unwrap())
+}
+
+pub(crate) fn write_warnings(warnings: &[u8]) {
     // Mod Studio combines both output streams and can interleave partial writes.
-    let _ = io::stderr()
-        .lock()
-        .write_all(format!("Warning: {message}\n").as_bytes());
+    let _ = io::stderr().lock().write_all(warnings);
 }
 
 fn invalid(path: &Path, error: impl std::fmt::Display) -> io::Error {

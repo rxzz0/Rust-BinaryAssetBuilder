@@ -10,21 +10,25 @@ pub(super) struct Encoders {
     workers: Vec<JoinHandle<()>>,
 }
 
+pub(crate) fn worker_count() -> io::Result<usize> {
+    let Some(value) = std::env::var_os("BAB_ASSET_WORKERS") else {
+        return Ok(1);
+    };
+    value
+        .to_str()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|count| (1..=64).contains(count))
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "BAB_ASSET_WORKERS must be between 1 and 64",
+            )
+        })
+}
+
 impl Encoders {
     pub(super) fn start() -> io::Result<Option<Self>> {
-        let Some(value) = std::env::var_os("BAB_ASSET_WORKERS") else {
-            return Ok(None);
-        };
-        let count = value
-            .to_str()
-            .and_then(|value| value.parse::<usize>().ok())
-            .filter(|count| (1..=64).contains(count))
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "BAB_ASSET_WORKERS must be between 1 and 64",
-                )
-            })?;
+        let count = worker_count()?;
         if count == 1 {
             return Ok(None);
         }
