@@ -1,0 +1,42 @@
+# Parallel build plan
+
+Parallelize the Rust BinaryAssetBuilder on the `parallel` branch while preserving the streams the game already accepts. Aim for a median clean Surge build of **5 seconds or less** on the same PC and SDK drive. Use phase timings to decide which work to parallelize and which work to leave sequential.
+
+## Scope and baseline
+
+Use the existing SDK commands and EALAModStudio workflow, with Rust selected and official map compilation skipped. A clean run starts in a fresh output directory with the stock SDK reference manifests and compiles the same Surge inputs through AptUI, global data, static data, merge, Fix Assets, both BIG archives, and Skudef creation. The Rust path remains native. EA fixtures and the current sequential Rust build provide separate compatibility checks.
+
+| Stage | Measured time |
+| --- | ---: |
+| AptUI | 0.12 s |
+| Global data | 1.70 s |
+| Static data | 9.51 s |
+| Merge and Fix Assets | 0.33 s |
+| Streams BIG | 0.36 s |
+| Misc BIG | 3.91 s |
+| Total, including Skudef and overhead | **15.95 s** |
+
+This was one command-line run at checkpoint 340. Fresh build output and cold Windows filesystem cache are separate conditions. The comparison should use the same storage and warning settings and report cold-cache results separately if measured.
+
+## Implementation checkpoints
+
+- [ ] **1. Capture a repeatable baseline and profile.** Freeze the compiler commit, Surge inputs, stock manifests, build settings, and output drive for paired runs. Time at least five clean runs per configuration, alternate configurations to limit filesystem cache bias, and record median, range, peak memory, CPU use, and per-phase timings. Within static data, measure include and schema preparation, per-type encoding, linking, and output writes. Within packaging, separate enumeration, source reads, and archive writes. Save file counts and output hashes from the sequential build. Run warning-enabled checks separately from timed runs.
+- [ ] **2. Separate preparation from encoding in `src/compile.rs` using one worker.** Keep traversal, include and define expansion, inheritance context, and duplicate handling in their current order. Give each eligible declaration a submission index, source path, and owned or safely shared input. Retain document-level parsing where possible to avoid reparsing an entire document per asset. Make the smallest read-only context needed by the selected encoders available to workers. Audit the current `Rc` data before sharing anything across threads. Keep music header caching, inherited assets, tentative instance discovery, and final reference resolution on their existing ordered path until measurements justify changing them. Verify sequential parity before adding workers.
+- [ ] **3. Parallelize the measured hot encoders with bounded workers.** Start with independent `AudioFile` work if profiling confirms it is a hotspot, then evaluate texture and W3D work separately. Use Rust standard-library scoped threads and a bounded number of in-flight jobs or results. Keep one worker available as a reference path and size higher worker counts from measured CPU and drive behavior. Collect each result and its diagnostics by submission index. Commit results in the original traversal order so override precedence, manifest ordering, first reported errors, and warning output stay predictable. Workers return asset data and leave publication to the existing coordinator.
+- [ ] **4. Parallelize independent AptUI and global metadata streams in `src/compile_batch.rs` and `src/compile/sdk_static.rs`.** Check duplicate output names and what stock or generated references each stream reads. Run independent streams within the worker budget, collect results in source order, and keep the current batch publication and rollback paths. Measure before sharing schema loading across streams. If a stream already uses internal workers, give it a slice of the same budget or run it with one worker to avoid oversubscribing the machine.
+- [ ] **5. Shorten the packaging critical path.** Profile `src/big.rs` on the SDK drive. Measure concurrent Streams and Misc archive creation first. Also measure whether starting Misc earlier helps, since its inputs can be checked independently once the build paths are ready. Deliver Skudef and final package files only when the required compilation and both archive writes succeed. If the drive benefits from multiple readers, test bounded read-ahead with one ordered writer. Keep BIG entry ordering, source-change detection, output size checks, and temporary-file publication. Compare I/O changes to the sequential output and keep only repeatable gains.
+- [ ] **6. Re-measure and optimize the remaining hotspot.** Sweep worker budgets such as 1, 2, 4, and the machine’s available parallelism. Check the combined workload rather than adding timings from isolated stages. Use the final profile to assess repeated schema or manifest loading, path resolution, parsing, or redundant file copies. Measure any incremental-build cache separately from the clean-build target. If five seconds remains out of reach, record the best verified time and the phase that sets the limit.
+- [ ] **7. Verify correctness and failure behavior.** Compare one-worker and multi-worker output byte for byte across repeated fresh runs, including manifests, bins, relocations, imports, custom data, LoD streams, both BIGs, and Skudef. Compare with checkpoint 340 using identical inputs and build settings. Run EA fixtures, all Rust tests, strict Clippy, and the linked stream checks. Exercise an empty mod, different include and inheritance patterns, duplicate IDs, unresolved references, schema errors, missing files, and packaging input changes. Verify that failure leaves the previous published output usable and that warnings remain readable and suppressible.
+- [ ] **8. Verify ModStudio and choose rollout settings.** Time a clean Rust build through the existing EALAModStudio window and confirm the EA selector still runs the original workflow. Smoke-test Surge in game, including completion of Archer Maiden or Cryo Legionnaire. Pick the default worker limit from benchmark and compatibility results and retain the one-worker setting for troubleshooting. Save the final timing table and exact reproduction steps in `PROGRESS.md`.
+
+## Acceptance and checkpoint policy
+
+- Use new output directories with identical source inputs for comparisons. Run the baseline and candidate on the same PC and drive. Report which stages, settings, and tools the timing covers.
+- Require repeatable byte-for-byte parity between Rust worker settings. Use existing EA fixtures for differences that the project already tracks independently of parallelism.
+- Run `cargo fmt --check`, `cargo test --all-targets`, `cargo clippy --all-targets -- -D warnings`, and `cargo build --release` before rollout. Verify the test package with `check-linked` and exercise ModStudio and the game as separate checks.
+- Commit each independently verified step on `parallel`. Record the commit, timing, parity result, and next step in `PROGRESS.md`. Keep the experiment on `parallel` until the correctness and performance results are reviewed.
+
+## Questions to answer with the baseline
+
+- How much of the 9.51 seconds in static data goes to audio, mesh and texture encoding, XML and schema work, linking, and writes?
+- Is Misc packaging limited by opening many files, transferring bytes on the SDK drive, or writing the archive?
