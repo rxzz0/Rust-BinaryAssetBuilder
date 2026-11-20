@@ -136,20 +136,8 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
         let (kind, pivot, width, frames) = read_channel(channel, num_frames as usize, path)?;
         let pointer = pointers + index * 4;
         let before = data.relocations.len();
-        let delta = settings
-            .allow_adaptive_delta
-            .then(|| delta::compress(&frames, kind, width, &settings))
-            .flatten();
-        let timecoded = (delta.is_none() || settings.allow_time_coded)
-            .then(|| timecoded::compress(&frames, kind, width, &settings));
-        match (timecoded, delta) {
-            (Some(timecoded), Some(delta)) if timecoded.estimate_size() < delta.estimate_size() => {
-                timecoded.encode(kind, pivot, pointer, &mut data)?;
-            }
-            (_, Some(delta)) => delta.encode(kind, pivot, pointer, &mut data)?,
-            (Some(timecoded), None) => timecoded.encode(kind, pivot, pointer, &mut data)?,
-            (None, None) => unreachable!("timecoded compression is always available"),
-        }
+        compress_channel(&frames, kind, width, &settings)
+            .encode(kind, pivot, pointer, &mut data)?;
         channel_relocations.push(data.relocations.remove(before));
     }
     data.relocations.splice(1..1, channel_relocations);
@@ -157,6 +145,48 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
     out.payload = data.payload;
     out.relocations = data.relocations;
     Ok(out)
+}
+
+enum CompressedChannel {
+    Delta(delta::Delta),
+    Timecoded(timecoded::Timecoded),
+}
+
+impl CompressedChannel {
+    fn encode(
+        self,
+        kind: u32,
+        pivot: u16,
+        pointer: usize,
+        data: &mut BinaryData<'_>,
+    ) -> io::Result<()> {
+        match self {
+            Self::Delta(channel) => channel.encode(kind, pivot, pointer, data),
+            Self::Timecoded(channel) => channel.encode(kind, pivot, pointer, data),
+        }
+    }
+}
+
+fn compress_channel(
+    frames: &[Frame],
+    kind: u32,
+    width: usize,
+    settings: &CompressionSettings,
+) -> CompressedChannel {
+    let delta = settings
+        .allow_adaptive_delta
+        .then(|| delta::compress(frames, kind, width, settings))
+        .flatten();
+    let timecoded = (delta.is_none() || settings.allow_time_coded)
+        .then(|| timecoded::compress(frames, kind, width, settings));
+    match (timecoded, delta) {
+        (Some(timecoded), Some(delta)) if timecoded.estimate_size() < delta.estimate_size() => {
+            CompressedChannel::Timecoded(timecoded)
+        }
+        (_, Some(delta)) => CompressedChannel::Delta(delta),
+        (Some(timecoded), None) => CompressedChannel::Timecoded(timecoded),
+        (None, None) => unreachable!("timecoded compression is always available"),
+    }
 }
 
 fn read_channel(

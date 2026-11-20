@@ -10,6 +10,14 @@ use std::path::Path;
 
 mod xas;
 
+struct AudioFileInput<'a> {
+    name: &'a str,
+    id: crate::manifest::AssetId,
+    file: std::path::PathBuf,
+    codec: u8,
+    streamed: bool,
+}
+
 impl Compiler<'_> {
     pub(in crate::compile) fn compile_audio_file(
         &self,
@@ -17,6 +25,15 @@ impl Compiler<'_> {
         path: &Path,
         source: &str,
     ) -> io::Result<CompiledAsset> {
+        let input = self.prepare_audio_file(node, path)?;
+        input.encode(node, path, source)
+    }
+
+    fn prepare_audio_file<'a>(
+        &self,
+        node: Node<'a, '_>,
+        path: &Path,
+    ) -> io::Result<AudioFileInput<'a>> {
         let (name, id) = declaration_id(node, path)?;
         validate_attributes(
             node,
@@ -70,6 +87,25 @@ impl Compiler<'_> {
             "false" | "0" => false,
             _ => return Err(invalid(path, "invalid IsStreamedOnPC")),
         };
+        Ok(AudioFileInput {
+            name,
+            id,
+            file,
+            codec,
+            streamed,
+        })
+    }
+}
+
+impl AudioFileInput<'_> {
+    fn encode(self, node: Node<'_, '_>, path: &Path, source: &str) -> io::Result<CompiledAsset> {
+        let Self {
+            name,
+            id,
+            file,
+            codec,
+            streamed,
+        } = self;
         let mut bytes = Vec::new();
         let file_hash = hash_source_file(&file, &mut bytes)?;
         let wave = Wave::parse(&bytes, &file)?;
