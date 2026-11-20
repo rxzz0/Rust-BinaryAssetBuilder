@@ -9,12 +9,16 @@ use expressions::{Definitions, expand_assets, merge_definitions, read_definition
 use roxmltree::{Document, Node, NodeId};
 use std::borrow::Cow;
 use std::cmp::Reverse;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::{Arc, mpsc};
 
+use asset_workers::Encoders;
+
+mod asset_workers;
 mod coverage;
 mod expressions;
 mod merge_assets;
@@ -145,6 +149,14 @@ fn compile(
         ids: HashSet::new(),
         static_asset_locations: HashMap::new(),
         next_document_order: 0,
+        encoders: if reference_mode == ReferenceMode::SdkStatic {
+            Encoders::start()?
+        } else {
+            None
+        },
+        pending: VecDeque::new(),
+        local_assets: HashSet::new(),
+        asset_document: None,
         assets: Vec::new(),
         tentative: HashMap::new(),
         definitions: HashMap::new(),
@@ -157,7 +169,11 @@ fn compile(
         external_ids: HashSet::new(),
         worldbuilder_hashes,
     };
-    compiler.read_document(&input, false, false)?;
+    let traversal = compiler.read_document(&input, false, false);
+    while !compiler.pending.is_empty() {
+        compiler.commit_pending()?;
+    }
+    traversal?;
     compiler.add_referenced_instances()?;
     compiler.finish()
 }
@@ -190,6 +206,10 @@ struct Compiler<'a> {
     ids: HashSet<AssetId>,
     static_asset_locations: HashMap<AssetId, (usize, usize)>,
     next_document_order: usize,
+    encoders: Option<Encoders>,
+    pending: VecDeque<PendingAsset>,
+    local_assets: HashSet<AssetId>,
+    asset_document: Option<usize>,
     assets: Vec<CompiledAsset>,
     tentative: HashMap<AssetId, Vec<TentativeAsset>>,
     definitions: HashMap<PathBuf, Rc<Definitions>>,
@@ -202,6 +222,17 @@ struct Compiler<'a> {
     referenced_manifests: Vec<String>,
     external_ids: HashSet<AssetId>,
     worldbuilder_hashes: HashMap<AssetId, u32>,
+}
+
+struct PendingAsset {
+    path: PathBuf,
+    document_order: usize,
+    result: AssetResult,
+}
+
+enum AssetResult {
+    Ready(io::Result<Box<CompiledAsset>>),
+    Running(mpsc::Receiver<io::Result<CompiledAsset>>),
 }
 
 #[derive(Clone)]
@@ -402,7 +433,7 @@ impl Compiler<'_> {
             .as_ref()
             .map_or(root, Document::root_element);
         let xml = expanded.as_ref().unwrap_or(&xml);
-        let mut local_assets = HashSet::new();
+        let mut shared_xml = None;
         for node in root.children().filter(Node::is_element) {
             if node.has_tag_name((SAGE_NS, "Includes")) {
                 if self.reference_directory.is_none() {
@@ -424,36 +455,119 @@ impl Compiler<'_> {
                     node: node.id(),
                 });
             } else {
-                let asset = if self.reference_directory.is_some() {
-                    self.compile_static_node(node, path, &source)?
-                } else {
-                    self.compile_apt_asset(node, path, &source)?
-                };
-                if self.reference_directory.is_some() {
-                    if !local_assets.insert(asset.id) {
-                        return Err(invalid(path, format!("duplicate asset ID {}", asset.name)));
-                    }
-                    if let Some((index, previous_order)) =
-                        self.static_asset_locations.get_mut(&asset.id)
+                if let Some(encoders) = &self.encoders {
+                    if self.pending.len() >= encoders.capacity()
+                        && let Err(error) = self.commit_pending()
                     {
-                        // An including document takes precedence over its descendants.
-                        // Across sibling include trees, EA keeps the first declaration.
-                        if document_order < *previous_order {
-                            self.assets[*index] = asset;
-                            *previous_order = document_order;
-                        }
-                        continue;
+                        self.pending.clear();
+                        return Err(error);
                     }
-                    self.static_asset_locations
-                        .insert(asset.id, (self.assets.len(), document_order));
+                    let result = self.queue_asset(node, path, &source, xml, &mut shared_xml)?;
+                    self.pending.push_back(PendingAsset {
+                        path: path.to_path_buf(),
+                        document_order,
+                        result,
+                    });
+                } else {
+                    let asset = if self.reference_directory.is_some() {
+                        self.compile_static_node(node, path, &source)?
+                    } else {
+                        self.compile_apt_asset(node, path, &source)?
+                    };
+                    self.commit_asset(asset, path, document_order)?;
                 }
-                if !self.ids.insert(asset.id) {
-                    return Err(invalid(path, format!("duplicate asset ID {}", asset.name)));
-                }
-                self.assets.push(asset);
             }
         }
         self.active.remove(path);
+        Ok(())
+    }
+
+    fn queue_asset(
+        &mut self,
+        node: Node<'_, '_>,
+        path: &Path,
+        source: &str,
+        xml: &str,
+        shared_xml: &mut Option<Arc<str>>,
+    ) -> io::Result<AssetResult> {
+        let kind = node.tag_name().name();
+        if !matches!(kind, "AudioFile" | "W3DAnimation") || node.attribute("inheritFrom").is_some()
+        {
+            return Ok(AssetResult::Ready(
+                self.compile_static_node(node, path, source).map(Box::new),
+            ));
+        }
+
+        let cleaned = self.schema_cleaned_xml(node, path)?;
+        let encoders = self.encoders.as_ref().unwrap();
+        let path = path.to_path_buf();
+        let source = source.to_owned();
+        let result = if kind == "AudioFile" {
+            let document = reparse_cleaned(cleaned.as_deref(), &path)?;
+            let input = self.prepare_audio_file(cleaned_node(node, document.as_ref()), &path)?;
+            encoders.submit(move || input.encode(&path, &source))?
+        } else {
+            let position = node.range().start;
+            let node_id = node.id();
+            let xml = cleaned
+                .is_none()
+                .then(|| Arc::clone(shared_xml.get_or_insert_with(|| xml.into())));
+            encoders.submit(move || {
+                let text = cleaned.as_deref().or(xml.as_deref()).unwrap();
+                let doc = Document::parse(text).map_err(|error| invalid(&path, error))?;
+                let node = if cleaned.is_some() {
+                    doc.descendants()
+                        .find(|node| node.is_element() && node.range().start == position)
+                } else {
+                    doc.get_node(node_id)
+                }
+                .ok_or_else(|| invalid(&path, "missing animation declaration"))?;
+                static_assets::compile_asset(node, &path, &source)
+            })?
+        };
+        Ok(AssetResult::Running(result))
+    }
+
+    fn commit_pending(&mut self) -> io::Result<()> {
+        let pending = self.pending.pop_front().unwrap();
+        let asset = match pending.result {
+            AssetResult::Ready(asset) => *asset?,
+            AssetResult::Running(asset) => asset
+                .recv()
+                .map_err(|error| invalid(&pending.path, error))??,
+        };
+        self.commit_asset(asset, &pending.path, pending.document_order)
+    }
+
+    fn commit_asset(
+        &mut self,
+        asset: CompiledAsset,
+        path: &Path,
+        document_order: usize,
+    ) -> io::Result<()> {
+        if self.reference_directory.is_some() {
+            if self.asset_document != Some(document_order) {
+                self.local_assets.clear();
+                self.asset_document = Some(document_order);
+            }
+            if !self.local_assets.insert(asset.id) {
+                return Err(invalid(path, format!("duplicate asset ID {}", asset.name)));
+            }
+            if let Some((index, previous_order)) = self.static_asset_locations.get_mut(&asset.id) {
+                // An including document wins over descendants. The first sibling wins.
+                if document_order < *previous_order {
+                    self.assets[*index] = asset;
+                    *previous_order = document_order;
+                }
+                return Ok(());
+            }
+            self.static_asset_locations
+                .insert(asset.id, (self.assets.len(), document_order));
+        }
+        if !self.ids.insert(asset.id) {
+            return Err(invalid(path, format!("duplicate asset ID {}", asset.name)));
+        }
+        self.assets.push(asset);
         Ok(())
     }
 

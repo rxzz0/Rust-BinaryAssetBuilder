@@ -10,12 +10,15 @@ use std::path::Path;
 
 mod xas;
 
-struct AudioFileInput<'a> {
-    name: &'a str,
+pub(in crate::compile) struct AudioFileInput {
+    name: String,
     id: crate::manifest::AssetId,
     file: std::path::PathBuf,
     codec: u8,
     streamed: bool,
+    sample_rate: Option<String>,
+    subtitle: Option<String>,
+    xml_hash: io::Result<u32>,
 }
 
 impl Compiler<'_> {
@@ -26,14 +29,14 @@ impl Compiler<'_> {
         source: &str,
     ) -> io::Result<CompiledAsset> {
         let input = self.prepare_audio_file(node, path)?;
-        input.encode(node, path, source)
+        input.encode(path, source)
     }
 
-    fn prepare_audio_file<'a>(
+    pub(in crate::compile) fn prepare_audio_file(
         &self,
-        node: Node<'a, '_>,
+        node: Node<'_, '_>,
         path: &Path,
-    ) -> io::Result<AudioFileInput<'a>> {
+    ) -> io::Result<AudioFileInput> {
         let (name, id) = declaration_id(node, path)?;
         validate_attributes(
             node,
@@ -88,28 +91,34 @@ impl Compiler<'_> {
             _ => return Err(invalid(path, "invalid IsStreamedOnPC")),
         };
         Ok(AudioFileInput {
-            name,
+            name: name.to_owned(),
             id,
             file,
             codec,
             streamed,
+            sample_rate: node.attribute("PCSampleRate").map(str::to_owned),
+            subtitle: node.attribute("SubtitleStringName").map(str::to_owned),
+            xml_hash: hash_xml(node, 0x8339_8e45 ^ 1_001_010, path),
         })
     }
 }
 
-impl AudioFileInput<'_> {
-    fn encode(self, node: Node<'_, '_>, path: &Path, source: &str) -> io::Result<CompiledAsset> {
+impl AudioFileInput {
+    pub(in crate::compile) fn encode(self, path: &Path, source: &str) -> io::Result<CompiledAsset> {
         let Self {
             name,
             id,
             file,
             codec,
             streamed,
+            sample_rate,
+            subtitle,
+            xml_hash,
         } = self;
         let mut bytes = Vec::new();
         let file_hash = hash_source_file(&file, &mut bytes)?;
         let wave = Wave::parse(&bytes, &file)?;
-        if let Some(rate) = node.attribute("PCSampleRate")
+        if let Some(rate) = sample_rate
             && rate.trim().parse::<u16>().ok() != Some(wave.rate)
         {
             return Err(invalid(path, "AudioFile resampling is unsupported"));
@@ -136,11 +145,7 @@ impl AudioFileInput<'_> {
             .and_then(|stem| stem.to_str())
             .ok_or_else(|| invalid(&file, "invalid WAV file name"))?;
         let default_subtitle = format!("DIALOGEVENT:{file_stem}SubTitle");
-        data.string(
-            4,
-            node.attribute("SubtitleStringName")
-                .unwrap_or(&default_subtitle),
-        )?;
+        data.string(4, subtitle.as_deref().unwrap_or(&default_subtitle))?;
         data.word(0xc, frames);
         data.word(0x10, u32::from(wave.rate));
         data.payload[0x1c] = wave.channels;
@@ -150,12 +155,10 @@ impl AudioFileInput<'_> {
             data.word(0x18, header.len() as u32);
         }
         data.relocations.push(u32::MAX);
-        const PROCESSING_HASH: u32 = 0x8339_8e45 ^ 1_001_010;
         Ok(CompiledAsset {
             id,
             type_hash: 0x53c8_1e47,
-            instance_hash: hash_xml(node, PROCESSING_HASH, path)?
-                ^ memory_stream_hash(file_hash.to_le_bytes().to_vec()),
+            instance_hash: xml_hash? ^ memory_stream_hash(file_hash.to_le_bytes().to_vec()),
             name: format!("AudioFile:{name}"),
             source: source.to_owned(),
             payload: data.payload,

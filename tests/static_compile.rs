@@ -2140,3 +2140,45 @@ fn polymorphic_audio_imports_match_ea_and_survive_fix_assets() {
     .unwrap();
     assert_eq!(fixed.assets, ea.assets.len());
 }
+
+#[test]
+fn sdk_asset_workers_report_the_first_error_in_traversal_order() {
+    let root = scratch_root();
+    let input = root.join("Mods/Example/Data/Mod.xml");
+    let output = root.join("builtmods");
+    fs::create_dir_all(input.parent().unwrap()).unwrap();
+    let compile = |declarations: &str, workers: &str| {
+        fs::write(
+            &input,
+            format!("<AssetDeclaration xmlns=\"uri:ea.com:eala:asset\">{declarations}</AssetDeclaration>"),
+        )
+        .unwrap();
+        let result = std::process::Command::new(env!("CARGO_BIN_EXE_binary-asset-builder"))
+            .arg("compile-static-sdk")
+            .arg(&input)
+            .arg("--sdk-root")
+            .arg(&root)
+            .arg("--output")
+            .arg(&output)
+            .env("BAB_ASSET_WORKERS", workers)
+            .output()
+            .unwrap();
+        assert!(!result.status.success());
+        assert!(!output.join("mods/example/data/mod.manifest").exists());
+        String::from_utf8(result.stderr).unwrap()
+    };
+
+    let animation = r#"<W3DAnimation id="Broken" NumFrames="1" FrameRate="30"/>"#;
+    let unsupported = r#"<UnsupportedWorkerFixture id="Unsupported"/>"#;
+    for (declarations, first_error) in [
+        (format!("{animation}{unsupported}"), "Channels"),
+        (
+            format!("{unsupported}{animation}"),
+            "UnsupportedWorkerFixture",
+        ),
+    ] {
+        let serial = compile(&declarations, "1");
+        assert!(serial.contains(first_error), "{serial}");
+        assert_eq!(compile(&declarations, "4"), serial);
+    }
+}
