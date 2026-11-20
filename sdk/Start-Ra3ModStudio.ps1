@@ -430,9 +430,19 @@ $warningSource = $source
 $source = Add-CompilerOption $source $originalSource
 $beforeOptionMove = $source
 $source = Move-CompilerOptions $source
+$beforeWorkerDefault = $source
+$rustHelper = 'private void RunRustBuildStep(RunExecutableArguments args)'
+$workerDefault = '            args.Arguments = args.Arguments.Insert(3, "(if not defined BAB_ASSET_WORKERS set \"BAB_ASSET_WORKERS=4\") & ");'
+$source = [regex]::Replace($source, '(' + [regex]::Escape($rustHelper) + '\r?\n[ \t]*\{)(\r?\n)', [System.Text.RegularExpressions.MatchEvaluator]{
+    param($match)
+    $match.Groups[1].Value + $match.Groups[2].Value + $workerDefault + $match.Groups[2].Value
+})
+if ($source -ceq $beforeWorkerDefault) {
+    throw 'Could not configure the Rust workers in the ModStudio script.'
+}
 
 if ($InstallDefault) {
-    $knownSources = @($source, $beforeOptionMove, $warningSource, $beforeWarningOption, $mapsSource, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
+    $knownSources = @($source, $beforeWorkerDefault, $beforeOptionMove, $warningSource, $beforeWarningOption, $mapsSource, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
     $knownSources += @($knownSources | ForEach-Object { $_.Replace(' --allow-missing-references 2>&1', ' 2>&1') })
     if ($hasRustCheck -and $knownSources -cnotcontains $currentSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."
