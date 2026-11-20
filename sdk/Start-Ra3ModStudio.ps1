@@ -36,6 +36,62 @@ function Add-RustWarningOption([string] $script) {
     $helper = ($helper -split '\r?\n') -join $lineEnd
     return $executeStep.Replace($script, $helper + $lineEnd + $lineEnd + '$0')
 }
+
+function Add-CompilerOption([string] $script, [string] $original) {
+    $methods = [regex]::new('(?m)^([\t ]*)private void executeModBuildStep\(int stepId\)\s*\{')
+    $cases = [regex]::Match($original, '(?ms)^[\t ]*case 4:.*?(?=^[\t ]*case 11:)')
+    $mapOption = [regex]::Match($original, '(?m)^[\t ]*modGUIData\.Add\(new GUIElementData\("step9",[^\r\n]*')
+    $options = [regex]::new('(?m)^([\t ]*)(modGUIData\.Add\(new GUIElementData\("hideRustWarnings",[^\r\n]*)')
+    $skipMaps = 'if (stepId == 9) return false;'
+    if ($methods.Matches($script).Count -ne 1 -or !$cases.Success -or !$mapOption.Success -or
+        $options.Matches($script).Count -ne 1 -or !$script.Contains($skipMaps)) {
+        throw 'Could not add the compiler selector to this ModStudio script.'
+    }
+    $lineEnd = if ($script.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $selector = 'modGUIData.Add(new GUIElementData("useEaCompiler", "Use original EA compiler", GUIElementData.CheckBoxType, ScriptIndex.ModScript));'
+    $script = $options.Replace($script, [System.Text.RegularExpressions.MatchEvaluator]{
+        param($match)
+        $match.Groups[1].Value + $selector + $lineEnd + $match.Value + $lineEnd + $mapOption.Value
+    })
+    $script = $script.Replace($skipMaps, 'if (stepId == 9 && !UseEaCompiler()) return false;')
+    $helper = @'
+        private bool UseEaCompiler()
+        {
+            object setting;
+            return currentGUIData.TryGetValue("useEaCompiler", out setting) && setting is bool && (bool)setting;
+        }
+
+        private void ExecuteEaBuildStep(int stepId)
+        {
+            switch (stepId)
+            {
+EA_CASES
+            }
+        }
+'@
+    $eaCases = $cases.Value.TrimEnd()
+    foreach ($tool in @{
+        BinaryAssetBuilder = 'binaryassetbuilder.exe'; LoDStreamBuilder = 'lodstreambuilder.exe'
+        AssetMerger = 'assetmerger.exe'; StreamSorter = 'streamsorter.exe'
+        HashFix = 'hashfix.exe'; AssetResolver = 'modassetresolver.exe'; MakeBig = 'makebig.exe'
+    }.GetEnumerator()) {
+        $eaCases = [regex]::Replace($eaCases, '\b' + $tool.Key + '\b', ('Path.Combine(SDKDirectory, @"tools\' + $tool.Value + '")'))
+    }
+    $helper = ($helper.Replace('EA_CASES', $eaCases) -split '\r?\n') -join $lineEnd
+    $gate = @'
+            if (stepId >= 4 && stepId <= 10 && UseEaCompiler())
+            {
+                ExecuteEaBuildStep(stepId);
+                return;
+            }
+'@
+    $gate = ($gate -split '\r?\n') -join $lineEnd
+    return $methods.Replace($script, [System.Text.RegularExpressions.MatchEvaluator]{
+        param($match)
+        $helper + $lineEnd + $lineEnd + $match.Value + $lineEnd + $gate
+    })
+}
+
 $SdkRoot = (Get-Item -LiteralPath $SdkRoot).FullName
 $studio = Get-Item -LiteralPath (Join-Path $SdkRoot 'EALAModStudio.exe')
 $repository = Split-Path -Parent $PSScriptRoot
@@ -48,7 +104,20 @@ $sourcePath = Join-Path $SdkRoot 'defaultscript.cs'
 $backupPath = "$sourcePath.before-rust-check"
 $currentSource = [IO.File]::ReadAllText($sourcePath)
 $hasRustCheck = $currentSource.Contains('echo Checking linked files with Rust') -or $currentSource.Contains('compile-static-sdk')
+if ($hasRustCheck -and !(Test-Path -LiteralPath $backupPath)) {
+    $backupPath = Join-Path $SdkRoot 'defaultscriptC.cs'
+}
 $source = if ($hasRustCheck) { [IO.File]::ReadAllText($backupPath) } else { $currentSource }
+$originalSource = $source
+if ($hasRustCheck) {
+    $versionDefaults = [regex]::new('(?m)^[\t ]*static string DEFAULT_(?:GAME|MOD)_VERSION\s*=\s*"[^"\r\n]*";')
+    $source = $versionDefaults.Replace($source, [System.Text.RegularExpressions.MatchEvaluator]{
+        param($match)
+        $name = [regex]::Match($match.Value, 'DEFAULT_(?:GAME|MOD)_VERSION').Value
+        $installed = $versionDefaults.Matches($currentSource) | Where-Object { $_.Value.Contains($name) }
+        if (@($installed).Count -eq 1) { $installed.Value } else { $match.Value }
+    })
+}
 $steps = [regex]::Matches($source, '(?ms)^[\t ]*case 6:.*?(?=^[\t ]*case 7:)')
 if ($steps.Count -ne 1) {
     throw "Could not locate the Build Static Data step in $sourcePath."
@@ -337,9 +406,11 @@ $source = $skipMaps.Replace($source, '${1}if (stepId == 9) return false;' + $lin
 
 $beforeWarningOption = $source
 $source = Add-RustWarningOption $source
+$warningSource = $source
+$source = Add-CompilerOption $source $originalSource
 
 if ($InstallDefault) {
-    $knownSources = @($source, $beforeWarningOption, $mapsSource, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
+    $knownSources = @($source, $warningSource, $beforeWarningOption, $mapsSource, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
     $knownSources += @($knownSources | ForEach-Object { $_.Replace(' --allow-missing-references 2>&1', ' 2>&1') })
     if ($hasRustCheck -and $knownSources -cnotcontains $currentSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."
