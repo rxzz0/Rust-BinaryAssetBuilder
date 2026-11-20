@@ -77,6 +77,21 @@ Five alternating pairs used identical Surge sources and four workers per configu
 - [ ] **7. Verify correctness and failure behavior.** Compare one-worker and multi-worker output byte for byte across repeated fresh runs, including manifests, bins, relocations, imports, custom data, LoD streams, both BIGs, and Skudef. Compare with checkpoint 340 using identical inputs and build settings. Run EA fixtures, all Rust tests, strict Clippy, and the linked stream checks. Exercise an empty mod, different include and inheritance patterns, duplicate IDs, unresolved references, schema errors, missing files, and packaging input changes. Verify that failure leaves the previous published output usable and that warnings remain readable and suppressible.
 - [ ] **8. Verify ModStudio and choose rollout settings.** Time a clean Rust build through the existing EALAModStudio window and confirm the EA selector still runs the original workflow. Smoke-test Surge in game, including completion of Archer Maiden or Cryo Legionnaire. Pick the default worker limit from benchmark and compatibility results and retain the one-worker setting for troubleshooting. Save the final timing table and exact reproduction steps in `PROGRESS.md`.
 
+## Worker sweep and I/O profile at checkpoint 349
+
+Eight clean command-line Surge builds used an instrumented release copy of checkpoint 348, serial packaging, fresh output on `X:`, and the usual Windows filesystem cache. Worker counts ran in order 4, 8, 2, 1, 1, 2, 8, 4. Timings exclude linked checks and SHA-256 verification. All eight passed both checks and matched all 1,358 reference files. The latest two builds were retained, along with the timing reports and phase logs for every run.
+
+| Workers | Median full build (range) | Median static | Median global | Median Misc BIG |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 16.78 s (16.70–16.87) | 9.64 s | 1.75 s | 3.91 s |
+| 2 | 13.85 s (13.60–14.09) | 6.96 s | 1.36 s | 3.79 s |
+| 4 | 11.76 s (11.48–12.05) | 5.59 s | 1.12 s | 3.51 s |
+| 8 | 11.97 s (11.54–12.41) | 5.41 s | 0.97 s | 3.95 s |
+
+At four workers, static traversal took 4.11 s, including 0.69 s waiting for encoder results, 0.32 s reading XML, and 0.75 s parsing XML during traversal. Schema loading took 0.24 s, final linking took about 0.02 s, and publishing static output took 1.14 s. Eight workers cut the median encoder wait to 0.30 s. The two full-build ranges overlap, so these runs give no reason to change the four-worker default.
+
+At four workers, writing the 1.09 GB Misc archive took 2.37 s inside buffered writes, and the full archive save took 3.22 s including other I/O and close. Reading the inputs took 0.17 s and enumeration took 0.01 s. The next static profile should separate the serial encoder work, include resolution, and XML transformations still combined in traversal. Future clean-build packaging changes should focus on write throughput and preserve byte parity.
+
 ## Acceptance and checkpoint policy
 
 - Use new output directories with identical source inputs for comparisons. Run the baseline and candidate on the same PC and drive. Report which stages, settings, and tools the timing covers.
