@@ -725,6 +725,7 @@ impl Compiler<'_> {
             | "UnitTypeIcon"
             | "SpecialPowerTemplate"
             | "WeaponTemplate"
+            | "ArmorTemplate"
             | "ExperienceLevelTemplate"
             | "FontDefaultSetting"
             | "FontSubstitution"

@@ -1768,6 +1768,58 @@ fn static_asset_duplicate_precedence_matches_ea() {
 }
 
 #[test]
+fn armor_inheritance_preserves_base_entries_and_overrides_scalars() {
+    let root = scratch_root();
+    let schemas = root.join("Schemas/xsd");
+    fs::create_dir_all(&schemas).unwrap();
+    fs::write(
+        schemas.join("CnC3Types.xsd"),
+        include_str!("../schemas/ra3/xsd/AssetTypeArmorTemplate.xsd").replace(
+            "</xs:schema>",
+            r#"<xs:complexType name="BaseInheritableAsset"/></xs:schema>"#,
+        ),
+    )
+    .unwrap();
+    let compile = |declarations| {
+        let input = root.join("armor.xml");
+        fs::write(
+            &input,
+            format!(
+                r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">{declarations}</AssetDeclaration>"#
+            ),
+        )
+        .unwrap();
+        compile_static(&input, &root, &root).unwrap()
+    };
+    let inherited = compile(
+        r#"<ArmorTemplate id="BaseArmor" Default="50%" DamageScalar="20%">
+              <Armor Damage="GUN" Percent="25%"/>
+           </ArmorTemplate>
+           <ArmorTemplate id="ChildArmor" inheritFrom="BaseArmor" DamageScalar="80%">
+              <Armor Damage="GUN" Percent="90%"/>
+           </ArmorTemplate>"#,
+    );
+    let explicit = compile(
+        r#"<ArmorTemplate id="ChildArmor" Default="50%" DamageScalar="80%">
+              <Armor Damage="GUN" Percent="25%"/>
+              <Armor Damage="GUN" Percent="90%"/>
+           </ArmorTemplate>"#,
+    );
+    let manifest = Manifest::parse(&inherited.manifest).unwrap();
+    assert_eq!(manifest.assets[0].name, b"ArmorTemplate:BaseArmor");
+    assert_eq!(manifest.assets[1].name, b"ArmorTemplate:ChildArmor");
+    let base = manifest.assets[0].chunk_sizes;
+    assert_eq!(
+        inherited.files.bin[4 + base.instance as usize..],
+        explicit.files.bin[4..]
+    );
+    assert_eq!(
+        inherited.files.relo[4 + base.relocations as usize..],
+        explicit.files.relo[4..]
+    );
+}
+
+#[test]
 fn inherited_upgrade_payload_matches_ea() {
     let root = scratch_root();
     let schemas = root.join("Schemas/xsd");
