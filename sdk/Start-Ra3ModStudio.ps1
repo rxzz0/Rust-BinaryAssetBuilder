@@ -441,8 +441,194 @@ if ($source -ceq $beforeWorkerDefault) {
     throw 'Could not configure the Rust workers in the ModStudio script.'
 }
 
+
+$beforeParallelBig = $source
+$parallelBig = @'
+
+        private string bigStage;
+        private System.Diagnostics.Process miscBig;
+
+        private System.Diagnostics.Process StartBig(string input, string name)
+        {
+            if (bigStage == null)
+            {
+                string stage = Path.Combine(ModInstallPath, ".rust-big-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(stage);
+                bigStage = stage;
+            }
+            System.Diagnostics.ProcessStartInfo start = new System.Diagnostics.ProcessStartInfo(
+                RUST_EXE, String.Format("pack-big \"{0}\" --output \"{1}\" --reuse \"{2}\"",
+                    input, Path.Combine(bigStage, name), Path.Combine(ModInstallPath, name)));
+            start.UseShellExecute = false;
+            start.CreateNoWindow = true;
+            start.RedirectStandardError = true;
+            return System.Diagnostics.Process.Start(start);
+        }
+
+        private static void WaitForBig(System.Diagnostics.Process process)
+        {
+            string error = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            if (process.ExitCode != 0)
+                throw new IOException(error.Trim());
+        }
+
+        private void StopBigBuild()
+        {
+            try
+            {
+                if (miscBig != null)
+                {
+                    using (miscBig)
+                    {
+                        if (!miscBig.HasExited)
+                        {
+                            try { miscBig.Kill(); }
+                            catch (InvalidOperationException)
+                            {
+                                if (!miscBig.HasExited) throw;
+                            }
+                        }
+                        miscBig.WaitForExit();
+                    }
+                }
+                if (bigStage != null)
+                {
+                    foreach (string path in Directory.GetFiles(bigStage))
+                        File.Delete(path);
+                    Directory.Delete(bigStage);
+                }
+            }
+            catch (Exception error)
+            {
+                BuildHelper.DisplayLine("Warning: BIG build cleanup failed. " + error.Message);
+            }
+            finally
+            {
+                miscBig = null;
+                bigStage = null;
+            }
+        }
+
+        private static bool OverlapMiscBigs()
+        {
+            return Environment.GetEnvironmentVariable("BAB_OVERLAP_MISC") == "1";
+        }
+
+        private void StartMiscBig()
+        {
+            if (!Directory.Exists(ModAdditionalFilesPath))
+                return;
+            try
+            {
+                miscBig = StartBig(ModAdditionalFilesPath, ModBigMisc);
+            }
+            catch (Exception error)
+            {
+                BuildHelper.DisplayLine("Warning: Could not start Misc BIG early. " + error.Message);
+                StopBigBuild();
+            }
+        }
+
+        private void PublishBigs()
+        {
+            List<string> moved = new List<string>();
+            try
+            {
+                foreach (string name in new string[] { ModBigStreams, ModBigMisc })
+                {
+                    string staged = Path.Combine(bigStage, name);
+                    if (!File.Exists(staged))
+                        continue;
+                    string target = Path.Combine(ModInstallPath, name);
+                    if (File.Exists(target))
+                        File.Replace(staged, target, staged + ".previous");
+                    else
+                        File.Move(staged, target);
+                    moved.Add(name);
+                }
+            }
+            catch
+            {
+                try
+                {
+                    for (int i = moved.Count - 1; i >= 0; --i)
+                    {
+                        string name = moved[i];
+                        string target = Path.Combine(ModInstallPath, name);
+                        string backup = Path.Combine(bigStage, name) + ".previous";
+                        if (File.Exists(backup))
+                            File.Replace(backup, target, null);
+                        else
+                            File.Delete(target);
+                    }
+                }
+                catch (Exception error)
+                {
+                    string recovery = bigStage;
+                    bigStage = null;
+                    throw new IOException("BIG rollback failed. Recovery files are in " + recovery, error);
+                }
+                throw;
+            }
+        }
+
+        private void FinishBigBuild()
+        {
+            bool success = false;
+            try
+            {
+                if (Directory.Exists(BuiltModPath))
+                {
+                    using (System.Diagnostics.Process streams = StartBig(BuiltModPath, ModBigStreams))
+                        WaitForBig(streams);
+                }
+                if (miscBig == null && Directory.Exists(ModAdditionalFilesPath))
+                    miscBig = StartBig(ModAdditionalFilesPath, ModBigMisc);
+                if (miscBig != null)
+                    WaitForBig(miscBig);
+                if (bigStage != null)
+                    PublishBigs();
+                success = true;
+            }
+            catch (Exception error)
+            {
+                BuildHelper.DisplayLine("Critical: Creating BIG files failed. " + error.Message);
+            }
+            finally
+            {
+                StopBigBuild();
+            }
+            RunExecutableArguments result = new RunExecutableArguments(Cmd);
+            result.Arguments = success ? "/C exit /b 0" : "/C echo Critical: Creating BIG files failed. & exit /b 1";
+            BuildHelper.RunStep(StepType.RunExecutable, result);
+        }
+'@
+$parallelBig = ($parallelBig.Replace('RUST_EXE', $rustExpression) -split '\r?\n') -join $lineEnding
+$helperAnchor = '        ' + $rustHelper
+$startBuild = 'executeModBuildStep(BuildHelper.GetNextExecutableStep());'
+$failure = [regex]::new('(?m)^([ \t]*public void onStepFailure\(int stepId\)\r?\n[ \t]*\{\r?\n)')
+$nativeBig = [regex]::new('(?ms)^([\t ]*case 10:\r?\n[\t ]*BuildHelper\.DisplayLine\([^\r\n]*Creating BIG files with Rust[^\r\n]*\r?\n).*?(?=^[\t ]*case 11:)')
+if ($nativeBig.Matches($source).Count -ne 1 -or $failure.Matches($source).Count -ne 1 -or
+    !$source.Contains($helperAnchor) -or !$source.Contains($startBuild)) {
+    throw 'Could not configure parallel BIG packaging in the ModStudio script.'
+}
+$source = $source.Replace($helperAnchor, $parallelBig + $lineEnding + $lineEnding + $helperAnchor)
+$source = $source.Replace($startBuild, 'StopBigBuild();' + $lineEnding +
+    '            if (!UseEaCompiler() && shouldExecuteStep(10) && OverlapMiscBigs())' + $lineEnding +
+    '                StartMiscBig();' + $lineEnding +
+    '            ' + $startBuild)
+$source = $failure.Replace($source, '$1' + '            StopBigBuild();' + $lineEnding)
+$source = $nativeBig.Replace($source, [System.Text.RegularExpressions.MatchEvaluator]{
+    param($match)
+    $header = $match.Groups[1].Value
+    $header + '                    if (OverlapMiscBigs()) { FinishBigBuild(); break; }' +
+        $lineEnding + $match.Value.Substring($header.Length)
+})
+
+
 if ($InstallDefault) {
-    $knownSources = @($source, $beforeWorkerDefault, $beforeOptionMove, $warningSource, $beforeWarningOption, $mapsSource, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
+    $knownSources = @($source, $beforeParallelBig, $beforeWorkerDefault, $beforeOptionMove, $warningSource, $beforeWarningOption, $mapsSource, $preMapsSource, $legacySource, $fixSource, $nativeSource, $packSource, $hybridSource, $aptUiSource, $staticCheckSource)
     $knownSources += @($knownSources | ForEach-Object { $_.Replace(' --allow-missing-references 2>&1', ' 2>&1') })
     if ($hasRustCheck -and $knownSources -cnotcontains $currentSource) {
         throw "The installed Rust check script has been edited. Review $sourcePath before reinstalling."

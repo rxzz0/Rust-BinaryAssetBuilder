@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use binary_asset_builder::big::pack_big;
+use binary_asset_builder::big::stage_big;
 use binary_asset_builder::compile::{
     CompiledStream, compile_apt_ui, compile_apt_ui_directory, compile_map, compile_sdk_global,
     compile_sdk_maps, compile_sdk_static, compile_static, merge_assets, sdk_coverage,
@@ -27,7 +27,7 @@ Usage
   binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory>
   binary-asset-builder merge-assets <file.manifest> --assets <directory>
   binary-asset-builder fix-assets <mod.manifest> --references <builtmods-directory> [--allow-missing-references]
-  binary-asset-builder pack-big <directory> --output <file.big>
+  binary-asset-builder pack-big <directory> --output <file.big> [--reuse <previous.big>]
   binary-asset-builder relink <file.manifest> --assets <directory> --output <new-directory>
   binary-asset-builder sdk-coverage <schema-directory>
   binary-asset-builder verify-ea-batch <file.xml> <ea.manifest> <ea-assets-directory>
@@ -96,9 +96,15 @@ fn main() -> ExitCode {
                 }
             }
         }
-        [command, input, flag, output] if command == "pack-big" && flag == "--output" => {
+        [command, input, flag, output, options @ ..]
+            if command == "pack-big"
+                && flag == "--output"
+                && (options.is_empty()
+                    || matches!(options, [option, _] if option == "--reuse")) =>
+        {
+            let previous = options.get(1).unwrap_or(output);
             let start = std::time::Instant::now();
-            match pack_big(Path::new(input), Path::new(output)) {
+            match stage_big(Path::new(input), Path::new(output), Path::new(previous)) {
                 Ok(result) => {
                     let action = if result.reused {
                         "Verified existing BIG with"
