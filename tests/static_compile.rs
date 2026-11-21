@@ -89,6 +89,24 @@ fn ai_inheritance_applies_remove_and_replace_to_named_states() {
 }
 
 #[test]
+fn ui_config_asset_id_matches_ea() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ui-config");
+    let stream = compile_static(&root.join("ui-asset-id.xml"), &root, &root).unwrap();
+    assert_eq!(
+        &stream.files.bin[4..],
+        &include_bytes!("fixtures/ui-config/ui-asset-id.bin")[4..]
+    );
+    assert_eq!(
+        &stream.files.relo[4..],
+        &include_bytes!("fixtures/ui-config/ui-asset-id.relo")[4..]
+    );
+    assert_eq!(
+        &stream.files.imp[4..],
+        &include_bytes!("fixtures/ui-config/ui-asset-id.imp")[4..]
+    );
+}
+
+#[test]
 fn embedded_dds_texture_matches_ea_payload_and_relocations() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/on-demand-texture");
     let stream = compile_static(&root.join("texture-probe.xml"), &root, &root).unwrap();

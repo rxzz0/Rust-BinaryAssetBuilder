@@ -200,6 +200,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "WaterTransparency" => (0x1f59_09eb, 90, stock_environment::water_transparency),
         "WaterSetting" => (0x1bfa_d724, 89, stock_environment::water_setting),
         "Weather" => (0xe23e_b9d9, 92, stock_environment::weather),
+        "UIConfigList" => (0xe599_789d, 93, stock_content::ui_config_list),
         "EngagingContent" => (0x2b3b_15e0, 85, stock_content::engaging_content),
         "EngagingContentGroup" => (0x59e0_ac87, 86, stock_content::engaging_group),
         "EngagingContentSequence" => (0x0d81_f33d, 87, stock_content::engaging_sequence),

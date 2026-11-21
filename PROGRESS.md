@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 363 completes native GlobalData coverage with UIConfigList and enables schema inheritance for five more types. All 72 stock XML files compiled. The stock UI payload, relocations, imports, and 87 references matched EA. The source-derived instance hash differs. Twelve inheritance fixtures matched EA. All 309 tests and strict Clippy passed. Next, verify the rebuilt GlobalData in-game.
 - Checkpoint 362 adds 19 native GlobalData encoders and ObjectCreationList inheritance. Verified against EA fixtures including all 263 ObjectCreationList assets with equivalent literal velocity values. EA evaluates 19 stock velocity expressions differently on this machine. All 308 tests and strict Clippy passed. Next, implement UIConfigList and rerun all 72 audited files.
 - Checkpoint 361 reports skipped missing source includes as nonfatal errors, matching the EA SampleMod log. Hide Rust warnings leaves errors visible. All 308 tests and Clippy passed. Keep X:\BaseSDK read-only for all future work. Use a separate writable copy for builds and installer tests. Next, verify the labels in ModStudio.
 - Checkpoint 360 installs over read-only SDK scripts and compiler files. Verified installer backup, repeat installation, and the refreshed tester package with a read-only stock script. Next, install the refreshed package on BaseSDK.
