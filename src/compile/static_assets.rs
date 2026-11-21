@@ -172,6 +172,9 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "W3DMesh" => (0xcd8a_089c, 35, w3d_mesh::compile),
         "W3DContainer" => (0x619d_a33f, 36, w3d_mesh::container),
         "AmbientStream" => (0x6d16_24fb, 37, audio::single_sound),
+        "MP3AmbientStream" => (0x1f53_3dca, 63, audio::single_sound),
+        "MP3MusicTrack" => (0x7f9f_abc5, 62, audio::single_sound),
+        "MP3DialogEvent" => (0x7850_dbf8, 61, audio::single_sound),
         "AudioEvent" => (0x560c_2e45, 38, audio::single_sound),
         "MusicTrack" => (0x07c5_0662, 59, audio::single_sound),
         "DialogEvent" => (0xd21e_8bf8, 60, audio::single_sound),
@@ -220,6 +223,7 @@ pub(super) fn has_encoder(type_name: &str) -> bool {
                 | "PathMusicMap"
                 | "PathMusicTrack"
                 | "AudioFile"
+                | "AudioFileMP3Passthrough"
                 | "OnDemandTexture"
                 | "Texture"
                 | "TerrainTextureAtlas"

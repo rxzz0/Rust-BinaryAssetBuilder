@@ -314,6 +314,9 @@ impl AssetReference {
                 "AmbientStream",
                 "DialogEvent",
                 "MusicTrack",
+                "MP3AmbientStream",
+                "MP3DialogEvent",
+                "MP3MusicTrack",
             ],
             (kind, _) if kind == *TARGETING_COMPARE_TYPE => targeting_compare::TYPES,
             (kind, _) if kind == *SUBSYSTEM_SETTINGS_TYPE => subsystem_settings::TYPES,
@@ -700,6 +703,12 @@ impl Compiler<'_> {
                 if self.ids.contains(&id) {
                     continue;
                 }
+                // A stock manifest already supplies this instance for SDK builds.
+                if self.reference_mode == ReferenceMode::SdkStatic
+                    && self.external_ids.contains(&id)
+                {
+                    continue;
+                }
                 let Some(candidates) = self.tentative.get(&id) else {
                     continue;
                 };
@@ -748,6 +757,7 @@ impl Compiler<'_> {
         let node = cleaned_node(node, document.as_ref());
         match node.tag_name().name() {
             "AudioFile" => self.compile_audio_file(node, path, source),
+            "AudioFileMP3Passthrough" => self.compile_mp3_passthrough(node, path, source),
             "OnDemandTexture" | "Texture" => self.compile_texture(node, path, source),
             "PathMusicEvent" | "PathMusicMap" | "PathMusicTrack" => {
                 self.compile_music(node, path, source)
@@ -912,16 +922,24 @@ impl Compiler<'_> {
             .ok_or_else(|| invalid(document, "manifest reference path must be ASCII"))?
             .replace('/', "\\")
             .to_ascii_lowercase();
-        if self.reference_mode == ReferenceMode::Map
-            && let Some(file @ ("static.manifest" | "global.manifest" | "audio.manifest")) =
-                name.strip_prefix("sagexml\\")
+        let directory = self.reference_directory.unwrap();
+        let mut relative = relative;
+        if let Some(file @ ("static.manifest" | "global.manifest" | "audio.manifest")) =
+            name.strip_prefix("sagexml\\")
         {
-            name = file.to_owned();
+            if self.reference_mode == ReferenceMode::Map {
+                name = file.to_owned();
+            } else if self.reference_mode == ReferenceMode::SdkStatic
+                && !directory.join(&relative).is_file()
+            {
+                // The SDK source may live under SageXml while bootstrapped catalogs live at the root.
+                relative = PathBuf::from(file);
+                name = file.to_owned();
+            }
         }
         if self.referenced_manifests.contains(&name) {
             return Ok(());
         }
-        let directory = self.reference_directory.unwrap();
         let path = if self.reference_mode == ReferenceMode::SdkStatic {
             sdk_manifest_path(directory, &relative, &name)
         } else {

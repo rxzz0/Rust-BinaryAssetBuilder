@@ -53,6 +53,10 @@ pub(super) fn single_sound(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
         .collect();
     validate_attributes(node, &allowed, path)?;
     let event = node.has_tag_name((SAGE_NS, "AudioEvent"));
+    let filename_type = match node.tag_name().name() {
+        "MP3AmbientStream" | "MP3DialogEvent" | "MP3MusicTrack" => "AudioFileMP3Passthrough",
+        _ => "AudioFile",
+    };
     let mut data = BinaryData {
         payload: vec![0; if event { 0x98 } else { 0x84 }],
         relocations: Vec::new(),
@@ -148,7 +152,7 @@ pub(super) fn single_sound(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
     if let Some(filename) = filename {
         let filename = super::text_value(filename, path)?;
         let offset = data.allocate(0x80, 4)?;
-        audio_file(filename, offset, &mut data, &mut result)?;
+        audio_file(filename, filename_type, offset, &mut data, &mut result)?;
     }
     for (index, list) in lists.into_iter().enumerate() {
         if list.is_empty() {
@@ -166,7 +170,7 @@ pub(super) fn single_sound(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
                 return Err(invalid(path, "expected audio file reference text"));
             };
             let offset = first + index * 12;
-            audio_file(filename, offset, &mut data, &mut result)?;
+            audio_file(filename, filename_type, offset, &mut data, &mut result)?;
             let weight = item
                 .attribute("Weight")
                 .unwrap_or("1000")
@@ -355,12 +359,13 @@ pub(super) fn multisound(node: Node<'_, '_>, path: &Path) -> io::Result<Marshale
 
 fn audio_file(
     value: &str,
+    filename_type: &str,
     offset: usize,
     data: &mut BinaryData<'_>,
     result: &mut Marshaled,
 ) -> io::Result<()> {
     let value = value.split_once('\\').map_or(value, |(name, _)| name);
-    let id = asset_reference(value, "AudioFile", data.path)?;
+    let id = asset_reference(value, filename_type, data.path)?;
     result.imports.push(offset as u32);
     result.reference_types.push(id.type_id);
     result.references.push(id.into());

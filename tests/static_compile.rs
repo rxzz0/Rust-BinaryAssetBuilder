@@ -424,6 +424,95 @@ fn sdk_static_treats_missing_source_includes_as_empty() {
 }
 
 #[test]
+fn sdk_static_reuses_stock_assets_also_present_in_instance_includes() {
+    let root = scratch_root();
+    let data = root.join("Mods/Example/Data");
+    let built = root.join("BuiltMods");
+    fs::create_dir_all(&data).unwrap();
+    fs::create_dir_all(&built).unwrap();
+    fs::create_dir(root.join("SageXml")).unwrap();
+    let stock_xml = root.join("SageXml/Static.xml");
+    fs::write(
+        &stock_xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <LogicCommand id="StockCommand" Type="STOP"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stock = compile_static(&stock_xml, &root, &built).unwrap();
+    let stock_manifest = Manifest::parse(&stock.manifest).unwrap();
+    fs::write(built.join("static.manifest"), &stock.manifest).unwrap();
+    let input = data.join("Mod.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes>
+                <Include type="instance" source="DATA:Static.xml"/>
+                <Include type="reference" source="DATA:Static.xml"/>
+            </Includes>
+            <LogicCommandSet id="Commands"><Cmd>StockCommand</Cmd></LogicCommandSet>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let bytes = fs::read(built.join("mods/example/data/mod.manifest")).unwrap();
+    let compiled = Manifest::parse(&bytes).unwrap();
+    let [commands] = compiled.assets.as_slice() else {
+        panic!("expected only the local command set");
+    };
+    assert_eq!(commands.name, b"LogicCommandSet:Commands");
+    assert_eq!(
+        commands.references.iter().collect::<Vec<_>>(),
+        [stock_manifest.assets[0].id]
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn sdk_static_copies_mp3_sidecars_and_links_music_tracks() {
+    let root = scratch_root();
+    let data = root.join("Mods/Example/Data");
+    let built = root.join("BuiltMods");
+    fs::create_dir_all(&data).unwrap();
+    let input = data.join("Mod.xml");
+    let mut mp3 = [0; 417];
+    mp3[..4].copy_from_slice(&[0xff, 0xfb, 0x90, 0x64]);
+    fs::write(data.join("Example.mp3"), mp3).unwrap();
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <MP3MusicTrack id="Track"><Filename>Song</Filename></MP3MusicTrack>
+            <AudioFileMP3Passthrough id="Song" File="Example.mp3" IsStreamed="false"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let output = built.join("mods/example/data");
+    let bytes = fs::read(output.join("mod.manifest")).unwrap();
+    let compiled = Manifest::parse(&bytes).unwrap();
+    let [audio, track] = compiled.assets.as_slice() else {
+        panic!("expected the MP3 file and track");
+    };
+    assert_eq!(audio.type_hash, 0x927b_908a);
+    assert_eq!(track.references.iter().collect::<Vec<_>>(), [audio.id]);
+    let sidecar = format!(
+        "{:08x}.{:08x}.{:08x}.{:08x}.cdata",
+        audio.id.type_id, audio.type_hash, audio.id.instance_id, audio.instance_hash
+    );
+    assert_eq!(
+        fs::read(output.join("mod/cdata").join(sidecar)).unwrap(),
+        mp3
+    );
+    assert_eq!(
+        &fs::read(output.join("mod.bin")).unwrap()[16..20],
+        &[2, 0, 0, 0]
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_warns_with_strong_and_weak_asset_names_without_changing_streams() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data");

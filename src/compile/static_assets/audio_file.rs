@@ -5,7 +5,7 @@ use crate::compile::{
     memory_stream_hash, required,
 };
 use roxmltree::Node;
-use std::io;
+use std::io::{self, Read, Seek, SeekFrom};
 use std::path::Path;
 
 mod xas;
@@ -22,6 +22,64 @@ pub(in crate::compile) struct AudioFileInput {
 }
 
 impl Compiler<'_> {
+    pub(in crate::compile) fn compile_mp3_passthrough(
+        &self,
+        node: Node<'_, '_>,
+        path: &Path,
+        source: &str,
+    ) -> io::Result<CompiledAsset> {
+        let (name, id) = declaration_id(node, path)?;
+        validate_attributes(
+            node,
+            &["id", "File", "SubtitleStringName", "IsStreamed"],
+            path,
+        )?;
+        if has_content(node) {
+            return Err(invalid(path, "unexpected AudioFileMP3Passthrough content"));
+        }
+        let file = self.resolve(path, required(node, "File", path)?)?;
+        let streamed = match node.attribute("IsStreamed").unwrap_or("true").trim() {
+            "true" | "1" => true,
+            "false" | "0" => false,
+            _ => return Err(invalid(path, "invalid IsStreamed")),
+        };
+        validate_mp3(&file)?;
+        let file_hash = hash_source_file(&file, &mut io::sink())?;
+        let file_stem = file
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .ok_or_else(|| invalid(&file, "invalid MP3 file name"))?;
+        let default_subtitle = format!("DIALOGEVENT:{}SubTitle", file_stem.to_ascii_lowercase());
+        let mut data = BinaryData {
+            payload: vec![0; 0x10],
+            relocations: Vec::new(),
+            path,
+        };
+        data.string(
+            4,
+            node.attribute("SubtitleStringName")
+                .unwrap_or(&default_subtitle),
+        )?;
+        data.payload[0xc] = 2;
+        data.payload[0xd] = u8::from(streamed);
+        data.relocations.push(u32::MAX);
+        Ok(CompiledAsset {
+            id,
+            type_hash: 0x927b_908a,
+            instance_hash: hash_xml(node, 0xa83e_0799, path)?
+                ^ memory_stream_hash(file_hash.to_le_bytes().to_vec()),
+            name: format!("AudioFileMP3Passthrough:{name}"),
+            source: source.to_owned(),
+            payload: data.payload,
+            relocations: encode_words(data.relocations),
+            imports: Vec::new(),
+            references: Vec::new(),
+            weak_references: Vec::new(),
+            custom_data: Some(CustomData::Source(file, file_hash)),
+            tokenized: false,
+            sort_order: 39,
+        })
+    }
     pub(in crate::compile) fn compile_audio_file(
         &self,
         node: Node<'_, '_>,
@@ -171,6 +229,43 @@ impl AudioFileInput {
             sort_order: 39,
         })
     }
+}
+
+fn validate_mp3(path: &Path) -> io::Result<()> {
+    let mut file = std::fs::File::open(path)?;
+    let mut header = [0; 4];
+    let read_header = |file: &mut std::fs::File, bytes: &mut [u8]| {
+        file.read_exact(bytes).map_err(|err| {
+            if err.kind() == io::ErrorKind::UnexpectedEof {
+                invalid(path, "expected MPEG Layer III audio")
+            } else {
+                err
+            }
+        })
+    };
+    read_header(&mut file, &mut header)?;
+    if &header[..3] == b"ID3" {
+        let mut tag = [0; 6];
+        read_header(&mut file, &mut tag)?;
+        if tag[2..].iter().any(|&byte| byte >= 128) {
+            return Err(invalid(path, "invalid ID3 tag size"));
+        }
+        let size = tag[2..]
+            .iter()
+            .fold(0u64, |size, &byte| (size << 7) | u64::from(byte));
+        let footer_size = if tag[1] & 0x10 != 0 { 10 } else { 0 };
+        file.seek(SeekFrom::Current((size + footer_size) as i64))?;
+        read_header(&mut file, &mut header)?;
+    }
+    if header[0] != 0xff
+        || header[1] & 0xe6 != 0xe2
+        || header[1] & 0x18 == 0x08
+        || header[2] >> 4 == 0xf
+        || header[2] & 0x0c == 0x0c
+    {
+        return Err(invalid(path, "expected MPEG Layer III audio"));
+    }
+    Ok(())
 }
 
 struct Wave<'a> {
