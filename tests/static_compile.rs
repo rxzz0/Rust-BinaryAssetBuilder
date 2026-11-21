@@ -372,6 +372,58 @@ fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
 }
 
 #[test]
+fn sdk_static_treats_missing_source_includes_as_empty() {
+    let root = scratch_root();
+    let data = root.join("Mods/Example/Data");
+    let built = root.join("BuiltMods");
+    fs::create_dir_all(&data).unwrap();
+    let input = data.join("Mod.xml");
+    let xml = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <Includes>
+            <Include type="all" source="ART:Missing.w3x"/>
+            <Include type="instance" source="MissingInstance.xml"/>
+        </Includes>
+        <Video id="example" Filename="example"/>
+    </AssetDeclaration>"#;
+    fs::write(&input, xml).unwrap();
+
+    let result = std::process::Command::new(env!("CARGO_BIN_EXE_binary-asset-builder"))
+        .args(["compile-static-sdk"])
+        .arg(&input)
+        .arg("--sdk-root")
+        .arg(&root)
+        .arg("--output")
+        .arg(&built)
+        .env_remove("BAB_NO_WARNINGS")
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8(result.stderr).unwrap();
+    assert!(result.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("Warning: Input file 'ART:Missing.w3x' not found"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("Warning: Input file 'MissingInstance.xml' not found"),
+        "{stderr}"
+    );
+    let bytes = fs::read(built.join("mods/example/data/mod.manifest")).unwrap();
+    assert_eq!(
+        Manifest::parse(&bytes).unwrap().assets[0].name,
+        b"Video:example"
+    );
+
+    fs::write(&input, xml.replace("type=\"all\"", "type=\"reference\"")).unwrap();
+    assert_eq!(
+        compile_sdk_static(&input, &root, &built)
+            .unwrap_err()
+            .kind(),
+        std::io::ErrorKind::NotFound
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_warns_with_strong_and_weak_asset_names_without_changing_streams() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data");

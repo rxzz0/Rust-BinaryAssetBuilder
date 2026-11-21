@@ -263,7 +263,7 @@ fn triangle_mip(pixels: &[Pixel], width: usize, height: usize, scale: usize) -> 
     output
 }
 
-fn encode_bc3(pixels: &[Pixel; 16]) -> [u8; 16] {
+pub(super) fn encode_bc3(pixels: &[Pixel; 16]) -> [u8; 16] {
     if pixels[1..].iter().all(|pixel| *pixel == pixels[0]) {
         let mut block = [0; 16];
         block[0] = pixels[0][3];

@@ -626,10 +626,24 @@ impl Compiler<'_> {
                 }
                 _ => return Err(invalid(path, format!("unsupported include type {kind:?}"))),
             };
-            let target = self.resolve(path, source)?;
             let art_include = source
                 .split_once(':')
-                .is_some_and(|(alias, _)| alias.eq_ignore_ascii_case("art"));
+                .is_some_and(|(alias, _)| alias.trim_start().eq_ignore_ascii_case("art"));
+            let target = match self.resolve(path, source) {
+                Err(error)
+                    if error.kind() == io::ErrorKind::NotFound
+                        && self.reference_mode == ReferenceMode::SdkStatic
+                        && matches!(kind, "all" | "instance") =>
+                {
+                    warning(format_args!(
+                        "Input file '{}' not found (referenced from '{}'). Treating it as empty.",
+                        source,
+                        path.display()
+                    ));
+                    continue;
+                }
+                result => result?,
+            };
             self.read_document(&target, included_tentative, art_include)?;
             if let Some(included) = self.definitions.get(&target) {
                 merge_definitions(definitions, included, path)?;
