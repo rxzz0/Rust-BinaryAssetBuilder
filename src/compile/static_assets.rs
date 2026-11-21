@@ -52,6 +52,10 @@ mod player_power_button;
 mod player_template;
 mod road;
 mod stance_template;
+mod stock_common;
+mod stock_content;
+mod stock_environment;
+mod stock_settings;
 pub(super) mod subsystem_settings;
 mod surface_mappings;
 mod system_settings;
@@ -185,6 +189,25 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "DamageFX" => (0x0b2e_b0ab, 42, damage_fx::compile),
         "EmotionTemplate" => (0x40da_32d1, 54, emotion::compile),
         "ObjectCreationList" => (0x2273_a9d1, 55, object_creation::compile),
+        "Language" => (0xbfff_81d6, 83, stock_common::language),
+        "MeshInstanceTemplate" => (0x7538_2abd, 83, stock_settings::mesh),
+        "Mouse" => (0x4a53_5d4b, 83, stock_settings::mouse),
+        "MultiplayerSettings" => (0x9c2b_6e7e, 83, stock_settings::multiplayer),
+        "UnitOverlayIconSettings" => (0xe812_807f, 84, stock_settings::unit_overlay),
+        "RedAlertTemplate" => (0x07f5_b4d2, 84, stock_settings::red_alert),
+        "Environment" => (0x4c11_a8fe, 91, stock_environment::environment),
+        "ShadowMap" => (0x35df_b9f9, 88, stock_environment::shadow_map),
+        "WaterTransparency" => (0x1f59_09eb, 90, stock_environment::water_transparency),
+        "WaterSetting" => (0x1bfa_d724, 89, stock_environment::water_setting),
+        "Weather" => (0xe23e_b9d9, 92, stock_environment::weather),
+        "EngagingContent" => (0x2b3b_15e0, 85, stock_content::engaging_content),
+        "EngagingContentGroup" => (0x59e0_ac87, 86, stock_content::engaging_group),
+        "EngagingContentSequence" => (0x0d81_f33d, 87, stock_content::engaging_sequence),
+        "TutorialMapData" => (0x9585_118a, 83, stock_content::tutorial_map_data),
+        "OnlineChatColors" => (0x522e_06c9, 83, stock_common::online_chat_colors),
+        "ProjectilePath" => (0x38ee_1c79, 83, stock_common::projectile_path),
+        "RegisteredObjectSet" => (0x0e02_4000, 83, stock_common::registered_object_set),
+        "TheVersion" => (0xa5df_846f, 83, stock_common::version),
         "ObjectFilterAsset" => (0x4352_195e, 43, game_object::object_filter_asset),
         "PlayerTemplate" => (0x3521_4948, 50, player_template::compile),
         "PlayerTech" => (0x35dd_9987, 44, player_tech),
