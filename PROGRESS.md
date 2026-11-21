@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 361 reports skipped missing source includes as nonfatal errors, matching the EA SampleMod log. Hide Rust warnings leaves errors visible. All 308 tests and Clippy passed. Keep X:\BaseSDK read-only for all future work. Use a separate writable copy for builds and installer tests. Next, verify the labels in ModStudio.
 - Checkpoint 360 installs over read-only SDK scripts and compiler files. Verified installer backup, repeat installation, and the refreshed tester package with a read-only stock script. Next, install the refreshed package on BaseSDK.
 - Checkpoint 359 adds native MP3 assets, reuses referenced SDK instances, and finds bootstrapped manifests when stock XML lives under SageXml. In an isolated SDK with empty BuiltMods and no GBDugOut.w3x, SampleMod passed AptUI, static compilation, Fix Assets for 197 assets, and linked checks. All eight MP3 assets and four sidecars matched EA. All 308 tests and strict Clippy passed. Next, retest SampleMod in ModStudio on the VM.
 - Checkpoint 358 treats missing SDK static source includes as empty, matching EA, and converts the stock sample TGA textures in Rust. The DXT1 output decodes and matches EA's DDS header and size. All 306 tests and strict Clippy passed. Next, support the sample's MP3 assets.

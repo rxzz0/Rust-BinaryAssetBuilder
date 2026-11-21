@@ -638,11 +638,12 @@ impl Compiler<'_> {
                         && self.reference_mode == ReferenceMode::SdkStatic
                         && matches!(kind, "all" | "instance") =>
                 {
-                    warning(format_args!(
-                        "Input file '{}' not found (referenced from '{}'). Treating it as empty.",
+                    let diagnostic = format!(
+                        "Error: Input file '{}' not found (referenced from '{}'). Treating it as empty.\n",
                         source,
                         path.display()
-                    ));
+                    );
+                    write_warnings(diagnostic.as_bytes());
                     continue;
                 }
                 result => result?,

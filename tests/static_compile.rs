@@ -394,17 +394,17 @@ fn sdk_static_treats_missing_source_includes_as_empty() {
         .arg(&root)
         .arg("--output")
         .arg(&built)
-        .env_remove("BAB_NO_WARNINGS")
+        .env("BAB_NO_WARNINGS", "1")
         .output()
         .unwrap();
     let stderr = String::from_utf8(result.stderr).unwrap();
     assert!(result.status.success(), "{stderr}");
     assert!(
-        stderr.contains("Warning: Input file 'ART:Missing.w3x' not found"),
+        stderr.contains("Error: Input file 'ART:Missing.w3x' not found"),
         "{stderr}"
     );
     assert!(
-        stderr.contains("Warning: Input file 'MissingInstance.xml' not found"),
+        stderr.contains("Error: Input file 'MissingInstance.xml' not found"),
         "{stderr}"
     );
     let bytes = fs::read(built.join("mods/example/data/mod.manifest")).unwrap();
