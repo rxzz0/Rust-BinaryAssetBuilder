@@ -32,6 +32,33 @@ $script = $versions.Replace($bundledScript, [System.Text.RegularExpressions.Matc
     if ($existing.Count -eq 1) { $existing[0].Value } else { $match.Value }
 })
 
+function Replace-SdkFile([string] $source, [string] $destination, [AllowNull()][string] $backup) {
+    $readOnly = [IO.FileAttributes]::ReadOnly
+    $cleared = @{}
+    try {
+        foreach ($path in @($destination, $backup)) {
+            if (!$path -or ![IO.File]::Exists($path)) { continue }
+            $attributes = [IO.File]::GetAttributes($path)
+            if ($attributes -band $readOnly) {
+                [IO.File]::SetAttributes($path, [IO.FileAttributes]($attributes -band (-bnot [int]$readOnly)))
+                $cleared[$path] = $attributes
+            }
+        }
+        if ($backup) {
+            [IO.File]::Replace($source, $destination, $backup)
+        } else {
+            [IO.File]::Replace($source, $destination, [NullString]::Value)
+        }
+    } catch {
+        foreach ($path in $cleared.Keys) {
+            if ([IO.File]::Exists($path)) {
+                [IO.File]::SetAttributes($path, $cleared[$path])
+            }
+        }
+        throw "Could not replace '$destination'. $($_.Exception.Message)"
+    }
+}
+
 if ($InstallDefault) {
     $backupDir = Join-Path $SdkRoot 'defaultscript'
     [void][IO.Directory]::CreateDirectory($backupDir)
@@ -66,7 +93,7 @@ if ($InstallDefault) {
             if ($changeRust) {
                 [IO.File]::Copy($rustPath, $pendingRust)
                 if ($hadRust) {
-                    [IO.File]::Replace($pendingRust, $installedRust, $previousRust)
+                    Replace-SdkFile $pendingRust $installedRust $previousRust
                 } else {
                     [IO.File]::Move($pendingRust, $installedRust)
                 }
@@ -74,14 +101,14 @@ if ($InstallDefault) {
             }
             if ($currentScript -cne $script) {
                 $backup = if ([IO.File]::Exists($original)) { $previous } else { $original }
-                [IO.File]::Replace($pendingScript, $scriptPath, $backup)
+                Replace-SdkFile $pendingScript $scriptPath $backup
             } elseif (![IO.File]::Exists($original)) {
                 [IO.File]::Copy($scriptPath, $original)
             }
         } catch {
             if ($rustUpdated) {
                 if ($hadRust) {
-                    [IO.File]::Replace($previousRust, $installedRust, [NullString]::Value)
+                    Replace-SdkFile $previousRust $installedRust $null
                 } else {
                     [IO.File]::Delete($installedRust)
                 }
