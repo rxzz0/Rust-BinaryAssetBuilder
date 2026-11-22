@@ -122,16 +122,26 @@ fn compile(
     reference_mode: ReferenceMode,
 ) -> io::Result<CompiledStream> {
     let root = fs::canonicalize(data_root)?;
-    let input = fs::canonicalize(input)?;
-    let mod_root = input.strip_prefix(&root).ok().and_then(|relative| {
-        let mut components = relative.iter();
-        let mods = components.next()?;
-        let name = components.next()?;
-        mods.eq_ignore_ascii_case("mods")
-            .then(|| root.join(mods).join(name))
-    });
+    let resolved_input = fs::canonicalize(input)?;
+    let redirected_apt = if reference_directory.is_none() && !resolved_input.starts_with(&root) {
+        redirected_apt_ui(input, data_root, &resolved_input)
+    } else {
+        None
+    };
+    let mod_root =
+        sdk_relative_path(&resolved_input, &root, redirected_apt.as_ref()).and_then(|relative| {
+            let mut components = relative.iter();
+            let mods = components.next()?;
+            let name = components.next()?;
+            mods.eq_ignore_ascii_case("mods")
+                .then(|| root.join(mods).join(name))
+        });
     let is_map = reference_mode == ReferenceMode::Map;
-    let map_root = if is_map { input.parent() } else { None };
+    let map_root = if is_map {
+        resolved_input.parent()
+    } else {
+        None
+    };
     let paths = |directory, sdk_directory| {
         search_paths(
             &root,
@@ -159,6 +169,7 @@ fn compile(
         audio_paths: paths("Audio", "Audio"),
         map_art_path: map_root.map(|map| map.join("Art")),
         root,
+        redirected_apt,
         visited: HashSet::new(),
         active: HashSet::new(),
         ids: HashSet::new(),
@@ -184,13 +195,60 @@ fn compile(
         external_ids: HashSet::new(),
         worldbuilder_hashes,
     };
-    let traversal = compiler.read_document(&input, false, false);
+    let traversal = compiler.read_document(&resolved_input, false, false);
     while !compiler.pending.is_empty() {
         compiler.commit_pending()?;
     }
     traversal?;
     compiler.add_referenced_instances()?;
     compiler.finish()
+}
+
+struct RedirectedAptUi {
+    sdk_relative: PathBuf,
+    physical: PathBuf,
+}
+
+fn redirected_apt_ui(input: &Path, data_root: &Path, resolved: &Path) -> Option<RedirectedAptUi> {
+    let input = std::path::absolute(input).ok()?;
+    let data_root = std::path::absolute(data_root).ok()?;
+    let relative = input.strip_prefix(&data_root).ok()?;
+    if !relative
+        .components()
+        .all(|part| matches!(part, std::path::Component::Normal(_)))
+    {
+        return None;
+    }
+    let mut parts = relative.iter();
+    let (mods, name, data, apt) = (parts.next()?, parts.next()?, parts.next()?, parts.next()?);
+    if !mods.eq_ignore_ascii_case("Mods")
+        || !data.eq_ignore_ascii_case("Data")
+        || !apt.eq_ignore_ascii_case("AptUI")
+        || parts.next().is_none()
+    {
+        return None;
+    }
+    let sdk_relative = PathBuf::from(mods).join(name).join(data).join(apt);
+    // A directory redirect is allowed for this mod's AptUI tree. Its XML and
+    // asset files must still resolve inside that tree or the canonical SDK.
+    let physical = fs::canonicalize(data_root.join(&sdk_relative)).ok()?;
+    resolved.starts_with(&physical).then_some(RedirectedAptUi {
+        sdk_relative,
+        physical,
+    })
+}
+
+fn sdk_relative_path<'a>(
+    path: &'a Path,
+    root: &Path,
+    redirected_apt: Option<&RedirectedAptUi>,
+) -> Option<Cow<'a, Path>> {
+    if let Ok(relative) = path.strip_prefix(root) {
+        return Some(Cow::Borrowed(relative));
+    }
+    let redirected = redirected_apt?;
+    let relative = path.strip_prefix(&redirected.physical).ok()?;
+    Some(Cow::Owned(redirected.sdk_relative.join(relative)))
 }
 
 fn search_paths(
@@ -213,6 +271,7 @@ fn search_paths(
 
 struct Compiler<'a> {
     root: PathBuf,
+    redirected_apt: Option<RedirectedAptUi>,
     data_paths: Vec<PathBuf>,
     art_paths: Vec<PathBuf>,
     audio_paths: Vec<PathBuf>,
@@ -392,9 +451,8 @@ impl Compiler<'_> {
         let document_order = self.next_document_order;
         self.next_document_order += 1;
         self.active.insert(path.to_path_buf());
-        let relative = path
-            .strip_prefix(&self.root)
-            .map_err(|_| invalid(path, "XML lies outside the data root"))?;
+        let relative = sdk_relative_path(path, &self.root, self.redirected_apt.as_ref())
+            .ok_or_else(|| invalid(path, "XML lies outside the data root"))?;
         let relative = relative
             .to_str()
             .filter(|name| name.is_ascii())
@@ -914,7 +972,12 @@ impl Compiler<'_> {
             document.with_file_name(path)
         };
         let resolved = read_with_context(&path, fs::canonicalize)?;
-        if !resolved.starts_with(&self.root) {
+        if !resolved.starts_with(&self.root)
+            && !self
+                .redirected_apt
+                .as_ref()
+                .is_some_and(|apt| resolved.starts_with(&apt.physical))
+        {
             return Err(invalid(&resolved, "path lies outside the data root"));
         }
         Ok(resolved)

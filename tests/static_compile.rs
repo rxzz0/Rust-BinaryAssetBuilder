@@ -21,6 +21,92 @@ fn scratch_root() -> PathBuf {
     root
 }
 
+#[cfg(windows)]
+#[test]
+fn apt_ui_accepts_redirected_directory_without_allowing_external_files() {
+    use binary_asset_builder::compile::{compile_apt_ui, compile_apt_ui_directory};
+
+    fn junction(link: &Path, target: &Path) {
+        let result = std::process::Command::new("cmd.exe")
+            .args(["/D", "/C", "mklink", "/J"])
+            .arg(link.components().collect::<PathBuf>())
+            .arg(target.components().collect::<PathBuf>())
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+
+    let root = scratch_root();
+    let sdk = root.join("RA3 MOD SDK");
+    let apt = sdk.join("Mods/Reborn/Data/AptUI");
+    let stream = apt.join("Briefing.xml");
+    let output = root.join("built");
+    let nested = apt.join("assets");
+    fs::create_dir_all(&nested).unwrap();
+    fs::write(
+        &stream,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+          <Includes><Include type="all" source="DATA:Reborn/Data/AptUI/assets/briefing.xml"/></Includes>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let asset_xml = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+      <AptAptData id="Briefing" File="briefing.apt"/>
+    </AssetDeclaration>"#;
+    fs::write(nested.join("briefing.xml"), asset_xml).unwrap();
+    fs::write(nested.join("briefing.apt"), b"apt test data").unwrap();
+    compile_apt_ui_directory(&apt, &sdk, &output).unwrap();
+    let names = [
+        "briefing.manifest",
+        "briefing.bin",
+        "briefing.imp",
+        "briefing.relo",
+    ];
+    let expected = names.map(|name| fs::read(output.join(name)).unwrap());
+
+    let redirected = root.join("OneDrive/CNC Files/AptUI");
+    fs::create_dir_all(redirected.parent().unwrap()).unwrap();
+    fs::rename(&apt, &redirected).unwrap();
+    junction(&apt, &redirected);
+
+    compile_apt_ui_directory(&apt, &sdk, &output).unwrap();
+    assert_eq!(
+        names.map(|name| fs::read(output.join(name)).unwrap()),
+        expected
+    );
+    assert!(
+        compile_apt_ui(&redirected.join("Briefing.xml"), &sdk)
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("XML lies outside the data root")
+    );
+
+    let external = root.join("external");
+    fs::create_dir(&external).unwrap();
+    fs::write(external.join("briefing.apt"), b"outside the SDK").unwrap();
+    junction(&nested.join("outside"), &external);
+    fs::write(
+        nested.join("briefing.xml"),
+        asset_xml.replace("briefing.apt", "outside/briefing.apt"),
+    )
+    .unwrap();
+    assert!(
+        compile_apt_ui(&stream, &sdk)
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("path lies outside the data root")
+    );
+    fs::remove_dir(nested.join("outside")).unwrap();
+    fs::remove_dir(&apt).unwrap();
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn inherited_logic_command_sets_reach_reference_validation() {
     let root = scratch_root();
