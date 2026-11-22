@@ -52,7 +52,10 @@ pub(super) fn single_sound(node: Node<'_, '_>, path: &Path) -> io::Result<Marsha
         .chain(PERCENTAGES.iter().chain(REALS).map(|&(name, _, _)| name))
         .collect();
     validate_attributes(node, &allowed, path)?;
-    let event = node.has_tag_name((SAGE_NS, "AudioEvent"));
+    let event = matches!(
+        node.tag_name().name(),
+        "AudioEvent" | "AudioEventOverridable"
+    );
     let filename_type = match node.tag_name().name() {
         "MP3AmbientStream" | "MP3DialogEvent" | "MP3MusicTrack" => "AudioFileMP3Passthrough",
         _ => "AudioFile",

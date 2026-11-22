@@ -1,0 +1,23 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UpgradeTemplate id="Upgrade_ProbeOne" Type="PLAYER"/>
+  <UpgradeTemplate id="Upgrade_ProbeTwo" Type="PLAYER"/>
+  <GameObject id="CaptureAndGiveUpgradeBare">
+    <Behaviors>
+      <CaptureAndGiveUpgradeBehavior id="ModuleTag_CaptureAndGiveUpgrade">
+        <UpgradeMap/>
+      </CaptureAndGiveUpgradeBehavior>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="CaptureAndGiveUpgradeFull">
+    <Behaviors>
+      <CaptureAndGiveUpgradeBehavior id="ModuleTag_CaptureAndGiveUpgrade"
+          GrantMoney="12345" GrantMoneyOneTime="true" SlavedCaptureObject="CaptureAndGiveUpgradeBare"
+          UnificationType="ALLIED_PLAYERS">
+        <UpgradeMap OwnershipAmount="1" ProvidedUpgrade="Upgrade_ProbeOne"/>
+        <UpgradeMap OwnershipAmount="-2" ProvidedUpgrade="Upgrade_ProbeTwo"/>
+      </CaptureAndGiveUpgradeBehavior>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

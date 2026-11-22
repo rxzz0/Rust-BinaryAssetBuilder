@@ -161,6 +161,10 @@ The installer activates the bundled script and saves the original at `defaultscr
 
 After switching from an older script, review the **Create BIG Files** and **Create Skudef File** checkboxes before the first build.
 
+### Build map overrides
+
+In ModStudio, select **Build Map Overrides** with the Rust compiler. Put each source map in a direct child folder of `Mods/<mod>/Misc/data/maps` with its `map.xml` and override XML files. The compiler writes the linked `map_mod` stream and `map.version` beside the map. **Create BIG Files** packages these files in the Misc BIG. Keep archived sources in a subfolder such as `INGORE`. The `Official` directory is excluded from the ModStudio build step.
+
 ### RA3 SDK coverage and EA verification
 
 Run these from the repository root after building the Rust release.

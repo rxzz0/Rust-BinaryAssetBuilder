@@ -49,6 +49,7 @@ const MODULES: &[(&str, &[&str])] = &[
         "Behaviors",
         &[
             "BridgeBuilder",
+            "CaptureAndGiveUpgradeBehavior",
             "ToppleUpdate",
             "WeaponSetUpdate",
             "LaserState",
@@ -1024,6 +1025,11 @@ mod tests {
     }
 
     #[test]
+    fn purchase_player_tech_button_matches_ea() {
+        assert_ea_fixture("purchase-player-tech-button", 2);
+    }
+
+    #[test]
     fn player_tech_store_matches_ea() {
         assert_ea_fixture("player-tech-store", 1);
     }
@@ -1173,6 +1179,16 @@ mod tests {
     }
 
     #[test]
+    fn weapon_damage_subtypes_match_ea() {
+        assert_ea_fixture("damage-subtypes", 1);
+    }
+
+    #[test]
+    fn weapon_damage_references_match_ea() {
+        assert_ea_fixture("damage-reference-fields", 3);
+    }
+
+    #[test]
     fn weapon_contained_matches_ea() {
         assert_ea_fixture("weapon-contained", 1);
     }
@@ -1221,6 +1237,11 @@ mod tests {
     #[test]
     fn capture_special_ability_matches_ea() {
         assert_ea_fixture("capture-special-ability", 3);
+    }
+
+    #[test]
+    fn capture_and_give_upgrade_behavior_matches_ea() {
+        assert_ea_fixture("capture-and-give-upgrade", 4);
     }
 
     #[test]
@@ -1368,6 +1389,11 @@ mod tests {
     #[test]
     fn game_maps_match_ea() {
         assert_ea_fixture("game-map", 5);
+    }
+
+    #[test]
+    fn map_override_types_match_ea() {
+        assert_ea_fixture("map-encoder-types", 3);
     }
 
     #[test]

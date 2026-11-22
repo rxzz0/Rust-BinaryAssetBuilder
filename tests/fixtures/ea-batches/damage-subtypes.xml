@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="DamageSubtypeTestWeapon">
+    <Nuggets>
+      <DamageNugget Damage="1" DamageSubType="NORMAL"/>
+      <DamageNugget Damage="2" DamageSubType="BECOME_UNDEAD"/>
+      <DamageNugget Damage="3" DamageSubType="SELF"/>
+      <DamageNugget Damage="4" DamageSubType="UNDEFINED"/>
+    </Nuggets>
+  </WeaponTemplate>
+</AssetDeclaration>

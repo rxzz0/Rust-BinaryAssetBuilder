@@ -3,7 +3,7 @@
 use binary_asset_builder::big::stage_big;
 use binary_asset_builder::compile::{
     CompiledStream, compile_apt_ui, compile_apt_ui_directory, compile_map, compile_sdk_global,
-    compile_sdk_maps, compile_sdk_static, compile_static, merge_assets, sdk_coverage,
+    compile_sdk_map_overrides, compile_sdk_static, compile_static, merge_assets, sdk_coverage,
     verify_ea_batch, write_compiled_stream,
 };
 use binary_asset_builder::fix_assets::{fix_assets, fix_assets_allow_missing};
@@ -23,7 +23,7 @@ Usage
   binary-asset-builder compile-aptui <input-directory> --data-root <directory> --output <directory>
   binary-asset-builder compile-static <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-map <file.xml> --data-root <directory> --references <directory> --output <new-directory>
-  binary-asset-builder compile-maps-sdk <official-maps-directory> --sdk-root <directory> --references <builtmods-directory> --output <official-maps-directory>
+  binary-asset-builder compile-maps-sdk <maps-directory> --sdk-root <directory> --references <builtmods-directory> --output <maps-directory> [--game-data <directory>]
   binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory> [--game-data <directory>]
   binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory> [--game-data <directory>]
   binary-asset-builder merge-assets <file.manifest> --assets <directory>
@@ -185,19 +185,22 @@ fn main() -> ExitCode {
             references,
             output_flag,
             output,
+            options @ ..,
         ] if command == "compile-maps-sdk"
             && sdk_flag == "--sdk-root"
             && references_flag == "--references"
-            && output_flag == "--output" =>
+            && output_flag == "--output"
+            && (options.is_empty() || matches!(options, [flag, _] if flag == "--game-data")) =>
         {
             diagnostic(
-                compile_sdk_maps(
+                compile_sdk_map_overrides(
                     Path::new(input),
                     Path::new(sdk),
                     Path::new(references),
                     Path::new(output),
+                    options.get(1).map(Path::new),
                 )
-                .map(|count| println!("Compiled {count} official maps with Rust")),
+                .map(|count| println!("Compiled {count} map override streams with Rust")),
             )
         }
         [

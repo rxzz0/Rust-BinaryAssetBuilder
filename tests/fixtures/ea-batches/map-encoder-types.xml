@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <RadarTerrainImage id="MapOverrideTestRadar" MapBorder="Purple" Texture="MapOverrideTestTexture" Rotated="true">
+    <ImageSize x="81" y="91"/>
+    <ImagePosition x="-7" y="9"/>
+    <TextureSize x="128" y="256"/>
+  </RadarTerrainImage>
+  <SkirmishOpeningMove id="MapOverrideTestOpening" Side="PlayerTemplate:Soviet">
+    <Order Build="SovietPowerPlant"/>
+    <Order Time="1250ms" Account="DEFENSE" Deposit="300"/>
+    <Order Time="100s" Build="SovietRefinery"/>
+  </SkirmishOpeningMove>
+  <SkirmishOpeningMove id="MapOverrideTestOpeningEmpty" Side="Allies" />
+</AssetDeclaration>

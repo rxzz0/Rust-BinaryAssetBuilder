@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <PurchasePlayerTechButtonTemplate id="Purchase_PlayerTech_Allied_Paradrop_Rank1"
+    PlayerTech="PlayerTech_Allied_Paradrop_Rank1" StateData="ButtonStateCampaignPlayerPowerParadropLvl1"/>
+  <PurchasePlayerTechButtonTemplate id="PurchasePlayerTechQualified"
+    PlayerTech="PlayerTech:QualifiedTech" StateData="ButtonSingleStateData:QualifiedState"/>
+</AssetDeclaration>

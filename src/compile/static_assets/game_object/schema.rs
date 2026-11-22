@@ -113,6 +113,18 @@ impl Schema {
                 }
             }
         }
+        if !schema.types.contains_key("AudioEventOverridable")
+            && schema.types.contains_key("AudioEvent")
+        {
+            // Uprising uses the same XML fields and payload layout as RA3 AudioEvent.
+            schema.types.insert(
+                "AudioEventOverridable".into(),
+                Type {
+                    base: Some("AudioEvent".into()),
+                    ..Type::default()
+                },
+            );
+        }
         Ok(schema)
     }
 

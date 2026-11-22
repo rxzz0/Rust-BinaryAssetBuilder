@@ -1782,6 +1782,187 @@ fn compiles_credits_with_ansi_strings_and_empty_lines() {
 }
 
 #[test]
+fn audio_event_overridable_inherits_and_matches_uprising_map_payload() {
+    let root = scratch_root();
+    let xml = root.join("map.xml");
+    fs::create_dir_all(root.join("Schemas/xsd")).unwrap();
+    fs::write(
+        root.join("Schemas/xsd/CnC3Types.xsd"),
+        r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:complexType name="AudioEvent"><xs:sequence>
+            <xs:element name="PitchShift" type="xs:string"/>
+            <xs:element name="InitialDelay" type="xs:string"/>
+            <xs:element name="Sound" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence></xs:complexType>
+        </xs:schema>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("BaseSoundEffect.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+          <AudioEvent id="BaseSoundEffect" ShrunkenPitchModifier="2" ShrunkenVolumeModifier="85"
+              MinRange="300" MaxRange="1000" ReverbEffectLevel="100"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        &xml,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+          <Includes>
+            <Include type="reference" source="DATA:audio.xml"/>
+            <Include type="instance" source="DATA:BaseSoundEffect.xml"/>
+          </Includes>
+          <AudioEventOverridable id="A02_SuperNanoShield_Loop"
+              inheritFrom="AudioEventOverridable:BaseSoundEffectOverridable"
+              Volume="100" Limit="2" Control="LOOP SEQUENTIAL"
+              Type="WORLD SHROUDED EVERYONE" SubmixSlider="SOUNDFX">
+            <PitchShift Low="-2" High="2"/>
+            <InitialDelay Low="0" High="200"/>
+            <Sound>A02_SuperNanoShieldLPa</Sound>
+            <Sound>A02_SuperNanoShieldLPb</Sound>
+            <Sound>A02_SuperNanoShieldLPc</Sound>
+          </AudioEventOverridable>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let files = [
+        (0xc9d1_7508, b"AudioFile:A02_SuperNanoShieldLPa"),
+        (0x0448_1f9c, b"AudioFile:A02_SuperNanoShieldLPb"),
+        (0x4150_8dd8, b"AudioFile:A02_SuperNanoShieldLPc"),
+    ];
+    let ids = files.map(|(instance_id, _)| AssetId {
+        type_id: 0x166b_084d,
+        instance_id,
+    });
+    let sizes = ChunkSizes {
+        instance: 0,
+        relocations: 0,
+        imports: 0,
+    };
+    let mut references = Manifest {
+        version: 6,
+        byte_order: ByteOrder::Little,
+        is_linked: true,
+        stream_checksum: 0,
+        all_types_hash: 0x54ee_e764,
+        total_instance_data_size: 0,
+        max_chunk_sizes: sizes,
+        assets: Vec::new(),
+        referenced_manifests: Vec::new(),
+    };
+    fs::write(
+        root.join("worldbuilder.manifest"),
+        references.encode().unwrap(),
+    )
+    .unwrap();
+    references.assets = ids
+        .into_iter()
+        .zip(files)
+        .map(|(id, (_, name))| AssetEntry {
+            id,
+            type_hash: 0,
+            instance_hash: 0,
+            chunk_sizes: sizes,
+            name,
+            source_file_name: b"DATA:audio.xml",
+            references: AssetReferences::from_ids(&[]),
+            tokenized: Some(0),
+        })
+        .collect();
+    fs::write(root.join("audio.manifest"), references.encode().unwrap()).unwrap();
+    fs::write(
+        root.join("audio.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"/>"#,
+    )
+    .unwrap();
+    let stream = compile_map(&xml, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let [asset] = manifest.assets.as_slice() else {
+        panic!("expected only the map-local audio override");
+    };
+    assert_eq!(
+        asset.name,
+        b"AudioEventOverridable:A02_SuperNanoShield_Loop"
+    );
+    assert_eq!(asset.id.type_id, 0x1084_5383);
+    assert_eq!(asset.type_hash, 0x8a26_7f59);
+    assert_eq!(asset.references.iter().collect::<Vec<_>>(), ids);
+    // Osaka's shipped Uprising map stream, without the stream header.
+    assert_eq!(
+        &stream.files.bin[4..],
+        [
+            0_u32,
+            0x3f80_0000,
+            0,
+            0,
+            0,
+            0x4000_0000,
+            0x3f59_9999,
+            0x3f80_0000,
+            2,
+            2,
+            0x86,
+            3,
+            0x4396_0000,
+            0x447a_0000,
+            0,
+            0x3f00_0000,
+            0x3f80_0000,
+            0x3e4c_cccc,
+            0x3f80_0000,
+            0x3f80_0000,
+            0xbc,
+            0xc0,
+            0,
+            0,
+            0xc8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            3,
+            0x98,
+            0,
+            0,
+            1,
+            1000,
+            0x3f80_0000,
+            2,
+            1000,
+            0x3f80_0000,
+            3,
+            1000,
+            0x3f80_0000,
+            0,
+            0xc000_0000,
+            0x4000_0000,
+            0,
+            200,
+        ]
+        .map(u32::to_le_bytes)
+        .as_flattened()
+    );
+    assert_eq!(
+        &stream.files.relo[4..],
+        [0x8c_u32, 0x50, 0x54, 0x60, u32::MAX]
+            .map(u32::to_le_bytes)
+            .as_flattened()
+    );
+    assert_eq!(
+        &stream.files.imp[4..],
+        [0x98_u32, 0xa4, 0xb0, u32::MAX]
+            .map(u32::to_le_bytes)
+            .as_flattened()
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn emits_the_concrete_external_audio_type_and_local_movie_import() {
     let root = scratch_root();
     let xml = root.join("sample.xml");
@@ -2418,10 +2599,16 @@ fn maps_link_worldbuilder_models_and_keep_local_overrides() {
         <xs:simpleType name="GameObjectWeakRef" xas:refType="GameObject"><xs:restriction base="WeakReference"/></xs:simpleType>
         <xs:complexType name="ToppleUpdateModuleData"><xs:attribute name="StumpId" type="GameObjectWeakRef"/></xs:complexType>
         <xs:complexType name="GameObject"><xs:sequence>
-          <xs:element name="Behaviors"><xs:complexType><xs:choice>
+          <xs:element name="Draws" minOccurs="0"><xs:complexType><xs:choice>
+            <xs:element name="PropDraw"/>
+          </xs:choice></xs:complexType></xs:element>
+          <xs:element name="Behaviors" minOccurs="0"><xs:complexType><xs:choice maxOccurs="unbounded">
             <xs:element name="ToppleUpdate" type="ToppleUpdateModuleData"/>
           </xs:choice></xs:complexType></xs:element>
-        </xs:sequence></xs:complexType>
+          <xs:element name="Body"><xs:complexType><xs:choice>
+            <xs:element name="PropBody"/>
+          </xs:choice></xs:complexType></xs:element>
+        </xs:sequence><xs:attribute name="EditorName" type="xs:string"/></xs:complexType>
         </xs:schema>"#,
     )
     .unwrap();
@@ -2436,12 +2623,37 @@ fn maps_link_worldbuilder_models_and_keep_local_overrides() {
     let stock = compile_static(&assets, &root, &root).unwrap();
     fs::write(root.join("worldbuilder.manifest"), &stock.manifest).unwrap();
     fs::write(
-        root.join("Data/props.xml"),
+        root.join("Data/base-props.xml"),
         r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
-        <GameObject id="Prop" EditorName="Map">
-            <Draws><PropDraw id="Draw" Model="StockModel"/></Draws>
-            <Behaviors><ToppleUpdate id="Topple" StumpId="Stump"/></Behaviors>
+        <GameObject id="Prop" EditorName="Stock">
+            <Behaviors>
+                <ToppleUpdate id="Removed" StumpId="Unwanted"/>
+                <ToppleUpdate id="Replaced" StumpId="Unwanted"/>
+            </Behaviors>
             <Body><PropBody id="Body"/></Body>
+        </GameObject>
+        <GameObject id="Unwanted"><Body><PropBody id="Body"/></Body></GameObject>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("Data/shared.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <Includes><Include type="all" source="props.xml"/></Includes>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("Data/props.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset" xmlns:xai="uri:ea.com:eala:asset:instance">
+        <Includes><Include type="instance" source="base-props.xml"/></Includes>
+        <GameObject id="Prop" inheritFrom="Prop" EditorName="Map">
+            <Draws><PropDraw id="Draw" Model="StockModel"/></Draws>
+            <Behaviors>
+                <ToppleUpdate id="Removed" xai:joinAction="Remove"/>
+                <ToppleUpdate id="Replaced" StumpId="Stump" xai:joinAction="Replace"/>
+                <ToppleUpdate id="Added" StumpId="Stump" xai:joinAction="Append"/>
+            </Behaviors>
         </GameObject>
         <GameObject id="Stump"><Body><PropBody id="Body"/></Body></GameObject>
         <MusicPalette id="Palette"/>
@@ -2451,7 +2663,10 @@ fn maps_link_worldbuilder_models_and_keep_local_overrides() {
     fs::write(
         &map,
         r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
-        <Includes><Include type="instance" source="DATA:props.xml"/></Includes>
+        <Includes>
+            <Include type="instance" source="DATA:base-props.xml"/>
+            <Include type="instance" source="DATA:shared.xml"/>
+        </Includes>
         <GameMap id="Map">
             <Prop ThingTemplate="Prop"><Position x="0" y="0" z="0"/></Prop>
             <WorldDict><AssetIdProperty Key="musicZone" Value="Palette"/></WorldDict>
@@ -2505,10 +2720,49 @@ fn maps_link_worldbuilder_models_and_keep_local_overrides() {
 }
 
 #[test]
+fn map_missing_nested_include_names_map_and_source() {
+    let root = scratch_root();
+    let map = root.join("map.xml");
+    fs::write(
+        &map,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <Includes><Include type="all" source="overrides.xml"/></Includes>
+        <GameMap id="Map"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("overrides.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <Includes><Include type="instance" source="DATA:missing.xml"/></Includes>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stock = compile_static_without_includes(&root);
+    fs::write(root.join("worldbuilder.manifest"), stock.manifest).unwrap();
+    let error = compile_map(&map, &root, &root).err().unwrap();
+    assert_eq!(error.kind(), std::io::ErrorKind::NotFound);
+    let message = error.to_string();
+    for expected in ["map.xml", "overrides.xml", "DATA:missing.xml"] {
+        assert!(message.contains(expected), "{message}");
+    }
+}
+
+fn compile_static_without_includes(root: &Path) -> binary_asset_builder::compile::CompiledStream {
+    let source = root.join("stock.xml");
+    fs::write(
+        &source,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"><W3DContainer id="Stock"/></AssetDeclaration>"#,
+    )
+    .unwrap();
+    compile_static(&source, root, root).unwrap()
+}
+
+#[test]
 fn sdk_map_publishing_preserves_sources_and_previous_stream_on_failure() {
     let root = scratch_root();
-    let official = root.join("Mods/Test/Misc/Data/Maps/Official");
-    let map = official.join("MapOne");
+    let maps = root.join("Mods/Test/Misc/Data/Maps");
+    let map = maps.join("MapOne");
     let source = map.join("map.xml");
     let xml = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameMap id="MapOne"/></AssetDeclaration>"#;
     fs::create_dir_all(&map).unwrap();
@@ -2516,13 +2770,15 @@ fn sdk_map_publishing_preserves_sources_and_previous_stream_on_failure() {
     let stock = compile_static(&source, &root, &root).unwrap();
     fs::write(root.join("worldbuilder.manifest"), &stock.manifest).unwrap();
     fs::write(map.join("MapOne.map"), b"terrain").unwrap();
-    fs::create_dir(official.join("PrecompiledMap")).unwrap();
+    fs::create_dir(maps.join("PrecompiledMap")).unwrap();
+    for ignored in ["Official/OriginalMap", "INGORE/ArchivedMap"] {
+        let path = maps.join(ignored);
+        fs::create_dir_all(&path).unwrap();
+        fs::write(path.join("map.xml"), "<invalid").unwrap();
+    }
 
     for _ in 0..2 {
-        assert_eq!(
-            compile_sdk_maps(&official, &root, &root, &official).unwrap(),
-            1
-        );
+        assert_eq!(compile_sdk_maps(&maps, &root, &root, &maps).unwrap(), 1);
     }
     let path = map.join("map_mod.manifest");
     let prior = fs::read(&path).unwrap();
@@ -2530,10 +2786,10 @@ fn sdk_map_publishing_preserves_sources_and_previous_stream_on_failure() {
     assert_eq!(fs::read(map.join("map.version")).unwrap(), b"_mod\r\n");
     assert_eq!(fs::read(map.join("MapOne.map")).unwrap(), b"terrain");
     assert_eq!(fs::read_to_string(&source).unwrap(), xml);
-    assert!(!official.join("PrecompiledMap/map.version").exists());
+    assert!(!maps.join("PrecompiledMap/map.version").exists());
 
     fs::write(&source, "<invalid").unwrap();
-    assert!(compile_sdk_maps(&official, &root, &root, &official).is_err());
+    assert!(compile_sdk_maps(&maps, &root, &root, &maps).is_err());
     assert_eq!(fs::read(&path).unwrap(), prior);
     assert_eq!(fs::read(map.join("map.version")).unwrap(), b"_mod\r\n");
     check_linked_files(&path, &Manifest::parse(&prior).unwrap()).unwrap();

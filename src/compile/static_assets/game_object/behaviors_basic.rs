@@ -1114,6 +1114,16 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
     match node.tag_name().name() {
+        "CaptureAndGiveUpgradeBehavior" => {
+            return super::capture_upgrade::encode(
+                node,
+                pointer,
+                data,
+                references,
+                reference_types,
+            )
+            .map(Some);
+        }
         "ToppleUpdate" => {
             return topple_update(node, pointer, data, references, reference_types).map(Some);
         }

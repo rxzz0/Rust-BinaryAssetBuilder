@@ -551,8 +551,15 @@ pub(in crate::compile::static_assets) fn audio_reference(
     }
     let reference = match name.trim().split_once(':') {
         Some((
-            kind @ ("AudioEvent" | "Multisound" | "AmbientStream" | "DialogEvent" | "MusicTrack"
-            | "MP3AmbientStream" | "MP3DialogEvent" | "MP3MusicTrack"),
+            kind @ ("AudioEvent"
+            | "AudioEventOverridable"
+            | "Multisound"
+            | "AmbientStream"
+            | "DialogEvent"
+            | "MusicTrack"
+            | "MP3AmbientStream"
+            | "MP3DialogEvent"
+            | "MP3MusicTrack"),
             _,
         )) => asset_reference(name, kind, path)?.into(),
         Some((_, plain)) => {

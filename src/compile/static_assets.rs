@@ -25,6 +25,7 @@ mod audio_file;
 mod audio_settings;
 mod binary;
 mod campaign;
+mod campaign_overrides;
 pub(super) mod conquer_cards;
 mod credits;
 mod damage_fx;
@@ -43,6 +44,7 @@ mod hotkeys;
 mod invisibility_template;
 mod joypad_buttons;
 mod locomotor;
+mod map_overrides;
 pub(super) mod music;
 pub(super) mod music_conditions;
 mod object_creation;
@@ -75,6 +77,8 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "AIBudgetStateDefinition" => (0x99ff_1736, 0, ai_budget),
         "PlayerTechRank" => (0x1227_1bce, 1, player_tech_rank),
         "CameraSettings" => (0xfdcc_69de, 2, global_ui::camera),
+        "UIDecalDestinationMarker" => (0xf4c9_ffa2, 94, campaign_overrides::destination_marker),
+        "DynamicsSettings" => (0x9c2b_0961, 95, campaign_overrides::dynamics_settings),
         "Credits" => (0x10d6_57ee, 3, credits::credits),
         "HealthBarTemplate" => (0xaa4f_0d82, 4, global_ui::health_bar_template),
         "MpGameRules" => (0x34d9_1648, 5, mp_game_rules),
@@ -100,6 +104,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "DebugHotKeys" => (0x045a_4cec, 18, hotkeys::map),
         "GeneralHotKeySlots" => (0x2710_c7a0, 17, hotkeys::general),
         "AIPersonalityDefinition" => (0xcb3c_9d2b, 19, ai_personality::compile),
+        "SkirmishOpeningMove" => (0x6ff5_d680, 28, map_overrides::skirmish_opening_move),
         "AIBuildStateDefinition" => (0xcaac_2e6e, 28, ai_build::compile),
         "AIStateDefinition" => (0x0300_0af5, 28, ai_strategic::state),
         "AIStrategicStateDefinition" => (0xd63d_e874, 29, ai_strategic::compile),
@@ -121,6 +126,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "StanceTemplate" => (0x4829_f362, 75, stance_template::compile),
         "GameScriptList" => (0xa268_995a, 76, game_script_list::compile),
         "Road" => (0x2bfd_2964, 77, road::compile),
+        "RadarTerrainImage" => (0xfbb7_431e, 78, map_overrides::radar_terrain_image),
         "GameMap" => (0xf465_7c12, 78, game_map::compile),
         "AudioSettings" => (0xd86e_d334, 83, audio_settings::settings),
         "AnimationSoundSettings" => (0xbcf8_03d4, 83, audio_settings::animation),
@@ -180,6 +186,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "MP3MusicTrack" => (0x7f9f_abc5, 62, audio::single_sound),
         "MP3DialogEvent" => (0x7850_dbf8, 61, audio::single_sound),
         "AudioEvent" => (0x560c_2e45, 38, audio::single_sound),
+        "AudioEventOverridable" => (0x8a26_7f59, 38, audio::single_sound),
         "MusicTrack" => (0x07c5_0662, 59, audio::single_sound),
         "DialogEvent" => (0xd21e_8bf8, 60, audio::single_sound),
         "AudioEventLimitGroup" => (0x9531_4dea, 61, audio::limit_group),
@@ -212,6 +219,9 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "ObjectFilterAsset" => (0x4352_195e, 43, game_object::object_filter_asset),
         "PlayerTemplate" => (0x3521_4948, 50, player_template::compile),
         "PlayerTech" => (0x35dd_9987, 44, player_tech),
+        "PurchasePlayerTechButtonTemplate" => {
+            (0xb2c1_9d3c, 44, global_ui::purchase_player_tech_button)
+        }
         "PlayerTechStoreTemplate" => (0x3a84_e115, 45, player_tech_store),
         "SpecialPowerTemplate" => (0x3aab_481c, 46, game_object::special_power::compile),
         "WeaponTemplate" => (0x0ce6_168e, 48, weapon::compile),
@@ -413,6 +423,18 @@ fn video(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     })
 }
 
+fn ai_bank_account(value: &str, path: &Path) -> io::Result<u32> {
+    match value {
+        "INVESTMENT" => Ok(0),
+        "SPECIAL_OPERATIONS" => Ok(1),
+        "PRODUCTION" => Ok(2),
+        "DEFENSE" => Ok(3),
+        "TECHNOLOGY" => Ok(4),
+        "SLUSH_FUND" => Ok(5),
+        _ => Err(invalid(path, "invalid AI bank account")),
+    }
+}
+
 fn ai_budget(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     validate_attributes(node, &["id"], path)?;
     let mut children = node.children().filter(Node::is_element);
@@ -437,15 +459,7 @@ fn ai_budget(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
             return Err(invalid(path, "expected Budget/AccountShare"));
         }
         validate_attributes(share, &["Account", "Percent"], path)?;
-        let account = match share.attribute("Account").unwrap_or("INVESTMENT") {
-            "INVESTMENT" => 0,
-            "SPECIAL_OPERATIONS" => 1,
-            "PRODUCTION" => 2,
-            "DEFENSE" => 3,
-            "TECHNOLOGY" => 4,
-            "SLUSH_FUND" => 5,
-            _ => return Err(invalid(path, "invalid AI bank account")),
-        };
+        let account = ai_bank_account(share.attribute("Account").unwrap_or("INVESTMENT"), path)?;
         let percent = percentage(
             share.attribute("Percent").unwrap_or("0"),
             "AI bank account share",
@@ -1247,6 +1261,10 @@ impl From<ParsedReference<'_>> for AssetReference {
             name: Some(format!("{}:{}", reference.kind, reference.name).into_boxed_str()),
         }
     }
+}
+
+pub(super) fn inheritance_id(node: Node<'_, '_>, parent: &str, path: &Path) -> io::Result<AssetId> {
+    Ok(asset_reference(parent, node.tag_name().name(), path)?.id())
 }
 
 fn asset_reference<'a>(

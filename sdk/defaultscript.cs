@@ -168,7 +168,7 @@ namespace EALABuild
 		// This function is called to determine if a step should execute.
         public bool shouldExecuteStep(int stepId)
         {
-            if (stepId == 9 && !UseEaCompiler()) return false;
+            if (stepId == 9 && UseEaCompiler()) return false;
             if (currentGUIData.ContainsKey("step" + stepId))
             {
                 if ((bool)currentGUIData["step" + stepId])
@@ -207,7 +207,7 @@ namespace EALABuild
 			ModSkudef = ModBase + ".skudef";
 
             StopBigBuild();
-            if (!UseEaCompiler() && shouldExecuteStep(10) && OverlapMiscBigs())
+            if (!UseEaCompiler() && shouldExecuteStep(10) && !shouldExecuteStep(9) && OverlapMiscBigs())
                 StartMiscBig();
             executeModBuildStep(BuildHelper.GetNextExecutableStep());
         }
@@ -229,7 +229,7 @@ namespace EALABuild
             modGUIData.Add(new GUIElementData("step6", "Build Static Data", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step7", "Merge Assets", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
             modGUIData.Add(new GUIElementData("step8", "Fix Assets", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
-			modGUIData.Add(new GUIElementData("step9", "Build Official Maps", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
+			modGUIData.Add(new GUIElementData("step9", "Build Map Overrides", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
             modGUIData.Add(new GUIElementData("sp2", "", GUIElementData.LabelType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step10", "Create BIG Files", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step11", "Create Skudef File", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
@@ -524,17 +524,6 @@ namespace EALABuild
 						SDKDirectory, BuiltModDataPath, Path.Combine(SDKDirectory, @"tools\hashfix.exe"), Path.Combine(SDKDirectory, @"tools\modassetresolver.exe"), Path.Combine(SDKDirectory, @"tools\streamsorter.exe"), Path.Combine(SDKDirectory, @"tools\lodstreambuilder.exe"), BuiltModsPath, RA3DataDir);
 					BuildHelper.RunStep(StepType.RunExecutable, argsFix);
 					break;
-				case 9:
-				BuildHelper.DisplayLine(String.Format("Step {0}: Building official maps", stepId));
-
-				RunExecutableArguments argsMaps = new RunExecutableArguments(Cmd);
-				argsMaps.Arguments = String.Format(
-					"/C (@echo off) & (cd /D \"{0}\") & (if exist \"{0}\\BuildMapV2.bat\" (call \"{0}\\BuildMapV2.bat\" \"{1}\"))",
-					SDKDirectory,
-					Mod);
-
-				BuildHelper.RunStep(StepType.RunExecutable, argsMaps);
-				break;
                 case 10:
 					BuildHelper.DisplayLine(String.Format("Step {0}: Creating big files",
 							stepId));
@@ -674,8 +663,17 @@ namespace EALABuild
 				    RunRustBuildStep(argsRustFix);
 				    break;
 				case 9:
-				    onStepSuccess(stepId);
+				{
+				    BuildHelper.DisplayLine("Step 9: Compiling map overrides with Rust");
+				    string maps = Path.Combine(ModAdditionalFilesPath, @"data\maps");
+				    RunExecutableArguments argsMaps = new RunExecutableArguments(Cmd);
+				    argsMaps.Arguments = String.Format(
+				        "/C (@echo off) & (\"{0}\" compile-maps-sdk \"{1}\" --sdk-root \"{2}\" --references \"{3}\" --output \"{1}\" --game-data \"{4}\" 2>&1)"
+				        + " || (echo Critical: Build Map Overrides failed. & exit /b 1)",
+				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), maps, SDKDirectory, BuiltModsPath, RA3DataDir);
+				    RunRustBuildStep(argsMaps);
 				    break;
+				}
 				case 10:
 				    BuildHelper.DisplayLine(String.Format("Step {0}: Creating BIG files with Rust", stepId));
                     if (OverlapMiscBigs()) { FinishBigBuild(); break; }

@@ -35,7 +35,7 @@ mod xinclude;
 pub use crate::compile_batch::{compile_apt_ui_directory, write_compiled_stream};
 pub use coverage::{sdk_coverage, verify_ea_batch};
 pub use merge_assets::merge_assets;
-pub use sdk_maps::compile_sdk_maps;
+pub use sdk_maps::{compile_sdk_map_overrides, compile_sdk_maps};
 pub use sdk_static::{compile_sdk_global, compile_sdk_static};
 
 const SAGE_NS: &str = "uri:ea.com:eala:asset";
@@ -185,6 +185,8 @@ fn compile(
         asset_document: None,
         assets: Vec::new(),
         tentative: HashMap::new(),
+        map_all_includes: HashMap::new(),
+        map_source: map_root.map(|_| resolved_input.clone()),
         definitions: HashMap::new(),
         xml_fragments: HashMap::new(),
         game_object_schema,
@@ -286,6 +288,8 @@ struct Compiler<'a> {
     asset_document: Option<usize>,
     assets: Vec<CompiledAsset>,
     tentative: HashMap<AssetId, Vec<TentativeAsset>>,
+    map_all_includes: HashMap<PathBuf, Vec<PathBuf>>,
+    map_source: Option<PathBuf>,
     definitions: HashMap<PathBuf, Rc<Definitions>>,
     xml_fragments: HashMap<PathBuf, Rc<str>>,
     game_object_schema: Option<static_assets::game_object::Schema>,
@@ -315,6 +319,8 @@ struct TentativeAsset {
     source: Rc<str>,
     xml: Rc<str>,
     node: NodeId,
+    order: usize,
+    same_id_override: bool,
 }
 
 struct CompiledAsset {
@@ -369,6 +375,7 @@ impl AssetReference {
             (RENDER_ASSET_TYPE, _) => &["W3DContainer", "W3DMesh", "W3DCollisionBox"],
             (AUDIO_ASSET_TYPE, _) | (_, Some(AUDIO_ASSET_TYPE)) => &[
                 "AudioEvent",
+                "AudioEventOverridable",
                 "Multisound",
                 "AmbientStream",
                 "DialogEvent",
@@ -534,15 +541,25 @@ impl Compiler<'_> {
                         && !has_content(node))
             {
                 continue;
-            } else if tentative {
-                let (_, id) = static_assets::declaration_id(node, path)?;
-                self.tentative.entry(id).or_default().push(TentativeAsset {
-                    path: path.to_path_buf(),
-                    source: Rc::clone(&source),
-                    xml: Rc::clone(xml),
-                    node: node.id(),
-                });
             } else {
+                if tentative || self.reference_mode == ReferenceMode::Map {
+                    let (_, id) = static_assets::declaration_id(node, path)?;
+                    let same_id_override = node.attribute("inheritFrom").is_some_and(|parent| {
+                        static_assets::inheritance_id(node, parent, path)
+                            .is_ok_and(|parent| parent == id)
+                    });
+                    self.tentative.entry(id).or_default().push(TentativeAsset {
+                        path: path.to_path_buf(),
+                        source: Rc::clone(&source),
+                        xml: Rc::clone(xml),
+                        node: node.id(),
+                        order: document_order,
+                        same_id_override,
+                    });
+                }
+                if tentative {
+                    continue;
+                }
                 if let Some(encoders) = &self.encoders {
                     if self.pending.len() >= encoders.capacity()
                         && let Err(error) = self.commit_pending()
@@ -704,14 +721,41 @@ impl Compiler<'_> {
                     write_warnings(diagnostic.as_bytes());
                     continue;
                 }
+                Err(error) if self.reference_mode == ReferenceMode::Map => {
+                    return Err(self.map_include_error(path, source, error));
+                }
                 result => result?,
             };
+            if self.reference_mode == ReferenceMode::Map && kind == "all" {
+                self.map_all_includes
+                    .entry(path.to_path_buf())
+                    .or_default()
+                    .push(target.clone());
+            }
             self.read_document(&target, included_tentative, art_include)?;
             if let Some(included) = self.definitions.get(&target) {
                 merge_definitions(definitions, included, path)?;
             }
         }
         Ok(())
+    }
+
+    fn map_include_error(&self, path: &Path, source: &str, error: io::Error) -> io::Error {
+        let map = self.map_source.as_deref().unwrap_or(path);
+        io::Error::new(
+            error.kind(),
+            format!(
+                "{}: include {source:?} from {}: {error}",
+                map.display(),
+                path.display()
+            ),
+        )
+    }
+
+    fn map_candidate<'a>(
+        candidates: impl Iterator<Item = &'a TentativeAsset>,
+    ) -> Option<&'a TentativeAsset> {
+        candidates.min_by_key(|candidate| (!candidate.same_id_override, candidate.order))
     }
 
     fn add_referenced_instances(&mut self) -> io::Result<()> {
@@ -771,7 +815,22 @@ impl Compiler<'_> {
                 let Some(candidates) = self.tentative.get(&id) else {
                     continue;
                 };
-                let [candidate] = candidates.as_slice() else {
+                let candidate = match candidates.as_slice() {
+                    [candidate] => Some(candidate),
+                    candidates if self.reference_mode == ReferenceMode::Map => {
+                        // Keep include order for repeated base declarations. Explicit
+                        // same-ID overrides precede the declarations they replace.
+                        Self::map_candidate(candidates.iter()).filter(|selected| {
+                            candidates
+                                .iter()
+                                .filter(|candidate| candidate.order == selected.order)
+                                .count()
+                                == 1
+                        })
+                    }
+                    _ => None,
+                };
+                let Some(candidate) = candidate else {
                     return Err(invalid(
                         &self.root,
                         format!(
@@ -829,13 +888,17 @@ impl Compiler<'_> {
             "GameObject"
             | "AmbientStream"
             | "AudioEvent"
+            | "AudioEventOverridable"
             | "LogicCommandSet"
             | "LogicCommand"
             | "ObjectFilterAsset"
             | "PlayerTech"
+            | "PlayerTemplate"
             | "AttributeModifier"
             | "UpgradeTemplate"
             | "UnitTypeIcon"
+            | "UIDecalDestinationMarker"
+            | "DynamicsSettings"
             | "SpecialPowerTemplate"
             | "WeaponTemplate"
             | "ArmorTemplate"
@@ -984,7 +1047,13 @@ impl Compiler<'_> {
     }
 
     fn read_reference(&mut self, document: &Path, source: &str) -> io::Result<()> {
-        let target = self.resolve(document, source)?;
+        let target = self.resolve(document, source).map_err(|error| {
+            if self.reference_mode == ReferenceMode::Map {
+                self.map_include_error(document, source, error)
+            } else {
+                error
+            }
+        })?;
         let relative = target
             .strip_prefix(&self.root)
             .map_err(|_| invalid(document, "reference lies outside the data root"))?
@@ -1015,6 +1084,15 @@ impl Compiler<'_> {
         }
         let path = if self.reference_mode == ReferenceMode::SdkStatic {
             sdk_manifest_path(directory, &relative, &name)
+        } else if self.reference_mode == ReferenceMode::Map
+            && SDK_BASE_MANIFESTS.contains(&name.as_str())
+        {
+            let found = directory.join(&relative);
+            if found.is_file() {
+                found
+            } else {
+                sdk_manifest_path(directory, Path::new(&name), &name)
+            }
         } else {
             directory.join(relative)
         };

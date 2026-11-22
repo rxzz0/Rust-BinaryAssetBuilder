@@ -877,9 +877,12 @@ fn fire_on_objects(
         "Damage",
         "DamageType",
         "DamageFXType",
+        "DamageSubType",
         "DeathType",
         "DamageArc",
         "DelayTimeSeconds",
+        "UnderAttackOverrideEvaEvent",
+        "VictimShroudRevealer",
     ]
     .into_iter()
     .chain(DAMAGE_REALS.map(|(name, _)| name))
@@ -990,6 +993,7 @@ fn fire_on_objects(
             ("DamageType", "UNDEFINED"),
             ("DeathType", "NORMAL"),
             ("DamageFXType", "UNDEFINED"),
+            ("DamageSubType", "NORMAL"),
         ]
         .into_iter()
         .enumerate()
@@ -1042,6 +1046,13 @@ fn fire_on_objects(
     }
     let mut scalar_reference_types = Vec::new();
     let scalars = if is_damage {
+        for (name, kind, offset) in [
+            ("UnderAttackOverrideEvaEvent", "EvaEvent", 0x64),
+            ("VictimShroudRevealer", "GameObject", 0x68),
+        ] {
+            let reference = nugget_reference(node.attribute(name), kind, path, out)?;
+            data.word(start + offset, reference);
+        }
         encode_damage_scalars(node, start + 0x88, data, &mut scalar_reference_types)?
     } else {
         Table::array(start + 0x88, [])
@@ -1446,8 +1457,12 @@ fn damage_enum(index: usize, raw: &str, path: &Path) -> io::Result<u32> {
             "DamageFXType",
             include_str!("../../../schemas/ra3/xsd/Includes/DamageFX.xsd"),
         ),
+        (
+            "DamageSubType",
+            include_str!("../../../schemas/ra3/xsd/Includes/DamageDef.xsd"),
+        ),
     ];
-    static VALUES: [OnceLock<[Vec<String>; 1]>; 3] = [const { OnceLock::new() }; 3];
+    static VALUES: [OnceLock<[Vec<String>; 1]>; 4] = [const { OnceLock::new() }; 4];
     let (name, schema) = SCHEMAS[index];
     let values = VALUES[index].get_or_init(|| schema_enums(schema, &[name]));
     let ordinal = super::ai_strategic::enum_index(raw, &values[0], name, path)?;
