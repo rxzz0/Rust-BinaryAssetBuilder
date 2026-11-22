@@ -883,6 +883,7 @@ fn fire_on_objects(
         "DelayTimeSeconds",
         "UnderAttackOverrideEvaEvent",
         "VictimShroudRevealer",
+        "InvalidTargetStatus",
     ]
     .into_iter()
     .chain(DAMAGE_REALS.map(|(name, _)| name))
@@ -951,6 +952,11 @@ fn fire_on_objects(
         data.word(start + offset, value);
     }
     if is_damage {
+        if let Some(value) = node.attribute("InvalidTargetStatus") {
+            // An explicit list replaces the schema's default mask.
+            data.payload[start + 0x6c..start + 0x88].fill(0);
+            super::game_object::write_status_flags(value, start + 0x6c, data)?;
+        }
         if let Some(value) = node.attribute("DamageArc") {
             data.word(
                 start + 0x34,

@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="DamageDefaultStatus">
+    <Nuggets><DamageNugget Damage="1"/></Nuggets>
+  </WeaponTemplate>
+  <WeaponTemplate id="DamageNoInvalidStatus">
+    <Nuggets><DamageNugget Damage="1" InvalidTargetStatus=""/></Nuggets>
+  </WeaponTemplate>
+  <WeaponTemplate id="DamageCustomInvalidStatus">
+    <Nuggets><DamageNugget Damage="1" InvalidTargetStatus="INSIDE_GARRISON UNDER_IRON_CURTAIN"/></Nuggets>
+  </WeaponTemplate>
+  <WeaponTemplate id="DotCustomInvalidStatus">
+    <Nuggets><DOTNugget Damage="1" DamageInterval="1s" DamageDuration="2s" InvalidTargetStatus="UNATTACKABLE"/></Nuggets>
+  </WeaponTemplate>
+</AssetDeclaration>

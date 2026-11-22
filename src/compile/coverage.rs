@@ -1189,6 +1189,11 @@ mod tests {
     }
 
     #[test]
+    fn weapon_damage_invalid_target_status_matches_ea() {
+        assert_ea_fixture("damage-invalid-target-status", 4);
+    }
+
+    #[test]
     fn weapon_contained_matches_ea() {
         assert_ea_fixture("weapon-contained", 1);
     }
