@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <Defines><Define name="WIDTH" value="4"/></Defines>
+  <Video id="IncludedVideo" Filename="included.bik"/>
+</AssetDeclaration>

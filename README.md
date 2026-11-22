@@ -181,3 +181,17 @@ $sdk = 'X:\RA3 MOD SDK'
 The TSV inventories the SDK's top-level declarations and the five GameObject module groups. Asset status covers native static dispatch. Module status records the currently implemented dispatch names. An encoder entry does not imply full support. ScriptedModelDraw also reports attribute and child coverage.
 
 Use a new output directory for each EA run. A batch is a self-contained AssetDeclaration with independent probes and no includes or inheritance. The comparator matches each asset by ID and checks binary payload, relocations, imports, ordered references, and metadata. The checked-in pilot oracle also runs under cargo test without EA installed. EA is used only to generate verification data.
+
+
+### Compare complete EA and Rust builds
+
+Build the Rust release, then run the shared compiler probes with the RA3 SDK installed.
+
+```powershell
+cargo build --release
+.\sdk\Test-EaConformance.ps1 -SdkRoot 'X:\RA3 MOD SDK' -RustCompiler .\target\release\binary-asset-builder.exe -OutputDirectory .\.scratch\ea-conformance
+```
+
+Give each run a new output directory. The script copies the probe XML and SDK schemas, builds both compilers with isolated outputs, and preserves logs and streams by case. It reports build failures, differences in unknown-reference warnings, missing streams, version sidecars, and per-asset linked differences. It exits with status 1 when it finds differences. EA is used only by this test script.
+
+Run `binary-asset-builder compare-linked <ea.manifest> <rust.manifest>` to compare an existing pair of linked streams. It validates the three binary files against each manifest and reports differences in stream order, references, checksums, asset metadata, and payload, relocation, and import bytes.

@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <Includes><Include type="all" source="base.xml"/></Includes>
+  <Video id="CalculatedVideo" Filename="= $WIDTH * 5 + 2"/>
+</AssetDeclaration>

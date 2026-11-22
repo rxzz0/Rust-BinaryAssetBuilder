@@ -7,7 +7,9 @@ use binary_asset_builder::compile::{
     verify_ea_batch, write_compiled_stream,
 };
 use binary_asset_builder::fix_assets::{fix_assets, fix_assets_allow_missing};
-use binary_asset_builder::linked_stream::{check_linked_files, link_assets};
+use binary_asset_builder::linked_stream::{
+    check_linked_files, compare_linked_streams, link_assets,
+};
 use binary_asset_builder::manifest::{ByteOrder, Manifest};
 use binary_asset_builder::sdk_references::prepare_references;
 use std::env;
@@ -34,6 +36,7 @@ Usage
   binary-asset-builder verify-ea-batch <file.xml> <ea.manifest> <ea-assets-directory>
   binary-asset-builder inspect <file.manifest>
   binary-asset-builder check-linked <file.manifest>
+  binary-asset-builder compare-linked <ea.manifest> <rust.manifest>
 
 Set BAB_NO_WARNINGS=1 to hide warnings. Build errors remain visible.";
 
@@ -255,6 +258,11 @@ fn main() -> ExitCode {
                 }
             }
         }
+        [command, ea, rust] if command == "compare-linked" => diagnostic(compare_linked_streams(
+            Path::new(ea),
+            Path::new(rust),
+            io::stdout().lock(),
+        )),
         [command, path] if command == "inspect" || command == "check-linked" => {
             let path = Path::new(path);
             match run(path, command == "check-linked") {

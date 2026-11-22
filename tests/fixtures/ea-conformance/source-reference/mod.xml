@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <Includes><Include type="reference" source="library.xml"/></Includes>
+  <VideoEventList id="Intro"><EventList><Movie MovieAsset="LibraryVideo"/></EventList></VideoEventList>
+</AssetDeclaration>
