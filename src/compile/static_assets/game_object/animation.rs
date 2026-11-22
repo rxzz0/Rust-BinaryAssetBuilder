@@ -1,7 +1,7 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, asset_reference, finite_number, hash_name, sage_time, significant_children,
+    AssetReference, asset_reference, finite_number, sage_time, significant_children,
     validate_attributes,
 };
 use super::draws::{array, boolean, fields, write_model_conditions};
@@ -346,15 +346,21 @@ impl AnimationEncoder<'_, '_> {
                 "FXParticleSystemTemplate",
                 offset + 8,
             )?;
-            for name in ["FXTrigger", "FXAction"] {
-                if node.attribute(name).unwrap_or("NONE") != "NONE" {
-                    return Err(invalid(path, format!("unsupported ParticleSysBone {name}")));
-                }
+            for (name, variants, field) in [
+                (
+                    "FXTrigger",
+                    &["NONE", "CATAPULT_ROCK", "TREBUCHET_ROCK"][..],
+                    0xc,
+                ),
+                ("FXAction", &["NONE", "HOLD", "KILL", "SPAWN"][..], 0x10),
+            ] {
+                self.data.word(
+                    offset + field,
+                    enum_value(node.attribute(name).unwrap_or("NONE"), variants, name, path)?,
+                );
             }
             self.integer(node, "PersistID", "0", offset + 0x14)?;
-            if let Some(id) = node.attribute("id").filter(|id| !id.is_empty()) {
-                self.data.word(offset + 0x18, hash_name(id));
-            }
+            self.string(node, "id", offset + 0x18)?;
             for (name, field) in [
                 ("FollowBone", 0x20),
                 ("OnlyIfOnWater", 0x21),

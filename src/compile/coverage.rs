@@ -1152,6 +1152,11 @@ mod tests {
     }
 
     #[test]
+    fn draw_particle_actions_match_ea() {
+        assert_ea_fixture("particle-actions", 1);
+    }
+
+    #[test]
     fn simple_weapon_effects_match_ea_batch() {
         assert_ea_fixture("simple-weapon-effects", 2);
     }
