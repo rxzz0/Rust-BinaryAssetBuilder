@@ -1349,6 +1349,7 @@ pub(super) fn encode(
         node.tag_name().name(),
         "RecallUnitsSpecialPower"
             | "SpecialPower"
+            | "ReturnToProducerSpecialPower"
             | "AssignSlavesTargetObjectSpecialPower"
             | "OCLSpecialPower"
             | "ActivateModuleSpecialPower"

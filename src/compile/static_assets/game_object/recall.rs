@@ -110,6 +110,7 @@ pub(super) fn encode(
         "StoreObjectsSpecialPower" => (0xa74a_234c, 0x1d4, STORE_FIELDS),
         "TeleportStoredObjectsSpecialPower" => (0x318d_c4d6, 0x1d0, TELEPORT_FIELDS),
         "RecallUnitsSpecialPower" => (KIND, 0x1cc, RECALL_FIELDS),
+        "ReturnToProducerSpecialPower" => (0x2800_4ab1, 0x1c4, &[][..]),
         "AssignSlavesTargetObjectSpecialPower" => (0x9daf_d38c, 0x1c4, &[][..]),
         "PrematureDischargeSpecialPower" => (0x8e22_e8c8, 0x1c4, &[][..]),
         "GiveProductionBonusSpecialPower" => (PRODUCTION_BONUS, 0x1dc, BONUS_FIELDS),

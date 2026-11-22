@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ReturnToProducerDefaults">
+    <Behaviors><ReturnToProducerSpecialPower id="ModuleTag_Return" SpecialPowerTemplate="SpecialPowerReturnToProducer"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ReturnToProducerWithModifier">
+    <Behaviors>
+      <ReturnToProducerSpecialPower id="ModuleTag_Return" SpecialPowerTemplate="SpecialPowerReturnToProducer"
+        AttributeModifier="AttributeModifier_ReturnToBase" AttributeModifierAffectsSelf="true"
+        SetModelCondition="USER_1" SetModelConditionTime="30s">
+        <RequirementsFilterMP Rule="ANY"><IncludeThing>ReturnToProducerWithModifier</IncludeThing></RequirementsFilterMP>
+      </ReturnToProducerSpecialPower>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
