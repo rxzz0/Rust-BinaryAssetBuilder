@@ -17,7 +17,7 @@ pub(crate) enum Contents {
     CustomData(Vec<(String, CustomData)>),
 }
 
-type Output = (OsString, Contents);
+pub(crate) type Output = (OsString, Contents);
 
 pub fn compile_apt_ui_directory(input: &Path, root: &Path, output: &Path) -> io::Result<()> {
     let sources = xml_sources(input, |_| true)?;
@@ -66,13 +66,8 @@ pub(crate) fn compile_streams(
         .take_while(|(_, stem)| names.insert(stem.clone()))
         .collect();
     let mut outputs = Vec::new();
-    let mut append = |stem: &OsStr, stream| {
-        stream_outputs(stem, stem, stream, &mut outputs);
-        outputs.push((
-            with_suffix(stem, ".version"),
-            Contents::Bytes(version.to_vec()),
-        ));
-    };
+    let mut append =
+        |stem: &OsStr, stream| append_versioned_stream(stem, stream, version, &mut outputs);
     for batch in jobs.chunks(workers) {
         if let [(source, stem)] = batch {
             println!("Compiling XML with Rust {}", source.display());
@@ -119,6 +114,19 @@ pub(crate) fn compile_streams(
     }
     Ok(outputs)
 }
+pub(crate) fn append_versioned_stream(
+    stem: &OsStr,
+    stream: CompiledStream,
+    version: &[u8],
+    outputs: &mut Vec<Output>,
+) {
+    stream_outputs(stem, stem, stream, outputs);
+    outputs.push((
+        with_suffix(stem, ".version"),
+        Contents::Bytes(version.to_vec()),
+    ));
+}
+
 fn stream_outputs(
     stem: &OsStr,
     custom_data_stem: &OsStr,
@@ -228,7 +236,10 @@ pub(crate) fn publish_prepared(
         for (name, contents) in &outputs {
             let destination = fresh.join(name);
             match contents {
-                Contents::Bytes(bytes) => fs::write(destination, bytes)?,
+                Contents::Bytes(bytes) => {
+                    fs::create_dir_all(destination.parent().unwrap())?;
+                    fs::write(destination, bytes)?;
+                }
                 Contents::CustomData(files) => {
                     fs::create_dir_all(&destination)?;
                     for (file, data) in files {
@@ -270,7 +281,10 @@ pub(crate) fn publish_prepared(
             }
         }
         for (name, contents) in &outputs {
-            if matches!(contents, Contents::CustomData(_)) && output.join(name).exists() {
+            if (matches!(contents, Contents::CustomData(_))
+                || Path::new(name).components().count() > 1)
+                && output.join(name).exists()
+            {
                 previous.push(name.clone());
             }
         }

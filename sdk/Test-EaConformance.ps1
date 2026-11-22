@@ -31,7 +31,7 @@ $cases = @(Get-ChildItem -LiteralPath $fixtures -Directory | Sort-Object Name)
 foreach ($case in $cases) {
     $source = Join-Path $work "Mods/$($case.Name)/Data"
     New-Item -ItemType Directory -Path $source | Out-Null
-    Get-ChildItem -LiteralPath $case.FullName -File | Copy-Item -Destination $source
+    Get-ChildItem -LiteralPath $case.FullName | Copy-Item -Destination $source -Recurse
     $inputXml = Join-Path $source 'mod.xml'
     $caseOutput = Join-Path $work "results/$($case.Name)"
     $eaOutput = (New-Item -ItemType Directory -Path (Join-Path $caseOutput 'ea')).FullName

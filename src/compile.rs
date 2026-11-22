@@ -121,6 +121,17 @@ fn compile(
     reference_directory: Option<&Path>,
     reference_mode: ReferenceMode,
 ) -> io::Result<CompiledStream> {
+    compile_with_source_references(input, data_root, reference_directory, reference_mode, None)
+        .map(|(stream, _)| stream)
+}
+
+fn compile_with_source_references(
+    input: &Path,
+    data_root: &Path,
+    reference_directory: Option<&Path>,
+    reference_mode: ReferenceMode,
+    source_references: Option<&mut sdk_static::SourceReferences>,
+) -> io::Result<(CompiledStream, HashSet<AssetId>)> {
     let root = fs::canonicalize(data_root)?;
     let resolved_input = fs::canonicalize(input)?;
     let redirected_apt = if reference_directory.is_none() && !resolved_input.starts_with(&root) {
@@ -175,7 +186,11 @@ fn compile(
         ids: HashSet::new(),
         static_asset_locations: HashMap::new(),
         next_document_order: 0,
-        encoders: if reference_mode == ReferenceMode::SdkStatic {
+        encoders: if reference_mode == ReferenceMode::SdkStatic
+            && source_references
+                .as_ref()
+                .is_none_or(|references| references.is_root())
+        {
             Encoders::start()?
         } else {
             None
@@ -193,6 +208,7 @@ fn compile(
         music_headers: HashMap::new(),
         reference_directory,
         reference_mode,
+        source_references,
         referenced_manifests: Vec::new(),
         external_ids: HashSet::new(),
         worldbuilder_hashes,
@@ -295,6 +311,7 @@ struct Compiler<'a> {
     game_object_schema: Option<static_assets::game_object::Schema>,
     music_headers: HashMap<PathBuf, static_assets::music::Header>,
     reference_directory: Option<&'a Path>,
+    source_references: Option<&'a mut sdk_static::SourceReferences>,
     reference_mode: ReferenceMode,
     map_art_path: Option<PathBuf>,
     referenced_manifests: Vec<String>,
@@ -1079,9 +1096,6 @@ impl Compiler<'_> {
                 name = file.to_owned();
             }
         }
-        if self.referenced_manifests.contains(&name) {
-            return Ok(());
-        }
         let path = if self.reference_mode == ReferenceMode::SdkStatic {
             sdk_manifest_path(directory, &relative, &name)
         } else if self.reference_mode == ReferenceMode::Map
@@ -1096,12 +1110,64 @@ impl Compiler<'_> {
         } else {
             directory.join(relative)
         };
-        self.read_reference_manifest(&path)?;
-        self.referenced_manifests.push(name);
+        if let Some(references) = self.source_references.as_deref_mut() {
+            let local = references.is_local(&target);
+            let exists = path.try_exists()?;
+            if local || !exists {
+                let stem = references.claim(&target)?;
+                let manifest_name = format!("{}.manifest", stem.display());
+                name = manifest_name.replace('/', "\\");
+                if !self.referenced_manifests.contains(&name) {
+                    let sibling = references.output.join(&manifest_name);
+                    let stream_root = references.output.clone();
+                    let precompiled = if local && exists {
+                        Some(&path)
+                    } else if local && sibling.try_exists()? {
+                        Some(&sibling)
+                    } else {
+                        None
+                    };
+                    let reused = match precompiled {
+                        Some(path) => {
+                            match self
+                                .read_reference_manifest_with_dependencies(path, Some(&stream_root))
+                            {
+                                Ok(()) => true,
+                                Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+                                Err(error) => return Err(error),
+                            }
+                        }
+                        None => false,
+                    };
+                    if !reused {
+                        let ids = self
+                            .source_references
+                            .as_deref_mut()
+                            .unwrap()
+                            .build(&target, stem, &self.root, directory)?;
+                        self.external_ids.extend(ids.iter().copied());
+                    }
+                    self.referenced_manifests.push(name);
+                }
+                return Ok(());
+            }
+        }
+        if !self.referenced_manifests.contains(&name) {
+            self.read_reference_manifest(&path)?;
+            self.referenced_manifests.push(name);
+        }
         Ok(())
     }
 
     fn read_reference_manifest(&mut self, path: &Path) -> io::Result<()> {
+        self.read_reference_manifest_with_dependencies(path, None)
+    }
+
+    fn read_reference_manifest_with_dependencies(
+        &mut self,
+        path: &Path,
+        stream_root: Option<&Path>,
+    ) -> io::Result<()> {
         let bytes = read_with_context(path, fs::read)?;
         let manifest = Manifest::parse(&bytes).map_err(|error| invalid(path, error))?;
         if manifest.version != 6
@@ -1110,6 +1176,14 @@ impl Compiler<'_> {
                 && !is_stock_audio_catalog(path, &manifest))
         {
             return Err(invalid(path, "reference must be an RA3 PC manifest"));
+        }
+        if let Some(root) = stream_root {
+            self.external_ids.extend(crate::fix_assets::external_ids(
+                &manifest,
+                path.parent().unwrap(),
+                root,
+                self.reference_directory.unwrap(),
+            )?);
         }
         self.external_ids
             .extend(manifest.assets.iter().map(|asset| asset.id));
@@ -1270,7 +1344,7 @@ impl Compiler<'_> {
         }
     }
 
-    fn finish(mut self) -> io::Result<CompiledStream> {
+    fn finish(mut self) -> io::Result<(CompiledStream, HashSet<AssetId>)> {
         if self.assets.is_empty()
             && (self.reference_directory.is_none() || self.reference_mode == ReferenceMode::Map)
         {
@@ -1466,11 +1540,17 @@ impl Compiler<'_> {
                 ))
             })
             .collect();
-        Ok(CompiledStream {
-            manifest,
-            files,
-            custom_data,
-        })
+        if self.source_references.is_some() {
+            self.external_ids.extend(self.ids);
+        }
+        Ok((
+            CompiledStream {
+                manifest,
+                files,
+                custom_data,
+            },
+            self.external_ids,
+        ))
     }
 }
 

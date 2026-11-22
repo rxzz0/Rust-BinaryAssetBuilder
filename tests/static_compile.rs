@@ -873,6 +873,112 @@ fn sdk_static_preserves_references_to_assets_in_commented_includes() {
 }
 
 #[test]
+fn sdk_static_builds_nested_source_references_and_resolves_transitive_assets() {
+    let root = scratch_root();
+    let data = root.join("Mods/Test/Data");
+    let built = root.join("builtmods");
+    fs::create_dir_all(data.join("libs")).unwrap();
+    for (path, contents) in [
+        (
+            "mod.xml",
+            include_str!("fixtures/ea-conformance/nested-source-reference/mod.xml"),
+        ),
+        (
+            "libs/library.xml",
+            include_str!("fixtures/ea-conformance/nested-source-reference/libs/library.xml"),
+        ),
+        (
+            "shared.xml",
+            include_str!("fixtures/ea-conformance/nested-source-reference/shared.xml"),
+        ),
+    ] {
+        fs::write(data.join(path), contents).unwrap();
+    }
+    let input = data.join("mod.xml");
+    let output = built.join("mods/test/data");
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let mut bytes = Vec::new();
+    for (stream, asset, reference) in [
+        (
+            "mod",
+            &b"VideoEventList:Intro"[..],
+            Some(&b"libs\\library.manifest"[..]),
+        ),
+        (
+            "libs/library",
+            &b"Video:LibraryVideo"[..],
+            Some(&b"shared.manifest"[..]),
+        ),
+        ("shared", &b"Video:SharedVideo"[..], None),
+    ] {
+        let path = output.join(format!("{stream}.manifest"));
+        bytes.push(fs::read(&path).unwrap());
+        let manifest = Manifest::parse(bytes.last().unwrap()).unwrap();
+        assert_eq!(manifest.assets.len(), 1);
+        assert_eq!(manifest.assets[0].name, asset);
+        assert_eq!(
+            manifest
+                .referenced_manifests
+                .iter()
+                .map(|r| r.path)
+                .collect::<Vec<_>>(),
+            reference.into_iter().collect::<Vec<_>>()
+        );
+        check_linked_files(&path, &manifest).unwrap();
+    }
+    let main = Manifest::parse(&bytes[0]).unwrap();
+    let leaf = Manifest::parse(&bytes[2]).unwrap();
+    assert_eq!(
+        main.assets[0].references.iter().collect::<Vec<_>>(),
+        [leaf.assets[0].id]
+    );
+    fs::write(built.join("worldbuilder.manifest"), &bytes[2]).unwrap();
+    binary_asset_builder::fix_assets::fix_assets(&output.join("mod.manifest"), &built).unwrap();
+
+    compile_sdk_static(&input, &root, &built).unwrap();
+    assert_eq!(fs::read(output.join("mod.manifest")).unwrap(), bytes[0]);
+
+    // Resume with a cached parent stream and a missing transitive manifest.
+    fs::remove_file(output.join("shared.manifest")).unwrap();
+    compile_sdk_static(&input, &root, &built).unwrap();
+    assert_eq!(fs::read(output.join("shared.manifest")).unwrap(), bytes[2]);
+    assert_eq!(fs::read(output.join("mod.manifest")).unwrap(), bytes[0]);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn sdk_static_reference_cycle_cannot_publish_partial_streams() {
+    let root = scratch_root();
+    let data = root.join("mods/test/data");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    let input = data.join("mod.xml");
+    fs::write(
+        &input,
+        include_str!("fixtures/ea-conformance/source-reference/mod.xml"),
+    )
+    .unwrap();
+    fs::write(
+        data.join("library.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <Includes><Include type="reference" source="mod.xml"/></Includes>
+    </AssetDeclaration>"#,
+    )
+    .unwrap();
+
+    let error = compile_sdk_static(&input, &root, &built).unwrap_err();
+    assert!(
+        error.to_string().contains("source reference cycle"),
+        "{error}"
+    );
+    assert_eq!(
+        fs::read_dir(built.join("mods/test/data")).unwrap().count(),
+        0
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_static_builds_and_fixes_a_mod_with_only_sdk_references() {
     let root = scratch_root();
     let data = root.join("Mods/Test/Data");

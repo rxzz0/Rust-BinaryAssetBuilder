@@ -71,7 +71,7 @@ fn fix_assets_impl(input: &Path, references: &Path, allow_missing: bool) -> io::
                 return Err(invalid("expected a base RA3 PC stream"));
             }
             check_linked_files(input, &manifest)?;
-            let external = external_ids(&manifest, directory, references)?;
+            let external = external_ids(&manifest, directory, directory, references)?;
             let order = dependency_order(&manifest, &external, allow_missing)?;
             if !manifest.assets.is_empty() {
                 let hashes = worldbuilder_hashes(references)?;
@@ -110,9 +110,10 @@ fn fix_assets_impl(input: &Path, references: &Path, allow_missing: bool) -> io::
     Ok(stats)
 }
 
-fn external_ids(
+pub(crate) fn external_ids(
     manifest: &Manifest<'_>,
     directory: &Path,
+    stream_root: &Path,
     references: &Path,
 ) -> io::Result<HashSet<AssetId>> {
     let mut ids = HashSet::new();
@@ -139,6 +140,7 @@ fn external_ids(
         }
         let path = [
             directory.join(relative),
+            stream_root.join(relative),
             references.join(relative),
             references.join("sagexml").join(relative),
         ]
