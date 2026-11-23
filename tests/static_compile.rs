@@ -986,6 +986,9 @@ fn sdk_static_builds_nested_source_references_and_resolves_transitive_assets() {
     let input = data.join("mod.xml");
     let output = built.join("mods/test/data");
     compile_sdk_static(&input, &root, &built).unwrap();
+    assert_eq!(fs::read(output.join("mod.version")).unwrap(), b"\r\n");
+    assert!(!output.join("libs/library.version").exists());
+    assert!(!output.join("shared.version").exists());
     let mut bytes = Vec::new();
     for (stream, asset, reference) in [
         (

@@ -127,7 +127,7 @@ pub(crate) fn append_versioned_stream(
     ));
 }
 
-fn stream_outputs(
+pub(crate) fn stream_outputs(
     stem: &OsStr,
     custom_data_stem: &OsStr,
     stream: CompiledStream,

@@ -1,6 +1,7 @@
 use super::{CompiledStream, ReferenceMode, compile_with_source_references, invalid};
 use crate::compile_batch::{
-    append_versioned_stream, compile_streams, is_generated, publish, publish_prepared, xml_sources,
+    append_versioned_stream, compile_streams, is_generated, publish, publish_prepared,
+    stream_outputs, xml_sources,
 };
 use crate::manifest::AssetId;
 use std::collections::{HashMap, HashSet};
@@ -37,8 +38,9 @@ pub fn compile_sdk_static(input: &Path, sdk_root: &Path, output: &Path) -> io::R
             )?;
             let mut outputs = Vec::new();
             for (name, stream) in references.streams {
-                append_versioned_stream(name.as_os_str(), stream, b"\r\n", &mut outputs);
+                stream_outputs(name.as_os_str(), name.as_os_str(), stream, &mut outputs);
             }
+            // ModStudio's Step 6 writes the blank version marker for the main stream.
             append_versioned_stream(OsStr::new(&stem), main, b"\r\n", &mut outputs);
             Ok(outputs)
         },

@@ -47,7 +47,7 @@ foreach ($case in $cases) {
         $modPath = "Mods\$($case.Name)"
         & $ea $inputXml "/dr:$work" "/od:$eaOutput" "/iod:$eaOutput" "/scd:$eaOutput" `
             "/data:.;.\$modPath\Data;.\Mods;.\SageXml" "/art:.;.\$modPath\Art;.\Mods;.\Art" `
-            "/audio:.;.\$modPath\Audio;.\Mods;.\Audio" /bc:false /sc:false /ls:true /ss:true /poe:false *> $eaLog
+            "/audio:.;.\$modPath\Audio;.\Mods;.\Audio" /bc:false /sc:false /ls:true /ss:true /vf:false /poe:false *> $eaLog
         $eaExit = $LASTEXITCODE
     } finally {
         Pop-Location
@@ -63,6 +63,9 @@ foreach ($case in $cases) {
         Write-Host "  ORACLE FAILED (no mod.manifest). See $eaLog"
         continue
     }
+    # The EA ModStudio script appends one blank line to the main stream's version file.
+    $mainManifest = Join-Path $eaOutput "$modPath/Data/mod.manifest"
+    [IO.File]::AppendAllText([IO.Path]::ChangeExtension($mainManifest, 'version'), "`r`n")
     $same = $rustExit -eq 0
     if (-not $same) {
         Write-Host "  DIFF build outcome (EA exit $eaExit, Rust exit $rustExit). See $rustLog"
@@ -80,13 +83,18 @@ foreach ($case in $cases) {
             Add-Content -LiteralPath $comparisonLog -Value "STREAM $name"
             & $rust compare-linked $expected.FullName $actual.FullName *>> $comparisonLog
             if ($LASTEXITCODE -ne 0) { $same = $false }
-            $eaVersion = Join-Path $expected.DirectoryName ($expected.BaseName + '.version')
-            $rustVersion = Join-Path $actual.DirectoryName ($actual.BaseName + '.version')
-            $eaHasVersion = Test-Path -LiteralPath $eaVersion -PathType Leaf
-            $rustHasVersion = Test-Path -LiteralPath $rustVersion -PathType Leaf
-            if ($eaHasVersion -ne $rustHasVersion -or
-                ($eaHasVersion -and (Get-FileHash -LiteralPath $eaVersion).Hash -ne (Get-FileHash -LiteralPath $rustVersion).Hash)) {
-                Write-Host "  DIFF version sidecar $name"
+        }
+        $versionPaths = foreach ($root in @($eaOutput, $rustOutput)) {
+            Get-ChildItem -LiteralPath $root -Recurse -Filter '*.version' -File |
+                ForEach-Object { $_.FullName.Substring($root.Length + 1) }
+        }
+        foreach ($path in ($versionPaths | Sort-Object -Unique)) {
+            $eaVersion = Join-Path $eaOutput $path
+            $rustVersion = Join-Path $rustOutput $path
+            if (!(Test-Path -LiteralPath $eaVersion -PathType Leaf) -or
+                !(Test-Path -LiteralPath $rustVersion -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $eaVersion).Hash -ne (Get-FileHash -LiteralPath $rustVersion).Hash) {
+                Write-Host "  DIFF version sidecar $path"
                 $same = $false
             }
         }
