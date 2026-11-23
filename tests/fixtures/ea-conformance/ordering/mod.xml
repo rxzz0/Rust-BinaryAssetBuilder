@@ -1,0 +1,15 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <LogicCommandSet id="A"><Cmd>zCommand</Cmd><Cmd>aCommand</Cmd></LogicCommandSet>
+  <LogicCommand id="zCommand" Type="ATTACK_MOVE"/>
+  <LogicCommand id="aCommand" Type="ATTACK_MOVE"/>
+  <LogicCommand id="BCommand" Type="ATTACK_MOVE"/>
+  <UpgradeTemplate id="u" Type="OBJECT"/>
+  <LogicCommand id="a-B" Type="ATTACK_MOVE"/>
+  <LogicCommand id="a_B" Type="ATTACK_MOVE"/>
+  <LogicCommand id="ab" Type="ATTACK_MOVE"/>
+  <LogicCommand id="abZ" Type="ATTACK_MOVE"/>
+  <LogicCommand id="a.b" Type="ATTACK_MOVE"/>
+  <LogicCommand id="Alpha" Type="ATTACK_MOVE"/>
+  <LogicCommand id="_A" Type="ATTACK_MOVE"/>
+  <LogicCommand id="9A" Type="ATTACK_MOVE"/>
+</AssetDeclaration>

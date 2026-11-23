@@ -28,6 +28,7 @@ mod precompiled;
 mod sdk_maps;
 mod sdk_static;
 mod static_assets;
+mod stream_order;
 mod terrain_atlas;
 mod texture;
 mod xinclude;
@@ -1445,11 +1446,20 @@ impl Compiler<'_> {
             }
             resolved_references.push(resolved);
         }
-        let assets = self
-            .assets
-            .iter()
-            .zip(&resolved_references)
-            .map(|(asset, references)| {
+        let order = if self.reference_mode == ReferenceMode::SdkStatic {
+            stream_order::stable_order(
+                &self.assets,
+                &resolved_references,
+                self.game_object_schema.as_ref(),
+            )
+        } else {
+            (0..self.assets.len()).collect()
+        };
+        let assets = order
+            .into_iter()
+            .map(|index| {
+                let asset = &self.assets[index];
+                let references = &resolved_references[index];
                 files.bin.extend_from_slice(&asset.payload);
                 files.relo.extend_from_slice(&asset.relocations);
                 files.imp.extend_from_slice(&asset.imports);

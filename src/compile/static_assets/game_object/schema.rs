@@ -232,6 +232,78 @@ impl Schema {
         })
     }
 
+    pub(in crate::compile) fn dependency_counts(&self) -> HashMap<&str, usize> {
+        let direct: HashMap<_, _> = self
+            .types
+            .keys()
+            .map(String::as_str)
+            .filter(|kind| self.derives_from(kind, "BaseAssetType"))
+            .map(|kind| {
+                let mut targets = HashSet::new();
+                self.collect_strong_targets(kind, &mut HashSet::new(), &mut targets);
+                (kind, targets)
+            })
+            .collect();
+        direct
+            .iter()
+            .map(|(&kind, targets)| {
+                let mut reachable = HashSet::new();
+                let mut pending: Vec<_> = targets.iter().copied().collect();
+                while let Some(target) = pending.pop() {
+                    if reachable.insert(target)
+                        && let Some(children) = direct.get(target)
+                    {
+                        pending.extend(children);
+                    }
+                }
+                (kind, reachable.len())
+            })
+            .collect()
+    }
+
+    fn derives_from<'a>(&'a self, mut kind: &'a str, base: &str) -> bool {
+        for _ in 0..64 {
+            if kind == base {
+                return true;
+            }
+            let Some(parent) = self.types.get(kind).and_then(|entry| entry.base.as_deref()) else {
+                return false;
+            };
+            kind = parent;
+        }
+        false
+    }
+
+    fn collect_strong_targets<'a>(
+        &'a self,
+        kind: &'a str,
+        visited: &mut HashSet<&'a str>,
+        targets: &mut HashSet<&'a str>,
+    ) {
+        if !visited.insert(kind) {
+            return;
+        }
+        let Some(entry) = self.types.get(kind) else {
+            return;
+        };
+        if let Some(target) = entry.reference_target.as_deref()
+            && self.derives_from(kind, "AssetReference")
+        {
+            targets.insert(target);
+        }
+        if let Some(base) = entry.base.as_deref() {
+            self.collect_strong_targets(base, visited, targets);
+        }
+        for field in entry.fields.iter().chain(&entry.children) {
+            if let Some(target) = field.reference_target.as_deref()
+                && self.derives_from(&field.kind, "AssetReference")
+            {
+                targets.insert(target);
+            }
+            self.collect_strong_targets(&field.kind, visited, targets);
+        }
+    }
+
     pub(in crate::compile) fn shape(&self, kind: &str, path: &Path) -> io::Result<Shape<'_>> {
         let mut lineage = Vec::new();
         let mut name = kind;

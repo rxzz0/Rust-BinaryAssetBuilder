@@ -873,6 +873,95 @@ fn sdk_static_preserves_references_to_assets_in_commented_includes() {
 }
 
 #[test]
+fn sdk_static_orders_assets_by_schema_and_local_dependencies() {
+    let root = scratch_root();
+    let data = root.join("Mods/Test/Data");
+    let schemas = root.join("Schemas/xsd");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    fs::create_dir_all(&schemas).unwrap();
+    fs::write(
+        schemas.join("CnC3Types.xsd"),
+        r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                      xmlns:xas="uri:ea.com:eala:asset:schema">
+          <xs:simpleType name="CommandReference" xas:refType="LogicCommand">
+            <xs:restriction base="AssetReference"/>
+          </xs:simpleType>
+          <xs:complexType name="UpgradeTemplate"><xs:complexContent>
+            <xs:extension base="BaseAssetType"/>
+          </xs:complexContent></xs:complexType>
+          <xs:complexType name="LogicCommand"><xs:complexContent>
+            <xs:extension base="BaseAssetType">
+              <xs:attribute name="Upgrade" type="AssetReference" xas:refType="UpgradeTemplate"/>
+            </xs:extension>
+          </xs:complexContent></xs:complexType>
+          <xs:complexType name="LogicCommandSet"><xs:complexContent>
+            <xs:extension base="BaseAssetType">
+              <xs:sequence><xs:element name="Cmd" type="CommandReference"/></xs:sequence>
+            </xs:extension>
+          </xs:complexContent></xs:complexType>
+        </xs:schema>"#,
+    )
+    .unwrap();
+    let input = data.join("mod.xml");
+    fs::write(
+        &input,
+        include_str!("fixtures/ea-conformance/ordering/mod.xml"),
+    )
+    .unwrap();
+    let output = built.join("mods/test/data/mod.manifest");
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let bytes = fs::read(&output).unwrap();
+    let manifest = Manifest::parse(&bytes).unwrap();
+    assert_eq!(manifest.stream_checksum, 0x5e90_5fa5);
+    let names: Vec<_> = manifest
+        .assets
+        .iter()
+        .map(|asset| std::str::from_utf8(asset.name).unwrap())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "UpgradeTemplate:u",
+            "LogicCommand:_A",
+            "LogicCommand:9A",
+            "LogicCommand:a.b",
+            "LogicCommand:a_B",
+            "LogicCommand:ab",
+            "LogicCommand:a-B",
+            "LogicCommand:abZ",
+            "LogicCommand:aCommand",
+            "LogicCommand:Alpha",
+            "LogicCommand:BCommand",
+            "LogicCommand:zCommand",
+            "LogicCommandSet:A",
+        ]
+    );
+    let set = manifest.assets.last().unwrap();
+    assert_eq!(
+        set.references.iter().collect::<Vec<_>>(),
+        [manifest.assets[11].id, manifest.assets[8].id]
+    );
+    check_linked_files(&output, &manifest).unwrap();
+
+    fs::remove_file(schemas.join("CnC3Types.xsd")).unwrap();
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let bytes = fs::read(&output).unwrap();
+    let manifest = Manifest::parse(&bytes).unwrap();
+    let index = |name: &[u8]| {
+        manifest
+            .assets
+            .iter()
+            .position(|asset| asset.name == name)
+            .unwrap()
+    };
+    assert!(index(b"LogicCommand:zCommand") < index(b"LogicCommandSet:A"));
+    assert!(index(b"LogicCommand:aCommand") < index(b"LogicCommandSet:A"));
+    check_linked_files(&output, &manifest).unwrap();
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_static_builds_nested_source_references_and_resolves_transitive_assets() {
     let root = scratch_root();
     let data = root.join("Mods/Test/Data");

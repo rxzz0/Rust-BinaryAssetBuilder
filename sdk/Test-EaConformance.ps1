@@ -43,7 +43,7 @@ foreach ($case in $cases) {
 
     Push-Location -LiteralPath (Split-Path -Parent $ea)
     try {
-        & $ea $inputXml "/dr:$source" "/od:$eaOutput" "/iod:$eaOutput" "/scd:$eaOutput" /bc:false /sc:false /ls:true /poe:false *> $eaLog
+        & $ea $inputXml "/dr:$source" "/od:$eaOutput" "/iod:$eaOutput" "/scd:$eaOutput" /bc:false /sc:false /ls:true /ss:true /poe:false *> $eaLog
         $eaExit = $LASTEXITCODE
     } finally {
         Pop-Location
