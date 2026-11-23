@@ -41,9 +41,13 @@ foreach ($case in $cases) {
     $comparisonLog = Join-Path $caseOutput 'comparison.log'
     Write-Host "CASE $($case.Name)"
 
-    Push-Location -LiteralPath (Split-Path -Parent $ea)
+    # EA anchors its SDK search paths and stream paths at the configured data root.
+    Push-Location -LiteralPath $work
     try {
-        & $ea $inputXml "/dr:$source" "/od:$eaOutput" "/iod:$eaOutput" "/scd:$eaOutput" /bc:false /sc:false /ls:true /ss:true /poe:false *> $eaLog
+        $modPath = "Mods\$($case.Name)"
+        & $ea $inputXml "/dr:$work" "/od:$eaOutput" "/iod:$eaOutput" "/scd:$eaOutput" `
+            "/data:.;.\$modPath\Data;.\Mods;.\SageXml" "/art:.;.\$modPath\Art;.\Mods;.\Art" `
+            "/audio:.;.\$modPath\Audio;.\Mods;.\Audio" /bc:false /sc:false /ls:true /ss:true /poe:false *> $eaLog
         $eaExit = $LASTEXITCODE
     } finally {
         Pop-Location

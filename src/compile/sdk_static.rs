@@ -12,13 +12,15 @@ use std::path::{Path, PathBuf};
 /// Compiles a static XML stream from SDK sources using the native compiler.
 pub fn compile_sdk_static(input: &Path, sdk_root: &Path, output: &Path) -> io::Result<()> {
     let (input, relative) = sdk_input(input, sdk_root)?;
-    let directory = output.join(relative.parent().unwrap());
+    let relative_directory = relative.parent().unwrap();
+    let directory = output.join(relative_directory);
     let stem = stream_stem(&input)?;
     publish_prepared(
         &directory,
         || {
             let mut references = SourceReferences {
                 output: directory.clone(),
+                relative_directory: relative_directory.to_path_buf(),
                 source_directory: input.parent().unwrap().to_path_buf(),
                 sources: HashMap::from([(PathBuf::from(&stem), input.clone())]),
                 active: HashSet::from([input.clone()]),
@@ -54,6 +56,7 @@ pub fn compile_sdk_static(input: &Path, sdk_root: &Path, output: &Path) -> io::R
 
 pub(super) struct SourceReferences {
     pub(super) output: PathBuf,
+    pub(super) relative_directory: PathBuf,
     source_directory: PathBuf,
     sources: HashMap<PathBuf, PathBuf>,
     active: HashSet<PathBuf>,

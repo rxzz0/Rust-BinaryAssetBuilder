@@ -991,12 +991,12 @@ fn sdk_static_builds_nested_source_references_and_resolves_transitive_assets() {
         (
             "mod",
             &b"VideoEventList:Intro"[..],
-            Some(&b"libs\\library.manifest"[..]),
+            Some(&b"mods\\test\\data\\libs\\library.manifest"[..]),
         ),
         (
             "libs/library",
             &b"Video:LibraryVideo"[..],
-            Some(&b"shared.manifest"[..]),
+            Some(&b"mods\\test\\data\\shared.manifest"[..]),
         ),
         ("shared", &b"Video:SharedVideo"[..], None),
     ] {
@@ -1005,6 +1005,10 @@ fn sdk_static_builds_nested_source_references_and_resolves_transitive_assets() {
         let manifest = Manifest::parse(bytes.last().unwrap()).unwrap();
         assert_eq!(manifest.assets.len(), 1);
         assert_eq!(manifest.assets[0].name, asset);
+        assert_eq!(
+            manifest.assets[0].source_file_name,
+            format!("DATA:mods/test/data/{stream}.xml").as_bytes()
+        );
         assert_eq!(
             manifest
                 .referenced_manifests

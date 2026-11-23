@@ -1117,7 +1117,14 @@ impl Compiler<'_> {
             if local || !exists {
                 let stem = references.claim(&target)?;
                 let manifest_name = format!("{}.manifest", stem.display());
-                name = manifest_name.replace('/', "\\");
+                name = references
+                    .relative_directory
+                    .join(&manifest_name)
+                    .to_str()
+                    .filter(|name| name.is_ascii())
+                    .ok_or_else(|| invalid(document, "manifest reference path must be ASCII"))?
+                    .replace('/', "\\")
+                    .to_ascii_lowercase();
                 if !self.referenced_manifests.contains(&name) {
                     let sibling = references.output.join(&manifest_name);
                     let stream_root = references.output.clone();
