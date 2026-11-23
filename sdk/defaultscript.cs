@@ -148,6 +148,8 @@ namespace EALABuild
 		// This function is called on the successful completion of a build step.
         public void onStepSuccess(int stepId)
         {
+            if (stepId == 9 && !UseEaCompiler() && shouldExecuteStep(10) && OverlapMiscBigs())
+                StartMiscBig();
             if (BuildHelper.GetNextExecutableStep() != -1)
             {
                 executeModBuildStep(BuildHelper.CurrentStep);
@@ -168,7 +170,7 @@ namespace EALABuild
 		// This function is called to determine if a step should execute.
         public bool shouldExecuteStep(int stepId)
         {
-            if (stepId == 9 && UseEaCompiler()) return false;
+            if (stepId == 9) return true;
             if (currentGUIData.ContainsKey("step" + stepId))
             {
                 if ((bool)currentGUIData["step" + stepId])
@@ -207,8 +209,6 @@ namespace EALABuild
 			ModSkudef = ModBase + ".skudef";
 
             StopBigBuild();
-            if (!UseEaCompiler() && shouldExecuteStep(10) && !shouldExecuteStep(9) && OverlapMiscBigs())
-                StartMiscBig();
             executeModBuildStep(BuildHelper.GetNextExecutableStep());
         }
 
@@ -229,7 +229,6 @@ namespace EALABuild
             modGUIData.Add(new GUIElementData("step6", "Build Static Data", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step7", "Merge Assets", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
             modGUIData.Add(new GUIElementData("step8", "Fix Assets", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
-			modGUIData.Add(new GUIElementData("step9", "Build Map Overrides", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
             modGUIData.Add(new GUIElementData("sp2", "", GUIElementData.LabelType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step10", "Create BIG Files", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step11", "Create Skudef File", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
@@ -539,7 +538,7 @@ namespace EALABuild
 
         private void executeModBuildStep(int stepId)
         {
-            if (stepId >= 4 && stepId <= 10 && UseEaCompiler())
+            if (stepId >= 4 && stepId <= 10 && stepId != 9 && UseEaCompiler())
             {
                 ExecuteEaBuildStep(stepId);
                 return;
