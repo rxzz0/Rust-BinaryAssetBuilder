@@ -1,0 +1,17 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ScriptObject">
+    <Behaviors><InfiltratorContain id="ModuleTag_Infiltrator" /></Behaviors>
+    <Body><ActiveBody id="BodyTag" /></Body>
+  </GameObject>
+  <GameScriptList id="ScriptList">
+    <ScriptSet id="Primary">
+      <Script id="My Script">
+        <Action Type="Go Ahead" />
+        <Action Type="&quot;A&amp;B&quot;" />
+        <Action Type="Terminé" />
+        <Action Type="É" />
+        <Action Type="" />
+      </Script>
+    </ScriptSet>
+  </GameScriptList>
+</AssetDeclaration>

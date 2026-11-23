@@ -1,5 +1,5 @@
 use super::super::asset_reference;
-use crate::compile::{AssetReference, SAGE_NS, invalid};
+use crate::compile::{AssetReference, SAGE_NS, invalid, string_hashes::StringHashes};
 use roxmltree::{Document, Node};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -378,6 +378,87 @@ impl Schema {
         let mut references = Vec::new();
         self.find_weak_references(node, node.tag_name().name(), path, map, &mut references)?;
         Ok(references)
+    }
+
+    pub(in crate::compile) fn collect_string_hashes(
+        &self,
+        node: Node<'_, '_>,
+        kind: &str,
+        path: &Path,
+        hashes: &mut StringHashes,
+    ) -> io::Result<()> {
+        if !self.types.contains_key(kind) {
+            return Ok(());
+        }
+        let shape = self.shape(kind, path)?;
+        for attribute in node.attributes().filter(|attr| attr.namespace().is_none()) {
+            if let Some(field) = shape
+                .fields
+                .iter()
+                .find(|field| field.name == attribute.name())
+            {
+                self.record_hash_field(field, attribute.value(), path, hashes)?;
+            }
+        }
+        for field in &shape.fields {
+            if let Some(value) = field.default.as_deref()
+                && node.attribute(field.name.as_str()).is_none()
+            {
+                self.record_hash_field(field, value, path, hashes)?;
+            }
+        }
+        for child in node
+            .children()
+            .filter(|child| child.tag_name().namespace() == Some(SAGE_NS))
+        {
+            if let Some(field) = shape
+                .children
+                .iter()
+                .find(|field| field.name == child.tag_name().name())
+            {
+                self.record_hash_field(field, child.text().unwrap_or_default(), path, hashes)?;
+                self.collect_string_hashes(child, &field.kind, path, hashes)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn record_hash_field(
+        &self,
+        field: &Field,
+        value: &str,
+        path: &Path,
+        hashes: &mut StringHashes,
+    ) -> io::Result<()> {
+        let (mut kind, mut target) = (field.kind.as_str(), field.reference_target.as_deref());
+        for _ in 0..64 {
+            match kind {
+                "Poid" | "StringHash" => {
+                    return hashes.value(kind, value, path);
+                }
+                "AssetReference" | "WeakReference" => {
+                    let value = value.trim();
+                    let value = value.split_once('\\').map_or(value, |(name, _)| name);
+                    let (kind, name) = value
+                        .split_once(':')
+                        .unwrap_or((target.unwrap_or_default(), value));
+                    if !kind.is_empty() && !name.is_empty() {
+                        hashes.asset(kind, name, path)?;
+                    }
+                    return Ok(());
+                }
+                _ => {}
+            }
+            let Some(entry) = self.types.get(kind) else {
+                break;
+            };
+            target = target.or(entry.reference_target.as_deref());
+            let Some(base) = entry.base.as_deref() else {
+                break;
+            };
+            kind = base;
+        }
+        Ok(())
     }
 
     fn find_weak_references(

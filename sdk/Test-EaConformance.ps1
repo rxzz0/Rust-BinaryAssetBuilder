@@ -45,15 +45,18 @@ foreach ($case in $cases) {
     Push-Location -LiteralPath $work
     try {
         $modPath = "Mods\$($case.Name)"
-        & $ea $inputXml "/dr:$work" "/od:$eaOutput" "/iod:$eaOutput" "/scd:$eaOutput" `
+        # Give both compilers the same logical StringHashes.xml path for manifest comparison.
+        $hashDirectory = Join-Path $rustOutput "$modPath/Data"
+        New-Item -ItemType Directory -Path $hashDirectory | Out-Null
+        $hashXml = Join-Path $hashDirectory 'StringHashes.xml'
+        $eaHashXml = Join-Path $eaOutput 'StringHashes.xml'
+        & $ea $inputXml "/dr:$work" "/od:$eaOutput" "/iod:$eaOutput" "/scd:$hashDirectory" `
             "/data:.;.\$modPath\Data;.\Mods;.\SageXml" "/art:.;.\$modPath\Art;.\Mods;.\Art" `
-            "/audio:.;.\$modPath\Audio;.\Mods;.\Audio" /bc:false /sc:false /ls:true /ss:true /vf:false /poe:false *> $eaLog
+            "/audio:.;.\$modPath\Audio;.\Mods;.\Audio" /bc:false /sc:false /ls:true /ss:true /vf:false /poe:false /osh:true *> $eaLog
         $eaExit = $LASTEXITCODE
     } finally {
         Pop-Location
     }
-    & $rust compile-static-sdk $inputXml --sdk-root $work --output $rustOutput *> $rustLog
-    $rustExit = $LASTEXITCODE
     if ($eaExit -ne 0) {
         Write-Host "  ORACLE FAILED (exit $eaExit). See $eaLog"
         continue
@@ -63,6 +66,9 @@ foreach ($case in $cases) {
         Write-Host "  ORACLE FAILED (no mod.manifest). See $eaLog"
         continue
     }
+    Move-Item -LiteralPath $hashXml -Destination $eaHashXml
+    & $rust compile-static-sdk $inputXml --sdk-root $work --output $rustOutput --string-hashes *> $rustLog
+    $rustExit = $LASTEXITCODE
     # The EA ModStudio script appends one blank line to the main stream's version file.
     $mainManifest = Join-Path $eaOutput "$modPath/Data/mod.manifest"
     [IO.File]::AppendAllText([IO.Path]::ChangeExtension($mainManifest, 'version'), "`r`n")
@@ -70,6 +76,11 @@ foreach ($case in $cases) {
     if (-not $same) {
         Write-Host "  DIFF build outcome (EA exit $eaExit, Rust exit $rustExit). See $rustLog"
     } else {
+        if (!(Test-Path -LiteralPath $hashXml -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $eaHashXml).Hash -ne (Get-FileHash -LiteralPath $hashXml).Hash) {
+            Write-Host '  DIFF StringHashes.xml'
+            $same = $false
+        }
         $rustManifests = @(Get-ChildItem -LiteralPath $rustOutput -Recurse -Filter '*.manifest' -File)
         foreach ($name in @($eaManifests.Name + $rustManifests.Name | Sort-Object -Unique)) {
             $expected = $eaManifests | Where-Object Name -EQ $name

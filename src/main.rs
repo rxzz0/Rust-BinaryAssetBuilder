@@ -3,8 +3,8 @@
 use binary_asset_builder::big::stage_big;
 use binary_asset_builder::compile::{
     CompiledStream, compile_apt_ui, compile_apt_ui_directory, compile_map, compile_sdk_global,
-    compile_sdk_map_overrides, compile_sdk_static, compile_static, merge_assets, sdk_coverage,
-    verify_ea_batch, write_compiled_stream,
+    compile_sdk_map_overrides, compile_sdk_static, compile_sdk_static_with_string_hashes,
+    compile_static, merge_assets, sdk_coverage, verify_ea_batch, write_compiled_stream,
 };
 use binary_asset_builder::fix_assets::{fix_assets, fix_assets_allow_missing};
 use binary_asset_builder::linked_stream::{
@@ -26,7 +26,7 @@ Usage
   binary-asset-builder compile-static <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-map <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-maps-sdk <maps-directory> --sdk-root <directory> --references <builtmods-directory> --output <maps-directory> [--game-data <directory>]
-  binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory> [--game-data <directory>]
+  binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory> [--game-data <directory>] [--string-hashes]
   binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory> [--game-data <directory>]
   binary-asset-builder merge-assets <file.manifest> --assets <directory>
   binary-asset-builder fix-assets <mod.manifest> --references <builtmods-directory> [--allow-missing-references]
@@ -151,13 +151,37 @@ fn main() -> ExitCode {
             options @ ..,
         ] if (command == "compile-static-sdk" || command == "compile-global-sdk")
             && sdk_flag == "--sdk-root"
-            && output_flag == "--output"
-            && (options.is_empty() || matches!(options, [flag, _] if flag == "--game-data")) =>
+            && output_flag == "--output" =>
         {
             let input = Path::new(input);
             let sdk = Path::new(sdk);
             let output = Path::new(output);
-            if let [_, game_data] = options {
+            let (game_data, string_hashes) = match options {
+                [] => (None, false),
+                [flag, path] if flag == "--game-data" => (Some(path), false),
+                [flag] if command == "compile-static-sdk" && flag == "--string-hashes" => {
+                    (None, true)
+                }
+                [a, path, b]
+                    if command == "compile-static-sdk"
+                        && a == "--game-data"
+                        && b == "--string-hashes" =>
+                {
+                    (Some(path), true)
+                }
+                [b, a, path]
+                    if command == "compile-static-sdk"
+                        && a == "--game-data"
+                        && b == "--string-hashes" =>
+                {
+                    (Some(path), true)
+                }
+                _ => {
+                    eprintln!("{USAGE}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            if let Some(game_data) = game_data {
                 match prepare_references(output, Path::new(game_data)) {
                     Ok(0) => {}
                     Ok(count) => {
@@ -168,6 +192,8 @@ fn main() -> ExitCode {
             }
             let result = if command == "compile-global-sdk" {
                 compile_sdk_global(input, sdk, output)
+            } else if string_hashes {
+                compile_sdk_static_with_string_hashes(input, sdk, output)
             } else {
                 compile_sdk_static(input, sdk, output)
             };

@@ -29,6 +29,8 @@ mod sdk_maps;
 mod sdk_static;
 mod static_assets;
 mod stream_order;
+mod string_hash_stream;
+mod string_hashes;
 mod terrain_atlas;
 mod texture;
 mod xinclude;
@@ -37,7 +39,9 @@ pub use crate::compile_batch::{compile_apt_ui_directory, write_compiled_stream};
 pub use coverage::{sdk_coverage, verify_ea_batch};
 pub use merge_assets::merge_assets;
 pub use sdk_maps::{compile_sdk_map_overrides, compile_sdk_maps};
-pub use sdk_static::{compile_sdk_global, compile_sdk_static};
+pub use sdk_static::{
+    compile_sdk_global, compile_sdk_static, compile_sdk_static_with_string_hashes,
+};
 
 const SAGE_NS: &str = "uri:ea.com:eala:asset";
 const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
@@ -560,6 +564,17 @@ impl Compiler<'_> {
             {
                 continue;
             } else {
+                if let Some(hashes) = self
+                    .source_references
+                    .as_deref_mut()
+                    .and_then(|references| references.string_hashes.as_mut())
+                {
+                    let (id, _) = static_assets::declaration_id(node, path)?;
+                    hashes.asset(node.tag_name().name(), id, path)?;
+                    if let Some(schema) = &self.game_object_schema {
+                        schema.collect_string_hashes(node, node.tag_name().name(), path, hashes)?;
+                    }
+                }
                 if tentative || self.reference_mode == ReferenceMode::Map {
                     let (_, id) = static_assets::declaration_id(node, path)?;
                     let same_id_override = node.attribute("inheritFrom").is_some_and(|parent| {
@@ -1128,7 +1143,9 @@ impl Compiler<'_> {
                 if !self.referenced_manifests.contains(&name) {
                     let sibling = references.output.join(&manifest_name);
                     let stream_root = references.output.clone();
-                    let precompiled = if local && exists {
+                    let precompiled = if references.string_hashes.is_some() {
+                        None
+                    } else if local && exists {
                         Some(&path)
                     } else if local && sibling.try_exists()? {
                         Some(&sibling)

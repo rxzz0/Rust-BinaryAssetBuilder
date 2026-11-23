@@ -1,6 +1,9 @@
-use super::{CompiledStream, ReferenceMode, compile_with_source_references, invalid};
+use super::{
+    CompiledStream, ReferenceMode, compile_with_source_references, invalid, string_hash_stream,
+    string_hashes::StringHashes,
+};
 use crate::compile_batch::{
-    append_versioned_stream, compile_streams, is_generated, publish, publish_prepared,
+    Contents, append_versioned_stream, compile_streams, is_generated, publish, publish_prepared,
     stream_outputs, xml_sources,
 };
 use crate::manifest::AssetId;
@@ -12,10 +15,37 @@ use std::path::{Path, PathBuf};
 
 /// Compiles a static XML stream from SDK sources using the native compiler.
 pub fn compile_sdk_static(input: &Path, sdk_root: &Path, output: &Path) -> io::Result<()> {
+    compile_sdk_static_impl(input, sdk_root, output, false)
+}
+
+/// Compiles a static stream and EA-compatible linked string-hash tables.
+pub fn compile_sdk_static_with_string_hashes(
+    input: &Path,
+    sdk_root: &Path,
+    output: &Path,
+) -> io::Result<()> {
+    compile_sdk_static_impl(input, sdk_root, output, true)
+}
+
+fn compile_sdk_static_impl(
+    input: &Path,
+    sdk_root: &Path,
+    output: &Path,
+    string_hashes: bool,
+) -> io::Result<()> {
     let (input, relative) = sdk_input(input, sdk_root)?;
     let relative_directory = relative.parent().unwrap();
     let directory = output.join(relative_directory);
     let stem = stream_stem(&input)?;
+    if string_hashes && !sdk_root.join("Schemas/xsd/CnC3Types.xsd").try_exists()? {
+        return Err(invalid(sdk_root, "string-hash output requires SDK schemas"));
+    }
+    if string_hashes && stem == "stringhashes" {
+        return Err(invalid(
+            &input,
+            "stringhashes is reserved for string-hash output",
+        ));
+    }
     publish_prepared(
         &directory,
         || {
@@ -27,6 +57,7 @@ pub fn compile_sdk_static(input: &Path, sdk_root: &Path, output: &Path) -> io::R
                 active: HashSet::from([input.clone()]),
                 exports: HashMap::new(),
                 streams: Vec::new(),
+                string_hashes: string_hashes.then(StringHashes::default),
             };
             println!("Compiling XML with Rust {}", input.display());
             let (main, _) = compile_with_source_references(
@@ -42,6 +73,23 @@ pub fn compile_sdk_static(input: &Path, sdk_root: &Path, output: &Path) -> io::R
             }
             // ModStudio's Step 6 writes the blank version marker for the main stream.
             append_versioned_stream(OsStr::new(&stem), main, b"\r\n", &mut outputs);
+            if let Some(hashes) = references.string_hashes {
+                let xml = hashes.xml();
+                let path = fs::canonicalize(&directory)?.join("StringHashes.xml");
+                let sdk = fs::canonicalize(sdk_root)?;
+                let source = if let Ok(relative) = path.strip_prefix(&sdk) {
+                    format!(
+                        "DATA:{}",
+                        relative.to_string_lossy().replace('\\', "/").to_lowercase()
+                    )
+                } else {
+                    path.display().to_string()
+                };
+                let stream = string_hash_stream::encode(&xml, &source, &path)?;
+                let name = OsStr::new("stringhashes");
+                stream_outputs(name, name, stream, &mut outputs);
+                outputs.push(("StringHashes.xml".into(), Contents::Bytes(xml.into_bytes())));
+            }
             Ok(outputs)
         },
         |path| {
@@ -64,6 +112,7 @@ pub(super) struct SourceReferences {
     active: HashSet<PathBuf>,
     exports: HashMap<PathBuf, HashSet<AssetId>>,
     streams: Vec<(PathBuf, CompiledStream)>,
+    pub(super) string_hashes: Option<StringHashes>,
 }
 
 impl SourceReferences {
@@ -86,6 +135,12 @@ impl SourceReferences {
             .unwrap_or(Path::new(""));
         let stem = directory.join(stream_stem(source)?);
         let stem = PathBuf::from(stem.as_os_str().to_ascii_lowercase());
+        if self.string_hashes.is_some() && stem == Path::new("stringhashes") {
+            return Err(invalid(
+                source,
+                "stringhashes is reserved for string-hash output",
+            ));
+        }
         match self.sources.entry(stem.clone()) {
             std::collections::hash_map::Entry::Vacant(slot) => {
                 slot.insert(source.to_path_buf());
