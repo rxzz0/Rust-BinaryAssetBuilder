@@ -2998,6 +2998,56 @@ fn sdk_map_publishing_preserves_sources_and_previous_stream_on_failure() {
 }
 
 #[test]
+fn sdk_map_skip_preserves_complete_versioned_streams_and_builds_partial_ones() {
+    let root = scratch_root();
+    let maps = root.join("Mods/Test/Misc/Data/Maps/Official");
+    let complete = maps.join("Precompiled");
+    let partial = maps.join("Partial");
+    fs::create_dir_all(&complete).unwrap();
+    fs::create_dir_all(&partial).unwrap();
+    fs::write(complete.join("map.xml"), "<invalid").unwrap();
+    for extension in ["bin", "imp", "manifest", "RELO"] {
+        fs::write(complete.join(format!("map.1.12.{extension}")), b"existing").unwrap();
+    }
+
+    let source = partial.join("map.xml");
+    let xml = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameMap id="MapOne"/></AssetDeclaration>"#;
+    fs::write(&source, xml).unwrap();
+    for extension in ["bin", "imp", "manifest"] {
+        fs::write(partial.join(format!("map.1.12.{extension}")), b"partial").unwrap();
+    }
+    fs::write(partial.join("map_mod.relo"), b"different stream").unwrap();
+    let stock = compile_static(&source, &root, &root).unwrap();
+    fs::write(root.join("worldbuilder.manifest"), &stock.manifest).unwrap();
+
+    assert_eq!(
+        binary_asset_builder::compile::compile_sdk_map_overrides(
+            &maps, &root, &root, &maps, None, true
+        )
+        .unwrap(),
+        1
+    );
+    let manifest = partial.join("map_mod.manifest");
+    check_linked_files(
+        &manifest,
+        &Manifest::parse(&fs::read(&manifest).unwrap()).unwrap(),
+    )
+    .unwrap();
+    assert!(!complete.join("map_mod.manifest").exists());
+    assert_eq!(
+        fs::read(complete.join("map.1.12.RELO")).unwrap(),
+        b"existing"
+    );
+    assert_eq!(
+        binary_asset_builder::compile::compile_sdk_map_overrides(
+            &maps, &root, &root, &maps, None, true
+        )
+        .unwrap(),
+        0
+    );
+}
+
+#[test]
 fn inherited_stance_reference_omits_schema_ordinal() {
     let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/inherited-stance");
     let root = scratch_root();

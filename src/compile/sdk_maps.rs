@@ -12,7 +12,7 @@ pub fn compile_sdk_maps(
     references: &Path,
     output: &Path,
 ) -> io::Result<usize> {
-    compile_sdk_map_overrides(input, sdk_root, references, output, None)
+    compile_sdk_map_overrides(input, sdk_root, references, output, None, false)
 }
 
 /// Builds SDK maps, preparing reference catalogs when the first source is found.
@@ -22,6 +22,7 @@ pub fn compile_sdk_map_overrides(
     references: &Path,
     output: &Path,
     game_data: Option<&Path>,
+    skip_precompiled: bool,
 ) -> io::Result<usize> {
     if !input.try_exists()? {
         return Ok(0);
@@ -42,6 +43,13 @@ pub fn compile_sdk_map_overrides(
         if !source.try_exists()? {
             continue;
         }
+        if skip_precompiled && has_precompiled_map(&map.path())? {
+            println!(
+                "Skipping precompiled map {}",
+                map.file_name().to_string_lossy()
+            );
+            continue;
+        }
         if compiled == 0
             && let Some(game_data) = game_data
         {
@@ -57,4 +65,38 @@ pub fn compile_sdk_map_overrides(
         compiled += 1;
     }
     Ok(compiled)
+}
+
+fn has_precompiled_map(directory: &Path) -> io::Result<bool> {
+    let mut streams = std::collections::HashMap::<String, u8>::new();
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let path = entry.path();
+        let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+            continue;
+        };
+        let stem = stem.to_ascii_lowercase();
+        if !matches!(stem.as_str(), "map" | "map_mod") && !stem.starts_with("map.") {
+            continue;
+        }
+        let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
+            continue;
+        };
+        let part = match extension.to_ascii_lowercase().as_str() {
+            "bin" => 1,
+            "imp" => 2,
+            "manifest" => 4,
+            "relo" => 8,
+            _ => continue,
+        };
+        if !entry.file_type()?.is_file() {
+            continue;
+        }
+        let parts = streams.entry(stem).or_default();
+        *parts |= part;
+        if *parts == 15 {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }

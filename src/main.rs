@@ -25,7 +25,7 @@ Usage
   binary-asset-builder compile-aptui <input-directory> --data-root <directory> --output <directory>
   binary-asset-builder compile-static <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-map <file.xml> --data-root <directory> --references <directory> --output <new-directory>
-  binary-asset-builder compile-maps-sdk <maps-directory> --sdk-root <directory> --references <builtmods-directory> --output <maps-directory> [--game-data <directory>]
+  binary-asset-builder compile-maps-sdk <maps-directory> --sdk-root <directory> --references <builtmods-directory> --output <maps-directory> [--game-data <directory>] [--skip-precompiled]
   binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory> [--game-data <directory>] [--string-hashes]
   binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory> [--game-data <directory>]
   binary-asset-builder merge-assets <file.manifest> --assets <directory>
@@ -218,16 +218,29 @@ fn main() -> ExitCode {
         ] if command == "compile-maps-sdk"
             && sdk_flag == "--sdk-root"
             && references_flag == "--references"
-            && output_flag == "--output"
-            && (options.is_empty() || matches!(options, [flag, _] if flag == "--game-data")) =>
+            && output_flag == "--output" =>
         {
+            let (options, skip_precompiled) = match options {
+                [flag, rest @ ..] if flag == "--skip-precompiled" => (rest, true),
+                [rest @ .., flag] if flag == "--skip-precompiled" => (rest, true),
+                _ => (options, false),
+            };
+            let game_data = match options {
+                [] => None,
+                [flag, path] if flag == "--game-data" => Some(Path::new(path)),
+                _ => {
+                    eprintln!("{USAGE}");
+                    return ExitCode::FAILURE;
+                }
+            };
             diagnostic(
                 compile_sdk_map_overrides(
                     Path::new(input),
                     Path::new(sdk),
                     Path::new(references),
                     Path::new(output),
-                    options.get(1).map(Path::new),
+                    game_data,
+                    skip_precompiled,
                 )
                 .map(|count| println!("Compiled {count} map override streams with Rust")),
             )

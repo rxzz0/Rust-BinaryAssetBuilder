@@ -170,7 +170,12 @@ namespace EALABuild
 		// This function is called to determine if a step should execute.
         public bool shouldExecuteStep(int stepId)
         {
-            if (stepId == 9) return true;
+            if (stepId == 9)
+            {
+                object compileMaps;
+                return currentGUIData.TryGetValue("compileMissingMapOverrides", out compileMaps)
+                    && compileMaps is bool && (bool)compileMaps;
+            }
             if (currentGUIData.ContainsKey("step" + stepId))
             {
                 if ((bool)currentGUIData["step" + stepId])
@@ -209,6 +214,8 @@ namespace EALABuild
 			ModSkudef = ModBase + ".skudef";
 
             StopBigBuild();
+            if (!UseEaCompiler() && shouldExecuteStep(10) && !shouldExecuteStep(9) && OverlapMiscBigs())
+                StartMiscBig();
             executeModBuildStep(BuildHelper.GetNextExecutableStep());
         }
 
@@ -229,6 +236,7 @@ namespace EALABuild
             modGUIData.Add(new GUIElementData("step6", "Build Static Data", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step7", "Merge Assets", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
             modGUIData.Add(new GUIElementData("step8", "Fix Assets", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
+            modGUIData.Add(new GUIElementData("compileMissingMapOverrides", "Compile missing map overrides", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
             modGUIData.Add(new GUIElementData("sp2", "", GUIElementData.LabelType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step10", "Create BIG Files", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step11", "Create Skudef File", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
@@ -667,7 +675,7 @@ namespace EALABuild
 				    string maps = Path.Combine(ModAdditionalFilesPath, @"data\maps\official");
 				    RunExecutableArguments argsMaps = new RunExecutableArguments(Cmd);
 				    argsMaps.Arguments = String.Format(
-				        "/C (@echo off) & (\"{0}\" compile-maps-sdk \"{1}\" --sdk-root \"{2}\" --references \"{3}\" --output \"{1}\" --game-data \"{4}\" 2>&1)"
+				        "/C (@echo off) & (\"{0}\" compile-maps-sdk \"{1}\" --sdk-root \"{2}\" --references \"{3}\" --output \"{1}\" --game-data \"{4}\" --skip-precompiled 2>&1)"
 				        + " || (echo Critical: Build Map Overrides failed. & exit /b 1)",
 				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), maps, SDKDirectory, BuiltModsPath, RA3DataDir);
 				    RunRustBuildStep(argsMaps);
