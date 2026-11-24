@@ -1328,6 +1328,9 @@ pub(super) fn encode(
         "DieOnProducerDeathUpdate" => return die_on_producer_death(node, pointer, data).map(Some),
         "StoreCurrentStateUpdate" => return store_current_state(node, pointer, data).map(Some),
         "AimWeapon" => return super::aim_weapon::encode(node, pointer, data).map(Some),
+        "LoseHealthUpdate" => {
+            return super::lose_health_update::encode(node, pointer, data).map(Some);
+        }
         "OCLMonitorUpdate" => {
             return super::ocl_monitor_update::encode(node, pointer, data).map(Some);
         }

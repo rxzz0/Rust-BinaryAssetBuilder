@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <GameObject id="LoseHealthDefaults">
+        <Behaviors><LoseHealthUpdate id="ModuleTag_LoseHealth" /></Behaviors>
+        <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    </GameObject>
+    <GameObject id="LoseHealthExplicit">
+        <Behaviors>
+            <LoseHealthUpdate id="ModuleTag_LoseHealth" HealthTrigger="25%" DamagePerSecond="37.5" DeathType="NORMAL">
+                <ObjectStatusValidation ForbiddenStatus="MAGNETIZED" RequiredStatus="CAN_ATTACK" />
+            </LoseHealthUpdate>
+        </Behaviors>
+        <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    </GameObject>
+</AssetDeclaration>

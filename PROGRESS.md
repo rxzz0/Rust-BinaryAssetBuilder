@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 388: Added `LoseHealthUpdate`, including health and damage defaults, death type, and optional object status validation. Both EA fixtures match byte for byte.
 - Checkpoint 387: Added `SubStructureStorageBehavior` using the EA base-module layout. The EA fixture matches byte for byte.
 - Checkpoint 386: Added `AimWeapon` with four thresholds and distances, including schema defaults. Both EA fixtures match byte for byte.
 - Checkpoint 385: Added `OCLMonitorUpdate` and `StrafeAreaTargetChooser`. Five EA fixtures match byte for byte. All 336 tests and strict Clippy passed.

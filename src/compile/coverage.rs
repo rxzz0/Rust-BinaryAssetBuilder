@@ -537,6 +537,11 @@ mod tests {
     }
 
     #[test]
+    fn lose_health_update_matches_ea() {
+        assert_ea_fixture("lose-health-update", 2);
+    }
+
+    #[test]
     fn ocl_monitor_update_matches_ea() {
         assert_ea_fixture("ocl-monitor-update", 2);
     }
