@@ -664,7 +664,7 @@ namespace EALABuild
 				case 9:
 				{
 				    BuildHelper.DisplayLine("Step 9: Compiling map overrides with Rust");
-				    string maps = Path.Combine(ModAdditionalFilesPath, @"data\maps");
+				    string maps = Path.Combine(ModAdditionalFilesPath, @"data\maps\official");
 				    RunExecutableArguments argsMaps = new RunExecutableArguments(Cmd);
 				    argsMaps.Arguments = String.Format(
 				        "/C (@echo off) & (\"{0}\" compile-maps-sdk \"{1}\" --sdk-root \"{2}\" --references \"{3}\" --output \"{1}\" --game-data \"{4}\" 2>&1)"

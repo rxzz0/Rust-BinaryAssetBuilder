@@ -163,7 +163,7 @@ After switching from an older script, review the **Create BIG Files** and **Crea
 
 ### Build map overrides
 
-In ModStudio, select **Build Map Overrides** with the Rust compiler. Put each source map in a direct child folder of `Mods/<mod>/Misc/data/maps` with its `map.xml` and override XML files. The compiler writes the linked `map_mod` stream and `map.version` beside the map. **Create BIG Files** packages these files in the Misc BIG. Keep archived sources in a subfolder such as `INGORE`. The `Official` directory is excluded from the ModStudio build step.
+Place each map in `Mods/<mod>/Misc/data/maps/official/<MapName>` with its `map.xml` and any override XML files it includes. On Windows, `Official` and `official` resolve to the same folder. ModStudio automatically compiles map overrides with Rust for either compiler selection. It writes the linked `map_mod` stream and `map.version` beside the map. **Create BIG Files** packages those files in the Misc BIG.
 
 ### RA3 SDK coverage and EA verification
 
