@@ -1335,6 +1335,9 @@ pub(super) fn encode(
             return super::strafe_area_target_chooser::encode(node, pointer, data, reference_types)
                 .map(Some);
         }
+        "SubStructureStorageBehavior" => {
+            return super::sub_structure_storage::encode(node, pointer, data).map(Some);
+        }
         "SwitchLocomotorUpdate" => return switch_locomotor(node, pointer, data).map(Some),
         "MagneticEffectUpdate" => {
             return magnetic_effect(node, pointer, data, reference_types).map(Some);

@@ -58,6 +58,7 @@ mod squeeze_fling;
 mod strafe_area_target_chooser;
 mod stream_draw;
 mod structures;
+mod sub_structure_storage;
 mod subobjects;
 mod tech_upgrade;
 mod teleport_stored;

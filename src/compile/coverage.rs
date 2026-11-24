@@ -542,6 +542,11 @@ mod tests {
     }
 
     #[test]
+    fn sub_structure_storage_matches_ea() {
+        assert_ea_fixture("sub-structure-storage-behavior", 1);
+    }
+
+    #[test]
     fn strafe_area_target_chooser_matches_ea() {
         assert_ea_fixture("strafe-area-target-chooser", 3);
     }

@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 387: Added `SubStructureStorageBehavior` using the EA base-module layout. The EA fixture matches byte for byte.
 - Checkpoint 386: Added `AimWeapon` with four thresholds and distances, including schema defaults. Both EA fixtures match byte for byte.
 - Checkpoint 385: Added `OCLMonitorUpdate` and `StrafeAreaTargetChooser`. Five EA fixtures match byte for byte. All 336 tests and strict Clippy passed.
 - Checkpoint 384: Added `StoreCurrentStateUpdate` with EA time defaults and typed values. Two EA fixtures match byte for byte, and Brighton Beach advances to `AimWeapon`.
