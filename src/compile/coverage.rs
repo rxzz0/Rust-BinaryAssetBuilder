@@ -527,6 +527,11 @@ mod tests {
     }
 
     #[test]
+    fn store_current_state_update_matches_ea() {
+        assert_ea_fixture("store-current-state-update", 2);
+    }
+
+    #[test]
     fn replace_self_matches_ea_batch() {
         assert_ea_fixture("replace-self", 1);
     }

@@ -72,6 +72,28 @@ fn die_on_producer_death(
     Ok((KIND, Table::record(entries)))
 }
 
+fn store_current_state(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xbed1_542a;
+    const TIME: u32 = 0x9986_69e8;
+    let path = data.path;
+    validate_attributes(node, &["id", "SleepTime", "MaxTime"], path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected StoreCurrentStateUpdate content"));
+    }
+    let start = data.allocate(pointer, 16)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    for (name, default, offset) in [("SleepTime", "0s", 8), ("MaxTime", "5s", 12)] {
+        let value = node.attribute(name).unwrap_or(default);
+        data.word(start + offset, sage_time(value, name, path)?.to_bits());
+        entries.push(Entry::named(name, TIME, Target::Data(start + offset)));
+    }
+    Ok((KIND, Table::record(entries)))
+}
+
 fn magnetic_effect(
     node: Node<'_, '_>,
     pointer: usize,
@@ -1304,6 +1326,7 @@ pub(super) fn encode(
             return super::ore::deposit(node, pointer, data, references, reference_types).map(Some);
         }
         "DieOnProducerDeathUpdate" => return die_on_producer_death(node, pointer, data).map(Some),
+        "StoreCurrentStateUpdate" => return store_current_state(node, pointer, data).map(Some),
         "SwitchLocomotorUpdate" => return switch_locomotor(node, pointer, data).map(Some),
         "MagneticEffectUpdate" => {
             return magnetic_effect(node, pointer, data, reference_types).map(Some);
