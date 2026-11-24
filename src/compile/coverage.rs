@@ -1431,6 +1431,11 @@ mod tests {
     }
 
     #[test]
+    fn circular_damage_update_matches_ea() {
+        assert_ea_fixture("circular-damage", 4);
+    }
+
+    #[test]
     fn linear_damage_updates_match_ea() {
         assert_ea_fixture("linear-damage", 4);
     }
