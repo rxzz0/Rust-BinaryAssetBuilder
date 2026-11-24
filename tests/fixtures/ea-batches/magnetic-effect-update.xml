@@ -1,0 +1,18 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="MagneticEffectDefaults">
+    <Behaviors><MagneticEffectUpdate id="ModuleTag_Default"><ObjectFilter/></MagneticEffectUpdate></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="MagneticEffectExplicit">
+    <Behaviors>
+      <MagneticEffectUpdate id="ModuleTag_Explicit" Radius="200" MaximumPullVelocity="24.5" MinimumPullVelocity="2.5"
+          ScalableDrawModuleId="ModuleTag_ShieldDraw" ScaledBoneName="TORUS01" VictimStatusToSet="IS_ATTACKING">
+        <ObjectStatusValidation RequiredStatus="GENERIC_TOGGLE_STATE" ForbiddenStatus="MAGNETIZED"/>
+        <ObjectFilter Rule="ANY" Relationship="ENEMIES" Include="PROJECTILE SMALL_MISSILE INFANTRY VEHICLE"
+            StatusBitFlagsExclude="MAGNETIZED"><IncludeThing>MagneticEffectDefaults</IncludeThing></ObjectFilter>
+      </MagneticEffectUpdate>
+      <MagneticEffectUpdate id="ModuleTag_EmptyName" ScaledBoneName=""><ObjectFilter/></MagneticEffectUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

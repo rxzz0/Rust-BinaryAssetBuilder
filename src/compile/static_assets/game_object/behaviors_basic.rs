@@ -72,6 +72,75 @@ fn die_on_producer_death(
     Ok((KIND, Table::record(entries)))
 }
 
+fn magnetic_effect(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x7ca3_739b;
+    const FIELDS: [(&str, u32, usize); 6] = [
+        ("ScalableDrawModuleId", 0xbdf0_7965, 8),
+        ("ScaledBoneName", 0x1a29_33aa, 0xc),
+        ("Radius", 0x6458_64f3, 0x14),
+        ("MaximumPullVelocity", 0x6458_64f3, 0x18),
+        ("MinimumPullVelocity", 0x6458_64f3, 0x1c),
+        ("VictimStatusToSet", 0xfa0d_e777, 0x20),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(FIELDS.map(|(name, ..)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let mut children = significant_children(node).peekable();
+    let status = children.next_if(|child| child.has_tag_name((SAGE_NS, "ObjectStatusValidation")));
+    let filter = super::super::required_element(&mut children, "ObjectFilter", path)?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected MagneticEffectUpdate child"));
+    }
+    let start = data.allocate(pointer, 0x98)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    if let Some(id) = node
+        .attribute("ScalableDrawModuleId")
+        .filter(|id| !id.is_empty())
+    {
+        data.word(start + 8, hash_name(id));
+    }
+    if let Some(name) = node.attribute("ScaledBoneName") {
+        data.string(start + 0xc, name)?;
+    }
+    for (name, offset, default) in [
+        ("Radius", 0x14, "250"),
+        ("MaximumPullVelocity", 0x18, "20"),
+        ("MinimumPullVelocity", 0x1c, "4"),
+    ] {
+        let value = finite_number(node.attribute(name).unwrap_or(default), name, path)?;
+        data.word(start + offset, value.to_bits());
+    }
+    let victim_status = node.attribute("VictimStatusToSet").unwrap_or("MAGNETIZED");
+    data.word(
+        start + 0x20,
+        super::secondary_damage::status_index(victim_status, path)? as u32,
+    );
+    entries.extend(fields(start, &FIELDS));
+    let status = match status {
+        Some(status) => Target::Table(super::secondary_damage::encode_status(
+            status,
+            start + 0x24,
+            data,
+        )?),
+        None => Target::Null,
+    };
+    let filter = super::parking::encode_inline_filter(filter, start + 0x28, data, reference_types)?;
+    entries.push(Entry::named("ObjectStatusValidation", 0x3e8f_938c, status));
+    entries.push(Entry::named(
+        "ObjectFilter",
+        0xe46e_a3b2,
+        Target::Table(filter),
+    ));
+    Ok((KIND, Table::record(entries)))
+}
+
 fn monitor_condition(
     node: Node<'_, '_>,
     pointer: usize,
@@ -1175,6 +1244,9 @@ pub(super) fn encode(
             return super::ore::deposit(node, pointer, data, references, reference_types).map(Some);
         }
         "DieOnProducerDeathUpdate" => return die_on_producer_death(node, pointer, data).map(Some),
+        "MagneticEffectUpdate" => {
+            return magnetic_effect(node, pointer, data, reference_types).map(Some);
+        }
         "MonitorConditionUpdate" => {
             return monitor_condition(node, pointer, data, references, reference_types).map(Some);
         }

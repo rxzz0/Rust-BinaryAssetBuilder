@@ -502,6 +502,11 @@ mod tests {
     }
 
     #[test]
+    fn magnetic_effect_update_matches_ea() {
+        assert_ea_fixture("magnetic-effect-update", 2);
+    }
+
+    #[test]
     fn replace_self_matches_ea_batch() {
         assert_ea_fixture("replace-self", 1);
     }
