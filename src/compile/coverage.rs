@@ -547,6 +547,11 @@ mod tests {
     }
 
     #[test]
+    fn model_state_skeleton_matches_ea() {
+        assert_ea_fixture("model-state-skeleton", 1);
+    }
+
+    #[test]
     fn ocl_monitor_update_matches_ea() {
         assert_ea_fixture("ocl-monitor-update", 2);
     }

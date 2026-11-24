@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <GameObject id="ModelStateSkeletonProbe">
+        <Draws>
+            <ScriptedModelDraw id="ModuleTag_Draw">
+                <ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name="" /></ModelConditionState>
+                <ModelConditionState ParseCondStateType="PARSE_NORMAL" ConditionsYes="DAMAGED" Skeleton="Probe_MixedCase_SKL"><Model Name="" /></ModelConditionState>
+                <ModelConditionState ParseCondStateType="PARSE_NORMAL" ConditionsYes="REALLYDAMAGED" Skeleton=""><Model Name="" /></ModelConditionState>
+            </ScriptedModelDraw>
+        </Draws>
+        <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+    </GameObject>
+</AssetDeclaration>

@@ -821,7 +821,12 @@ fn model_state(
 ) -> io::Result<Table> {
     validate_attributes(
         node,
-        &["ParseCondStateType", "ConditionsYes", "RetainSubObjects"],
+        &[
+            "ParseCondStateType",
+            "ConditionsYes",
+            "Skeleton",
+            "RetainSubObjects",
+        ],
         data.path,
     )?;
     let parse_type = match required(node, "ParseCondStateType", data.path)? {
@@ -839,6 +844,9 @@ fn model_state(
     data.payload[start + 0xc0] = boolean(node, "RetainSubObjects", false, data.path)?;
     if let Some(value) = node.attribute("ConditionsYes") {
         write_model_conditions(value, start + 0xc, data)?;
+    }
+    if let Some(skeleton) = node.attribute("Skeleton") {
+        data.string(start + 0x48, skeleton)?;
     }
     let mut weapon_bones: [Vec<_>; 4] = std::array::from_fn(|_| Vec::new());
     let mut models = Vec::new();
