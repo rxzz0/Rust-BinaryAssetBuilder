@@ -497,6 +497,11 @@ mod tests {
     }
 
     #[test]
+    fn die_on_producer_death_update_matches_ea() {
+        assert_ea_fixture("producer-death-update", 2);
+    }
+
+    #[test]
     fn replace_self_matches_ea_batch() {
         assert_ea_fixture("replace-self", 1);
     }

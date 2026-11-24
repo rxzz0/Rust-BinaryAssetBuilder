@@ -41,6 +41,37 @@ pub(super) fn module_base(
     })
 }
 
+fn die_on_producer_death(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x1c43_6dd2;
+    const FIELDS: [(&str, u32, usize); 2] = [
+        ("SleepInterval", 0x9986_69e8, 8),
+        ("DieOnProducerDisabled", 0x77e3_f4f7, 12),
+    ];
+    let path = data.path;
+    validate_attributes(
+        node,
+        &["id", "SleepInterval", "DieOnProducerDisabled"],
+        path,
+    )?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected DieOnProducerDeathUpdate content"));
+    }
+    let start = data.allocate(pointer, 16)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    let interval = node.attribute("SleepInterval").unwrap_or("0.5s");
+    data.word(
+        start + 8,
+        sage_time(interval, "SleepInterval", path)?.to_bits(),
+    );
+    data.payload[start + 12] = boolean(node, "DieOnProducerDisabled", false, path)?;
+    entries.extend(fields(start, &FIELDS));
+    Ok((KIND, Table::record(entries)))
+}
+
 fn monitor_condition(
     node: Node<'_, '_>,
     pointer: usize,
@@ -1143,6 +1174,7 @@ pub(super) fn encode(
         "OreNodeBehavior" => {
             return super::ore::deposit(node, pointer, data, references, reference_types).map(Some);
         }
+        "DieOnProducerDeathUpdate" => return die_on_producer_death(node, pointer, data).map(Some),
         "MonitorConditionUpdate" => {
             return monitor_condition(node, pointer, data, references, reference_types).map(Some);
         }

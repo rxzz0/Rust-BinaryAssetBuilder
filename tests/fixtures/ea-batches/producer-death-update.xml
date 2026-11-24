@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProducerDeathDefaults">
+    <Behaviors><DieOnProducerDeathUpdate id="ModuleTag_Default"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProducerDeathExplicit">
+    <Behaviors>
+      <DieOnProducerDeathUpdate id="ModuleTag_Explicit" SleepInterval="1250ms" DieOnProducerDisabled="true"/>
+      <DieOnProducerDeathUpdate id="ModuleTag_Milliseconds" SleepInterval="1ms" DieOnProducerDisabled="false"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
