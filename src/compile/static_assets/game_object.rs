@@ -46,6 +46,7 @@ mod schema;
 mod secondary_damage;
 mod secondary_listener;
 pub(super) use shadow::encode_settings_shadow;
+mod aim_weapon;
 mod ocl_monitor_update;
 mod shadow;
 mod slaved;
