@@ -47,6 +47,7 @@ mod secondary_damage;
 mod secondary_listener;
 pub(super) use shadow::encode_settings_shadow;
 mod aim_weapon;
+mod hit_reaction;
 mod lose_health_update;
 mod ocl_monitor_update;
 mod shadow;

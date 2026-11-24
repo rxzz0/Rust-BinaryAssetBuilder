@@ -542,6 +542,11 @@ mod tests {
     }
 
     #[test]
+    fn hit_reaction_matches_ea() {
+        assert_ea_fixture("hit-reaction-behavior", 2);
+    }
+
+    #[test]
     fn ocl_monitor_update_matches_ea() {
         assert_ea_fixture("ocl-monitor-update", 2);
     }

@@ -1,0 +1,19 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="HitReactionDefaults">
+    <Behaviors><HitReactionBehavior id="ModuleTag_Default"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="HitReactionExplicit">
+    <Behaviors>
+      <HitReactionBehavior id="ModuleTag_Explicit"
+          LightDamageHitReactionLifeTimer="250ms" MediumDamageHitReactionLifeTimer="2s" HeavyDamageHitReactionLifeTimer="12s"
+          LightDamageHitReactionThreshold="1.5" MediumDamageHitReactionThreshold="6" HeavyDamageHitReactionThreshold="9.25"
+          RotateToSourceWhenDamaged="true" RotateToSourceIgnoreIdleCheck="true" GoIdleWhenDamaged="true"
+          RequiredDeathTypes="NORMAL ELECTROCUTED EXTRA_7">
+        <ObjectStatusValidation RequiredStatus="GENERIC_TOGGLE_STATE" ForbiddenStatus="MAGNETIZED"/>
+      </HitReactionBehavior>
+      <HitReactionBehavior id="ModuleTag_All" RequiredDeathTypes="ALL"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

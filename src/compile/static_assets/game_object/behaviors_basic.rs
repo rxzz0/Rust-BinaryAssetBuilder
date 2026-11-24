@@ -1331,6 +1331,7 @@ pub(super) fn encode(
         "LoseHealthUpdate" => {
             return super::lose_health_update::encode(node, pointer, data).map(Some);
         }
+        "HitReactionBehavior" => return super::hit_reaction::encode(node, pointer, data).map(Some),
         "OCLMonitorUpdate" => {
             return super::ocl_monitor_update::encode(node, pointer, data).map(Some);
         }
