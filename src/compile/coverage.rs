@@ -552,6 +552,11 @@ mod tests {
     }
 
     #[test]
+    fn dominate_enemy_matches_ea() {
+        assert_ea_fixture("dominate-enemy-special-power", 2);
+    }
+
+    #[test]
     fn ocl_monitor_update_matches_ea() {
         assert_ea_fixture("ocl-monitor-update", 2);
     }

@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 391: Added `DominateEnemySpecialPower` with FX, radius, conversion and object filter in EA relocation order. Both EA fixtures match byte for byte. Next: `CircularDamageUpdate`.
 - Checkpoint 390: Added `ModelConditionState` skeleton overrides with EA distinctions for omitted, empty, and nonempty strings. The EA fixture matches. Brighton Beach advances to `CircularDamageUpdate`.
 - Checkpoint 389: Added `HitReactionBehavior` with timers, thresholds, booleans, death masks, and optional object status. Both EA fixtures match byte for byte.
 - Checkpoint 388: Added `LoseHealthUpdate`, including health and damage defaults, death type, and optional object status validation. Both EA fixtures match byte for byte.

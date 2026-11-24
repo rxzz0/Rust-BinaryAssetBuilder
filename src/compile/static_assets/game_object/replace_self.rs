@@ -9,7 +9,7 @@ use super::draws::{boolean, model_condition_index};
 use super::secondary_damage::write_status_flags;
 use super::spawn::{id_list, weak_reference};
 use super::tech_upgrade::encode_anim;
-use super::{eject_passengers, special_disguise};
+use super::{dominate_enemy, eject_passengers, special_disguise};
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::{Document, Node};
 use std::{io, sync::OnceLock};
@@ -237,6 +237,11 @@ pub(super) fn encode(
             eject_passengers::FIELDS,
         ),
         "ReplaceSelfSpecialAbility" => (KIND, 0x104, REPLACE_FIELDS),
+        "DominateEnemySpecialPower" => (
+            dominate_enemy::KIND,
+            dominate_enemy::SIZE,
+            dominate_enemy::FIELDS,
+        ),
         "ReconstituteStateSpecialAbility" => (RECONSTITUTE, 0x104, RECONSTITUTE_FIELDS),
         "SpecialDisguiseUpdate" => (
             special_disguise::KIND,
@@ -297,6 +302,9 @@ pub(super) fn encode(
     }
     let disguise = (kind == special_disguise::KIND)
         .then(|| special_disguise::terrain(children.by_ref(), start, data, reference_types))
+        .transpose()?;
+    let dominate = (kind == dominate_enemy::KIND)
+        .then(|| dominate_enemy::filter(children.by_ref(), start, data, reference_types))
         .transpose()?;
     for &(name, tag, offset, storage, default) in all_fields {
         let value = node.attribute(name).unwrap_or(default);
@@ -375,8 +383,8 @@ pub(super) fn encode(
     let mut entries = vec![base(ABILITY, Table::record(ability))];
     entries.extend(derived);
     entries.extend(ejection);
-    if let Some(terrain) = disguise {
-        entries.push(terrain);
+    if let Some(derived_child) = disguise.or(dominate) {
+        entries.push(derived_child);
         return Ok((kind, Table::record(entries)));
     }
     if kind == TOGGLE {

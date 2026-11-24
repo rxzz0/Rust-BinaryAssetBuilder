@@ -1768,6 +1768,7 @@ pub(super) fn encode(
         node.tag_name().name(),
         "SpecialAbilityUpdate"
             | "ReplaceSelfSpecialAbility"
+            | "DominateEnemySpecialPower"
             | "ReconstituteStateSpecialAbility"
             | "SpecialDisguiseUpdate"
             | "WeaponFireSpecialAbilityUpdate"
