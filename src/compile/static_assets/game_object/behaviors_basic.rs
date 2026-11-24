@@ -1731,6 +1731,7 @@ pub(super) fn encode(
         "SpecialAbilityUpdate"
             | "ReplaceSelfSpecialAbility"
             | "ReconstituteStateSpecialAbility"
+            | "SpecialDisguiseUpdate"
             | "WeaponFireSpecialAbilityUpdate"
             | "EjectPassengersSpecialAbilityUpdate"
             | "ToggleStatusSpecialAbilityUpdate"

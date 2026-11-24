@@ -157,6 +157,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut create_object_modules = Vec::new();
     let mut eject_passenger_modules = Vec::new();
     let mut movement_power_modules = Vec::new();
+    let mut special_disguise_modules = Vec::new();
     let mut spawn_modules = Vec::new();
     let mut upgrade_relocation_anchors = Vec::new();
     let mut chooser_relocations = Vec::new();
@@ -288,6 +289,9 @@ pub(in crate::compile::static_assets) fn compile(
                 }
                 if module.has_tag_name((SAGE_NS, "MovementSpecialPower")) {
                     movement_power_modules.push(start);
+                }
+                if module.has_tag_name((SAGE_NS, "SpecialDisguiseUpdate")) {
+                    special_disguise_modules.push(start);
                 }
                 let result = behaviors_basic::encode(
                     module,
@@ -469,6 +473,14 @@ pub(in crate::compile::static_assets) fn compile(
             let offset = pointer - start;
             if matches!(offset, 0x1cc | 0x1d0) {
                 return (start, offset);
+            }
+        }
+        // SpecialDisguiseUpdate emits its terrain list before inherited pointers.
+        let index = special_disguise_modules.partition_point(|&start| start <= pointer);
+        if index > 0 {
+            let start = special_disguise_modules[index - 1];
+            if pointer - start == 0x100 {
+                return (start, 0x100);
             }
         }
         // EA emits the inherited status pointers after the two upgrade lists.

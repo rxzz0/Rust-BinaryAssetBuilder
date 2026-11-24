@@ -6,10 +6,10 @@ use super::super::{
 };
 use super::behaviors_basic::{base, module_base};
 use super::draws::{boolean, model_condition_index};
-use super::eject_passengers;
 use super::secondary_damage::write_status_flags;
 use super::spawn::{id_list, weak_reference};
 use super::tech_upgrade::encode_anim;
+use super::{eject_passengers, special_disguise};
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::{Document, Node};
 use std::{io, sync::OnceLock};
@@ -238,6 +238,11 @@ pub(super) fn encode(
         ),
         "ReplaceSelfSpecialAbility" => (KIND, 0x104, REPLACE_FIELDS),
         "ReconstituteStateSpecialAbility" => (RECONSTITUTE, 0x104, RECONSTITUTE_FIELDS),
+        "SpecialDisguiseUpdate" => (
+            special_disguise::KIND,
+            special_disguise::SIZE,
+            special_disguise::FIELDS,
+        ),
         name => {
             return Err(invalid(
                 data.path,
@@ -290,6 +295,9 @@ pub(super) fn encode(
         };
         data.word(start + offset, word);
     }
+    let disguise = (kind == special_disguise::KIND)
+        .then(|| special_disguise::terrain(children.by_ref(), start, data, reference_types))
+        .transpose()?;
     for &(name, tag, offset, storage, default) in all_fields {
         let value = node.attribute(name).unwrap_or(default);
         let offset = start + offset;
@@ -367,6 +375,10 @@ pub(super) fn encode(
     let mut entries = vec![base(ABILITY, Table::record(ability))];
     entries.extend(derived);
     entries.extend(ejection);
+    if let Some(terrain) = disguise {
+        entries.push(terrain);
+        return Ok((kind, Table::record(entries)));
+    }
     if kind == TOGGLE {
         let states: Vec<_> = children.collect();
         if states.is_empty() {

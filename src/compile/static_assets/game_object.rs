@@ -50,6 +50,7 @@ mod shadow;
 mod slaved;
 mod slow_death;
 mod spawn;
+mod special_disguise;
 pub(super) mod special_power;
 mod squeeze_fling;
 mod stream_draw;

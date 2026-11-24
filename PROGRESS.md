@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 383: Added `SpecialDisguiseUpdate`, including inherited stealth fields, terrain entries, FX references, and EA relocation order. Both EA fixtures match.
 - Checkpoint 382 adds SwitchLocomotorUpdate with its time, health threshold, reveal radius and status/condition masks. Two fixtures matched EA byte for byte. Brighton Beach passed ReconstituteStateSpecialAbility and reaches StoreCurrentStateUpdate. Next, cover SpecialDisguiseUpdate and StoreCurrentStateUpdate.
 - Checkpoint 381 adds ReconstituteStateSpecialAbility through the shared special ability encoder. Two fixtures matched EA byte for byte, including the local module ID, timing, FX and attribute modifier references. Next, cover SwitchLocomotorUpdate.
 - Checkpoint 380 adds MovementSpecialPower with its inherited filters, locomotor enum, timing, bounce scalars and optional masks. Both fixtures matched EA byte for byte, including derived mask relocations. Brighton Beach advances to ReconstituteStateSpecialAbility. Next, checkpoint that variant.
