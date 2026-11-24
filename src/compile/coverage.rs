@@ -532,6 +532,16 @@ mod tests {
     }
 
     #[test]
+    fn ocl_monitor_update_matches_ea() {
+        assert_ea_fixture("ocl-monitor-update", 2);
+    }
+
+    #[test]
+    fn strafe_area_target_chooser_matches_ea() {
+        assert_ea_fixture("strafe-area-target-chooser", 3);
+    }
+
+    #[test]
     fn replace_self_matches_ea_batch() {
         assert_ea_fixture("replace-self", 1);
     }

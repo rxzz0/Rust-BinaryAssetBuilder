@@ -1327,6 +1327,13 @@ pub(super) fn encode(
         }
         "DieOnProducerDeathUpdate" => return die_on_producer_death(node, pointer, data).map(Some),
         "StoreCurrentStateUpdate" => return store_current_state(node, pointer, data).map(Some),
+        "OCLMonitorUpdate" => {
+            return super::ocl_monitor_update::encode(node, pointer, data).map(Some);
+        }
+        "StrafeAreaTargetChooser" => {
+            return super::strafe_area_target_chooser::encode(node, pointer, data, reference_types)
+                .map(Some);
+        }
         "SwitchLocomotorUpdate" => return switch_locomotor(node, pointer, data).map(Some),
         "MagneticEffectUpdate" => {
             return magnetic_effect(node, pointer, data, reference_types).map(Some);
