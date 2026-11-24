@@ -141,6 +141,66 @@ fn magnetic_effect(
     Ok((KIND, Table::record(entries)))
 }
 
+fn switch_locomotor(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x4edf_b24b;
+    const FIELDS: [(&str, u32, usize); 6] = [
+        ("LocomotorSet", 0x845d_12b2, 8),
+        ("UpdatePeriod", 0x9986_69e8, 0xc),
+        ("RevealShroudToAllPlayersRadius", 0x6458_64f3, 0x10),
+        ("MinimumHealth", 0x6458_64f3, 0x14),
+        ("ObjectStatusWhileActive", 0xa7bd_811e, 0x18),
+        ("ModelConditionWhileActive", 0x67db_bfc9, 0x34),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(FIELDS.map(|(name, ..)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected SwitchLocomotorUpdate content"));
+    }
+    let start = data.allocate(pointer, 0x70)?;
+    let parent = module_base(node, KIND, start, data, true)?;
+    data.word(
+        start + 8,
+        super::ai_update::locomotor_condition(
+            node.attribute("LocomotorSet").unwrap_or("NORMAL"),
+            "LocomotorSet",
+            path,
+        )?,
+    );
+    let period = node.attribute("UpdatePeriod").unwrap_or("1.0s");
+    data.word(
+        start + 0xc,
+        sage_time(period, "UpdatePeriod", path)?.to_bits(),
+    );
+    let radius = node
+        .attribute("RevealShroudToAllPlayersRadius")
+        .unwrap_or("0");
+    data.word(
+        start + 0x10,
+        finite_number(radius, "RevealShroudToAllPlayersRadius", path)?.to_bits(),
+    );
+    let health = node.attribute("MinimumHealth").unwrap_or("0%");
+    data.word(
+        start + 0x14,
+        percentage(health, "MinimumHealth", path)?.to_bits(),
+    );
+    if let Some(flags) = node.attribute("ObjectStatusWhileActive") {
+        super::secondary_damage::write_status_flags(flags, start + 0x18, data)?;
+    }
+    if let Some(flags) = node.attribute("ModelConditionWhileActive") {
+        super::draws::write_model_conditions(flags, start + 0x34, data)?;
+    }
+    let mut entries = vec![parent];
+    entries.extend(fields(start, &FIELDS));
+    Ok((KIND, Table::record(entries)))
+}
+
 fn monitor_condition(
     node: Node<'_, '_>,
     pointer: usize,
@@ -1244,6 +1304,7 @@ pub(super) fn encode(
             return super::ore::deposit(node, pointer, data, references, reference_types).map(Some);
         }
         "DieOnProducerDeathUpdate" => return die_on_producer_death(node, pointer, data).map(Some),
+        "SwitchLocomotorUpdate" => return switch_locomotor(node, pointer, data).map(Some),
         "MagneticEffectUpdate" => {
             return magnetic_effect(node, pointer, data, reference_types).map(Some);
         }
