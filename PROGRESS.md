@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 381 adds ReconstituteStateSpecialAbility through the shared special ability encoder. Two fixtures matched EA byte for byte, including the local module ID, timing, FX and attribute modifier references. Next, cover SwitchLocomotorUpdate.
 - Checkpoint 380 adds MovementSpecialPower with its inherited filters, locomotor enum, timing, bounce scalars and optional masks. Both fixtures matched EA byte for byte, including derived mask relocations. Brighton Beach advances to ReconstituteStateSpecialAbility. Next, checkpoint that variant.
 - Checkpoint 379 adds MagneticEffectUpdate, including both pull limits, victim status, the optional validation record and the inline object filter. Two fixtures matched EA byte for byte. Brighton Beach advances to MovementSpecialPower. Next, add MovementSpecialPower and work through the other map archive blockers.
 - Checkpoint 378 adds DieOnProducerDeathUpdate with its default and explicit sleep interval and producer-disabled flag. Two fixtures matched EA byte for byte. The isolated Brighton Beach build now reaches MagneticEffectUpdate. Next, implement MagneticEffectUpdate.

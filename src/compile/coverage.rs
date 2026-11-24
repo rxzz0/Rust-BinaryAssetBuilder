@@ -512,6 +512,11 @@ mod tests {
     }
 
     #[test]
+    fn reconstitute_state_matches_ea() {
+        assert_ea_fixture("reconstitute-state", 2);
+    }
+
+    #[test]
     fn replace_self_matches_ea_batch() {
         assert_ea_fixture("replace-self", 1);
     }

@@ -1,7 +1,7 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, asset_reference, finite_number, sage_time, significant_children,
+    AssetReference, asset_reference, finite_number, hash_name, sage_time, significant_children,
     validate_attributes,
 };
 use super::behaviors_basic::{base, module_base};
@@ -19,6 +19,7 @@ const TOGGLE: u32 = 0xed1a_e55c;
 const ABILITY: u32 = 0xac59_8f82;
 const CAPTURE: u32 = 0x3139_98b5;
 const WEAPON: u32 = 0x1e45_a393;
+const RECONSTITUTE: u32 = 0x3f9b_9ef1;
 const TOGGLE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[(
     "ReloadAllWeaponsOnToggle",
     0x77e3_f4f7,
@@ -134,6 +135,20 @@ const REPLACE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
     ("ClearTriggerDistance", 0x645864f3, 0xf8, "real", "120"),
 ];
 
+const RECONSTITUTE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("UpdateModuleId", 0xbdf0_7965, 0xf0, "poid", ""),
+    ("TimeStepsBack", 0x9986_69e8, 0xf4, "time", "0s"),
+    ("LeavePositionFX", 0x0d1c_8e83, 0xf8, "ref", "FXList"),
+    ("ReturnPositionFX", 0x0d1c_8e83, 0xfc, "ref", "FXList"),
+    (
+        "PostReconstituteAttributeModifier",
+        0x09dd_cff3,
+        0x100,
+        "ref",
+        "AttributeModifier",
+    ),
+];
+
 const WEAPON_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
     ("SpecialWeapon", 0xd046_dd22, 0xf0, "ref", "WeaponTemplate"),
     ("WhichSpecialWeapon", 0x23e6_50b8, 0xf4, "int", "0"),
@@ -222,6 +237,7 @@ pub(super) fn encode(
             eject_passengers::FIELDS,
         ),
         "ReplaceSelfSpecialAbility" => (KIND, 0x104, REPLACE_FIELDS),
+        "ReconstituteStateSpecialAbility" => (RECONSTITUTE, 0x104, RECONSTITUTE_FIELDS),
         name => {
             return Err(invalid(
                 data.path,
@@ -299,6 +315,7 @@ pub(super) fn encode(
                         .map_err(|_| invalid(path, format!("invalid {name}")))?,
                     "real" => finite_number(value, name, path)?.to_bits(),
                     "time" => sage_time(value, name, path)?.to_bits(),
+                    "poid" => hash_name(required(node, name, path)?),
                     "options" => options(value, path)?,
                     "conditions" => flags(value, &["MOUNTED", "WEAPON_TOGGLE", "MOVING"], path)?,
                     "disabled" => flags(value, super::production::DISABLED, path)?,
@@ -389,7 +406,10 @@ pub(super) fn encode(
         )?);
         return Ok((kind, Table::record(entries)));
     }
-    if matches!(kind, WEAPON | CAPTURE | eject_passengers::KIND) {
+    if matches!(
+        kind,
+        WEAPON | CAPTURE | RECONSTITUTE | eject_passengers::KIND
+    ) {
         if children.next().is_some() {
             return Err(invalid(
                 path,
