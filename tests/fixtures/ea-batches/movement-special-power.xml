@@ -1,0 +1,19 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="MovementPowerDefaults">
+    <Behaviors><MovementSpecialPower id="ModuleTag_Default" SpecialPowerTemplate="SpecialPower_TriggerRushAttack"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="MovementPowerExplicit">
+    <Behaviors>
+      <MovementSpecialPower id="ModuleTag_Targeted" SpecialPowerTemplate="SpecialPower_TriggerRushAttack"
+          AttributeModifier="AttributeModifier_Rush" AttributeModifierAffectsSelf="true"
+          MovementType="TARGETED" Duration="4s" ModelCondition="USER_6 USER_7"
+          ObjectStatus="SPECIALABILITY_ACTIVE NO_SQUISHCOLLIDE_DELAY" LocomotorSet="NORMAL_UPGRADED"
+          BusyDurationOnExit="250ms" CollisionBounceHeight="28.5" CollisionBounceDistance="130" CollisionBounceSpeedScalar="0.25">
+        <RequirementsFilterMP Rule="ANY"><IncludeThing>MovementPowerDefaults</IncludeThing></RequirementsFilterMP>
+      </MovementSpecialPower>
+      <MovementSpecialPower id="ModuleTag_Ahead" SpecialPowerTemplate="SpecialPower_TriggerRushAttack" MovementType="STRAIGHT_AHEAD"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

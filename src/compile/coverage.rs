@@ -507,6 +507,11 @@ mod tests {
     }
 
     #[test]
+    fn movement_special_power_matches_ea() {
+        assert_ea_fixture("movement-special-power", 2);
+    }
+
+    #[test]
     fn replace_self_matches_ea_batch() {
         assert_ea_fixture("replace-self", 1);
     }

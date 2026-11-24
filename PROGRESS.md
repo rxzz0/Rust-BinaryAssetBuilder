@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 380 adds MovementSpecialPower with its inherited filters, locomotor enum, timing, bounce scalars and optional masks. Both fixtures matched EA byte for byte, including derived mask relocations. Brighton Beach advances to ReconstituteStateSpecialAbility. Next, checkpoint that variant.
 - Checkpoint 379 adds MagneticEffectUpdate, including both pull limits, victim status, the optional validation record and the inline object filter. Two fixtures matched EA byte for byte. Brighton Beach advances to MovementSpecialPower. Next, add MovementSpecialPower and work through the other map archive blockers.
 - Checkpoint 378 adds DieOnProducerDeathUpdate with its default and explicit sleep interval and producer-disabled flag. Two fixtures matched EA byte for byte. The isolated Brighton Beach build now reaches MagneticEffectUpdate. Next, implement MagneticEffectUpdate.
 - Checkpoint 377 makes ModStudio map compilation opt-in. The optional step preserves complete same-name map streams, including EA versioned streams, while building incomplete ones. A regression test verified both cases, and the Studio script accepted only the new explicit setting with both compiler selections. Next, checkpoint DieOnProducerDeathUpdate.

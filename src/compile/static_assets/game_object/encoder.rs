@@ -156,6 +156,7 @@ pub(in crate::compile::static_assets) fn compile(
     let mut material_float_names = Vec::new();
     let mut create_object_modules = Vec::new();
     let mut eject_passenger_modules = Vec::new();
+    let mut movement_power_modules = Vec::new();
     let mut spawn_modules = Vec::new();
     let mut upgrade_relocation_anchors = Vec::new();
     let mut chooser_relocations = Vec::new();
@@ -284,6 +285,9 @@ pub(in crate::compile::static_assets) fn compile(
                 let start = data.payload.len() as u32;
                 if module.has_tag_name((SAGE_NS, "EjectPassengersSpecialAbilityUpdate")) {
                     eject_passenger_modules.push(start);
+                }
+                if module.has_tag_name((SAGE_NS, "MovementSpecialPower")) {
+                    movement_power_modules.push(start);
                 }
                 let result = behaviors_basic::encode(
                     module,
@@ -456,6 +460,15 @@ pub(in crate::compile::static_assets) fn compile(
             let offset = pointer - start;
             if matches!(offset, 0x44 | 0xc8 | 0xe8) {
                 return (start + 0x110, offset);
+            }
+        }
+        // MovementSpecialPower emits the derived masks before inherited filter pointers.
+        let index = movement_power_modules.partition_point(|&start| start <= pointer);
+        if index > 0 {
+            let start = movement_power_modules[index - 1];
+            let offset = pointer - start;
+            if matches!(offset, 0x1cc | 0x1d0) {
+                return (start, offset);
             }
         }
         // EA emits the inherited status pointers after the two upgrade lists.
