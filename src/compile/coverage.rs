@@ -1461,6 +1461,11 @@ mod tests {
     }
 
     #[test]
+    fn selective_visibility_matches_ea() {
+        assert_ea_fixture("selective-visibility", 2);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

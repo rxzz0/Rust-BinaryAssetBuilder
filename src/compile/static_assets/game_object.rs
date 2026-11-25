@@ -36,6 +36,7 @@ mod linear_damage;
 pub(super) mod material;
 mod parabolic_curve_update;
 mod projectile_update;
+mod selective_visibility;
 mod strafe_area_update;
 pub(super) use material::encode_render_material;
 mod grappling_hook;

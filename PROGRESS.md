@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 399: Added SelectiveVisibilityBehavior, including optional update rate and player mask. Both EA assets match byte for byte.
 - Checkpoint 398: Added native ParabolicCurveUpdate and verified its base-only record against EA.
 - Checkpoint 397: Added InvalidTargetsDeathUpdate and optional status masks with EA relocation behavior. Both EA fixture assets match byte for byte.
 - Checkpoint 396: Added ProjectileUpdate with all four movement variants, projectile paths, and references. All seven EA fixture assets match byte for byte.
