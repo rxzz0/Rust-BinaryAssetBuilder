@@ -25,6 +25,7 @@ mod circular_damage;
 mod crate_collide;
 mod destroy_objects;
 mod encoder;
+mod energy_disabling_behavior;
 mod engineer;
 mod fields;
 mod fx_list_behavior;

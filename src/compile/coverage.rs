@@ -1521,6 +1521,11 @@ mod tests {
     }
 
     #[test]
+    fn energy_disabling_behavior_matches_ea() {
+        assert_ea_fixture("energy-disabling-behavior", 1);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
