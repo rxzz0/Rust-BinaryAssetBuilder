@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AudioEvent id="CratePickup"/>
+  <GameObject id="ProbeHealCrateCollide">
+    <Behaviors>
+      <HealCrateCollide id="ModuleTag_Default"/>
+<HealCrateCollide id="ModuleTag_Explicit" Range="37.25" KindOf="VEHICLE" ExecuteAnimationFades="true">
+  <ObjectFilter Rule="ANY" Include="INFANTRY VEHICLE"><IncludeThing>ProbeHealCrateCollide</IncludeThing></ObjectFilter>
+</HealCrateCollide>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

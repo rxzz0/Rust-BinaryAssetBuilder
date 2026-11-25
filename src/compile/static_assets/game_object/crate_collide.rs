@@ -5,11 +5,15 @@ use roxmltree::Node;
 use super::super::binary::BinaryData;
 use super::super::global_ui::kind_of_flags;
 use super::super::tokenized::{Entry, Table, Target};
-use super::super::{AssetReference, asset_reference, finite_number, validate_attributes};
+use super::super::{
+    AssetReference, asset_reference, finite_number, significant_children, validate_attributes,
+};
 use super::behaviors_basic::{base, module_base};
 use super::client_behaviors::audio_reference;
 use super::draws::{boolean, fields};
+use super::parking::encode_filter;
 use super::passive_area::reference;
+use crate::compile::SAGE_NS;
 use crate::compile::{has_content, invalid};
 
 const KIND: u32 = 0x2027_962a;
@@ -146,4 +150,36 @@ fn validate_crate_attributes(
         .chain(extra.iter().copied())
         .collect();
     validate_attributes(node, &allowed, data.path)
+}
+
+pub(super) fn encode_heal(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const HEAL: u32 = 0x839a_e83c;
+    validate_crate_attributes(node, &["Range"], data)?;
+    let mut children = significant_children(node).peekable();
+    let filter = children.next_if(|child| child.has_tag_name((SAGE_NS, "ObjectFilter")));
+    if children.next().is_some() {
+        return Err(invalid(data.path, "unexpected HealCrateCollide child"));
+    }
+    let start = data.allocate(pointer, 0x74)?;
+    let crate_table = encode_base(node, HEAL, start, data, references, reference_types)?;
+    let range = finite_number(node.attribute("Range").unwrap_or("75"), "Range", data.path)?;
+    data.word(start + 0x6c, range.to_bits());
+    let filter = match filter {
+        Some(child) => Target::Table(encode_filter(child, start + 0x70, data, reference_types)?),
+        None => Target::Null,
+    };
+    Ok((
+        HEAL,
+        Table::record(vec![
+            base(KIND, crate_table),
+            Entry::named("Range", 0x6458_64f3, Target::Data(start + 0x6c)),
+            Entry::named("ObjectFilter", 0xe46e_a3b2, filter),
+        ]),
+    ))
 }

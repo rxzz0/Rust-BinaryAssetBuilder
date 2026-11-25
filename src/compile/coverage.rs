@@ -1546,6 +1546,11 @@ mod tests {
     }
 
     #[test]
+    fn heal_crate_collide_matches_ea() {
+        assert_ea_fixture("heal-crate-collide", 2);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
