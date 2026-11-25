@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 407: Added native height-triggered death, its flags and delay rounding. Four EA assets match.
 - Checkpoint 406: Added native shield sphere fields, collision masks and object filters. Two EA assets match.
 - Checkpoint 405: Added native invisibility broadcasts with status masks and optional object filters. Three EA assets match.
 - Checkpoint 404: Added native speed multipliers, target flags and object filters. Two EA assets match.

@@ -29,6 +29,7 @@ mod fields;
 mod fx_list_behavior;
 mod garrison;
 mod grant_upgrade_create;
+mod height_die_update;
 mod infiltrator;
 mod invalid_targets_death_update;
 mod invisibility_broadcast;

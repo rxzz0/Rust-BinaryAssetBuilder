@@ -1501,6 +1501,11 @@ mod tests {
     }
 
     #[test]
+    fn height_die_update_matches_ea() {
+        assert_ea_fixture("height-die-update", 4);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

@@ -1,0 +1,20 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeHeightDieDefault">
+    <Behaviors><HeightDieUpdate id="HeightDefault"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeHeightDieCustom">
+    <Behaviors><HeightDieUpdate id="HeightCustom" TargetHeight="31.5" TargetHeightIncludesStructures="true" OnlyWhenMovingDown="true" SnapToGroundOnDeath="true" InitialDelay="150"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+<GameObject id="ProbeHeightDieBoundary">
+    <Behaviors><HeightDieUpdate id="HeightBoundary" TargetHeight="31.5" TargetHeightIncludesStructures="true" OnlyWhenMovingDown="true" SnapToGroundOnDeath="true" InitialDelay="200"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+
+<GameObject id="ProbeHeightDieAbove">
+    <Behaviors><HeightDieUpdate id="HeightAbove" TargetHeight="31.5" TargetHeightIncludesStructures="true" OnlyWhenMovingDown="true" SnapToGroundOnDeath="true" InitialDelay="201"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+
+</AssetDeclaration>
