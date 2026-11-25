@@ -183,3 +183,45 @@ pub(super) fn encode_heal(
         ]),
     ))
 }
+
+pub(super) fn encode_veterancy(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const VETERANCY: u32 = 0x573d_c203;
+    const EXTRA_FIELDS: [(&str, u32, usize); 4] = [
+        ("RangeOfEffect", 0x7631_77a4, 0x6c),
+        ("AddsOwnerVeterancy", 0x77e3_f4f7, 0x74),
+        ("IsPilot", 0x77e3_f4f7, 0x75),
+        ("AffectsUpToLevel", 0x23e6_50b8, 0x70),
+    ];
+    let path = data.path;
+    validate_crate_attributes(node, &EXTRA_FIELDS.map(|(name, ..)| name), data)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected VeterancyCrateCollide content"));
+    }
+    let start = data.allocate(pointer, 0x78)?;
+    let crate_table = encode_base(node, VETERANCY, start, data, references, reference_types)?;
+    let range = node
+        .attribute("RangeOfEffect")
+        .unwrap_or("0")
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| invalid(path, "invalid RangeOfEffect"))?;
+    let level = node
+        .attribute("AffectsUpToLevel")
+        .unwrap_or("0")
+        .trim()
+        .parse::<i32>()
+        .map_err(|_| invalid(path, "invalid AffectsUpToLevel"))?;
+    data.word(start + 0x6c, range);
+    data.word(start + 0x70, level as u32);
+    data.payload[start + 0x74] = boolean(node, "AddsOwnerVeterancy", false, path)?;
+    data.payload[start + 0x75] = boolean(node, "IsPilot", false, path)?;
+    let mut entries = vec![base(KIND, crate_table)];
+    entries.extend(fields(start, &EXTRA_FIELDS));
+    Ok((VETERANCY, Table::record(entries)))
+}

@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AudioEvent id="CratePickup"/>
+
+  <GameObject id="ProbeveterancyCrate">
+    <Behaviors>
+      <VeterancyCrateCollide id="ModuleTag_Default"/>
+<VeterancyCrateCollide id="ModuleTag_Explicit" RangeOfEffect="123" AddsOwnerVeterancy="true" IsPilot="true" AffectsUpToLevel="-2"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

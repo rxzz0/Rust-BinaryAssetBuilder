@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 418: Added native veterancy crates using the inherited crate layout. Two EA assets match.
 - Checkpoint 417: Added native RadarUpdate with stock and explicit extension time. Two EA assets match.
 - Checkpoint 416: Added native healing crates with repeatable filters and EA-compatible inherited fields. Two EA assets match.
 - Checkpoint 415: Added native money crates using the inherited crate fields and cash range. Two EA assets match.
