@@ -1553,6 +1553,7 @@ pub(super) fn encode(
         "RecallUnitsSpecialPower"
             | "SpecialPower"
             | "ReturnToProducerSpecialPower"
+            | "ReturnToDockSpecialPower"
             | "MovementSpecialPower"
             | "AssignSlavesTargetObjectSpecialPower"
             | "OCLSpecialPower"

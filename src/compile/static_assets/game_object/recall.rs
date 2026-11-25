@@ -124,6 +124,7 @@ pub(super) fn encode(
         "TeleportStoredObjectsSpecialPower" => (0x318d_c4d6, 0x1d0, TELEPORT_FIELDS),
         "RecallUnitsSpecialPower" => (KIND, 0x1cc, RECALL_FIELDS),
         "MovementSpecialPower" => (MOVEMENT_POWER, 0x1e8, MOVEMENT_FIELDS),
+        "ReturnToDockSpecialPower" => (0x07fe_a222, 0x1c4, &[][..]),
         "ReturnToProducerSpecialPower" => (0x2800_4ab1, 0x1c4, &[][..]),
         "AssignSlavesTargetObjectSpecialPower" => (0x9daf_d38c, 0x1c4, &[][..]),
         "PrematureDischargeSpecialPower" => (0x8e22_e8c8, 0x1c4, &[][..]),

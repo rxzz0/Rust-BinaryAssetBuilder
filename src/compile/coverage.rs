@@ -1506,6 +1506,11 @@ mod tests {
     }
 
     #[test]
+    fn return_to_dock_special_power_matches_ea() {
+        assert_ea_fixture("return-to-dock", 2);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
