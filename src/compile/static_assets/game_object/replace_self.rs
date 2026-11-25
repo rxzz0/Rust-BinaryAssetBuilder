@@ -6,10 +6,10 @@ use super::super::{
 };
 use super::behaviors_basic::{base, module_base};
 use super::draws::{boolean, model_condition_index};
-use super::secondary_damage::write_status_flags;
+use super::secondary_damage::{STATUS_BYTES, write_status_flags};
 use super::spawn::{id_list, weak_reference};
 use super::tech_upgrade::encode_anim;
-use super::{dominate_enemy, eject_passengers, special_disguise};
+use super::{beam_special_ability, dominate_enemy, eject_passengers, special_disguise};
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::{Document, Node};
 use std::{io, sync::OnceLock};
@@ -230,6 +230,11 @@ pub(super) fn encode(
         "ToggleStatusSpecialAbilityUpdate" => (TOGGLE, 0xfc, TOGGLE_FIELDS),
         "ActivateModuleSpecialAbilityUpdate" => (ACTIVATE_MODULE, 0xf8, &[][..]),
         "SpecialAbilityUpdate" => (ABILITY, 0xf0, &[][..]),
+        "BeamSpecialAbilityUpdate" => (
+            beam_special_ability::KIND,
+            beam_special_ability::SIZE,
+            beam_special_ability::FIELDS,
+        ),
         "CaptureSpecialAbilityUpdate" => (CAPTURE, 0xf0, &[][..]),
         "EjectPassengersSpecialAbilityUpdate" => (
             eject_passengers::KIND,
@@ -306,9 +311,16 @@ pub(super) fn encode(
     let dominate = (kind == dominate_enemy::KIND)
         .then(|| dominate_enemy::filter(children.by_ref(), start, data, reference_types))
         .transpose()?;
-    for &(name, tag, offset, storage, default) in all_fields {
+    // Beam allocates its derived status list and string before inherited data.
+    let ordered_fields = if kind == beam_special_ability::KIND {
+        variant.iter().chain(FIELDS)
+    } else {
+        all_fields
+    };
+    for &(name, tag, offset, storage, default) in ordered_fields {
         let value = node.attribute(name).unwrap_or(default);
         let offset = start + offset;
+        let mut target = Target::Data(offset);
         match storage {
             "ref" | "weak" | "audio" | "preencoded" => {}
             "string" => {
@@ -318,6 +330,16 @@ pub(super) fn encode(
             }
             "bool" => data.payload[offset] = boolean(node, name, default == "true", path)?,
             "status" => write_status_flags(value, offset, data)?,
+            "optional_status" => {
+                target = match node.attribute(name) {
+                    Some(value) => {
+                        let start = data.allocate(offset, STATUS_BYTES)?;
+                        write_status_flags(value, start, data)?;
+                        Target::Data(start)
+                    }
+                    None => Target::Null,
+                };
+            }
             storage => {
                 let word = match storage {
                     "int" => value
@@ -357,7 +379,7 @@ pub(super) fn encode(
                 data.word(offset, word);
             }
         }
-        let entry = Entry::named(name, tag, Target::Data(offset));
+        let entry = Entry::named(name, tag, target);
         if offset >= start + 0xf0 {
             derived.push(entry);
         } else {
@@ -428,7 +450,7 @@ pub(super) fn encode(
     }
     if matches!(
         kind,
-        WEAPON | CAPTURE | RECONSTITUTE | eject_passengers::KIND
+        WEAPON | CAPTURE | RECONSTITUTE | eject_passengers::KIND | beam_special_ability::KIND
     ) {
         if children.next().is_some() {
             return Err(invalid(

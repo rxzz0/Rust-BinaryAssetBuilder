@@ -290,10 +290,14 @@ pub(in crate::compile::static_assets) fn compile(
                 if module.has_tag_name((SAGE_NS, "MovementSpecialPower")) {
                     movement_power_modules.push(start);
                 }
-                if module.has_tag_name((SAGE_NS, "SpecialDisguiseUpdate")) {
-                    early_module_fields.push((start, 0x100));
-                } else if module.has_tag_name((SAGE_NS, "DominateEnemySpecialPower")) {
-                    early_module_fields.push((start, super::dominate_enemy::FILTER_POINTER as u32));
+                let early_fields: &[u32] = match module.tag_name().name() {
+                    "SpecialDisguiseUpdate" => &[0x100],
+                    "DominateEnemySpecialPower" => &[super::dominate_enemy::FILTER_POINTER as u32],
+                    "BeamSpecialAbilityUpdate" => &[0xf8, 0x108],
+                    _ => &[],
+                };
+                if !early_fields.is_empty() {
+                    early_module_fields.push((start, early_fields));
                 }
                 let result = behaviors_basic::encode(
                     module,
@@ -477,11 +481,12 @@ pub(in crate::compile::static_assets) fn compile(
                 return (start, offset);
             }
         }
-        // The disguise terrain list and domination filter precede inherited pointers.
+        // Some abilities emit derived pointers before inherited pointers.
         let index = early_module_fields.partition_point(|&(start, _)| start <= pointer);
         if index > 0 {
-            let (start, offset) = early_module_fields[index - 1];
-            if pointer - start == offset {
+            let (start, offsets) = early_module_fields[index - 1];
+            let offset = pointer - start;
+            if offsets.contains(&offset) {
                 return (start, offset);
             }
         }

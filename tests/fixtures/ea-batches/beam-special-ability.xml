@@ -1,0 +1,18 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="BeamAbilityDefaults">
+    <Behaviors><BeamSpecialAbilityUpdate id="ModuleTag_Default" SpecialPowerTemplate="SpecialPower_ProbeBeam"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="BeamAbilityExplicit">
+    <Behaviors>
+      <BeamSpecialAbilityUpdate id="ModuleTag_Beam" SpecialPowerTemplate="SpecialPower_ProbeBeam"
+          DamagePerSecond="111.25" JoinWithOtherBeams="true" DissapateWhenTargetDead="false" LineType="true"
+          TargetAttributeModifierAdd="ProbeBeamModifier" TargetObjectStatusAdd="SPECIALABILITY_ACTIVE NO_SQUISHCOLLIDE_DELAY"
+          SweepFX="ProbeBeamFx" ReflectorExtendDistance="387.5" TargetSamePlayerOnly="true" PreferredTargetBone="BeamSocket"
+          SpecialObjectAttachToBone="BaseSocket" ContactPointOverride="BaseContact">
+        <CustomAnimAndDuration AnimState="MOVING" Frames="12" Trigger="3"/>
+      </BeamSpecialAbilityUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

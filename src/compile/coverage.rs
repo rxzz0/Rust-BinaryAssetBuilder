@@ -1531,6 +1531,11 @@ mod tests {
     }
 
     #[test]
+    fn beam_special_ability_matches_ea() {
+        assert_ea_fixture("beam-special-ability", 2);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

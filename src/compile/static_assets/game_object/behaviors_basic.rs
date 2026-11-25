@@ -1856,6 +1856,7 @@ pub(super) fn encode(
     if matches!(
         node.tag_name().name(),
         "SpecialAbilityUpdate"
+            | "BeamSpecialAbilityUpdate"
             | "ReplaceSelfSpecialAbility"
             | "DominateEnemySpecialPower"
             | "ReconstituteStateSpecialAbility"
