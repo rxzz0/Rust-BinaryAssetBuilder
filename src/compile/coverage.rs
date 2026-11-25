@@ -1456,6 +1456,11 @@ mod tests {
     }
 
     #[test]
+    fn parabolic_curve_update_matches_ea() {
+        assert_ea_fixture("parabolic-curve-update", 1);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
