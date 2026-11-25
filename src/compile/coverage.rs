@@ -1436,6 +1436,11 @@ mod tests {
     }
 
     #[test]
+    fn strafe_area_update_matches_ea() {
+        assert_ea_fixture("strafe-area-update", 4);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
