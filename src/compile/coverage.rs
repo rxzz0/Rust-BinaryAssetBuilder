@@ -1516,6 +1516,11 @@ mod tests {
     }
 
     #[test]
+    fn unit_vision_behavior_matches_ea() {
+        assert_ea_fixture("unit-vision-behavior", 3);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

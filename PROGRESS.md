@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 410: Added native unit vision with its stock rate and signed override. Three EA assets match.
 - Checkpoint 409: Added native crate triggers, flags, audio and FX references. Five EA assets match.
 - Checkpoint 408: Added native docking via the shared recall layout. Two EA assets match.
 - Checkpoint 407: Added native height-triggered death, its flags and delay rounding. Four EA assets match.

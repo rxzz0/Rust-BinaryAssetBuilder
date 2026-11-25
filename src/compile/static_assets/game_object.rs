@@ -46,6 +46,7 @@ mod selective_visibility;
 mod set_locomotor_speed;
 mod shield_sphere_update;
 mod strafe_area_update;
+mod unit_vision_behavior;
 mod weapon_scatter_effect;
 pub(super) use material::encode_render_material;
 mod grappling_hook;
