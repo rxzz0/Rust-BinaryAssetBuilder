@@ -1,0 +1,109 @@
+use std::io;
+
+use roxmltree::Node;
+
+use super::super::binary::BinaryData;
+use super::super::global_ui::kind_of_flags;
+use super::super::tokenized::Table;
+use super::super::{AssetReference, asset_reference, finite_number, validate_attributes};
+use super::behaviors_basic::{base, module_base};
+use super::client_behaviors::audio_reference;
+use super::draws::{boolean, fields};
+use super::passive_area::reference;
+use crate::compile::{has_content, invalid};
+
+const KIND: u32 = 0x2027_962a;
+const FIELDS: [(&str, u32, usize); 12] = [
+    ("KindOf", 0x9afc_9193, 8),
+    ("KindOfNot", 0x9afc_9193, 0x2c),
+    ("IsForbidOwnerPlayer", 0x77e3_f4f7, 0x64),
+    ("IsBuildingPickup", 0x77e3_f4f7, 0x65),
+    ("IsHumanOnlyPickup", 0x77e3_f4f7, 0x66),
+    ("IsHumanOnlyPickupInSinglePlayerCampaign", 0x77e3_f4f7, 0x67),
+    ("ExecuteFX", 0x0d1c_8e83, 0x50),
+    ("ExecutionAnimationTemplate", 0x148e_d75d, 0x54),
+    ("ExecuteAnimationDisplayTimeInSeconds", 0x6458_64f3, 0x58),
+    ("ExecuteAnimationZRisePerSecond", 0x6458_64f3, 0x5c),
+    ("ExecuteAnimationFades", 0x77e3_f4f7, 0x68),
+    ("ExecuteAudioEvent", 0x63d7_b468, 0x60),
+];
+
+pub(super) fn encode(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(FIELDS.iter().map(|&(name, ..)| name))
+        .collect();
+    validate_attributes(node, &allowed, data.path)?;
+    if has_content(node) {
+        return Err(invalid(data.path, "unexpected CrateCollide content"));
+    }
+    let start = data.allocate(pointer, 0x6c)?;
+    let table = encode_base(node, KIND, start, data, references, reference_types)?;
+    Ok((KIND, table))
+}
+
+fn encode_base(
+    node: Node<'_, '_>,
+    kind: u32,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Table> {
+    let path = data.path;
+    let behavior = module_base(node, kind, start, data, false)?;
+    for &(name, field_kind, offset) in &FIELDS {
+        let value = node.attribute(name).unwrap_or("");
+        match field_kind {
+            0x9afc_9193 => {
+                let flags = kind_of_flags(value, path)?;
+                for (index, word) in flags.into_iter().enumerate() {
+                    data.word(start + offset + index * 4, word);
+                }
+            }
+            0x77e3_f4f7 => {
+                let default = name == "IsHumanOnlyPickupInSinglePlayerCampaign";
+                data.payload[start + offset] = boolean(node, name, default, path)?;
+            }
+            0x6458_64f3 => {
+                let value = finite_number(node.attribute(name).unwrap_or("0"), name, path)?;
+                data.word(start + offset, value.to_bits());
+            }
+            _ => {}
+        }
+    }
+
+    for attribute in node.attributes() {
+        let value = attribute.value();
+        match attribute.name() {
+            "ExecuteFX" => {
+                let ordinal = reference(value, "FXList", path, references, reference_types)?;
+                data.word(start + 0x50, ordinal);
+            }
+            "ExecutionAnimationTemplate" if !value.trim().is_empty() => {
+                let name = value.split_once('\\').map_or(value, |(name, _)| name);
+                let asset = asset_reference(name, "GameObject", path)?;
+                data.word(start + 0x54, asset.instance_id);
+                reference_types.push(asset.type_id);
+            }
+            "ExecuteAudioEvent" => {
+                let ordinal = audio_reference(value, path, references, reference_types)?;
+                data.word(start + 0x60, ordinal);
+            }
+            _ => {}
+        }
+    }
+    if node.attribute("ExecuteAudioEvent").is_none() {
+        let ordinal = audio_reference("CratePickup", path, references, reference_types)?;
+        data.word(start + 0x60, ordinal);
+    }
+
+    let mut entries = vec![base(0x70e5_c103, Table::record(vec![behavior]))];
+    entries.extend(fields(start, &FIELDS));
+    Ok(Table::record(entries))
+}

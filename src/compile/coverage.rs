@@ -1511,6 +1511,11 @@ mod tests {
     }
 
     #[test]
+    fn crate_collide_matches_ea() {
+        assert_ea_fixture("crate-collide", 5);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

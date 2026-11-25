@@ -22,6 +22,7 @@ mod animal_ai;
 mod attach;
 mod bombard_area_update;
 mod circular_damage;
+mod crate_collide;
 mod destroy_objects;
 mod encoder;
 mod engineer;

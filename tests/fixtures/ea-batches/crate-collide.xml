@@ -1,0 +1,15 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AudioEvent id="CratePickup"/>
+  <AudioEvent id="ProbeCratePickup"/>
+  <FXList id="ProbeCrateFx"><NuggetList/></FXList>
+  <GameObject id="CrateCollideDefaultProbe">
+    <Behaviors><CrateCollide id="ModuleTag_CrateCollide"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="CrateCollideExplicitProbe">
+    <Behaviors>
+      <CrateCollide id="ModuleTag_CrateCollide" KindOf="INFANTRY VEHICLE" KindOfNot="AIRCRAFT STRUCTURE" IsForbidOwnerPlayer="true" IsBuildingPickup="true" IsHumanOnlyPickup="true" IsHumanOnlyPickupInSinglePlayerCampaign="false" ExecuteAudioEvent="ProbeCratePickup" ExecuteFX="ProbeCrateFx" ExecutionAnimationTemplate="CrateCollideDefaultProbe" ExecuteAnimationDisplayTimeInSeconds="2.5" ExecuteAnimationZRisePerSecond="-3.75" ExecuteAnimationFades="true"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
