@@ -244,6 +244,7 @@ pub(in crate::compile::static_assets) fn compile(
                     | "ModelConditionUpgrade"
                     | "GeometryUpgrade"
                     | "RemoveUpgradeUpgrade"
+                    | "ArmorUpgrade"
             ) {
                 let start = data.payload.len() as u32;
                 let result = super::tech_upgrade::encode(

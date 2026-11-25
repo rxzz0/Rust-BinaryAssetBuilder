@@ -1536,6 +1536,11 @@ mod tests {
     }
 
     #[test]
+    fn armor_upgrade_matches_ea() {
+        assert_ea_fixture("armor-upgrade", 2);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
