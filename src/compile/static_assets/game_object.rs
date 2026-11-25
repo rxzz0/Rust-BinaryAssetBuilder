@@ -40,6 +40,7 @@ pub(super) mod material;
 mod parabolic_curve_update;
 mod projectile_update;
 mod selective_visibility;
+mod set_locomotor_speed;
 mod strafe_area_update;
 mod weapon_scatter_effect;
 pub(super) use material::encode_render_material;

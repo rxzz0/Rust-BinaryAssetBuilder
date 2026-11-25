@@ -1486,6 +1486,11 @@ mod tests {
     }
 
     #[test]
+    fn set_locomotor_speed_matches_ea() {
+        assert_ea_fixture("set-locomotor-speed", 2);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
