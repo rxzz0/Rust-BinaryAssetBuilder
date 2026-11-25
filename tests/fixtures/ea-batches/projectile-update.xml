@@ -1,0 +1,38 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProjectileBombProbe">
+    <Behaviors>
+      <ProjectileUpdate id="ModuleTag_Bomb"><Movement><MoveToGround/></Movement></ProjectileUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProjectileBombExplicitProbe">
+    <Behaviors>
+      <ProjectileUpdate id="ModuleTag_BombExplicit" StateMachine="BombProjectile" MinDetonationHeight="-1.25" MinTargetDistance="22.5">
+        <Movement><MoveToGround InitialSpeed="33" Acceleration="-4.5" TerminalVelocity="78" RotationSpeedPerSecond="-30d" TerminalRotation="1.25r" ForwardVelocityDamping="70%"/></Movement>
+      </ProjectileUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProjectileStraightProbe">
+    <Behaviors>
+      <ProjectileUpdate id="ModuleTag_Straight" StateMachine="StraightLineProjectile" Flags="LAUNCH_AT_TARGET_POS" MinTargetDistance="5">
+        <Movement><MoveInStraightLine MuzzleVelocity="40" Acceleration="0.125" TerminalVelocity="65"/></Movement>
+      </ProjectileUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProjectileBalloonProbe">
+    <Behaviors><ProjectileUpdate id="ModuleTag_Balloon" StateMachine="BalloonProjectile"><Movement><BalloonMoveToGround/></Movement></ProjectileUpdate></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProjectileBezierProbe">
+    <Behaviors>
+      <ProjectileUpdate id="ModuleTag_Bezier" StateMachine="BezierSplineProjectile">
+        <Movement><BezierSpline Velocity="42" Range="345" Gravity="0.75"><Path>ProjectilePathAB</Path><Path>ProjectilePathCD</Path></BezierSpline></Movement>
+      </ProjectileUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <ProjectilePath id="ProjectilePathAB"><Point x="1" y="2" z="3" w="4"/></ProjectilePath>
+  <ProjectilePath id="ProjectilePathCD"><Point x="3" y="4" z="5" w="6"/></ProjectilePath>
+</AssetDeclaration>

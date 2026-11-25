@@ -33,6 +33,7 @@ mod laser_state;
 mod line_segment_damage;
 mod linear_damage;
 pub(super) mod material;
+mod projectile_update;
 mod strafe_area_update;
 pub(super) use material::encode_render_material;
 mod grappling_hook;

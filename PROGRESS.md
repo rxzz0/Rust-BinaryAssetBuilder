@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 396: Added ProjectileUpdate with all four movement variants, projectile paths, and references. All seven EA fixture assets match byte for byte.
 - Checkpoint 395: Added DestroyObjectsUpdate with radius and required inline object filter, including status and object selectors. Both EA fixture assets match byte for byte.
 - Checkpoint 394: Added native StrafeAreaUpdate, including both weapon references, strafing parameters and flags. All four EA fixture assets match byte for byte.
 - Checkpoint 393: Added native AnimalAIUpdate with inherited AI data and animal settings. Both EA fixture assets match byte for byte.
