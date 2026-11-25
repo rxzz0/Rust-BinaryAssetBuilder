@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="RadarDefaults"><Behaviors><RadarUpdate id="ModuleTag_Radar" /></Behaviors><Body><ImmortalBody id="ModuleTag_Body" /></Body></GameObject>
+  <GameObject id="RadarExplicit"><Behaviors><RadarUpdate id="ModuleTag_Radar" RadarExtendTime="2.75" /></Behaviors><Body><ImmortalBody id="ModuleTag_Body" /></Body></GameObject>
+</AssetDeclaration>

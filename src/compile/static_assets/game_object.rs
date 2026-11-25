@@ -44,6 +44,7 @@ mod linear_damage;
 pub(super) mod material;
 mod parabolic_curve_update;
 mod projectile_update;
+mod radar_update;
 mod selective_visibility;
 mod set_locomotor_speed;
 mod shield_sphere_update;

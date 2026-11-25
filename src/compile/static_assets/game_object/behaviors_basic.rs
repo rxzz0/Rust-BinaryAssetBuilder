@@ -1793,6 +1793,9 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "EnergyDisablingBehavior")) {
         return super::energy_disabling_behavior::encode(node, pointer, data).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "RadarUpdate")) {
+        return super::radar_update::encode(node, pointer, data).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "CircularDamageUpdate")) {
         return super::circular_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);

@@ -1551,6 +1551,11 @@ mod tests {
     }
 
     #[test]
+    fn radar_update_matches_ea() {
+        assert_ea_fixture("radar-update", 2);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
