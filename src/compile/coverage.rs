@@ -1491,6 +1491,11 @@ mod tests {
     }
 
     #[test]
+    fn invisibility_broadcast_matches_ea() {
+        assert_ea_fixture("invisibility-broadcast", 3);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

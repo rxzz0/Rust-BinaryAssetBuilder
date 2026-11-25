@@ -1750,6 +1750,16 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "SetLocomotorSpeedUpdate")) {
         return super::set_locomotor_speed::encode(node, pointer, data, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "InvisibilityBroadcastUpdate")) {
+        return super::invisibility_broadcast::encode(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "CircularDamageUpdate")) {
         return super::circular_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);

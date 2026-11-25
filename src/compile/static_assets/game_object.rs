@@ -31,6 +31,7 @@ mod garrison;
 mod grant_upgrade_create;
 mod infiltrator;
 mod invalid_targets_death_update;
+mod invisibility_broadcast;
 mod laser_draw;
 mod laser_scatter;
 mod laser_state;

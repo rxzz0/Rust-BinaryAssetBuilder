@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 405: Added native invisibility broadcasts with status masks and optional object filters. Three EA assets match.
 - Checkpoint 404: Added native speed multipliers, target flags and object filters. Two EA assets match.
 - Checkpoint 403: Added WeaponScatterEffectUpdate with optional weapon pointer, inline filter, and timing. All three EA fixture assets match byte for byte.
 - Checkpoint 402: Added LaserScatterUpdate with EA percentage rounding and timer encoding. Both EA fixture assets match byte for byte.
