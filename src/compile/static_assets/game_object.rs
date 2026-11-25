@@ -21,6 +21,7 @@ pub(in crate::compile) use draws::SCRIPTED_FLAGS;
 mod animal_ai;
 mod attach;
 mod circular_damage;
+mod destroy_objects;
 mod encoder;
 mod engineer;
 mod fields;

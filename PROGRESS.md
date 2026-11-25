@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 395: Added DestroyObjectsUpdate with radius and required inline object filter, including status and object selectors. Both EA fixture assets match byte for byte.
 - Checkpoint 394: Added native StrafeAreaUpdate, including both weapon references, strafing parameters and flags. All four EA fixture assets match byte for byte.
 - Checkpoint 393: Added native AnimalAIUpdate with inherited AI data and animal settings. Both EA fixture assets match byte for byte.
 - Checkpoint 392: Added `CircularDamageUpdate`, including flags, sweep FX and weapon references, timer, and the required object filter. All four EA fixture assets match. All 343 tests and Clippy passed. Installed and verified in the SDK. The isolated Brighton Beach build advances to `StrafeAreaUpdate`.

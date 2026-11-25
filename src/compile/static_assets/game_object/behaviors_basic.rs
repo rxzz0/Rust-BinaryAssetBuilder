@@ -1698,6 +1698,9 @@ pub(super) fn encode(
         return super::strafe_area_update::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "DestroyObjectsUpdate")) {
+        return super::destroy_objects::encode(node, pointer, data, reference_types).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "CircularDamageUpdate")) {
         return super::circular_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);
