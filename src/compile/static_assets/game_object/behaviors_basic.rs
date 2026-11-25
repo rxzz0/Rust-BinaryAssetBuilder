@@ -1734,6 +1734,9 @@ pub(super) fn encode(
         )
         .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "LaserScatterUpdate")) {
+        return super::laser_scatter::encode(node, pointer, data).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "CircularDamageUpdate")) {
         return super::circular_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);

@@ -32,6 +32,7 @@ mod grant_upgrade_create;
 mod infiltrator;
 mod invalid_targets_death_update;
 mod laser_draw;
+mod laser_scatter;
 mod laser_state;
 mod line_segment_damage;
 mod linear_damage;

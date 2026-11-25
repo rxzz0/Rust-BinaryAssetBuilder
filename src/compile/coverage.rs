@@ -1476,6 +1476,11 @@ mod tests {
     }
 
     #[test]
+    fn laser_scatter_matches_ea() {
+        assert_ea_fixture("laser-scatter", 2);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
