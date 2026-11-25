@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AudioEvent id="CratePickup"/>
+
+  <GameObject id="ProberandomCrate">
+    <Behaviors>
+      <RandomCrateCollide id="ModuleTag_Default"/>
+<RandomCrateCollide id="ModuleTag_Explicit" AttributeCrateChance="12.5" UnitCrateChance="2.25" BombCrateChance="3.25" HealCrateChance="4.25" MoneyCrateChance="5.25" ShroudCrateChance="6.25" VeterancyCrateChance="7.25" AllowAIPickup="true"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

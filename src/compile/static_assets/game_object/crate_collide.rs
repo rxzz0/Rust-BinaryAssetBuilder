@@ -225,3 +225,41 @@ pub(super) fn encode_veterancy(
     entries.extend(fields(start, &EXTRA_FIELDS));
     Ok((VETERANCY, Table::record(entries)))
 }
+
+pub(super) fn encode_random(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const RANDOM: u32 = 0x1cc0_14e0;
+    const EXTRA_FIELDS: [(&str, u32, usize); 8] = [
+        ("AttributeCrateChance", 0x6458_64f3, 0x6c),
+        ("UnitCrateChance", 0x6458_64f3, 0x70),
+        ("BombCrateChance", 0x6458_64f3, 0x74),
+        ("HealCrateChance", 0x6458_64f3, 0x78),
+        ("MoneyCrateChance", 0x6458_64f3, 0x7c),
+        ("ShroudCrateChance", 0x6458_64f3, 0x80),
+        ("VeterancyCrateChance", 0x6458_64f3, 0x84),
+        ("AllowAIPickup", 0x77e3_f4f7, 0x88),
+    ];
+    let path = data.path;
+    validate_crate_attributes(node, &EXTRA_FIELDS.map(|(name, ..)| name), data)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected RandomCrateCollide content"));
+    }
+    let start = data.allocate(pointer, 0x8c)?;
+    let crate_table = encode_base(node, RANDOM, start, data, references, reference_types)?;
+    for &(name, kind, offset) in &EXTRA_FIELDS {
+        if kind == 0x77e3_f4f7 {
+            data.payload[start + offset] = boolean(node, name, false, path)?;
+        } else {
+            let chance = finite_number(node.attribute(name).unwrap_or("0"), name, path)?;
+            data.word(start + offset, chance.to_bits());
+        }
+    }
+    let mut entries = vec![base(KIND, crate_table)];
+    entries.extend(fields(start, &EXTRA_FIELDS));
+    Ok((RANDOM, Table::record(entries)))
+}
