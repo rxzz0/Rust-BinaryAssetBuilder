@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="GrantUpgradeCreateDefaults">
+    <Behaviors><GrantUpgradeCreate id="ModuleTag_Default"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="GrantUpgradeCreateExplicit">
+    <Behaviors><GrantUpgradeCreate id="ModuleTag_Custom" UpgradeToGrant="ProbeUpgradeToGrant" ExemptStatus="CAN_ATTACK GENERIC_TOGGLE_STATE" GiveOnBuildComplete="true"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <UpgradeTemplate id="ProbeUpgradeToGrant" Type="OBJECT"/>
+</AssetDeclaration>

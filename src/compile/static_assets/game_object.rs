@@ -27,6 +27,7 @@ mod engineer;
 mod fields;
 mod fx_list_behavior;
 mod garrison;
+mod grant_upgrade_create;
 mod infiltrator;
 mod invalid_targets_death_update;
 mod laser_draw;

@@ -1466,6 +1466,11 @@ mod tests {
     }
 
     #[test]
+    fn grant_upgrade_create_matches_ea() {
+        assert_ea_fixture("grant-upgrade-create", 3);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

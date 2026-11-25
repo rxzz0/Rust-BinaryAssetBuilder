@@ -1714,6 +1714,16 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "SelectiveVisibilityBehavior")) {
         return super::selective_visibility::encode(node, pointer, data).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "GrantUpgradeCreate")) {
+        return super::grant_upgrade_create::encode(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "CircularDamageUpdate")) {
         return super::circular_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);
