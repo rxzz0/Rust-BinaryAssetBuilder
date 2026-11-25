@@ -4,6 +4,7 @@ use super::super::{
     AssetReference, asset_reference, finite_number, hash_name, percentage, sage_time,
     significant_children, validate_attributes,
 };
+use super::animal_ai;
 use super::parking::encode_inline_filter;
 use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::{Document, Node};
@@ -46,6 +47,7 @@ pub(super) fn encode(
         let kind = match (tag.namespace(), tag.name()) {
             (Some(SAGE_NS), "AIUpdate") => AI_UPDATE,
             (Some(SAGE_NS), "JetAIUpdate") => JET_AI_UPDATE,
+            (Some(SAGE_NS), "AnimalAIUpdate") => animal_ai::KIND,
             _ => {
                 return Err(invalid(
                     data.path,
@@ -98,13 +100,17 @@ fn encode_update(
         ("StateMachine", 0xac6e_35e0, 0x3c),
         ("DefaultLocomotorSet", 0x845d_12b2, 0x40),
     ];
-    let jet = kind == JET_AI_UPDATE;
+    let (size, derived_fields) = match kind {
+        JET_AI_UPDATE => (0x64, JET_FIELDS),
+        animal_ai::KIND => (animal_ai::SIZE, animal_ai::FIELDS),
+        _ => (0x4c, &[][..]),
+    };
     let extra: Vec<_> = std::iter::once("id")
-        .chain(JET_FIELDS.iter().filter(|_| jet).map(|&(name, _, _)| name))
+        .chain(derived_fields.iter().map(|&(name, _, _)| name))
         .collect();
     validate_fields(node, FIELDS, &extra, data.path)?;
     let chooser = optional_chooser(node, data.path)?;
-    let start = data.allocate(pointer, if jet { 0x64 } else { 0x4c })?;
+    let start = data.allocate(pointer, size)?;
     data.word(start, kind);
     data.word(start + 4, hash_name(required(node, "id", data.path)?));
     if let Some(text) = node
@@ -153,7 +159,7 @@ fn encode_update(
     data.word(start + 0x40, locomotor_set(node, data.path)?);
     write_bool(node, "StandGround", false, start + 0x48, data)?;
     write_bool(node, "FadeOnPortals", false, start + 0x49, data)?;
-    if jet {
+    if kind == JET_AI_UPDATE {
         encode_jet_fields(node, start, data, references, reference_types)?;
     }
 
@@ -207,12 +213,14 @@ fn encode_update(
         chooser,
     ));
     let table = Table::record(fields);
-    if jet {
-        let mut entries = vec![base(AI_UPDATE, table)];
-        entries.extend(super::draws::fields(start, JET_FIELDS));
-        Ok(Table::record(entries))
-    } else {
-        Ok(table)
+    match kind {
+        JET_AI_UPDATE => {
+            let mut entries = vec![base(AI_UPDATE, table)];
+            entries.extend(super::draws::fields(start, JET_FIELDS));
+            Ok(Table::record(entries))
+        }
+        animal_ai::KIND => animal_ai::encode_fields(node, start, data, base(AI_UPDATE, table)),
+        _ => Ok(table),
     }
 }
 
