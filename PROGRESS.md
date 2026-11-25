@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 406: Added native shield sphere fields, collision masks and object filters. Two EA assets match.
 - Checkpoint 405: Added native invisibility broadcasts with status masks and optional object filters. Three EA assets match.
 - Checkpoint 404: Added native speed multipliers, target flags and object filters. Two EA assets match.
 - Checkpoint 403: Added WeaponScatterEffectUpdate with optional weapon pointer, inline filter, and timing. All three EA fixture assets match byte for byte.

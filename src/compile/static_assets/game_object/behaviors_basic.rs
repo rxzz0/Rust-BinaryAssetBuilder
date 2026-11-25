@@ -1760,6 +1760,9 @@ pub(super) fn encode(
         )
         .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "ShieldSphereUpdate")) {
+        return super::shield_sphere_update::encode(node, pointer, data, reference_types).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "CircularDamageUpdate")) {
         return super::circular_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);

@@ -1496,6 +1496,11 @@ mod tests {
     }
 
     #[test]
+    fn shield_sphere_update_matches_ea() {
+        assert_ea_fixture("shield-sphere-update", 2);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
