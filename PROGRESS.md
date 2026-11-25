@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 420: Added native spider hole update with stock and explicit settings. Two EA assets match.
 - Checkpoint 419: Added native random crates with seven chances and AI pickup. Two EA assets match.
 - Checkpoint 418: Added native veterancy crates using the inherited crate layout. Two EA assets match.
 - Checkpoint 417: Added native RadarUpdate with stock and explicit extension time. Two EA assets match.

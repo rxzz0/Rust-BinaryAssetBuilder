@@ -1566,6 +1566,11 @@ mod tests {
     }
 
     #[test]
+    fn spider_hole_update_matches_ea() {
+        assert_ea_fixture("spider-hole-update", 2);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

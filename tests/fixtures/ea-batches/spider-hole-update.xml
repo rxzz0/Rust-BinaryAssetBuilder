@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeSpiderHoleStock">
+    <Behaviors><SpiderHoleUpdate id="ModuleTag_SpiderHoleUpdate" Radius="5" ScanFrequency="0.5s">
+      <ObjectFilter Rule="ANY" Relationship="ALLIES NEUTRAL ENEMIES" Include="VEHICLE"/>
+    </SpiderHoleUpdate></Behaviors>
+    <Body><PropBody id="ModuleTag_Body"/></Body>
+  </GameObject>
+  <GameObject id="ProbeSpiderHoleDefaults">
+    <Behaviors><SpiderHoleUpdate id="DefaultSpiderHole">
+      <ObjectFilter/>
+    </SpiderHoleUpdate></Behaviors>
+    <Body><PropBody id="ModuleTag_Body"/></Body>
+  </GameObject>
+</AssetDeclaration>
