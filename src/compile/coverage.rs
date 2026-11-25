@@ -1481,6 +1481,11 @@ mod tests {
     }
 
     #[test]
+    fn weapon_scatter_effect_matches_ea() {
+        assert_ea_fixture("weapon-scatter-effect-update", 3);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

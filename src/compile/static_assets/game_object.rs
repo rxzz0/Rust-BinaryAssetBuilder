@@ -41,6 +41,7 @@ mod parabolic_curve_update;
 mod projectile_update;
 mod selective_visibility;
 mod strafe_area_update;
+mod weapon_scatter_effect;
 pub(super) use material::encode_render_material;
 mod grappling_hook;
 mod ore;
