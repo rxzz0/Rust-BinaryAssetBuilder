@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 412: Added native ship death using the inherited SlowDeath layout. Four EA assets match.
 - Checkpoint 411: Added native energy disabling with stock behavior defaults. The EA asset matches.
 - Checkpoint 410: Added native unit vision with its stock rate and signed override. Three EA assets match.
 - Checkpoint 409: Added native crate triggers, flags, audio and FX references. Five EA assets match.

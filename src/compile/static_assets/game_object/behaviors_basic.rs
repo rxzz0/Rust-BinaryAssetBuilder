@@ -1688,7 +1688,9 @@ pub(super) fn encode(
         return super::teleport_stored::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
-    if node.has_tag_name((SAGE_NS, "SlowDeath")) {
+    if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(node.tag_name().name(), "SlowDeath" | "ShipSlowDeath")
+    {
         return super::slow_death::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }

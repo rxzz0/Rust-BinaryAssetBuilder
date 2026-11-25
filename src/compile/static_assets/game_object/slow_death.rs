@@ -4,14 +4,15 @@ use super::super::{
     AssetReference, asset_reference, finite_number, percentage, sage_time, significant_children,
     validate_attributes,
 };
-use super::behaviors_basic::{base, encode_die_mux, module_base};
+use super::behaviors_basic::{base, encode_die_mux, inherited, module_base};
 use super::draws::{boolean, write_model_conditions};
 use super::secondary_damage::{STATUS_BYTES, write_status_flags};
 use crate::compile::{SAGE_NS, has_content, invalid};
 use roxmltree::Node;
 use std::io;
 
-const KIND: u32 = 0x9876_9794;
+const SLOW_DEATH: u32 = 0x9876_9794;
+const SHIP_SLOW_DEATH: u32 = 0xecc6_823d;
 const REAL: u32 = 0x6458_64f3;
 const TIME: u32 = 0x9986_69e8;
 const ANGLE: u32 = 0x4e16_ea4d;
@@ -60,7 +61,12 @@ pub(super) fn encode(
     names.extend(ATTRIBUTES.map(|(name, _, _, _)| name));
     validate_attributes(node, &names, path)?;
     let start = data.allocate(pointer, 0x74)?;
-    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    let kind = if node.has_tag_name((SAGE_NS, "ShipSlowDeath")) {
+        SHIP_SLOW_DEATH
+    } else {
+        SLOW_DEATH
+    };
+    let mut entries = vec![module_base(node, kind, start, data, true)?];
     for (name, kind, relative, default) in ATTRIBUTES {
         let value = node.attribute(name).unwrap_or(default);
         let offset = start + relative;
@@ -208,7 +214,13 @@ pub(super) fn encode(
         return Err(invalid(path, "unexpected SlowDeath child"));
     }
     entries.push(Entry::named("DieMuxData", 0x0084_001b, mux));
-    Ok((KIND, Table::record(entries)))
+    let table = Table::record(entries);
+    let table = if kind == SHIP_SLOW_DEATH {
+        inherited(SLOW_DEATH, table)
+    } else {
+        table
+    };
+    Ok((kind, table))
 }
 
 pub(super) fn angle(value: &str, name: &str, data: &BinaryData<'_>) -> io::Result<f32> {

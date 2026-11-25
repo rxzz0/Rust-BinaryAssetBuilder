@@ -1526,6 +1526,11 @@ mod tests {
     }
 
     #[test]
+    fn ship_slow_death_matches_ea() {
+        assert_ea_fixture("ship-slow-death", 4);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

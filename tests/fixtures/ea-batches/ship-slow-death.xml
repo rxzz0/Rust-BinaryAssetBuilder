@@ -1,0 +1,18 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <FXList id="ShipSlowDeathFx"><NuggetList/></FXList>
+  <ObjectCreationList id="ShipSlowDeathOcl"/>
+  <WeaponTemplate id="ShipSlowDeathWeapon"/>
+  <GameObject id="ShipSlowDeathProbe">
+    <Behaviors>
+      <ShipSlowDeath id="ModuleTag_Default"/>
+      <ShipSlowDeath id="ModuleTag_Death" SinkDelay="3s" SinkRate="4" DestructionDelay="10s" Fade="true" FlingPitch="30d" DeathFlags="DYING" DeathTypes="DYING" DeathObjectStatusBits="UNDER_CONSTRUCTION">
+        <FX Type="MIDPOINT"><FX>ShipSlowDeathFx</FX></FX>
+        <OCL Type="FINAL"><OCL>ShipSlowDeathOcl</OCL></OCL>
+        <Weapon Type="HIT_GROUND"><Weapon>ShipSlowDeathWeapon</Weapon></Weapon>
+        <Sound Type="INITIAL" List="ProbeSound ProbeSound2"/>
+        <DieMuxData DeathTypes="ALL"/>
+      </ShipSlowDeath>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
