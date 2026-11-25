@@ -1724,6 +1724,16 @@ pub(super) fn encode(
         )
         .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "BombardAreaUpdate")) {
+        return super::bombard_area_update::encode(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "CircularDamageUpdate")) {
         return super::circular_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);

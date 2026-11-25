@@ -1,0 +1,22 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeBombardAreaDefault">
+    <Behaviors>
+      <BombardAreaUpdate id="ModuleTag_Default">
+        <TimeDelayRange Low="0s" High="0s"/>
+        <RadiusSpreadRange Low="0" High="0"/>
+      </BombardAreaUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeBombardAreaCustom">
+    <Behaviors>
+      <BombardAreaUpdate id="ModuleTag_Custom" WeaponName="ProbeBombardWeapon" UsePlayerStore="true" IncomingAngle="45d" MaxShots="9">
+        <ObjectStatusValidation RequiredStatus="GENERIC_TOGGLE_STATE" ForbiddenStatus="MAGNETIZED"/>
+        <TimeDelayRange Low="240ms" High="2.5s"/>
+        <RadiusSpreadRange Low="19" High="80"/>
+      </BombardAreaUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <WeaponTemplate id="ProbeBombardWeapon"/>
+</AssetDeclaration>

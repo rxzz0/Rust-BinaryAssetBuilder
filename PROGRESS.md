@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 401: Added BombardAreaUpdate with weapon, timer/radius ranges, firing angle, and status validation. All three EA fixture assets match byte for byte.
 - Checkpoint 400: Added GrantUpgradeCreate with upgrade references, exempt object status, and completion timing. All three EA fixture assets match byte for byte.
 - Checkpoint 399: Added SelectiveVisibilityBehavior, including optional update rate and player mask. Both EA assets match byte for byte.
 - Checkpoint 398: Added native ParabolicCurveUpdate and verified its base-only record against EA.

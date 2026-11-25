@@ -1471,6 +1471,11 @@ mod tests {
     }
 
     #[test]
+    fn bombard_area_update_matches_ea() {
+        assert_ea_fixture("bombard-area-update", 3);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

@@ -20,6 +20,7 @@ mod enable_dynamics_collide;
 pub(in crate::compile) use draws::SCRIPTED_FLAGS;
 mod animal_ai;
 mod attach;
+mod bombard_area_update;
 mod circular_damage;
 mod destroy_objects;
 mod encoder;
