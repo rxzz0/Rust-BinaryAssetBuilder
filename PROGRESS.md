@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 415: Added native money crates using the inherited crate fields and cash range. Two EA assets match.
 - Checkpoint 414: Added native armor set upgrades using the common upgrade layout. Two EA assets match.
 - Checkpoint 413: Added native beam special ability with inherited options and EA-compatible pointer allocation. Two EA assets match.
 - Checkpoint 412: Added native ship death using the inherited SlowDeath layout. Four EA assets match.

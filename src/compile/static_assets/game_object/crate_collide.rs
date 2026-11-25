@@ -4,7 +4,7 @@ use roxmltree::Node;
 
 use super::super::binary::BinaryData;
 use super::super::global_ui::kind_of_flags;
-use super::super::tokenized::Table;
+use super::super::tokenized::{Entry, Table, Target};
 use super::super::{AssetReference, asset_reference, finite_number, validate_attributes};
 use super::behaviors_basic::{base, module_base};
 use super::client_behaviors::audio_reference;
@@ -35,10 +35,8 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
-    let allowed: Vec<_> = std::iter::once("id")
-        .chain(FIELDS.iter().map(|&(name, ..)| name))
-        .collect();
-    validate_attributes(node, &allowed, data.path)?;
+    validate_crate_attributes(node, &[], data)?;
+
     if has_content(node) {
         return Err(invalid(data.path, "unexpected CrateCollide content"));
     }
@@ -106,4 +104,46 @@ fn encode_base(
     let mut entries = vec![base(0x70e5_c103, Table::record(vec![behavior]))];
     entries.extend(fields(start, &FIELDS));
     Ok(Table::record(entries))
+}
+
+pub(super) fn encode_money(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const MONEY: u32 = 0xef29_3c44;
+    validate_crate_attributes(node, &["MoneyProvided"], data)?;
+    if has_content(node) {
+        return Err(invalid(data.path, "unexpected MoneyCrateCollide content"));
+    }
+    let start = data.allocate(pointer, 0x70)?;
+    let crate_table = encode_base(node, MONEY, start, data, references, reference_types)?;
+    let amount = node
+        .attribute("MoneyProvided")
+        .unwrap_or("0")
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| invalid(data.path, "invalid MoneyProvided"))?;
+    data.word(start + 0x6c, amount);
+    Ok((
+        MONEY,
+        Table::record(vec![
+            base(KIND, crate_table),
+            Entry::named("MoneyProvided", 0x7631_77a4, Target::Data(start + 0x6c)),
+        ]),
+    ))
+}
+
+fn validate_crate_attributes(
+    node: Node<'_, '_>,
+    extra: &[&str],
+    data: &BinaryData<'_>,
+) -> io::Result<()> {
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(FIELDS.iter().map(|&(name, ..)| name))
+        .chain(extra.iter().copied())
+        .collect();
+    validate_attributes(node, &allowed, data.path)
 }
