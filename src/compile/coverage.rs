@@ -1451,6 +1451,11 @@ mod tests {
     }
 
     #[test]
+    fn invalid_targets_death_update_matches_ea() {
+        assert_ea_fixture("invalid-targets-death-update", 2);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

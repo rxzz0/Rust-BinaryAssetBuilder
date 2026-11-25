@@ -28,6 +28,7 @@ mod fields;
 mod fx_list_behavior;
 mod garrison;
 mod infiltrator;
+mod invalid_targets_death_update;
 mod laser_draw;
 mod laser_state;
 mod line_segment_damage;

@@ -1705,6 +1705,9 @@ pub(super) fn encode(
         return super::projectile_update::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "InvalidTargetsDeathUpdate")) {
+        return super::invalid_targets_death_update::encode(node, pointer, data).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "CircularDamageUpdate")) {
         return super::circular_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);
