@@ -48,6 +48,7 @@ mod radar_update;
 mod selective_visibility;
 mod set_locomotor_speed;
 mod shield_sphere_update;
+mod spawn_crate_update;
 mod spider_hole_update;
 mod strafe_area_update;
 mod unit_vision_behavior;

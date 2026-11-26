@@ -1,0 +1,20 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="MoneyCrateMP"><Body><PropBody id="ModuleTag_Body"/></Body></GameObject>
+  <GameObject id="VeterancyCrateMP"><Body><PropBody id="ModuleTag_Body"/></Body></GameObject>
+  <GameObject id="HealCrateMP"><Body><PropBody id="ModuleTag_Body"/></Body></GameObject>
+  <GameObject id="GenericCrateSpawner">
+    <Behaviors><SpawnCrateUpdate id="ModuleTag_SpawnCrateUpdate">
+      <CrateList>MoneyCrateMP</CrateList>
+      <CrateList>VeterancyCrateMP</CrateList>
+      <CrateList>HealCrateMP</CrateList>
+      <BlockingUnits Rule="ANY" Include="VEHICLE INFANTRY TIBERIUM"/>
+    </SpawnCrateUpdate></Behaviors>
+    <Body><PropBody id="ModuleTag_Body"/></Body>
+  </GameObject>
+  <GameObject id="ProbeSpawnCrateCustom">
+    <Behaviors><SpawnCrateUpdate id="CrateCustom" MaxCrates="3" CreateFrequency="250ms"
+      CrateLifetime="5s" MapExclusionMargin="15.5" BlockingUnitRange="21.5"
+      BlockingStartPositionRange="260.5" Flags="NONE"/></Behaviors>
+    <Body><PropBody id="ModuleTag_Body"/></Body>
+  </GameObject>
+</AssetDeclaration>

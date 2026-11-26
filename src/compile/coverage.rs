@@ -1571,6 +1571,11 @@ mod tests {
     }
 
     #[test]
+    fn spawn_crate_update_matches_ea() {
+        assert_ea_fixture("spawn-crate-update", 5);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
