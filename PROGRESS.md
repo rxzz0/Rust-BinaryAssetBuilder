@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 439: Matched EA for whitespace and omitted W3DHierarchy pivot names. The Ursa Major skeleton and synthetic fixture match byte for byte. Insurrection static compile and linking passed with 3,566 verified assets. Next: verify a full ModStudio build of Insurrection.
 - Checkpoint 438: Added native AttackTargetSpecialPower using the shared SpecialPower layout. Both EA fixture assets match. Insurrection advances to the Ursa Major W3X Name validation error. Next: compare the Ursa Major skeleton with EA.
 - Checkpoint 437: Encoded inherited FireOnObjectsNugget damage fields and EA filter allocation order. The new fixture matches EA byte for byte. Insurrection static compilation advances to AttackTargetSpecialPower. Next: encode AttackTargetSpecialPower.
 - Checkpoint 436: Added native horde containment with inherited transport, rank positions, banner carrier and EA relocation order. All seven EA assets match. Next: prioritize uncovered schema modules outside the stock XML examples.

@@ -619,6 +619,11 @@ mod tests {
     }
 
     #[test]
+    fn w3d_hierarchy_pivot_names_match_ea() {
+        assert_ea_fixture("w3d-hierarchy-pivot-names", 1);
+    }
+
+    #[test]
     fn model_state_skeleton_matches_ea() {
         assert_ea_fixture("model-state-skeleton", 1);
     }

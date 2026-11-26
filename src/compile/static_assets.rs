@@ -708,12 +708,20 @@ fn w3d_hierarchy(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
             return Err(invalid(path, "unexpected element in W3DHierarchy"));
         }
         validate_attributes(pivot, &["Name", "Parent"], path)?;
-        let name = required(pivot, "Name", path)?;
+        let name_hash = match pivot.attribute("Name") {
+            None => 0,
+            Some(name)
+                if !name.is_empty() && name.bytes().all(|b| b == b' ' || b.is_ascii_graphic()) =>
+            {
+                hash_name(name)
+            }
+            Some(_) => return Err(invalid(path, "expected a nonempty ASCII Pivot Name")),
+        };
         let parent = required(pivot, "Parent", path)?
             .trim()
             .parse::<i32>()
             .map_err(|_| invalid(path, "invalid W3DHierarchy Pivot Parent"))?;
-        words.extend([hash_name(name), parent as u32]);
+        words.extend([name_hash, parent as u32]);
         let mut fields = significant_children(pivot);
         for (tag, attributes) in [
             ("Translation", &["X", "Y", "Z"][..]),
