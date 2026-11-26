@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 450: Added WaterTextureList, DLContent, and AssetReportTable. All five EA fixture assets match, including collection relocation and weak-reference metadata. Next: add timer, message, and military caption displays.
 - Checkpoint 449: Added HeaderTemplate, UIFloatingTextDisplay, and UISubtitleDisplay using the shared UI font layout. All four EA fixture assets match. Next: add the water texture, downloadable content, and asset report collections.
 - Checkpoint 448: Added InactiveBody, ShieldBody, and ShieldBodyUpdate using the existing body and update layouts. All five EA fixture assets match, including source-order shield references. Next: add font-based UI displays.
 - Checkpoint 447: Decodes RLE-compressed true-color TGAs for AptUI. Reborn's 11-asset co-op staging stream matches EA across all four linked files. Next: verify the tester's full Reborn build.
