@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 447: Decodes RLE-compressed true-color TGAs for AptUI. Reborn's 11-asset co-op staging stream matches EA across all four linked files. Next: verify the tester's full Reborn build.
 - Checkpoint 446: Step 5 follows linked AdditionalMaps directories while preserving SDK-relative asset names and outputs. A Windows junction produced the same five files as a local build. Next: verify Step 6 in the tester's linked SDK.
 - Checkpoint 445: Accepts the optional AptUI AllowAutomaticResize setting and embeds DDS textures as EA does. The tester’s six-asset Objective Briefing stream matched EA byte for byte across all four linked files. Next: handle linked SDK paths for global data.
 - Checkpoint 444: Restored map_mod filenames and the _mod map.version selector for future builds. The WorldBuilder dependency fix remains in place. Next: verify the installed Brighton Beach build in game.
