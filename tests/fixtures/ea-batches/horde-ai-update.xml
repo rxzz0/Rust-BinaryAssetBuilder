@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeHordeAIDefault">
+    <AI><HordeAIUpdate id="HordeDefault"/></AI>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeHordeAIExplicit">
+    <AI><HordeAIUpdate id="ModuleTag_HordeAIUpdate" AutoAcquireEnemiesWhenIdle="YES ATTACK_BUILDINGS" MaxCowerTime="5s" MinCowerTime="3.0s" AttackPriority="HordePriority"/></AI>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

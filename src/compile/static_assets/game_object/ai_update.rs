@@ -13,6 +13,7 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 const AI_UPDATE: u32 = 0x08db_c00e;
+const HORDE_AI_UPDATE: u32 = 0x55d7_7703;
 const JET_AI_UPDATE: u32 = 0x4486_cf48;
 const TIME: u32 = 0x9986_69e8;
 const REAL: u32 = 0x6458_64f3;
@@ -46,6 +47,7 @@ pub(super) fn encode(
         let tag = node.tag_name();
         let kind = match (tag.namespace(), tag.name()) {
             (Some(SAGE_NS), "AIUpdate") => AI_UPDATE,
+            (Some(SAGE_NS), "HordeAIUpdate") => HORDE_AI_UPDATE,
             (Some(SAGE_NS), "JetAIUpdate") => JET_AI_UPDATE,
             (Some(SAGE_NS), "AnimalAIUpdate") => animal_ai::KIND,
             _ => {
@@ -219,6 +221,7 @@ fn encode_update(
             entries.extend(super::draws::fields(start, JET_FIELDS));
             Ok(Table::record(entries))
         }
+        HORDE_AI_UPDATE => Ok(Table::record(vec![base(AI_UPDATE, table)])),
         animal_ai::KIND => animal_ai::encode_fields(node, start, data, base(AI_UPDATE, table)),
         _ => Ok(table),
     }
