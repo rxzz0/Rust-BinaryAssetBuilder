@@ -53,6 +53,7 @@ mod shield_sphere_update;
 mod spawn_crate_update;
 mod spider_hole_update;
 mod strafe_area_update;
+mod sub_structure_build;
 mod unit_vision_behavior;
 mod weapon_scatter_effect;
 pub(super) use material::encode_render_material;

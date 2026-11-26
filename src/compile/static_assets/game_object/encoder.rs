@@ -313,6 +313,9 @@ pub(in crate::compile::static_assets) fn compile(
                 ) {
                     upgrade_relocation_anchors.push((start, data.payload.len() as u32 - 1));
                 }
+                if module.has_tag_name((SAGE_NS, "SubStructureBuild")) {
+                    upgrade_relocation_anchors.push((start, start + 0x34));
+                }
                 if module.has_tag_name((SAGE_NS, "FireWeaponWhenDead")) {
                     upgrade_relocation_anchors.push((start, start + 0x88));
                 }

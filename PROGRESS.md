@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 425: Added native substructure upgrades with EA relocation order and inherited references hashed first. All four EA assets match. Next: UnitCrateCollide.
 - Checkpoint 424: Added native condition-based EVA event selection and optional audio overrides. All three EA assets match. Next: SubStructureBuild.
 - Checkpoint 423: Added native energy distribution using the inherited capture module. Both EA assets match. Next: EVA condition selector.
 - Checkpoint 422: Added native enclosure behavior and its strong references. Both EA assets match. Next: DistributeEnergyToAlliesBehavior.

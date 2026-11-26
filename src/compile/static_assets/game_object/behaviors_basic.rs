@@ -538,7 +538,7 @@ fn status_bits_upgrade(
     Ok((KIND, Table::record(entries)))
 }
 
-fn upgrade_parent<'a, 'input: 'a>(
+pub(super) fn upgrade_parent<'a, 'input: 'a>(
     node: Node<'_, '_>,
     kind: u32,
     start: usize,
@@ -1835,6 +1835,9 @@ pub(super) fn encode(
             reference_types,
         )
         .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "SubStructureBuild")) {
+        return super::sub_structure_build::encode(node, pointer, data, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "CircularDamageUpdate")) {
         return super::circular_damage::encode(node, pointer, data, references, reference_types)

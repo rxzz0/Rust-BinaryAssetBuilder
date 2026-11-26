@@ -1591,6 +1591,11 @@ mod tests {
     }
 
     #[test]
+    fn sub_structure_build_matches_ea() {
+        assert_ea_fixture("sub-structure-build", 4);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
