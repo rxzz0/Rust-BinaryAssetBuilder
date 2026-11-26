@@ -708,6 +708,39 @@ fn ui_layout(name: &str) -> Option<UiLayout> {
             ],
         ),
         "Color3" => (4, &[]),
+        "UIMessageDisplay" => (
+            32,
+            &[
+                ui_field!("Delay", 4, true, Some("5s"), Time),
+                ui_field!("Color1", 8, false, None, Inline("Color3")),
+                ui_field!("Color2", 12, false, None, Inline("Color3")),
+                ui_field!("Font", 16, false, None, Inline("FontDesc")),
+            ],
+        ),
+        "UITimerDisplay" => (
+            64,
+            &[
+                ui_field!("FlashDuration", 4, true, Some("1s"), Time),
+                ui_field!("Position", 8, false, None, Inline("Vector2")),
+                ui_field!("FlashColor", 16, false, None, Inline("Color3")),
+                ui_field!("NormalFont", 20, false, None, Inline("FontDesc")),
+                ui_field!("NormalColor", 36, false, None, Inline("Color3")),
+                ui_field!("ReadyFont", 40, false, None, Inline("FontDesc")),
+                ui_field!("ReadyColor", 56, false, None, Inline("Color3")),
+                ui_field!("Centered", 60, true, Some("false"), Boolean),
+            ],
+        ),
+        "UIMilitaryCaptionDisplay" => (
+            56,
+            &[
+                ui_field!("Delay", 4, true, Some("750ms"), Time),
+                ui_field!("Color", 8, false, None, Inline("Color3")),
+                ui_field!("Position", 12, false, None, Inline("Vector2")),
+                ui_field!("TitleFont", 20, false, None, Inline("FontDesc")),
+                ui_field!("Font", 36, false, None, Inline("FontDesc")),
+                ui_field!("Centered", 52, true, Some("false"), Boolean),
+            ],
+        ),
         "FontDesc" => (
             16,
             &[
