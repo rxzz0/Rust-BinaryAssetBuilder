@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 423: Added native energy distribution using the inherited capture module. Both EA assets match. Next: EVA condition selector.
 - Checkpoint 422: Added native enclosure behavior and its strong references. Both EA assets match. Next: DistributeEnergyToAlliesBehavior.
 - Checkpoint 421: Added native spawn-crate selection and references. All five EA assets match. Next: EncloseBehavior.
 - Checkpoint 420: Added native spider hole update with stock and explicit settings. Two EA assets match.

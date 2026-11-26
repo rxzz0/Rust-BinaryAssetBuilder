@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="NeutralPowerPlant">
+    <Behaviors><DistributeEnergyToAlliesBehavior id="ModuleTag_DistributeEnergyToAllies"/></Behaviors>
+    <Body><PropBody id="ModuleTag_Body"/></Body>
+  </GameObject>
+  <GameObject id="ProbeDistributeEnergyCustom">
+    <Behaviors><DistributeEnergyToAlliesBehavior id="CustomEnergy" GrantMoney="125"
+      GrantMoneyOneTime="true" SlavedCaptureObject="NeutralPowerPlant" ComradePercentage="37.5%"/></Behaviors>
+    <Body><PropBody id="ModuleTag_Body"/></Body>
+  </GameObject>
+</AssetDeclaration>

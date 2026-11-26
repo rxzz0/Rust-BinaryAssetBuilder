@@ -1827,6 +1827,15 @@ pub(super) fn encode(
         return super::enclose_behavior::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "DistributeEnergyToAlliesBehavior")) {
+        return super::distribute_energy_to_allies_behavior::encode(
+            node,
+            pointer,
+            data,
+            reference_types,
+        )
+        .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "CircularDamageUpdate")) {
         return super::circular_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);

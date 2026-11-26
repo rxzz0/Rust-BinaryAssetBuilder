@@ -1581,6 +1581,11 @@ mod tests {
     }
 
     #[test]
+    fn distribute_energy_to_allies_behavior_matches_ea() {
+        assert_ea_fixture("distribute-energy-to-allies-behavior", 2);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
