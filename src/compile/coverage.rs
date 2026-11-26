@@ -30,8 +30,12 @@ const MODULES: &[(&str, &[&str])] = &[
             "AIGateUpdate",
             "AnimalAIUpdate",
             "ConstructionYardAIUpdate",
+            "DeployStyleAIUpdate",
             "HordeAIUpdate",
             "JetAIUpdate",
+            "SupplyTruckAIUpdate",
+            "TransportAIUpdate",
+            "WanderAIUpdate",
         ],
     ),
     (

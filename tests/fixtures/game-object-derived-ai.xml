@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AttributeModifier id="DeployModifier" />
+  <GameObject id="DeployDefault"><AI><DeployStyleAIUpdate id="ModuleTag_AI" /></AI><Body><PropBody id="Body" /></Body></GameObject>
+  <GameObject id="DeployCustom"><AI><DeployStyleAIUpdate id="ModuleTag_AI" UnpackTime="150ms" PackTime="2s" ResetTurretBeforePacking="true" TurretsFunctionOnlyWhenDeployed="true" TurretsMustCenterBeforePacking="true" MustDeployToAttack="true" DeployedAttributeModifierName="DeployModifier" /></AI><Body><PropBody id="Body" /></Body></GameObject>
+  <GameObject id="TransportDefault"><AI><TransportAIUpdate id="ModuleTag_AI" /></AI><Body><PropBody id="Body" /></Body></GameObject>
+  <GameObject id="WanderDefault"><AI><WanderAIUpdate id="ModuleTag_AI" /></AI><Body><PropBody id="Body" /></Body></GameObject>
+  <GameObject id="WanderCustom"><AI><WanderAIUpdate id="ModuleTag_AI" AttackAll="true" EntryCondition="DAMAGED REALLYDAMAGED" Selectable="true" WanderDistance="543" /></AI><Body><PropBody id="Body" /></Body></GameObject>
+  <GameObject id="SupplyDefault"><AI><SupplyTruckAIUpdate id="ModuleTag_AI" /></AI><Body><PropBody id="Body" /></Body></GameObject>
+  <GameObject id="SupplyCustom"><AI><SupplyTruckAIUpdate id="ModuleTag_AI" MaxBoxes="7" SupplyCenterActionDelay="250ms" SupplyWarehouseActionDelay="2s" SupplyWarehouseScanDistance="48" DepletedAnnounceDistance="59" HarvestTrees="true" HarvestTiberium="true" HarvestActivationRange="68" HarvestPreparationTime="3s" HarvestActionTime="4s" HarvestsFromRearEnd="true" CanPathThroughUnitsWhileDocking="false" CanPathThroughUnitsWhileHarvesting="false" /></AI><Body><PropBody id="Body" /></Body></GameObject>
+</AssetDeclaration>
