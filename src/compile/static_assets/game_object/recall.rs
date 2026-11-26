@@ -98,6 +98,26 @@ const OCL_FIELDS: &[(&str, u32, usize)] = &[
     ("RegisterObjectsWithSpecialAbilityUpdate", BOOL, 0x1f0),
 ];
 
+const SPECIAL_POWER: u32 = 0xcefe_1113;
+
+pub(super) fn base_layout_variant(name: &str) -> Option<u32> {
+    Some(match name {
+        "SpecialPower" => SPECIAL_POWER,
+        "ReturnToDockSpecialPower" => 0x07fe_a222,
+        "ReturnToProducerSpecialPower" => 0x2800_4ab1,
+        "AssignSlavesTargetObjectSpecialPower" => 0x9daf_d38c,
+        "AttackTargetSpecialPower" => 0x239d_954f,
+        "PrematureDischargeSpecialPower" => 0x8e22_e8c8,
+        "HordeDispatchSpecialPower" => 0x90a9_315b,
+        "MoveToPositionAndEvacuateSpecialPower" => 0xac7e_2a4a,
+        "MoveToPositionAndReplaceSelfSpecialPower" => 0xd679_1f61,
+        "RepairSpecialPower" => 0x39b8_25ff,
+        "SpecialPowerTimerRefreshSpecialPower" => 0x5420_3fa0,
+        "UncombineSpecialPower" => 0x7c29_8d04,
+        _ => return None,
+    })
+}
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,
@@ -106,7 +126,6 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
     let path = data.path;
-    const SPECIAL_POWER: u32 = 0xcefe_1113;
     const PRODUCTION_BONUS: u32 = 0x8ed3_3e53;
     const ACTIVATE_MODULE: u32 = 0x4856_3167;
     const PLAYER_UPGRADE: u32 = 0x005b_408e;
@@ -124,15 +143,15 @@ pub(super) fn encode(
         "TeleportStoredObjectsSpecialPower" => (0x318d_c4d6, 0x1d0, TELEPORT_FIELDS),
         "RecallUnitsSpecialPower" => (KIND, 0x1cc, RECALL_FIELDS),
         "MovementSpecialPower" => (MOVEMENT_POWER, 0x1e8, MOVEMENT_FIELDS),
-        "ReturnToDockSpecialPower" => (0x07fe_a222, 0x1c4, &[][..]),
-        "ReturnToProducerSpecialPower" => (0x2800_4ab1, 0x1c4, &[][..]),
-        "AssignSlavesTargetObjectSpecialPower" => (0x9daf_d38c, 0x1c4, &[][..]),
-        "AttackTargetSpecialPower" => (0x239d_954f, 0x1c4, &[][..]),
-        "PrematureDischargeSpecialPower" => (0x8e22_e8c8, 0x1c4, &[][..]),
         "GiveProductionBonusSpecialPower" => (PRODUCTION_BONUS, 0x1dc, BONUS_FIELDS),
         "ActivateModuleSpecialPower" => (ACTIVATE_MODULE, 0x1cc, &[][..]),
         "PlayerUpgradeSpecialPower" => (PLAYER_UPGRADE, 0x1cc, &[][..]),
-        _ => (SPECIAL_POWER, 0x1c4, &[][..]),
+        name => (
+            base_layout_variant(name)
+                .ok_or_else(|| invalid(path, format!("unsupported special power module {name}")))?,
+            0x1c4,
+            &[][..],
+        ),
     };
     let allowed: Vec<_> = POWER_FIELDS
         .iter()

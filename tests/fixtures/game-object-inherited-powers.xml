@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <SpecialPowerTemplate id="ProbePower" TargetType="OBJECT" />
+  <GameObject id="HordeDispatchSpecialPowerProbe"><Behaviors><HordeDispatchSpecialPower id="ModuleTag_Power" SpecialPowerTemplate="ProbePower" StartsPaused="true" UpdateModuleStartsAttack="true" /></Behaviors><Body><PropBody id="Body" /></Body></GameObject>
+  <GameObject id="MoveToPositionAndEvacuateSpecialPowerProbe"><Behaviors><MoveToPositionAndEvacuateSpecialPower id="ModuleTag_Power" SpecialPowerTemplate="ProbePower" StartsPaused="true" UpdateModuleStartsAttack="true" /></Behaviors><Body><PropBody id="Body" /></Body></GameObject>
+  <GameObject id="MoveToPositionAndReplaceSelfSpecialPowerProbe"><Behaviors><MoveToPositionAndReplaceSelfSpecialPower id="ModuleTag_Power" SpecialPowerTemplate="ProbePower" StartsPaused="true" UpdateModuleStartsAttack="true" /></Behaviors><Body><PropBody id="Body" /></Body></GameObject>
+  <GameObject id="RepairSpecialPowerProbe"><Behaviors><RepairSpecialPower id="ModuleTag_Power" SpecialPowerTemplate="ProbePower" StartsPaused="true" UpdateModuleStartsAttack="true" /></Behaviors><Body><PropBody id="Body" /></Body></GameObject>
+  <GameObject id="SpecialPowerTimerRefreshSpecialPowerProbe"><Behaviors><SpecialPowerTimerRefreshSpecialPower id="ModuleTag_Power" SpecialPowerTemplate="ProbePower" StartsPaused="true" UpdateModuleStartsAttack="true" /></Behaviors><Body><PropBody id="Body" /></Body></GameObject>
+  <GameObject id="UncombineSpecialPowerProbe"><Behaviors><UncombineSpecialPower id="ModuleTag_Power" SpecialPowerTemplate="ProbePower" StartsPaused="true" UpdateModuleStartsAttack="true" /></Behaviors><Body><PropBody id="Body" /></Body></GameObject>
+</AssetDeclaration>
