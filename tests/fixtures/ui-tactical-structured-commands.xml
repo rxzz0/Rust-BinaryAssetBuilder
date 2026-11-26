@@ -1,0 +1,26 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UIMouseTacticalCommandCommunicateWithAllies id="Required" PlaceUnattachedBeaconCursor="Beacon" PlaceAttachedBeaconCursor="Attach" PingRadarCursor="Ping"/>
+  <UIMouseTacticalCommandCommunicateWithAllies id="WithFilter" PingRadarCursor="Ping" PlaceAttachedBeaconCursor="Attach" PlaceUnattachedBeaconCursor="Beacon">
+    <BeaconAttachableObjectFilter Rule="ANY" Include="INFANTRY"/>
+  </UIMouseTacticalCommandCommunicateWithAllies>
+  <UIMouseTacticalCommandEnter id="Default"/>
+  <UIMouseTacticalCommandEnter id="Custom" ContestCursor="Contest" DefaultCursor="Default">
+    <InfiltratorEffectTypeSettings Effect="VISION" Cursor="Vision"/>
+    <InfiltratorEffectTypeSettings Effect="RADAR_FREEZE"/>
+  </UIMouseTacticalCommandEnter>
+  <UIMouseTacticalCommandPlaceAIBeacon id="Default"/>
+  <UIMouseTacticalCommandPlaceAIBeacon id="Custom">
+    <BeaconTypeSettings Type="Assault" PlaceAttachedCursor="Attack" PlaceUnattachedCursor="Place" CanTargetObjects="false">
+      <AttachableObjectFilter Rule="ANY" Include="VEHICLE"/>
+    </BeaconTypeSettings>
+    <BeaconTypeSettings Type="HoldPosition" CanTargetPosition="false"/>
+  </UIMouseTacticalCommandPlaceAIBeacon>
+  <UIMouseTacticalCommandSelect id="Default"/>
+  <UIMouseTacticalCommandSelect id="Custom" GiveUnitsToAllyHotKeySlot="Give" Cursor="Select" TakeUnitsFromAllyHotKeySlot="Take"/>
+  <UIMouseTacticalCommandSell id="Required"><DefaultCursors/></UIMouseTacticalCommandSell>
+  <UIMouseTacticalCommandSell id="Custom">
+    <DefaultCursors InvalidTarget="DefaultInvalid" ValidTarget="DefaultValid"/>
+    <FactionCursors Faction="Soviet"><Cursors ValidTarget="SovietValid"/></FactionCursors>
+    <FactionCursors Faction="Allies"><Cursors InvalidTarget="AlliesInvalid"/></FactionCursors>
+  </UIMouseTacticalCommandSell>
+</AssetDeclaration>

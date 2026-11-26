@@ -127,6 +127,7 @@ enum UiCodec {
     Percentage,
     Faction,
     Enum(&'static [&'static str]),
+    EnumWithInvalid(&'static [&'static str]),
     Weak(&'static str),
     WeakPointer(&'static str),
     Strong(&'static str),
@@ -278,6 +279,20 @@ fn write_ui_layout(
     result: &mut Marshaled,
 ) -> io::Result<()> {
     let is_asset = offset == 0;
+    let required_attributes: &[&str] = match name {
+        "UIMouseTacticalCommandCommunicateWithAllies" => &[
+            "PlaceUnattachedBeaconCursor",
+            "PlaceAttachedBeaconCursor",
+            "PingRadarCursor",
+        ],
+        "InfiltratorEffectSettings" => &["Effect"],
+        "AIBeaconSettings" => &["Type"],
+        "SellFactionCursorSet" => &["Faction"],
+        _ => &[],
+    };
+    for attribute in required_attributes {
+        required(node, attribute, data.path)?;
+    }
     match name {
         "JoypadCommandBarTemplateButtonSlot" => {
             required(node, "Ordinal", data.path)?;
@@ -413,7 +428,9 @@ fn write_ui_layout(
                 ));
             } else if let Some(value) = field.default {
                 write_ui_value(field.codec, value, offset, data, result)?;
-            } else if is_asset && matches!(field.codec, UiCodec::Inline(_)) {
+            } else if (is_asset || name == "SellFactionCursorSet")
+                && matches!(field.codec, UiCodec::Inline(_))
+            {
                 return Err(invalid(
                     data.path,
                     format!("{name} requires {}", field.name),
@@ -511,12 +528,13 @@ fn write_ui_value(
                 .ok_or_else(parse_error)?;
             data.word(offset, (index as u32).wrapping_sub(1));
         }
-        UiCodec::Enum(variants) => {
+        UiCodec::Enum(variants) | UiCodec::EnumWithInvalid(variants) => {
             let index = variants
                 .iter()
                 .position(|&variant| variant == value.trim())
                 .ok_or_else(parse_error)?;
-            data.word(offset, index as u32);
+            let bias = u32::from(matches!(codec, UiCodec::EnumWithInvalid(_)));
+            data.word(offset, (index as u32).wrapping_sub(bias));
         }
         UiCodec::KindOf => {
             for (index, word) in super::global_ui::kind_of_flags(value, data.path)?
@@ -662,6 +680,157 @@ const UICONFIGTYPE: [&str; 4] = ["INGAME", "SHELL", "BOOTUP", "LOADSCREEN"];
 fn ui_layout(name: &str) -> Option<UiLayout> {
     use UiCodec::*;
     let (size, fields): (_, &[_]) = match name {
+        "UIMouseTacticalCommandCommunicateWithAllies" => (
+            20,
+            &[
+                ui_field!(
+                    "PlaceUnattachedBeaconCursor",
+                    4,
+                    true,
+                    None,
+                    Strong("MouseCursor")
+                ),
+                ui_field!(
+                    "PlaceAttachedBeaconCursor",
+                    8,
+                    true,
+                    None,
+                    Strong("MouseCursor")
+                ),
+                ui_field!("PingRadarCursor", 12, true, None, Strong("MouseCursor")),
+                ui_field!(
+                    "BeaconAttachableObjectFilter",
+                    16,
+                    false,
+                    None,
+                    Pointer("ObjectFilter")
+                ),
+            ],
+        ),
+        "InfiltratorEffectSettings" => (
+            8,
+            &[
+                ui_field!(
+                    "Effect",
+                    0,
+                    true,
+                    None,
+                    EnumWithInvalid(&[
+                        "INVALID",
+                        "RADAR_FREEZE",
+                        "DISABLE",
+                        "STEAL_MONEY",
+                        "VISION",
+                        "ENERGY",
+                        "RESET",
+                        "VISION_UNITS",
+                        "PARALYZE",
+                        "KILL",
+                    ])
+                ),
+                ui_field!("Cursor", 4, true, None, Strong("MouseCursor")),
+            ],
+        ),
+        "UIMouseTacticalCommandEnter" => (
+            20,
+            &[
+                ui_field!("DefaultCursor", 4, true, None, Strong("MouseCursor")),
+                ui_field!("ContestCursor", 8, true, None, Strong("MouseCursor")),
+                ui_field!(
+                    "InfiltratorEffectTypeSettings",
+                    12,
+                    false,
+                    None,
+                    Repeated(8, &Inline("InfiltratorEffectSettings"))
+                ),
+            ],
+        ),
+        "AIBeaconSettings" => (
+            20,
+            &[
+                ui_field!(
+                    "Type",
+                    0,
+                    true,
+                    None,
+                    EnumWithInvalid(&["Invalid", "Assault", "HoldPosition", "HoldObject"])
+                ),
+                ui_field!(
+                    "PlaceUnattachedCursor",
+                    4,
+                    true,
+                    None,
+                    Strong("MouseCursor")
+                ),
+                ui_field!("PlaceAttachedCursor", 8, true, None, Strong("MouseCursor")),
+                ui_field!(
+                    "AttachableObjectFilter",
+                    12,
+                    false,
+                    None,
+                    Pointer("ObjectFilter")
+                ),
+                ui_field!("CanTargetObjects", 16, true, Some("true"), Boolean),
+                ui_field!("CanTargetPosition", 17, true, Some("true"), Boolean),
+            ],
+        ),
+        "UIMouseTacticalCommandPlaceAIBeacon" => (
+            12,
+            &[ui_field!(
+                "BeaconTypeSettings",
+                4,
+                false,
+                None,
+                Repeated(20, &Inline("AIBeaconSettings"))
+            )],
+        ),
+        "UIMouseTacticalCommandSelect" => (
+            16,
+            &[
+                ui_field!("Cursor", 4, true, None, Strong("MouseCursor")),
+                ui_field!(
+                    "TakeUnitsFromAllyHotKeySlot",
+                    8,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!(
+                    "GiveUnitsToAllyHotKeySlot",
+                    12,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+            ],
+        ),
+        "SellCursorSet" => (
+            8,
+            &[
+                ui_field!("ValidTarget", 0, true, None, Strong("MouseCursor")),
+                ui_field!("InvalidTarget", 4, true, None, Strong("MouseCursor")),
+            ],
+        ),
+        "SellFactionCursorSet" => (
+            12,
+            &[
+                ui_field!("Faction", 0, true, None, Faction),
+                ui_field!("Cursors", 4, false, None, Inline("SellCursorSet")),
+            ],
+        ),
+        "UIMouseTacticalCommandSell" => (
+            20,
+            &[
+                ui_field!("DefaultCursors", 4, false, None, Inline("SellCursorSet")),
+                ui_field!(
+                    "FactionCursors",
+                    12,
+                    false,
+                    None,
+                    Repeated(12, &Inline("SellFactionCursorSet"))
+                ),
+            ],
+        ),
         "UIMouseTacticalGroupSelectionGroup" => (
             16,
             &[

@@ -211,6 +211,13 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "UISubtitleDisplay" => (0x434c_6a31, 84, stock_content::ui_display),
         "UIMessageDisplay" => (0xd6d6_efaa, 84, stock_content::ui_display),
         "UITimerDisplay" => (0x7c1a_f1f2, 84, stock_content::ui_display),
+        "UIMouseTacticalCommandCommunicateWithAllies" => {
+            (0x8ba2_6c02, 84, stock_content::ui_display)
+        }
+        "UIMouseTacticalCommandEnter" => (0x4364_6c6a, 84, stock_content::ui_display),
+        "UIMouseTacticalCommandPlaceAIBeacon" => (0xf99b_6672, 84, stock_content::ui_display),
+        "UIMouseTacticalCommandSelect" => (0xdbe5_398f, 84, stock_content::ui_display),
+        "UIMouseTacticalCommandSell" => (0xab4c_591b, 84, stock_content::ui_display),
         "UIMouseTacticalGroupSelection" => (0x4b91_c129, 84, stock_content::ui_display),
         "UIMouseTacticalLookAt" => (0x63e9_948b, 84, stock_content::ui_display),
         "UIMouseTacticalMiscHotKeys" => (0xd346_b6af, 84, stock_content::ui_display),
