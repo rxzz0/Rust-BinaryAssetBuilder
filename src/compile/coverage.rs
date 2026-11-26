@@ -25,7 +25,14 @@ const MODULES: &[(&str, &[&str])] = &[
     ),
     (
         "AI",
-        &["AIUpdate", "AnimalAIUpdate", "HordeAIUpdate", "JetAIUpdate"],
+        &[
+            "AIUpdate",
+            "AIGateUpdate",
+            "AnimalAIUpdate",
+            "ConstructionYardAIUpdate",
+            "HordeAIUpdate",
+            "JetAIUpdate",
+        ],
     ),
     (
         "Body",
@@ -220,6 +227,11 @@ const MODULES: &[(&str, &[&str])] = &[
             "SwitchLocomotorUpdate",
             "TimedOpacityUpdate",
             "ShieldBodyUpdate",
+            "Collide",
+            "Damager",
+            "DeletionUpdate",
+            "Destroy",
+            "FiringTracker",
             "TrackDamage",
             "TrackIncomingWeaponFireBehavior",
             "UnitCrateCollide",

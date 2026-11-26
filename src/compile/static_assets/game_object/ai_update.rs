@@ -14,6 +14,8 @@ use std::sync::OnceLock;
 
 const AI_UPDATE: u32 = 0x08db_c00e;
 const HORDE_AI_UPDATE: u32 = 0x55d7_7703;
+const AI_GATE_UPDATE: u32 = 0x347c_ed1c;
+const CONSTRUCTION_YARD_AI_UPDATE: u32 = 0x00bd_afa3;
 const JET_AI_UPDATE: u32 = 0x4486_cf48;
 const TIME: u32 = 0x9986_69e8;
 const REAL: u32 = 0x6458_64f3;
@@ -47,6 +49,8 @@ pub(super) fn encode(
         let tag = node.tag_name();
         let kind = match (tag.namespace(), tag.name()) {
             (Some(SAGE_NS), "AIUpdate") => AI_UPDATE,
+            (Some(SAGE_NS), "AIGateUpdate") => AI_GATE_UPDATE,
+            (Some(SAGE_NS), "ConstructionYardAIUpdate") => CONSTRUCTION_YARD_AI_UPDATE,
             (Some(SAGE_NS), "HordeAIUpdate") => HORDE_AI_UPDATE,
             (Some(SAGE_NS), "JetAIUpdate") => JET_AI_UPDATE,
             (Some(SAGE_NS), "AnimalAIUpdate") => animal_ai::KIND,
@@ -57,14 +61,14 @@ pub(super) fn encode(
                 ));
             }
         };
-        let table = encode_update(
-            node,
-            kind,
-            pointers + index * 4,
-            data,
-            references,
-            reference_types,
-        )?;
+        let pointer = pointers + index * 4;
+        let table = match kind {
+            AI_GATE_UPDATE => encode_gate(node, pointer, data)?,
+            CONSTRUCTION_YARD_AI_UPDATE => {
+                super::behaviors_basic::fieldless_module(node, pointer, data, kind, true)?
+            }
+            _ => encode_update(node, kind, pointer, data, references, reference_types)?,
+        };
         items.push((
             0,
             Target::Table(Table::sequence(vec![Entry::new(
@@ -75,6 +79,27 @@ pub(super) fn encode(
         ));
     }
     Ok(Target::Table(Table::array(AI_LIST, items)))
+}
+
+fn encode_gate(node: Node<'_, '_>, pointer: usize, data: &mut BinaryData<'_>) -> io::Result<Table> {
+    super::super::fx_list::validate_leaf(
+        node,
+        &["id", "TriggerWidthX", "TriggerWidthY"],
+        data.path,
+    )?;
+    let start = data.allocate(pointer, 16)?;
+    let mut entries = vec![super::behaviors_basic::module_base(
+        node,
+        AI_GATE_UPDATE,
+        start,
+        data,
+        true,
+    )?];
+    for (name, offset) in [("TriggerWidthX", start + 8), ("TriggerWidthY", start + 12)] {
+        write_real(node, name, "0", offset, data)?;
+        entries.push(Entry::named(name, REAL, Target::Data(offset)));
+    }
+    Ok(Table::record(entries))
 }
 
 fn encode_update(

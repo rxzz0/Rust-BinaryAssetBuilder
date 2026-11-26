@@ -41,6 +41,47 @@ pub(super) fn module_base(
     })
 }
 
+pub(super) fn fieldless_module(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    kind: u32,
+    update: bool,
+) -> io::Result<Table> {
+    validate_attributes(node, &["id"], data.path)?;
+    if has_content(node) {
+        return Err(invalid(
+            data.path,
+            format!("unexpected {} content", node.tag_name().name()),
+        ));
+    }
+    let start = data.allocate(pointer, 8)?;
+    Ok(Table::record(vec![module_base(
+        node, kind, start, data, update,
+    )?]))
+}
+
+fn deletion_update(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x4240_9853;
+    let path = data.path;
+    super::super::fx_list::validate_leaf(node, &["id", "MinFrames", "MaxFrames"], path)?;
+    let start = data.allocate(pointer, 16)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    for (name, default, offset) in [
+        ("MinFrames", "0", start + 8),
+        ("MaxFrames", "1", start + 12),
+    ] {
+        let value = super::super::sage_uint(node.attribute(name).unwrap_or(default), name, path)?;
+        data.word(offset, value);
+        entries.push(Entry::named(name, 0x7631_77a4, Target::Data(offset)));
+    }
+    Ok((KIND, Table::record(entries)))
+}
+
 fn die_on_producer_death(
     node: Node<'_, '_>,
     pointer: usize,
@@ -1295,7 +1336,20 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
+    let fieldless = match node.tag_name().name() {
+        "Collide" => Some((0x70e5_c103, false)),
+        "Damager" => Some((0x2a79_518f, false)),
+        "Destroy" => Some((0xcb90_9bfe, false)),
+        "FiringTracker" => Some((0x9827_0bd0, true)),
+        "ShieldBodyUpdate" => Some((0x643a_2ac3, true)),
+        _ => None,
+    };
+    if let Some((kind, update)) = fieldless {
+        return fieldless_module(node, pointer, data, kind, update)
+            .map(|table| Some((kind, table)));
+    }
     match node.tag_name().name() {
+        "DeletionUpdate" => return deletion_update(node, pointer, data).map(Some),
         "CaptureAndGiveUpgradeBehavior" => {
             return super::capture_upgrade::encode(
                 node,
@@ -1872,16 +1926,6 @@ pub(super) fn encode(
     }
     if node.has_tag_name((SAGE_NS, "FreefallUpdate")) {
         return super::freefall_update::encode(node, pointer, data).map(Some);
-    }
-    if node.has_tag_name((SAGE_NS, "ShieldBodyUpdate")) {
-        const KIND: u32 = 0x643a_2ac3;
-        validate_attributes(node, &["id"], data.path)?;
-        if has_content(node) {
-            return Err(invalid(data.path, "unexpected ShieldBodyUpdate content"));
-        }
-        let start = data.allocate(pointer, 8)?;
-        let update = module_base(node, KIND, start, data, true)?;
-        return Ok(Some((KIND, Table::record(vec![update]))));
     }
     if node.has_tag_name((SAGE_NS, "TimedOpacityUpdate")) {
         return super::timed_opacity_update::encode(node, pointer, data).map(Some);
