@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <Includes><Include type="reference" source="../shared.xml"/></Includes>
+  <Video id="LibraryVideo" Filename="library.bik"/>
+</AssetDeclaration>

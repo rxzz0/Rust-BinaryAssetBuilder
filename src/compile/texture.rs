@@ -50,6 +50,14 @@ impl Compiler<'_> {
         ) {
             return Err(invalid(path, "invalid texture OutputFormat"));
         }
+        if input
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("tga"))
+            && !bytes.starts_with(b"DDS ")
+        {
+            bytes = compile_tga(&bytes, mipmaps, resizing, format)
+                .map_err(|error| invalid(&input, error))?;
+        }
         // EA preserves the DDS bytes even when the XML requests another format.
         prepare_dds(&bytes, mipmaps, resizing).map_err(|error| invalid(&input, error))?;
         let instance_hash = hash_xml(node, type_hash ^ 4, path)?
@@ -228,4 +236,131 @@ pub(super) fn tga_to_dds(bytes: &[u8]) -> Result<Vec<u8>, &'static str> {
         }
     }
     Ok(dds)
+}
+
+fn compile_tga(
+    bytes: &[u8],
+    mipmaps: bool,
+    resizing: bool,
+    format: &str,
+) -> Result<Vec<u8>, &'static str> {
+    let mut decoded = tga_to_dds(bytes)?;
+    let (width, height) = (
+        u32::from_le_bytes(decoded[16..20].try_into().unwrap()) as usize,
+        u32::from_le_bytes(decoded[12..16].try_into().unwrap()) as usize,
+    );
+    if width > 16384 || height > 16384 {
+        return Err("invalid TGA dimensions");
+    }
+    if resizing && (!width.is_power_of_two() || !height.is_power_of_two()) {
+        return Err("TGA resizing is unsupported");
+    }
+    let compressed = match format {
+        "DXT1" => true,
+        "A8R8G8B8" => false,
+        _ => return Err("unsupported TGA OutputFormat"),
+    };
+    if !compressed && !mipmaps {
+        return Ok(decoded);
+    }
+
+    let (header, pixels) = decoded.split_at_mut(128);
+    let levels = if mipmaps {
+        usize::BITS - width.max(height).leading_zeros()
+    } else {
+        1
+    };
+    let mut dds = header.to_vec();
+    let mut word = |index: usize, value: u32| {
+        dds[index * 4..index * 4 + 4].copy_from_slice(&value.to_le_bytes());
+    };
+    let storage = if compressed { 0x80000 } else { 0x8 };
+    word(2, 0x1007 | storage | if levels > 1 { 0x2_0000 } else { 0 });
+    word(7, if levels > 1 { levels } else { 0 });
+    word(27, if levels > 1 { 0x401008 } else { 0x1000 });
+    if compressed {
+        word(5, (width.div_ceil(4) * height.div_ceil(4) * 8) as u32);
+        word(20, 4);
+        word(21, u32::from_le_bytes(*b"DXT1"));
+        for index in 22..27 {
+            word(index, 0);
+        }
+    } else {
+        word(5, (width * 4) as u32);
+    }
+
+    let (mut width, mut height) = (width, height);
+    let mut pixels = std::borrow::Cow::Borrowed(pixels.as_chunks::<4>().0);
+    for level in 0..levels {
+        if compressed {
+            for y in (0..height).step_by(4) {
+                for x in (0..width).step_by(4) {
+                    let block = std::array::from_fn(|i| {
+                        pixels[(y + i / 4).min(height - 1) * width + (x + i % 4).min(width - 1)]
+                    });
+                    // The BC3 color block is also a BC1 block for opaque pixels.
+                    let encoded = super::terrain_atlas::encode_bc3(&block);
+                    dds.extend_from_slice(&encoded[8..]);
+                }
+            }
+        } else {
+            dds.extend_from_slice(pixels.as_flattened());
+        }
+        if level + 1 < levels {
+            let next_width = (width / 2).max(1);
+            let next_height = (height / 2).max(1);
+            let mut next = Vec::with_capacity(next_width * next_height);
+            for y in 0..next_height {
+                for x in 0..next_width {
+                    let a = pixels[(y * 2) * width + x * 2];
+                    let b = pixels[(y * 2) * width + (x * 2 + 1).min(width - 1)];
+                    let c = pixels[(y * 2 + 1).min(height - 1) * width + x * 2];
+                    let d =
+                        pixels[(y * 2 + 1).min(height - 1) * width + (x * 2 + 1).min(width - 1)];
+                    next.push(std::array::from_fn(|i| {
+                        ((u16::from(a[i])
+                            + u16::from(b[i])
+                            + u16::from(c[i])
+                            + u16::from(d[i])
+                            + 2)
+                            / 4) as u8
+                    }));
+                }
+            }
+            pixels = std::borrow::Cow::Owned(next);
+            width = next_width;
+            height = next_height;
+        }
+    }
+    Ok(dds)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn static_tga_encodes_dxt1_mipmaps_and_uncompressed_alpha() {
+        let mut tga = vec![0; 18];
+        tga[2] = 2;
+        tga[12] = 4;
+        tga[14] = 4;
+        tga[16] = 32;
+        tga[17] = 0x28;
+        tga.extend([0, 0, 255, 127].repeat(16));
+
+        let dxt1 = compile_tga(&tga, true, true, "DXT1").unwrap();
+        prepare_dds(&dxt1, true, true).unwrap();
+        assert_eq!(&dxt1[84..88], b"DXT1");
+        assert_eq!(dxt1[28], 3);
+        assert_eq!(dxt1.len(), 128 + 3 * 8);
+        for block in dxt1[128..].as_chunks::<8>().0 {
+            assert_eq!(block, &[0, 0xf8, 0, 0, 0, 0, 0, 0]);
+        }
+
+        let rgba = compile_tga(&tga, false, false, "A8R8G8B8").unwrap();
+        prepare_dds(&rgba, false, false).unwrap();
+        assert_eq!(rgba.len(), 128 + 16 * 4);
+        assert_eq!(&rgba[128..132], &[0, 0, 255, 127]);
+    }
 }

@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeShieldSphereBase">
+    <Behaviors><ShieldSphereUpdate id="ShieldDefaults"><ObjectFilter/></ShieldSphereUpdate></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeShieldSphereCustom">
+    <Behaviors>
+      <ShieldSphereUpdate id="ShieldCustom" RadiusMax="210" RadiusMin="51.5" DamageTypesNotToAbsorb="HEALING RADIATION" ScanFrequency="200ms" Duration="20s" MaxDamage="1995" ObjectStatus="GENERIC_TOGGLE_STATE IGNORING_STEALTH" ModelCondition="LOCOMOTOR_NORMAL_UPGRADED" InitiallyActive="true" ShieldBoneName="FX_Cannon" ShieldSizeMultiplier="2.5" Options="ALLOW_ALLIES_PROJECTTILE_GOTHROUGH">
+        <PositionOffset x="12.5" y="-5" z="30"/>
+        <ObjectFilter Rule="ANY" Relationship="ALLIES" Include="INFANTRY VEHICLE STRUCTURE" StatusBitFlags="CAN_ATTACK"/>
+        <IgnoreInsideToInsideCheck Rule="NONE"><IncludeThing>ProbeShieldSphereBase</IncludeThing></IgnoreInsideToInsideCheck>
+      </ShieldSphereUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <LogicCommand id="First" Type="ATTACK_MOVE"/>
+  <LogicCommandSet id="Base"><Cmd>First</Cmd></LogicCommandSet>
+</AssetDeclaration>

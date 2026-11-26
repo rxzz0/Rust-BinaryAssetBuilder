@@ -1,0 +1,17 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ArmorUpgradeDefaults">
+    <Behaviors><ArmorUpgrade id="ModuleTag_Default"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ArmorUpgradeExplicit">
+    <Behaviors>
+      <ArmorUpgrade id="ModuleTag_Armor" ArmorSetFlag="PLAYER_UPGRADE_2" KillArmorUpgrade="true" IgnoreArmorUpgrade="true" RequiresAllTriggers="true">
+        <CustomAnimAndDuration AnimState="MOVING" Frames="12" Trigger="3"/>
+        <TriggeredBy>Upgrade_ProbeArmor</TriggeredBy>
+        <ConflictsWith>Upgrade_ProbeArmorConflict</ConflictsWith>
+      </ArmorUpgrade>
+      <ArmorUpgrade id="ModuleTag_Invalid" ArmorSetFlag="INVALID"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

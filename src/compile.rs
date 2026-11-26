@@ -5,16 +5,26 @@ use crate::linked_stream::LinkedFiles;
 use crate::manifest::{
     AssetEntry, AssetId, AssetReferences, ByteOrder, ChunkSizes, Manifest, ReferencedManifest,
 };
+use crate::sdk_references::{AUDIO_BASE, AUDIO_PATCH, is_stock_audio_catalog};
 use expressions::{Definitions, expand_assets, merge_definitions, read_definitions};
 use roxmltree::{Document, Node, NodeId};
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::cmp::Reverse;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::{Arc, mpsc};
 
+use std::time::{Duration, Instant};
+
+use asset_workers::Encoders;
+use build_log::BuildLog;
+
+pub(crate) mod asset_workers;
+pub(crate) mod build_log;
 mod coverage;
 mod expressions;
 mod merge_assets;
@@ -22,6 +32,9 @@ mod precompiled;
 mod sdk_maps;
 mod sdk_static;
 mod static_assets;
+mod stream_order;
+mod string_hash_stream;
+mod string_hashes;
 mod terrain_atlas;
 mod texture;
 mod xinclude;
@@ -29,13 +42,15 @@ mod xinclude;
 pub use crate::compile_batch::{compile_apt_ui_directory, write_compiled_stream};
 pub use coverage::{sdk_coverage, verify_ea_batch};
 pub use merge_assets::merge_assets;
-pub use sdk_maps::compile_sdk_maps;
-pub use sdk_static::{compile_sdk_global, compile_sdk_static};
+pub use sdk_maps::{compile_sdk_map_overrides, compile_sdk_maps};
+pub use sdk_static::{
+    compile_sdk_global, compile_sdk_static, compile_sdk_static_with_string_hashes,
+};
 
 const SAGE_NS: &str = "uri:ea.com:eala:asset";
 const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
 const FILE_HASH_BLOCK: usize = 0x100000;
-const RA3_ALL_TYPES_HASH: u32 = 0x54ee_e764;
+pub(crate) const RA3_ALL_TYPES_HASH: u32 = 0x54ee_e764;
 const RELOCATIONS: [u8; 8] = [4, 0, 0, 0, 255, 255, 255, 255];
 
 pub struct CompiledStream {
@@ -90,6 +105,19 @@ enum ReferenceMode {
     Map,
 }
 
+const SDK_BASE_MANIFESTS: [&str; 3] = ["audio.manifest", "global.manifest", "static.manifest"];
+
+fn sdk_manifest_path(directory: &Path, relative: &Path, name: &str) -> PathBuf {
+    let path = directory.join(relative);
+    if SDK_BASE_MANIFESTS.contains(&name) && !path.is_file() {
+        let nested = directory.join("sagexml").join(relative);
+        if nested.is_file() {
+            return nested;
+        }
+    }
+    path
+}
+
 impl ReferenceMode {
     fn validates_schema(self) -> bool {
         self != Self::Map
@@ -102,17 +130,38 @@ fn compile(
     reference_directory: Option<&Path>,
     reference_mode: ReferenceMode,
 ) -> io::Result<CompiledStream> {
+    compile_with_source_references(input, data_root, reference_directory, reference_mode, None)
+        .map(|(stream, _)| stream)
+}
+
+fn compile_with_source_references(
+    input: &Path,
+    data_root: &Path,
+    reference_directory: Option<&Path>,
+    reference_mode: ReferenceMode,
+    source_references: Option<&mut sdk_static::SourceReferences>,
+) -> io::Result<(CompiledStream, HashSet<AssetId>)> {
     let root = fs::canonicalize(data_root)?;
-    let input = fs::canonicalize(input)?;
-    let mod_root = input.strip_prefix(&root).ok().and_then(|relative| {
-        let mut components = relative.iter();
-        let mods = components.next()?;
-        let name = components.next()?;
-        mods.eq_ignore_ascii_case("mods")
-            .then(|| root.join(mods).join(name))
-    });
+    let resolved_input = fs::canonicalize(input)?;
+    let redirected_apt = if reference_directory.is_none() && !resolved_input.starts_with(&root) {
+        redirected_apt_ui(input, data_root, &resolved_input)
+    } else {
+        None
+    };
+    let mod_root =
+        sdk_relative_path(&resolved_input, &root, redirected_apt.as_ref()).and_then(|relative| {
+            let mut components = relative.iter();
+            let mods = components.next()?;
+            let name = components.next()?;
+            mods.eq_ignore_ascii_case("mods")
+                .then(|| root.join(mods).join(name))
+        });
     let is_map = reference_mode == ReferenceMode::Map;
-    let map_root = if is_map { input.parent() } else { None };
+    let map_root = if is_map {
+        resolved_input.parent()
+    } else {
+        None
+    };
     let paths = |directory, sdk_directory| {
         search_paths(
             &root,
@@ -122,11 +171,14 @@ fn compile(
             sdk_directory,
         )
     };
-    let worldbuilder_hashes = if is_map {
-        crate::fix_assets::worldbuilder_hashes(reference_directory.unwrap())?
-    } else {
-        HashMap::new()
-    };
+    let worldbuilder = is_map
+        .then(|| crate::fix_assets::read_worldbuilder_manifest(reference_directory.unwrap()))
+        .transpose()?;
+    let worldbuilder = worldbuilder
+        .as_deref()
+        .map(Manifest::parse)
+        .transpose()
+        .map_err(io::Error::other)?;
     let schema_root = root.join("Schemas/xsd");
     let game_object_schema =
         if reference_directory.is_some() && schema_root.join("CnC3Types.xsd").try_exists()? {
@@ -135,31 +187,110 @@ fn compile(
             None
         };
     let mut compiler = Compiler {
+        log: BuildLog::start(&resolved_input, &root),
         data_paths: paths("Data", "SageXml"),
         art_paths: paths("Art", "Art"),
         audio_paths: paths("Audio", "Audio"),
         map_art_path: map_root.map(|map| map.join("Art")),
         root,
+        redirected_apt,
         visited: HashSet::new(),
         active: HashSet::new(),
         ids: HashSet::new(),
         static_asset_locations: HashMap::new(),
         next_document_order: 0,
+        encoders: if reference_mode == ReferenceMode::SdkStatic
+            && source_references
+                .as_ref()
+                .is_none_or(|references| references.is_root())
+        {
+            Encoders::start()?
+        } else {
+            None
+        },
+        pending: VecDeque::new(),
+        local_assets: HashSet::new(),
+        asset_document: None,
         assets: Vec::new(),
         tentative: HashMap::new(),
+        map_all_includes: HashMap::new(),
+        map_source: map_root.map(|_| resolved_input.clone()),
         definitions: HashMap::new(),
         xml_fragments: HashMap::new(),
         game_object_schema,
         music_headers: HashMap::new(),
         reference_directory,
         reference_mode,
+        source_references,
         referenced_manifests: Vec::new(),
         external_ids: HashSet::new(),
-        worldbuilder_hashes,
+        map_mod_ids: HashSet::new(),
     };
-    compiler.read_document(&input, false, false)?;
+    if let (true, Some(mod_root), Some(references)) = (is_map, mod_root, reference_directory) {
+        let relative = mod_root.strip_prefix(&compiler.root).unwrap();
+        let stream_root = references.join(relative).join("data");
+        let manifest = stream_root.join("mod.manifest");
+        if manifest.try_exists()? {
+            // ModStudio loads the mod before the map. Its assets are available for
+            // reference resolution without adding a map-relative manifest import.
+            compiler.read_reference_manifest_with_dependencies(&manifest, Some(&stream_root))?;
+            compiler.map_mod_ids = std::mem::take(&mut compiler.external_ids);
+        }
+    }
+    let traversal = compiler.read_document(&resolved_input, false, false);
+    while !compiler.pending.is_empty() {
+        compiler.commit_pending()?;
+    }
+    traversal?;
     compiler.add_referenced_instances()?;
-    compiler.finish()
+    compiler.finish(worldbuilder)
+}
+
+struct RedirectedAptUi {
+    sdk_relative: PathBuf,
+    physical: PathBuf,
+}
+
+fn redirected_apt_ui(input: &Path, data_root: &Path, resolved: &Path) -> Option<RedirectedAptUi> {
+    let input = std::path::absolute(input).ok()?;
+    let data_root = std::path::absolute(data_root).ok()?;
+    let relative = input.strip_prefix(&data_root).ok()?;
+    if !relative
+        .components()
+        .all(|part| matches!(part, std::path::Component::Normal(_)))
+    {
+        return None;
+    }
+    let mut parts = relative.iter();
+    let (mods, name, data, apt) = (parts.next()?, parts.next()?, parts.next()?, parts.next()?);
+    if !mods.eq_ignore_ascii_case("Mods")
+        || !data.eq_ignore_ascii_case("Data")
+        || !apt.eq_ignore_ascii_case("AptUI")
+        || parts.next().is_none()
+    {
+        return None;
+    }
+    let sdk_relative = PathBuf::from(mods).join(name).join(data).join(apt);
+    // A directory redirect is allowed for this mod's AptUI tree. Its XML and
+    // asset files must still resolve inside that tree or the canonical SDK.
+    let physical = fs::canonicalize(data_root.join(&sdk_relative)).ok()?;
+    resolved.starts_with(&physical).then_some(RedirectedAptUi {
+        sdk_relative,
+        physical,
+    })
+}
+
+fn sdk_relative_path<'a>(
+    path: &'a Path,
+    root: &Path,
+    redirected_apt: Option<&RedirectedAptUi>,
+) -> Option<Cow<'a, Path>> {
+    if let Ok(relative) = path.strip_prefix(root) {
+        return Some(Cow::Borrowed(relative));
+    }
+    let redirected = redirected_apt?;
+    let relative = path.strip_prefix(&redirected.physical).ok()?;
+    Some(Cow::Owned(redirected.sdk_relative.join(relative)))
 }
 
 fn search_paths(
@@ -181,7 +312,9 @@ fn search_paths(
 }
 
 struct Compiler<'a> {
+    log: Option<BuildLog>,
     root: PathBuf,
+    redirected_apt: Option<RedirectedAptUi>,
     data_paths: Vec<PathBuf>,
     art_paths: Vec<PathBuf>,
     audio_paths: Vec<PathBuf>,
@@ -190,18 +323,47 @@ struct Compiler<'a> {
     ids: HashSet<AssetId>,
     static_asset_locations: HashMap<AssetId, (usize, usize)>,
     next_document_order: usize,
+    encoders: Option<Encoders>,
+    pending: VecDeque<PendingAsset>,
+    local_assets: HashSet<AssetId>,
+    asset_document: Option<usize>,
     assets: Vec<CompiledAsset>,
     tentative: HashMap<AssetId, Vec<TentativeAsset>>,
+    map_all_includes: HashMap<PathBuf, Vec<PathBuf>>,
+    map_source: Option<PathBuf>,
     definitions: HashMap<PathBuf, Rc<Definitions>>,
     xml_fragments: HashMap<PathBuf, Rc<str>>,
     game_object_schema: Option<static_assets::game_object::Schema>,
     music_headers: HashMap<PathBuf, static_assets::music::Header>,
     reference_directory: Option<&'a Path>,
+    source_references: Option<&'a mut sdk_static::SourceReferences>,
     reference_mode: ReferenceMode,
     map_art_path: Option<PathBuf>,
     referenced_manifests: Vec<String>,
     external_ids: HashSet<AssetId>,
-    worldbuilder_hashes: HashMap<AssetId, u32>,
+    map_mod_ids: HashSet<AssetId>,
+}
+
+struct PendingAsset {
+    path: PathBuf,
+    document_order: usize,
+    result: AssetResult,
+}
+
+enum AssetResult {
+    Ready(io::Result<Box<TimedAsset>>),
+    Running(mpsc::Receiver<io::Result<TimedAsset>>),
+}
+
+type TimedAsset = (CompiledAsset, Duration);
+
+fn time_asset(
+    detailed: bool,
+    encode: impl FnOnce() -> io::Result<CompiledAsset>,
+) -> io::Result<TimedAsset> {
+    let start = detailed.then(Instant::now);
+    let asset = encode()?;
+    Ok((asset, start.map_or(Duration::ZERO, |start| start.elapsed())))
 }
 
 #[derive(Clone)]
@@ -210,6 +372,8 @@ struct TentativeAsset {
     source: Rc<str>,
     xml: Rc<str>,
     node: NodeId,
+    order: usize,
+    same_id_override: bool,
 }
 
 struct CompiledAsset {
@@ -232,6 +396,7 @@ struct CompiledAsset {
 struct AssetReference {
     id: AssetId,
     external_type: Option<u32>,
+    name: Option<Box<str>>,
 }
 
 impl From<AssetId> for AssetReference {
@@ -239,6 +404,7 @@ impl From<AssetId> for AssetReference {
         Self {
             id,
             external_type: None,
+            name: None,
         }
     }
 }
@@ -262,10 +428,14 @@ impl AssetReference {
             (RENDER_ASSET_TYPE, _) => &["W3DContainer", "W3DMesh", "W3DCollisionBox"],
             (AUDIO_ASSET_TYPE, _) | (_, Some(AUDIO_ASSET_TYPE)) => &[
                 "AudioEvent",
+                "AudioEventOverridable",
                 "Multisound",
                 "AmbientStream",
                 "DialogEvent",
                 "MusicTrack",
+                "MP3AmbientStream",
+                "MP3DialogEvent",
+                "MP3MusicTrack",
             ],
             (kind, _) if kind == *TARGETING_COMPARE_TYPE => targeting_compare::TYPES,
             (kind, _) if kind == *SUBSYSTEM_SETTINGS_TYPE => subsystem_settings::TYPES,
@@ -311,6 +481,16 @@ impl AssetReference {
         }
     }
 
+    fn diagnostic_name(&self) -> std::borrow::Cow<'_, str> {
+        match &self.name {
+            Some(name) => std::borrow::Cow::Borrowed(name),
+            None => {
+                let id = self.declared_id();
+                format!("{:08x}:{:08x}", id.type_id, id.instance_id).into()
+            }
+        }
+    }
+
     fn output_id(&self, local_ids: &HashSet<AssetId>) -> AssetId {
         self.local_id(local_ids)
             .unwrap_or_else(|| self.declared_id())
@@ -328,12 +508,14 @@ impl Compiler<'_> {
         if !self.visited.insert((path.to_path_buf(), tentative)) {
             return Ok(());
         }
+        if let Some(log) = &self.log {
+            log.line(format_args!("Loading 'file://{}'.", path.display()));
+        }
         let document_order = self.next_document_order;
         self.next_document_order += 1;
         self.active.insert(path.to_path_buf());
-        let relative = path
-            .strip_prefix(&self.root)
-            .map_err(|_| invalid(path, "XML lies outside the data root"))?;
+        let relative = sdk_relative_path(path, &self.root, self.redirected_apt.as_ref())
+            .ok_or_else(|| invalid(path, "XML lies outside the data root"))?;
         let relative = relative
             .to_str()
             .filter(|name| name.is_ascii())
@@ -402,7 +584,7 @@ impl Compiler<'_> {
             .as_ref()
             .map_or(root, Document::root_element);
         let xml = expanded.as_ref().unwrap_or(&xml);
-        let mut local_assets = HashSet::new();
+        let mut shared_xml = None;
         for node in root.children().filter(Node::is_element) {
             if node.has_tag_name((SAGE_NS, "Includes")) {
                 if self.reference_directory.is_none() {
@@ -415,45 +597,157 @@ impl Compiler<'_> {
                         && !has_content(node))
             {
                 continue;
-            } else if tentative {
-                let (_, id) = static_assets::declaration_id(node, path)?;
-                self.tentative.entry(id).or_default().push(TentativeAsset {
-                    path: path.to_path_buf(),
-                    source: Rc::clone(&source),
-                    xml: Rc::clone(xml),
-                    node: node.id(),
-                });
             } else {
-                let asset = if self.reference_directory.is_some() {
-                    self.compile_static_node(node, path, &source)?
-                } else {
-                    self.compile_apt_asset(node, path, &source)?
-                };
-                if self.reference_directory.is_some() {
-                    if !local_assets.insert(asset.id) {
-                        return Err(invalid(path, format!("duplicate asset ID {}", asset.name)));
+                if let Some(hashes) = self
+                    .source_references
+                    .as_deref_mut()
+                    .and_then(|references| references.string_hashes.as_mut())
+                {
+                    let (id, _) = static_assets::declaration_id(node, path)?;
+                    hashes.asset(node.tag_name().name(), id, path)?;
+                    if let Some(schema) = &self.game_object_schema {
+                        schema.collect_string_hashes(node, node.tag_name().name(), path, hashes)?;
                     }
-                    if let Some((index, previous_order)) =
-                        self.static_asset_locations.get_mut(&asset.id)
+                }
+                if tentative || self.reference_mode == ReferenceMode::Map {
+                    let (_, id) = static_assets::declaration_id(node, path)?;
+                    let same_id_override = node.attribute("inheritFrom").is_some_and(|parent| {
+                        static_assets::inheritance_id(node, parent, path)
+                            .is_ok_and(|parent| parent == id)
+                    });
+                    self.tentative.entry(id).or_default().push(TentativeAsset {
+                        path: path.to_path_buf(),
+                        source: Rc::clone(&source),
+                        xml: Rc::clone(xml),
+                        node: node.id(),
+                        order: document_order,
+                        same_id_override,
+                    });
+                }
+                if tentative {
+                    continue;
+                }
+                if let Some(encoders) = &self.encoders {
+                    if self.pending.len() >= encoders.capacity()
+                        && let Err(error) = self.commit_pending()
                     {
-                        // An including document takes precedence over its descendants.
-                        // Across sibling include trees, EA keeps the first declaration.
-                        if document_order < *previous_order {
-                            self.assets[*index] = asset;
-                            *previous_order = document_order;
-                        }
-                        continue;
+                        self.pending.clear();
+                        return Err(error);
                     }
-                    self.static_asset_locations
-                        .insert(asset.id, (self.assets.len(), document_order));
+                    let result = self.queue_asset(node, path, &source, xml, &mut shared_xml)?;
+                    self.pending.push_back(PendingAsset {
+                        path: path.to_path_buf(),
+                        document_order,
+                        result,
+                    });
+                } else {
+                    let asset = time_asset(self.log.is_some(), || {
+                        if self.reference_directory.is_some() {
+                            self.compile_static_node(node, path, &source)
+                        } else {
+                            self.compile_apt_asset(node, path, &source)
+                        }
+                    })?;
+                    self.commit_asset(asset, path, document_order)?;
                 }
-                if !self.ids.insert(asset.id) {
-                    return Err(invalid(path, format!("duplicate asset ID {}", asset.name)));
-                }
-                self.assets.push(asset);
             }
         }
         self.active.remove(path);
+        Ok(())
+    }
+
+    fn queue_asset(
+        &mut self,
+        node: Node<'_, '_>,
+        path: &Path,
+        source: &str,
+        xml: &str,
+        shared_xml: &mut Option<Arc<str>>,
+    ) -> io::Result<AssetResult> {
+        let detailed = self.log.is_some();
+        let kind = node.tag_name().name();
+        if !matches!(kind, "AudioFile" | "W3DAnimation") || node.attribute("inheritFrom").is_some()
+        {
+            return Ok(AssetResult::Ready(
+                time_asset(detailed, || self.compile_static_node(node, path, source)).map(Box::new),
+            ));
+        }
+
+        let cleaned = self.schema_cleaned_xml(node, path)?;
+        let encoders = self.encoders.as_ref().unwrap();
+        let path = path.to_path_buf();
+        let source = source.to_owned();
+        let result = if kind == "AudioFile" {
+            let document = reparse_cleaned(cleaned.as_deref(), &path)?;
+            let input = self.prepare_audio_file(cleaned_node(node, document.as_ref()), &path)?;
+            encoders.submit(move || time_asset(detailed, || input.encode(&path, &source)))?
+        } else {
+            let position = node.range().start;
+            let node_id = node.id();
+            let xml = cleaned
+                .is_none()
+                .then(|| Arc::clone(shared_xml.get_or_insert_with(|| xml.into())));
+            encoders.submit(move || {
+                time_asset(detailed, || {
+                    let text = cleaned.as_deref().or(xml.as_deref()).unwrap();
+                    let doc = Document::parse(text).map_err(|error| invalid(&path, error))?;
+                    let node = if cleaned.is_some() {
+                        doc.descendants()
+                            .find(|node| node.is_element() && node.range().start == position)
+                    } else {
+                        doc.get_node(node_id)
+                    }
+                    .ok_or_else(|| invalid(&path, "missing animation declaration"))?;
+                    static_assets::compile_asset(node, &path, &source)
+                })
+            })?
+        };
+        Ok(AssetResult::Running(result))
+    }
+
+    fn commit_pending(&mut self) -> io::Result<()> {
+        let pending = self.pending.pop_front().unwrap();
+        let asset = match pending.result {
+            AssetResult::Ready(asset) => *asset?,
+            AssetResult::Running(asset) => asset
+                .recv()
+                .map_err(|error| invalid(&pending.path, error))??,
+        };
+        self.commit_asset(asset, &pending.path, pending.document_order)
+    }
+
+    fn commit_asset(
+        &mut self,
+        (asset, elapsed): TimedAsset,
+        path: &Path,
+        document_order: usize,
+    ) -> io::Result<()> {
+        if let Some(log) = &mut self.log {
+            log.asset(path, &asset, elapsed);
+        }
+        if self.reference_directory.is_some() {
+            if self.asset_document != Some(document_order) {
+                self.local_assets.clear();
+                self.asset_document = Some(document_order);
+            }
+            if !self.local_assets.insert(asset.id) {
+                return Err(invalid(path, format!("duplicate asset ID {}", asset.name)));
+            }
+            if let Some((index, previous_order)) = self.static_asset_locations.get_mut(&asset.id) {
+                // An including document wins over descendants. The first sibling wins.
+                if document_order < *previous_order {
+                    self.assets[*index] = asset;
+                    *previous_order = document_order;
+                }
+                return Ok(());
+            }
+            self.static_asset_locations
+                .insert(asset.id, (self.assets.len(), document_order));
+        }
+        if !self.ids.insert(asset.id) {
+            return Err(invalid(path, format!("duplicate asset ID {}", asset.name)));
+        }
+        self.assets.push(asset);
         Ok(())
     }
 
@@ -485,16 +779,58 @@ impl Compiler<'_> {
                 }
                 _ => return Err(invalid(path, format!("unsupported include type {kind:?}"))),
             };
-            let target = self.resolve(path, source)?;
             let art_include = source
                 .split_once(':')
-                .is_some_and(|(alias, _)| alias.eq_ignore_ascii_case("art"));
+                .is_some_and(|(alias, _)| alias.trim_start().eq_ignore_ascii_case("art"));
+            let target = match self.resolve(path, source) {
+                Err(error)
+                    if error.kind() == io::ErrorKind::NotFound
+                        && self.reference_mode == ReferenceMode::SdkStatic
+                        && matches!(kind, "all" | "instance") =>
+                {
+                    let diagnostic = format!(
+                        "Error: Input file '{}' not found (referenced from '{}'). Treating it as empty.\n",
+                        source,
+                        path.display()
+                    );
+                    write_warnings(diagnostic.as_bytes());
+                    continue;
+                }
+                Err(error) if self.reference_mode == ReferenceMode::Map => {
+                    return Err(self.map_include_error(path, source, error));
+                }
+                result => result?,
+            };
+            if self.reference_mode == ReferenceMode::Map && kind == "all" {
+                self.map_all_includes
+                    .entry(path.to_path_buf())
+                    .or_default()
+                    .push(target.clone());
+            }
             self.read_document(&target, included_tentative, art_include)?;
             if let Some(included) = self.definitions.get(&target) {
                 merge_definitions(definitions, included, path)?;
             }
         }
         Ok(())
+    }
+
+    fn map_include_error(&self, path: &Path, source: &str, error: io::Error) -> io::Error {
+        let map = self.map_source.as_deref().unwrap_or(path);
+        io::Error::new(
+            error.kind(),
+            format!(
+                "{}: include {source:?} from {}: {error}",
+                map.display(),
+                path.display()
+            ),
+        )
+    }
+
+    fn map_candidate<'a>(
+        candidates: impl Iterator<Item = &'a TentativeAsset>,
+    ) -> Option<&'a TentativeAsset> {
+        candidates.min_by_key(|candidate| (!candidate.same_id_override, candidate.order))
     }
 
     fn add_referenced_instances(&mut self) -> io::Result<()> {
@@ -505,7 +841,11 @@ impl Compiler<'_> {
         let mut pending = Vec::new();
         while index < self.assets.len() {
             let asset = &self.assets[index];
-            for reference in asset.references.iter().chain(&asset.weak_references) {
+            let weak = asset
+                .weak_references
+                .iter()
+                .filter(|_| self.reference_mode == ReferenceMode::Map);
+            for reference in asset.references.iter().chain(weak) {
                 if reference.local_id(&self.ids).is_some() {
                     continue;
                 }
@@ -541,10 +881,31 @@ impl Compiler<'_> {
                 if self.ids.contains(&id) {
                     continue;
                 }
+                // A stock manifest already supplies this instance for SDK builds.
+                if self.reference_mode == ReferenceMode::SdkStatic
+                    && self.external_ids.contains(&id)
+                {
+                    continue;
+                }
                 let Some(candidates) = self.tentative.get(&id) else {
                     continue;
                 };
-                let [candidate] = candidates.as_slice() else {
+                let candidate = match candidates.as_slice() {
+                    [candidate] => Some(candidate),
+                    candidates if self.reference_mode == ReferenceMode::Map => {
+                        // Keep include order for repeated base declarations. Explicit
+                        // same-ID overrides precede the declarations they replace.
+                        Self::map_candidate(candidates.iter()).filter(|selected| {
+                            candidates
+                                .iter()
+                                .filter(|candidate| candidate.order == selected.order)
+                                .count()
+                                == 1
+                        })
+                    }
+                    _ => None,
+                };
+                let Some(candidate) = candidate else {
                     return Err(invalid(
                         &self.root,
                         format!(
@@ -565,7 +926,12 @@ impl Compiler<'_> {
                 let node = document
                     .get_node(candidate.node)
                     .ok_or_else(|| invalid(&candidate.path, "missing instance declaration"))?;
-                let asset = self.compile_static_node(node, &candidate.path, &candidate.source)?;
+                let (asset, elapsed) = time_asset(self.log.is_some(), || {
+                    self.compile_static_node(node, &candidate.path, &candidate.source)
+                })?;
+                if let Some(log) = &mut self.log {
+                    log.asset(&candidate.path, &asset, elapsed);
+                }
                 self.ids.insert(asset.id);
                 self.assets.push(asset);
             }
@@ -589,6 +955,7 @@ impl Compiler<'_> {
         let node = cleaned_node(node, document.as_ref());
         match node.tag_name().name() {
             "AudioFile" => self.compile_audio_file(node, path, source),
+            "AudioFileMP3Passthrough" => self.compile_mp3_passthrough(node, path, source),
             "OnDemandTexture" | "Texture" => self.compile_texture(node, path, source),
             "PathMusicEvent" | "PathMusicMap" | "PathMusicTrack" => {
                 self.compile_music(node, path, source)
@@ -601,16 +968,30 @@ impl Compiler<'_> {
             "GameObject"
             | "AmbientStream"
             | "AudioEvent"
+            | "AudioEventOverridable"
             | "LogicCommandSet"
             | "LogicCommand"
             | "ObjectFilterAsset"
             | "PlayerTech"
+            | "PlayerTemplate"
             | "AttributeModifier"
             | "UpgradeTemplate"
             | "UnitTypeIcon"
+            | "UIDecalDestinationMarker"
+            | "DynamicsSettings"
             | "SpecialPowerTemplate"
             | "WeaponTemplate"
+            | "ArmorTemplate"
             | "ExperienceLevelTemplate"
+            | "ObjectCreationList"
+            | "Language"
+            | "ProjectilePath"
+            | "RegisteredObjectSet"
+            | "MeshInstanceTemplate"
+            | "RedAlertTemplate"
+            | "ShadowMap"
+            | "UnitOverlayIconSettings"
+            | "Weather"
             | "FontDefaultSetting"
             | "FontSubstitution"
             | "FormationAssistant"
@@ -730,14 +1111,25 @@ impl Compiler<'_> {
             document.with_file_name(path)
         };
         let resolved = read_with_context(&path, fs::canonicalize)?;
-        if !resolved.starts_with(&self.root) {
+        if !resolved.starts_with(&self.root)
+            && !self
+                .redirected_apt
+                .as_ref()
+                .is_some_and(|apt| resolved.starts_with(&apt.physical))
+        {
             return Err(invalid(&resolved, "path lies outside the data root"));
         }
         Ok(resolved)
     }
 
     fn read_reference(&mut self, document: &Path, source: &str) -> io::Result<()> {
-        let target = self.resolve(document, source)?;
+        let target = self.resolve(document, source).map_err(|error| {
+            if self.reference_mode == ReferenceMode::Map {
+                self.map_include_error(document, source, error)
+            } else {
+                error
+            }
+        })?;
         let relative = target
             .strip_prefix(&self.root)
             .map_err(|_| invalid(document, "reference lies outside the data root"))?
@@ -748,27 +1140,137 @@ impl Compiler<'_> {
             .ok_or_else(|| invalid(document, "manifest reference path must be ASCII"))?
             .replace('/', "\\")
             .to_ascii_lowercase();
-        if self.reference_mode == ReferenceMode::Map
-            && let Some(file @ ("static.manifest" | "global.manifest" | "audio.manifest")) =
-                name.strip_prefix("sagexml\\")
+        let directory = self.reference_directory.unwrap();
+        let mut relative = relative;
+        if let Some(file @ ("static.manifest" | "global.manifest" | "audio.manifest")) =
+            name.strip_prefix("sagexml\\")
         {
-            name = file.to_owned();
+            if self.reference_mode == ReferenceMode::Map {
+                name = file.to_owned();
+            } else if self.reference_mode == ReferenceMode::SdkStatic
+                && !directory.join(&relative).is_file()
+            {
+                // The SDK source may live under SageXml while bootstrapped catalogs live at the root.
+                relative = PathBuf::from(file);
+                name = file.to_owned();
+            }
         }
-        if self.referenced_manifests.contains(&name) {
-            return Ok(());
+        let path = if self.reference_mode == ReferenceMode::SdkStatic {
+            sdk_manifest_path(directory, &relative, &name)
+        } else if self.reference_mode == ReferenceMode::Map
+            && SDK_BASE_MANIFESTS.contains(&name.as_str())
+        {
+            let found = directory.join(&relative);
+            if found.is_file() {
+                found
+            } else {
+                sdk_manifest_path(directory, Path::new(&name), &name)
+            }
+        } else {
+            directory.join(relative)
+        };
+        if let Some(references) = self.source_references.as_deref_mut() {
+            let local = references.is_local(&target);
+            let exists = path.try_exists()?;
+            if local || !exists {
+                let stem = references.claim(&target)?;
+                let manifest_name = format!("{}.manifest", stem.display());
+                name = references
+                    .relative_directory
+                    .join(&manifest_name)
+                    .to_str()
+                    .filter(|name| name.is_ascii())
+                    .ok_or_else(|| invalid(document, "manifest reference path must be ASCII"))?
+                    .replace('/', "\\")
+                    .to_ascii_lowercase();
+                if !self.referenced_manifests.contains(&name) {
+                    let sibling = references.output.join(&manifest_name);
+                    let stream_root = references.output.clone();
+                    let precompiled = if references.string_hashes.is_some() {
+                        None
+                    } else if local && exists {
+                        Some(&path)
+                    } else if local && sibling.try_exists()? {
+                        Some(&sibling)
+                    } else {
+                        None
+                    };
+                    let reused = match precompiled {
+                        Some(path) => {
+                            match self
+                                .read_reference_manifest_with_dependencies(path, Some(&stream_root))
+                            {
+                                Ok(()) => true,
+                                Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+                                Err(error) => return Err(error),
+                            }
+                        }
+                        None => false,
+                    };
+                    if !reused {
+                        let ids = self
+                            .source_references
+                            .as_deref_mut()
+                            .unwrap()
+                            .build(&target, stem, &self.root, directory)?;
+                        self.external_ids.extend(ids.iter().copied());
+                    }
+                    self.referenced_manifests.push(name);
+                }
+                return Ok(());
+            }
         }
-        let path = self.reference_directory.unwrap().join(relative);
-        let bytes = read_with_context(&path, fs::read)?;
-        let manifest = Manifest::parse(&bytes).map_err(|error| invalid(&path, error))?;
+        if !self.referenced_manifests.contains(&name) {
+            self.read_reference_manifest(&path)?;
+            self.referenced_manifests.push(name);
+        }
+        Ok(())
+    }
+
+    fn read_reference_manifest(&mut self, path: &Path) -> io::Result<()> {
+        self.read_reference_manifest_with_dependencies(path, None)
+    }
+
+    fn read_reference_manifest_with_dependencies(
+        &mut self,
+        path: &Path,
+        stream_root: Option<&Path>,
+    ) -> io::Result<()> {
+        if let Some(log) = &self.log {
+            log.line(format_args!(
+                "Loading reference manifest '{}'.",
+                path.display()
+            ));
+        }
+        let bytes = read_with_context(path, fs::read)?;
+        let manifest = Manifest::parse(&bytes).map_err(|error| invalid(path, error))?;
         if manifest.version != 6
             || manifest.byte_order != ByteOrder::Little
-            || manifest.all_types_hash != RA3_ALL_TYPES_HASH
+            || (manifest.all_types_hash != RA3_ALL_TYPES_HASH
+                && !is_stock_audio_catalog(path, &manifest))
         {
-            return Err(invalid(&path, "reference must be an RA3 PC manifest"));
+            return Err(invalid(path, "reference must be an RA3 PC manifest"));
+        }
+        if let Some(root) = stream_root {
+            self.external_ids.extend(crate::fix_assets::external_ids(
+                &manifest,
+                path.parent().unwrap(),
+                root,
+                self.reference_directory.unwrap(),
+            )?);
         }
         self.external_ids
             .extend(manifest.assets.iter().map(|asset| asset.id));
-        self.referenced_manifests.push(name);
+        if path
+            .file_name()
+            .is_some_and(|name| name.eq_ignore_ascii_case(AUDIO_BASE))
+            && is_stock_audio_catalog(Path::new(AUDIO_BASE), &manifest)
+        {
+            let patch = path.with_file_name(AUDIO_PATCH);
+            if patch.is_file() {
+                self.read_reference_manifest(&patch)?;
+            }
+        }
         Ok(())
     }
 
@@ -867,12 +1369,79 @@ impl Compiler<'_> {
         })
     }
 
-    fn finish(mut self) -> io::Result<CompiledStream> {
+    fn warn_implicit_references(&self, worldbuilder_ids: &HashSet<AssetId>) {
+        let assets: HashMap<_, _> = self.assets.iter().map(|asset| (asset.id, asset)).collect();
+        let mut visited = HashSet::new();
+        let mut reported = HashSet::new();
+        let mut stack = Vec::new();
+        for root in &self.assets {
+            if !visited.insert(root.id) {
+                continue;
+            }
+            stack.push((root, root.references.iter()));
+            // EA follows dependencies before continuing with the next declaration.
+            while let Some((asset, references)) = stack.last_mut() {
+                let Some(reference) = references.next() else {
+                    stack.pop();
+                    continue;
+                };
+                if let Some(local) = reference.local_id(&self.ids) {
+                    if let Some(target) = assets.get(&local)
+                        && visited.insert(local)
+                    {
+                        stack.push((target, target.references.iter()));
+                    }
+                } else if reference.external_id(&self.external_ids).is_none()
+                    && reference.external_id(worldbuilder_ids).is_none()
+                    && reported.insert(reference.declared_id())
+                {
+                    self.warn_missing_reference(asset, reference);
+                }
+            }
+        }
+    }
+
+    fn warn_missing_reference(&self, asset: &CompiledAsset, reference: &AssetReference) {
+        let path = asset.source.strip_prefix("DATA:").map_or_else(
+            || asset.source.clone(),
+            |relative| {
+                let path = self.root.join(relative);
+                let name = path.to_string_lossy();
+                format!(
+                    "file://{}",
+                    name.strip_prefix(r"\\?\")
+                        .unwrap_or(&name)
+                        .replace('/', std::path::MAIN_SEPARATOR_STR)
+                        .to_ascii_lowercase()
+                )
+            },
+        );
+        warning(format_args!(
+            "Unknown asset '{}' referenced from '{}' in '{}'",
+            reference.diagnostic_name(),
+            asset.name,
+            path
+        ));
+    }
+
+    fn finish(
+        mut self,
+        worldbuilder: Option<Manifest<'_>>,
+    ) -> io::Result<(CompiledStream, HashSet<AssetId>)> {
         if self.assets.is_empty()
             && (self.reference_directory.is_none() || self.reference_mode == ReferenceMode::Map)
         {
             return Err(invalid(&self.root, "input contains no supported assets"));
         }
+        if let Some(log) = &self.log {
+            log.phase("Resolving references");
+        }
+        let worldbuilder_assets = worldbuilder.map_or_else(Vec::new, |manifest| manifest.assets);
+        let worldbuilder_by_id: HashMap<_, _> = worldbuilder_assets
+            .iter()
+            .map(|asset| (asset.id, asset))
+            .collect();
+        let worldbuilder_ids: HashSet<_> = worldbuilder_by_id.keys().copied().collect();
         if self.reference_mode == ReferenceMode::Implicit
             && self
                 .assets
@@ -881,25 +1450,23 @@ impl Compiler<'_> {
                 .any(|reference| {
                     reference.local_id(&self.ids).is_none()
                         && reference.external_id(&self.external_ids).is_none()
+                        && reference.external_id(&worldbuilder_ids).is_none()
                 })
         {
+            if warnings_enabled() {
+                self.warn_implicit_references(&worldbuilder_ids);
+            }
+            // Preserve stock reference resolution without hiding missing declared dependencies.
             let root = self.reference_directory.unwrap();
-            for file in ["audio.manifest", "global.manifest", "static.manifest"] {
-                let path = root.join(file);
+            for file in SDK_BASE_MANIFESTS {
+                let path = sdk_manifest_path(root, Path::new(file), file);
                 if path.is_file() {
-                    let bytes = read_with_context(&path, fs::read)?;
-                    let manifest =
-                        Manifest::parse(&bytes).map_err(|error| invalid(&path, error))?;
-                    if manifest.version != 6
-                        || manifest.byte_order != ByteOrder::Little
-                        || manifest.all_types_hash != RA3_ALL_TYPES_HASH
-                    {
-                        return Err(invalid(&path, "expected an RA3 PC reference stream"));
-                    }
-                    self.external_ids
-                        .extend(manifest.assets.iter().map(|asset| asset.id));
+                    self.read_reference_manifest(&path)?;
                 }
             }
+        }
+        if let Some(log) = &self.log {
+            log.line(format_args!("Stable sorting assets"));
         }
         self.assets
             .sort_by_cached_key(|asset| (asset.sort_order, asset_name_order(&asset.name)));
@@ -914,13 +1481,11 @@ impl Compiler<'_> {
             relocations: 0,
             imports: 0,
         };
-        let worldbuilder_ids: HashSet<_> = self.worldbuilder_hashes.keys().copied().collect();
         let mut resolved_references = Vec::with_capacity(self.assets.len());
         let mut deferred = HashSet::new();
         for asset in &self.assets {
             let mut resolved = Vec::with_capacity(asset.references.len());
             for reference in &asset.references {
-                let id = reference.id;
                 if let Some(local) = reference.local_id(&self.ids) {
                     resolved.push(local);
                     continue;
@@ -928,15 +1493,20 @@ impl Compiler<'_> {
                 let Some(external) = reference
                     .external_id(&self.external_ids)
                     .or_else(|| reference.external_id(&worldbuilder_ids))
+                    .or_else(|| {
+                        reference
+                            .external_id(&self.map_mod_ids)
+                            .map(|_| reference.declared_id())
+                    })
                 else {
-                    if self.reference_mode == ReferenceMode::SdkStatic {
+                    if matches!(
+                        self.reference_mode,
+                        ReferenceMode::SdkStatic | ReferenceMode::Implicit
+                    ) {
                         let id = reference.declared_id();
                         resolved.push(id);
-                        if deferred.insert(id) {
-                            warning(format_args!(
-                                "Unknown asset '{:08x}:{:08x}' referenced from '{}' in '{}'",
-                                id.type_id, id.instance_id, asset.name, asset.source
-                            ));
+                        if self.reference_mode == ReferenceMode::SdkStatic && deferred.insert(id) {
+                            self.warn_missing_reference(asset, reference);
                         }
                         continue;
                     }
@@ -957,8 +1527,10 @@ impl Compiler<'_> {
                     return Err(invalid(
                         &self.root,
                         format!(
-                            "unresolved reference {:08x}:{:08x} in {}",
-                            id.type_id, id.instance_id, asset.name
+                            "unresolved reference {} in {} ({})",
+                            reference.diagnostic_name(),
+                            asset.name,
+                            asset.source
                         ),
                     ));
                 };
@@ -966,48 +1538,106 @@ impl Compiler<'_> {
             }
             resolved_references.push(resolved);
         }
-        let assets = self
-            .assets
-            .iter()
-            .zip(&resolved_references)
-            .map(|(asset, references)| {
-                files.bin.extend_from_slice(&asset.payload);
-                files.relo.extend_from_slice(&asset.relocations);
-                files.imp.extend_from_slice(&asset.imports);
-                for word in [
-                    asset.id.type_id,
-                    asset.type_hash,
-                    asset.id.instance_id,
-                    asset.instance_hash,
-                    asset.references.len() as u32,
-                ] {
-                    checksums.extend(word.to_le_bytes());
-                }
-                let chunk_sizes = ChunkSizes {
-                    instance: asset.payload.len() as u32,
-                    relocations: asset.relocations.len() as u32,
-                    imports: asset.imports.len() as u32,
-                };
+        let order = if matches!(
+            self.reference_mode,
+            ReferenceMode::SdkStatic | ReferenceMode::Map
+        ) {
+            stream_order::stable_order(
+                &self.assets,
+                &resolved_references,
+                self.game_object_schema.as_ref(),
+                self.log.as_ref(),
+            )
+        } else {
+            (0..self.assets.len()).collect()
+        };
+        if let Some(log) = &self.log {
+            log.phase("Generating stream");
+            for data in [
+                "Linking binary data",
+                "Linking import data",
+                "Linking relocation data",
+            ] {
+                log.stream_event(data);
+            }
+        }
+        let mut stock_size = 0u32;
+        let mut assets = Vec::new();
+        if !worldbuilder_assets.is_empty() {
+            let required = sdk_maps::worldbuilder_dependencies(
+                &worldbuilder_by_id,
+                &self.ids,
+                &self.external_ids,
+                &resolved_references,
+            );
+            for stock in worldbuilder_assets
+                .iter()
+                .filter(|stock| required.contains(&stock.id))
+            {
+                let chunk_sizes = stock.chunk_sizes;
+                stock_size = stock_size
+                    .checked_add(chunk_sizes.instance)
+                    .ok_or_else(|| invalid(&self.root, "stream is too large"))?;
                 max_chunk_sizes.instance = max_chunk_sizes.instance.max(chunk_sizes.instance);
                 max_chunk_sizes.relocations =
                     max_chunk_sizes.relocations.max(chunk_sizes.relocations);
                 max_chunk_sizes.imports = max_chunk_sizes.imports.max(chunk_sizes.imports);
-                AssetEntry {
-                    id: asset.id,
-                    type_hash: asset.type_hash,
-                    instance_hash: self
-                        .worldbuilder_hashes
-                        .get(&asset.id)
-                        .copied()
-                        .unwrap_or(asset.instance_hash),
-                    chunk_sizes,
-                    name: asset.name.as_bytes(),
-                    source_file_name: asset.source.as_bytes(),
-                    references: AssetReferences::from_ids(references),
-                    tokenized: Some(u32::from(asset.tokenized)),
+                for word in [
+                    stock.id.type_id,
+                    stock.type_hash,
+                    stock.id.instance_id,
+                    stock.instance_hash,
+                    stock.references.iter().len() as u32,
+                ] {
+                    checksums.extend(word.to_le_bytes());
                 }
-            })
-            .collect();
+                // The map patch gets these chunks from WorldBuilder at runtime.
+                let mut entry = stock.clone();
+                entry.chunk_sizes = ChunkSizes {
+                    instance: 0,
+                    relocations: 0,
+                    imports: 0,
+                };
+                entry.tokenized = Some(0);
+                assets.push(entry);
+            }
+        }
+        assets.extend(order.into_iter().map(|index| {
+            let asset = &self.assets[index];
+            let references = &resolved_references[index];
+            files.bin.extend_from_slice(&asset.payload);
+            files.relo.extend_from_slice(&asset.relocations);
+            files.imp.extend_from_slice(&asset.imports);
+            for word in [
+                asset.id.type_id,
+                asset.type_hash,
+                asset.id.instance_id,
+                asset.instance_hash,
+                asset.references.len() as u32,
+            ] {
+                checksums.extend(word.to_le_bytes());
+            }
+            let chunk_sizes = ChunkSizes {
+                instance: asset.payload.len() as u32,
+                relocations: asset.relocations.len() as u32,
+                imports: asset.imports.len() as u32,
+            };
+            max_chunk_sizes.instance = max_chunk_sizes.instance.max(chunk_sizes.instance);
+            max_chunk_sizes.relocations = max_chunk_sizes.relocations.max(chunk_sizes.relocations);
+            max_chunk_sizes.imports = max_chunk_sizes.imports.max(chunk_sizes.imports);
+            AssetEntry {
+                id: asset.id,
+                type_hash: asset.type_hash,
+                instance_hash: worldbuilder_by_id
+                    .get(&asset.id)
+                    .map_or(asset.instance_hash, |stock| stock.instance_hash),
+                chunk_sizes,
+                name: asset.name.as_bytes(),
+                source_file_name: asset.source.as_bytes(),
+                references: AssetReferences::from_ids(references),
+                tokenized: Some(u32::from(asset.tokenized)),
+            }
+        }));
         let stream_checksum = if checksums.is_empty() {
             0
         } else {
@@ -1023,7 +1653,9 @@ impl Compiler<'_> {
             stream_checksum,
             all_types_hash: RA3_ALL_TYPES_HASH,
             total_instance_data_size: u32::try_from(files.bin.len() - 4)
-                .map_err(|_| invalid(&self.root, "stream is too large"))?,
+                .ok()
+                .and_then(|size| size.checked_add(stock_size))
+                .ok_or_else(|| invalid(&self.root, "stream is too large"))?,
             max_chunk_sizes,
             assets,
             referenced_manifests: (self.reference_mode == ReferenceMode::Map)
@@ -1044,6 +1676,9 @@ impl Compiler<'_> {
         }
         .encode()
         .map_err(io::Error::other)?;
+        if let Some(log) = &self.log {
+            log.complete();
+        }
         let custom_data = self
             .assets
             .into_iter()
@@ -1061,11 +1696,17 @@ impl Compiler<'_> {
                 ))
             })
             .collect();
-        Ok(CompiledStream {
-            manifest,
-            files,
-            custom_data,
-        })
+        if self.source_references.is_some() {
+            self.external_ids.extend(self.ids);
+        }
+        Ok((
+            CompiledStream {
+                manifest,
+                files,
+                custom_data,
+            },
+            self.external_ids,
+        ))
     }
 }
 
@@ -1338,14 +1979,38 @@ fn cleaned_node<'a, 'input: 'a>(
     })
 }
 
+fn warnings_enabled() -> bool {
+    std::env::var_os("BAB_NO_WARNINGS").is_none_or(|value| value != "1")
+}
+
 pub(crate) fn warning(message: std::fmt::Arguments<'_>) {
-    if std::env::var_os("BAB_NO_WARNINGS").is_some_and(|value| value == "1") {
+    if !warnings_enabled() {
         return;
     }
+    let line = format!("Warning: {message}\n");
+    STREAM_WARNINGS.with_borrow_mut(|warnings| {
+        if let Some(warnings) = warnings {
+            warnings.extend_from_slice(line.as_bytes());
+        } else {
+            write_warnings(line.as_bytes());
+        }
+    });
+}
+
+thread_local! {
+    static STREAM_WARNINGS: RefCell<Option<Vec<u8>>> = const { RefCell::new(None) };
+}
+
+// Used on a dedicated stream worker that terminates when compilation finishes.
+pub(crate) fn capture_stream_warnings<T>(compile: impl FnOnce() -> T) -> (T, Vec<u8>) {
+    STREAM_WARNINGS.set(Some(Vec::new()));
+    let result = compile();
+    (result, STREAM_WARNINGS.take().unwrap())
+}
+
+pub(crate) fn write_warnings(warnings: &[u8]) {
     // Mod Studio combines both output streams and can interleave partial writes.
-    let _ = io::stderr()
-        .lock()
-        .write_all(format!("Warning: {message}\n").as_bytes());
+    let _ = io::stderr().lock().write_all(warnings);
 }
 
 fn invalid(path: &Path, error: impl std::fmt::Display) -> io::Error {

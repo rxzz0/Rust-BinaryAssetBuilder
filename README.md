@@ -149,6 +149,22 @@ BinaryAssetBuilder implementation for Kane's Wrath in .Net
 * [ ] UIJoypadCommandBarTopMenu
 * [ ] UIJoypadCommandBarMgTopMenu
 
+### Install in RA3 ModStudio
+
+Close ModStudio and run the PowerShell installer with the path to the SDK folder that contains `EALAModStudio.exe`.
+
+```powershell
+.\sdk\Start-Ra3ModStudio.ps1 -SdkRoot 'X:\RA3 MOD SDK' -InstallDefault
+```
+
+The installer activates the bundled script and saves the original at `defaultscript\defaultscript.cs` inside the SDK. Reinstalling preserves that backup. Existing build script customizations are stored in the backup. To restore them, close ModStudio and copy the backed-up file to the SDK root as `defaultscript.cs`.
+
+After switching from an older script, review the **Create BIG Files** and **Create Skudef File** checkboxes before the first build.
+
+### Build map overrides
+
+Place each map in `Mods/<mod>/Misc/data/maps/official/<MapName>` with its `map.xml` and any override XML files it includes. On Windows, `Official` and `official` resolve to the same folder. ModStudio packages existing map streams in the Misc BIG when **Create BIG Files** is enabled. Enable **Compile missing map overrides** to build maps whose folder has no complete matching `.bin`, `.imp`, `.manifest`, and `.relo` set. Rust writes the linked `map_mod` stream and `map.version` beside the map.
+
 ### RA3 SDK coverage and EA verification
 
 Run these from the repository root after building the Rust release.
@@ -165,3 +181,17 @@ $sdk = 'X:\RA3 MOD SDK'
 The TSV inventories the SDK's top-level declarations and the five GameObject module groups. Asset status covers native static dispatch. Module status records the currently implemented dispatch names. An encoder entry does not imply full support. ScriptedModelDraw also reports attribute and child coverage.
 
 Use a new output directory for each EA run. A batch is a self-contained AssetDeclaration with independent probes and no includes or inheritance. The comparator matches each asset by ID and checks binary payload, relocations, imports, ordered references, and metadata. The checked-in pilot oracle also runs under cargo test without EA installed. EA is used only to generate verification data.
+
+
+### Compare complete EA and Rust builds
+
+Build the Rust release, then run the shared compiler probes with the RA3 SDK installed.
+
+```powershell
+cargo build --release
+.\sdk\Test-EaConformance.ps1 -SdkRoot 'X:\RA3 MOD SDK' -RustCompiler .\target\release\binary-asset-builder.exe -OutputDirectory .\.scratch\ea-conformance
+```
+
+Give each run a new output directory. The script copies the probe XML and SDK schemas, builds both compilers with isolated outputs, and preserves logs and streams by case. It reports build failures, differences in unknown-reference warnings, missing streams, version sidecars, and per-asset linked differences. It exits with status 1 when it finds differences. EA is used only by this test script.
+
+Run `binary-asset-builder compare-linked <ea.manifest> <rust.manifest>` to compare an existing pair of linked streams. It validates the three binary files against each manifest and reports differences in stream order, references, checksums, asset metadata, and payload, relocation, and import bytes.

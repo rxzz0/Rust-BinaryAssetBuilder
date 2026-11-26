@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="EnergyDisabler">
+    <Behaviors><EnergyDisablingBehavior id="ModuleTag_EnergyDisablingBehavior"/></Behaviors>
+    <Body><PropBody id="ModuleTag_Body"/></Body>
+  </GameObject>
+</AssetDeclaration>

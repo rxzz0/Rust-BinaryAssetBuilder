@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UpgradeTemplate id="ProbeSubUpgrade"/>
+  <UpgradeTemplate id="ProbeSubUpgradeB"/>
+  <GameObject id="ProbeSubDefault"><Behaviors><SubStructureBuild id="ModuleTag_Sub"/></Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject>
+  <GameObject id="ProbeSubExplicit">
+    <Behaviors>
+      <SubStructureBuild id="ModuleTag_Sub" RequiresAllTriggers="true" RequiresAllConflictingTriggers="true" Permanent="true">
+        <TriggeredBy>ProbeSubUpgrade</TriggeredBy>
+        <ConflictsWith>ProbeSubUpgradeB</ConflictsWith>
+        <AvailableSubStructure><UpgradeTrigger>ProbeSubUpgrade</UpgradeTrigger><ObjectTemplate>ProbeSubDefault</ObjectTemplate></AvailableSubStructure>
+        <AvailableSubStructure><UpgradeTrigger>ProbeSubUpgradeB</UpgradeTrigger><ObjectTemplate>ProbeSubExplicit</ObjectTemplate></AvailableSubStructure>
+        <StructureOffset ModelCondition="USER_6 USER_7"><Offset x="12.5" y="-2" z="3.5"/></StructureOffset>
+        <StructureOffset><Offset x="2" y="3" z="9"/></StructureOffset>
+      </SubStructureBuild>
+    </Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

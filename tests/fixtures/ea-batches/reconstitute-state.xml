@@ -1,0 +1,17 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ReconstituteDefaults">
+    <Behaviors>
+      <ReconstituteStateSpecialAbility id="ModuleTag_Reconstitute" UpdateModuleId="MyTracker"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ReconstituteFull">
+    <Behaviors>
+      <ReconstituteStateSpecialAbility id="ModuleTag_Reconstitute" ReturnPositionFX="FX_Target" StartAbilityRange="250"
+        SpecialPowerTemplate="SpecialPowerChronoRift" UpdateModuleId="OtherTracker" TimeStepsBack="7.5s"
+        PostReconstituteAttributeModifier="ModifierReturned" LeavePositionFX="FX_Origin"
+        Options="RECONSTITUTE_STORED_COMMAND IGNORE_FACING_CHECK"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

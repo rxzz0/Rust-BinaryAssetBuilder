@@ -1,0 +1,23 @@
+use super::super::binary::BinaryData;
+use super::super::tokenized::Table;
+use super::super::validate_attributes;
+use super::behaviors_basic::module_base;
+use crate::compile::{has_content, invalid};
+use roxmltree::Node;
+use std::io;
+
+pub(super) fn encode(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x4727_001d;
+    let path = data.path;
+    validate_attributes(node, &["id"], path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected ParabolicCurveUpdate content"));
+    }
+    let start = data.allocate(pointer, 8)?;
+    let base = module_base(node, KIND, start, data, true)?;
+    Ok((KIND, Table::record(vec![base])))
+}

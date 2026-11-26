@@ -1,0 +1,3 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <VideoEventList id="Intro"><EventList><Movie MovieAsset="MissingVideo"/></EventList></VideoEventList>
+</AssetDeclaration>

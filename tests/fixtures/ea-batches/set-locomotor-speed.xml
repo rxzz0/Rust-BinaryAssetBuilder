@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="SetLocomotorSpeedDefault">
+    <Behaviors><SetLocomotorSpeedUpdate id="ModuleTag_Default"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="SetLocomotorSpeedExplicit">
+    <Behaviors><SetLocomotorSpeedUpdate id="ModuleTag_Custom" Type="IN_RANGE_OBJECT_FILTER" LocomotorSpeedToSet="75.25" LocomotorDeltaPerUpdate="-3.5" OtherScaredScanRangeMultiplier="1.25" ObjectFilterRange="202" UpdatePeriod="1400ms" VisionArc="33d">
+      <ObjectFilter Rule="ANY" Relationship="ENEMIES" StatusBitFlags="CAN_ATTACK" Include="INFANTRY"/>
+    </SetLocomotorSpeedUpdate></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

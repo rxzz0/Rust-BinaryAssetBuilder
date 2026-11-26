@@ -1,0 +1,19 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DominateEnemySpecialPowerDefaults">
+    <Behaviors><DominateEnemySpecialPower id="ModuleTag_Dominate"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="DominateEnemySpecialPowerExplicit">
+    <Behaviors>
+      <DominateEnemySpecialPower id="ModuleTag_Dominate" DominatedFX="FX_Dominated" DominateRadius="100.5"
+        SpecialPowerTemplate="SpecialPower_Dominate" TriggerFX="FX_Dominate" PermanentlyConvert="true"
+        Options="LOSE_STEALTH_ON_TRIGGER" SpecialObjectAttachToBone="ATTACH01" ContactPointOverride="ContactTest" UnpackTime="1s" PackTime="2s">
+        <CustomAnimAndDuration AnimState="MOVING" Frames="12" Trigger="3"/>
+        <AttributeModifierAffects Rule="ANY" Include="VEHICLE">
+          <IncludeThing>DominateEnemySpecialPowerDefaults</IncludeThing>
+        </AttributeModifierAffects>
+      </DominateEnemySpecialPower>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

@@ -1,14 +1,17 @@
 #![forbid(unsafe_code)]
 
-use binary_asset_builder::big::pack_big;
+use binary_asset_builder::big::stage_big;
 use binary_asset_builder::compile::{
     CompiledStream, compile_apt_ui, compile_apt_ui_directory, compile_map, compile_sdk_global,
-    compile_sdk_maps, compile_sdk_static, compile_static, merge_assets, sdk_coverage,
-    verify_ea_batch, write_compiled_stream,
+    compile_sdk_map_overrides, compile_sdk_static, compile_sdk_static_with_string_hashes,
+    compile_static, merge_assets, sdk_coverage, verify_ea_batch, write_compiled_stream,
 };
 use binary_asset_builder::fix_assets::{fix_assets, fix_assets_allow_missing};
-use binary_asset_builder::linked_stream::{check_linked_files, link_assets};
+use binary_asset_builder::linked_stream::{
+    check_linked_files, compare_linked_streams, link_assets,
+};
 use binary_asset_builder::manifest::{ByteOrder, Manifest};
+use binary_asset_builder::sdk_references::prepare_references;
 use std::env;
 use std::error::Error;
 use std::fs;
@@ -22,17 +25,18 @@ Usage
   binary-asset-builder compile-aptui <input-directory> --data-root <directory> --output <directory>
   binary-asset-builder compile-static <file.xml> --data-root <directory> --references <directory> --output <new-directory>
   binary-asset-builder compile-map <file.xml> --data-root <directory> --references <directory> --output <new-directory>
-  binary-asset-builder compile-maps-sdk <official-maps-directory> --sdk-root <directory> --references <builtmods-directory> --output <official-maps-directory>
-  binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory>
-  binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory>
+  binary-asset-builder compile-maps-sdk <maps-directory> --sdk-root <directory> --references <builtmods-directory> --output <maps-directory> [--game-data <directory>] [--skip-precompiled]
+  binary-asset-builder compile-static-sdk <file.xml> --sdk-root <directory> --output <builtmods-directory> [--game-data <directory>] [--string-hashes]
+  binary-asset-builder compile-global-sdk <additionalmaps-directory> --sdk-root <directory> --output <builtmods-directory> [--game-data <directory>]
   binary-asset-builder merge-assets <file.manifest> --assets <directory>
   binary-asset-builder fix-assets <mod.manifest> --references <builtmods-directory> [--allow-missing-references]
-  binary-asset-builder pack-big <directory> --output <file.big>
+  binary-asset-builder pack-big <directory> --output <file.big> [--reuse <previous.big>]
   binary-asset-builder relink <file.manifest> --assets <directory> --output <new-directory>
   binary-asset-builder sdk-coverage <schema-directory>
   binary-asset-builder verify-ea-batch <file.xml> <ea.manifest> <ea-assets-directory>
   binary-asset-builder inspect <file.manifest>
   binary-asset-builder check-linked <file.manifest>
+  binary-asset-builder compare-linked <ea.manifest> <rust.manifest>
 
 Set BAB_NO_WARNINGS=1 to hide warnings. Build errors remain visible.";
 
@@ -48,6 +52,16 @@ fn diagnostic(result: io::Result<()>) -> ExitCode {
 
 fn main() -> ExitCode {
     let args: Vec<_> = env::args_os().skip(1).collect();
+    let detailed = env::var_os("BAB_DETAILED_BUILDLOG").is_some_and(|value| value == "1");
+    if detailed
+        && args.first().is_some_and(|command| {
+            let command = command.to_string_lossy();
+            command.starts_with("compile-")
+                || matches!(command.as_ref(), "merge-assets" | "fix-assets" | "pack-big")
+        })
+    {
+        println!("Command Line: {:?}", env::args_os().collect::<Vec<_>>());
+    }
     match args.as_slice() {
         [flag] if flag == "--help" || flag == "-h" || flag == "/?" => {
             println!("{USAGE}");
@@ -96,10 +110,19 @@ fn main() -> ExitCode {
                 }
             }
         }
-        [command, input, flag, output] if command == "pack-big" && flag == "--output" => {
+        [command, input, flag, output, options @ ..]
+            if command == "pack-big"
+                && flag == "--output"
+                && (options.is_empty()
+                    || matches!(options, [option, _] if option == "--reuse")) =>
+        {
+            let previous = options.get(1).unwrap_or(output);
             let start = std::time::Instant::now();
-            match pack_big(Path::new(input), Path::new(output)) {
+            match stage_big(Path::new(input), Path::new(output), Path::new(previous)) {
                 Ok(result) => {
+                    if detailed && !result.reused {
+                        println!("{} Files added", result.entries);
+                    }
                     let action = if result.reused {
                         "Verified existing BIG with"
                     } else {
@@ -131,16 +154,59 @@ fn main() -> ExitCode {
                 }
             }
         }
-        [command, input, sdk_flag, sdk, output_flag, output]
-            if (command == "compile-static-sdk" || command == "compile-global-sdk")
-                && sdk_flag == "--sdk-root"
-                && output_flag == "--output" =>
+        [
+            command,
+            input,
+            sdk_flag,
+            sdk,
+            output_flag,
+            output,
+            options @ ..,
+        ] if (command == "compile-static-sdk" || command == "compile-global-sdk")
+            && sdk_flag == "--sdk-root"
+            && output_flag == "--output" =>
         {
             let input = Path::new(input);
             let sdk = Path::new(sdk);
             let output = Path::new(output);
+            let (game_data, string_hashes) = match options {
+                [] => (None, false),
+                [flag, path] if flag == "--game-data" => (Some(path), false),
+                [flag] if command == "compile-static-sdk" && flag == "--string-hashes" => {
+                    (None, true)
+                }
+                [a, path, b]
+                    if command == "compile-static-sdk"
+                        && a == "--game-data"
+                        && b == "--string-hashes" =>
+                {
+                    (Some(path), true)
+                }
+                [b, a, path]
+                    if command == "compile-static-sdk"
+                        && a == "--game-data"
+                        && b == "--string-hashes" =>
+                {
+                    (Some(path), true)
+                }
+                _ => {
+                    eprintln!("{USAGE}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            if let Some(game_data) = game_data {
+                match prepare_references(output, Path::new(game_data)) {
+                    Ok(0) => {}
+                    Ok(count) => {
+                        println!("Prepared {count} stock reference manifests from Red Alert 3")
+                    }
+                    Err(error) => return diagnostic(Err(error)),
+                }
+            }
             let result = if command == "compile-global-sdk" {
                 compile_sdk_global(input, sdk, output)
+            } else if string_hashes {
+                compile_sdk_static_with_string_hashes(input, sdk, output)
             } else {
                 compile_sdk_static(input, sdk, output)
             };
@@ -161,19 +227,35 @@ fn main() -> ExitCode {
             references,
             output_flag,
             output,
+            options @ ..,
         ] if command == "compile-maps-sdk"
             && sdk_flag == "--sdk-root"
             && references_flag == "--references"
             && output_flag == "--output" =>
         {
+            let (options, skip_precompiled) = match options {
+                [flag, rest @ ..] if flag == "--skip-precompiled" => (rest, true),
+                [rest @ .., flag] if flag == "--skip-precompiled" => (rest, true),
+                _ => (options, false),
+            };
+            let game_data = match options {
+                [] => None,
+                [flag, path] if flag == "--game-data" => Some(Path::new(path)),
+                _ => {
+                    eprintln!("{USAGE}");
+                    return ExitCode::FAILURE;
+                }
+            };
             diagnostic(
-                compile_sdk_maps(
+                compile_sdk_map_overrides(
                     Path::new(input),
                     Path::new(sdk),
                     Path::new(references),
                     Path::new(output),
+                    game_data,
+                    skip_precompiled,
                 )
-                .map(|count| println!("Compiled {count} official maps with Rust")),
+                .map(|count| println!("Compiled {count} map override streams with Rust")),
             )
         }
         [
@@ -228,6 +310,11 @@ fn main() -> ExitCode {
                 }
             }
         }
+        [command, ea, rust] if command == "compare-linked" => diagnostic(compare_linked_streams(
+            Path::new(ea),
+            Path::new(rust),
+            io::stdout().lock(),
+        )),
         [command, path] if command == "inspect" || command == "check-linked" => {
             let path = Path::new(path);
             match run(path, command == "check-linked") {

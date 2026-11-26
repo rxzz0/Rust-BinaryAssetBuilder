@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="AimWeaponDefaults">
+    <Behaviors><AimWeapon id="ModuleTag_Default"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="AimWeaponExplicit">
+    <Behaviors>
+      <AimWeapon id="ModuleTag_Explicit" AimLowThreshold="-0.125" AimHighThreshold="0.75"
+                 AimNearDistance="32.5" AimFarDistance="325"/>
+      <AimWeapon id="ModuleTag_Partial" AimNearDistance="10"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

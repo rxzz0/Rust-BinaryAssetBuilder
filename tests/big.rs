@@ -1,4 +1,4 @@
-use binary_asset_builder::big::pack_big;
+use binary_asset_builder::big::{pack_big, stage_big};
 use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -40,7 +40,14 @@ fn matches_makebig_and_reuses_only_identical_contents() {
         \0\0\0\x76\0\0\0\x01z.txt\0L219\0\0\0\0hellorabcz";
     assert_eq!(fs::read(&output).unwrap(), expected);
     assert!(pack_big(&input, &output).unwrap().reused);
+    let staged = root.join("staged.big");
+    assert!(stage_big(&input, &staged, &output).unwrap().reused);
+    assert!(!staged.exists());
     fs::write(input.join("a.txt"), b"xyz").unwrap();
+    assert!(!stage_big(&input, &staged, &output).unwrap().reused);
+    assert!(fs::read(&staged).unwrap().ends_with(b"hellorxyzz"));
+    assert_eq!(fs::read(&output).unwrap(), expected);
+    fs::remove_file(staged).unwrap();
     assert!(!pack_big(&input, &output).unwrap().reused);
     assert!(fs::read(&output).unwrap().ends_with(b"hellorxyzz"));
 

@@ -3,6 +3,7 @@
 use crate::compile_batch::{Contents, publish_prepared};
 use crate::linked_stream::check_linked_files;
 use crate::manifest::{AssetId, ByteOrder, Manifest};
+use crate::sdk_references::{AUDIO_BASE, AUDIO_PATCH, is_stock_audio_catalog};
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::ffi::OsString;
@@ -70,7 +71,7 @@ fn fix_assets_impl(input: &Path, references: &Path, allow_missing: bool) -> io::
                 return Err(invalid("expected a base RA3 PC stream"));
             }
             check_linked_files(input, &manifest)?;
-            let external = external_ids(&manifest, directory, references)?;
+            let external = external_ids(&manifest, directory, directory, references)?;
             let order = dependency_order(&manifest, &external, allow_missing)?;
             if !manifest.assets.is_empty() {
                 let hashes = worldbuilder_hashes(references)?;
@@ -109,9 +110,10 @@ fn fix_assets_impl(input: &Path, references: &Path, allow_missing: bool) -> io::
     Ok(stats)
 }
 
-fn external_ids(
+pub(crate) fn external_ids(
     manifest: &Manifest<'_>,
     directory: &Path,
+    stream_root: &Path,
     references: &Path,
 ) -> io::Result<HashSet<AssetId>> {
     let mut ids = HashSet::new();
@@ -138,6 +140,7 @@ fn external_ids(
         }
         let path = [
             directory.join(relative),
+            stream_root.join(relative),
             references.join(relative),
             references.join("sagexml").join(relative),
         ]
@@ -156,6 +159,17 @@ fn external_ids(
         let bytes = fs::read(&path)?;
         let manifest = Manifest::parse(&bytes)
             .map_err(|error| invalid(format!("{} ({error})", path.display())))?;
+        if path
+            .file_name()
+            .is_some_and(|name| name.eq_ignore_ascii_case(AUDIO_BASE))
+            && is_stock_audio_catalog(Path::new(AUDIO_BASE), &manifest)
+            && path.with_file_name(AUDIO_PATCH).is_file()
+        {
+            pending.push((
+                path.parent().unwrap_or(references).to_path_buf(),
+                AUDIO_PATCH.as_bytes().to_vec(),
+            ));
+        }
         ids.extend(manifest.assets.into_iter().map(|asset| asset.id));
         let parent = path.parent().unwrap_or(references);
         pending.extend(
@@ -168,15 +182,19 @@ fn external_ids(
     Ok(ids)
 }
 
-pub(crate) fn worldbuilder_hashes(references: &Path) -> io::Result<HashMap<AssetId, u32>> {
+pub(crate) fn read_worldbuilder_manifest(references: &Path) -> io::Result<Vec<u8>> {
     let schema_copy = references.join("sagexml").join("worldbuilder.manifest");
     let path = if schema_copy.is_file() {
         schema_copy
     } else {
         references.join("worldbuilder.manifest")
     };
-    let bytes = fs::read(&path)
-        .map_err(|error| io::Error::new(error.kind(), format!("{} ({error})", path.display())))?;
+    fs::read(&path)
+        .map_err(|error| io::Error::new(error.kind(), format!("{} ({error})", path.display())))
+}
+
+fn worldbuilder_hashes(references: &Path) -> io::Result<HashMap<AssetId, u32>> {
+    let bytes = read_worldbuilder_manifest(references)?;
     let manifest = Manifest::parse(&bytes).map_err(invalid)?;
     Ok(manifest
         .assets

@@ -1,5 +1,5 @@
 use super::super::asset_reference;
-use crate::compile::{AssetReference, SAGE_NS, invalid};
+use crate::compile::{AssetReference, SAGE_NS, invalid, string_hashes::StringHashes};
 use roxmltree::{Document, Node};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -42,7 +42,6 @@ pub(in crate::compile) struct Field {
     pub(super) repeated: bool,
     minimum: usize,
     maximum: usize,
-    explicitly_optional: bool,
     reference_target: Option<String>,
 }
 
@@ -112,6 +111,18 @@ impl Schema {
                     schema.read_type(name, node);
                 }
             }
+        }
+        if !schema.types.contains_key("AudioEventOverridable")
+            && schema.types.contains_key("AudioEvent")
+        {
+            // Uprising uses the same XML fields and payload layout as RA3 AudioEvent.
+            schema.types.insert(
+                "AudioEventOverridable".into(),
+                Type {
+                    base: Some("AudioEvent".into()),
+                    ..Type::default()
+                },
+            );
         }
         Ok(schema)
     }
@@ -214,10 +225,80 @@ impl Schema {
                 occurs(node, "minOccurs")
             },
             maximum: occurs(node, "maxOccurs"),
-            explicitly_optional: node.attribute("use") == Some("optional")
-                || node.attribute("minOccurs") == Some("0"),
             reference_target: node.attribute((SAGE_SCHEMA, "refType")).map(str::to_owned),
         })
+    }
+
+    pub(in crate::compile) fn dependency_counts(&self) -> HashMap<&str, usize> {
+        let direct: HashMap<_, _> = self
+            .types
+            .keys()
+            .map(String::as_str)
+            .filter(|kind| self.derives_from(kind, "BaseAssetType"))
+            .map(|kind| {
+                let mut targets = HashSet::new();
+                self.collect_strong_targets(kind, &mut HashSet::new(), &mut targets);
+                (kind, targets)
+            })
+            .collect();
+        direct
+            .iter()
+            .map(|(&kind, targets)| {
+                let mut reachable = HashSet::new();
+                let mut pending: Vec<_> = targets.iter().copied().collect();
+                while let Some(target) = pending.pop() {
+                    if reachable.insert(target)
+                        && let Some(children) = direct.get(target)
+                    {
+                        pending.extend(children);
+                    }
+                }
+                (kind, reachable.len())
+            })
+            .collect()
+    }
+
+    fn derives_from<'a>(&'a self, mut kind: &'a str, base: &str) -> bool {
+        for _ in 0..64 {
+            if kind == base {
+                return true;
+            }
+            let Some(parent) = self.types.get(kind).and_then(|entry| entry.base.as_deref()) else {
+                return false;
+            };
+            kind = parent;
+        }
+        false
+    }
+
+    fn collect_strong_targets<'a>(
+        &'a self,
+        kind: &'a str,
+        visited: &mut HashSet<&'a str>,
+        targets: &mut HashSet<&'a str>,
+    ) {
+        if !visited.insert(kind) {
+            return;
+        }
+        let Some(entry) = self.types.get(kind) else {
+            return;
+        };
+        if let Some(target) = entry.reference_target.as_deref()
+            && self.derives_from(kind, "AssetReference")
+        {
+            targets.insert(target);
+        }
+        if let Some(base) = entry.base.as_deref() {
+            self.collect_strong_targets(base, visited, targets);
+        }
+        for field in entry.fields.iter().chain(&entry.children) {
+            if let Some(target) = field.reference_target.as_deref()
+                && self.derives_from(&field.kind, "AssetReference")
+            {
+                targets.insert(target);
+            }
+            self.collect_strong_targets(&field.kind, visited, targets);
+        }
     }
 
     pub(in crate::compile) fn shape(&self, kind: &str, path: &Path) -> io::Result<Shape<'_>> {
@@ -293,6 +374,87 @@ impl Schema {
         let mut references = Vec::new();
         self.find_weak_references(node, node.tag_name().name(), path, &mut references)?;
         Ok(references)
+    }
+
+    pub(in crate::compile) fn collect_string_hashes(
+        &self,
+        node: Node<'_, '_>,
+        kind: &str,
+        path: &Path,
+        hashes: &mut StringHashes,
+    ) -> io::Result<()> {
+        if !self.types.contains_key(kind) {
+            return Ok(());
+        }
+        let shape = self.shape(kind, path)?;
+        for attribute in node.attributes().filter(|attr| attr.namespace().is_none()) {
+            if let Some(field) = shape
+                .fields
+                .iter()
+                .find(|field| field.name == attribute.name())
+            {
+                self.record_hash_field(field, attribute.value(), path, hashes)?;
+            }
+        }
+        for field in &shape.fields {
+            if let Some(value) = field.default.as_deref()
+                && node.attribute(field.name.as_str()).is_none()
+            {
+                self.record_hash_field(field, value, path, hashes)?;
+            }
+        }
+        for child in node
+            .children()
+            .filter(|child| child.tag_name().namespace() == Some(SAGE_NS))
+        {
+            if let Some(field) = shape
+                .children
+                .iter()
+                .find(|field| field.name == child.tag_name().name())
+            {
+                self.record_hash_field(field, child.text().unwrap_or_default(), path, hashes)?;
+                self.collect_string_hashes(child, &field.kind, path, hashes)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn record_hash_field(
+        &self,
+        field: &Field,
+        value: &str,
+        path: &Path,
+        hashes: &mut StringHashes,
+    ) -> io::Result<()> {
+        let (mut kind, mut target) = (field.kind.as_str(), field.reference_target.as_deref());
+        for _ in 0..64 {
+            match kind {
+                "Poid" | "StringHash" => {
+                    return hashes.value(kind, value, path);
+                }
+                "AssetReference" | "WeakReference" => {
+                    let value = value.trim();
+                    let value = value.split_once('\\').map_or(value, |(name, _)| name);
+                    let (kind, name) = value
+                        .split_once(':')
+                        .unwrap_or((target.unwrap_or_default(), value));
+                    if !kind.is_empty() && !name.is_empty() {
+                        hashes.asset(kind, name, path)?;
+                    }
+                    return Ok(());
+                }
+                _ => {}
+            }
+            let Some(entry) = self.types.get(kind) else {
+                break;
+            };
+            target = target.or(entry.reference_target.as_deref());
+            let Some(base) = entry.base.as_deref() else {
+                break;
+            };
+            kind = base;
+        }
+        Ok(())
     }
 
     fn find_weak_references(

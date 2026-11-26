@@ -1,0 +1,18 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="StrafeAreaTargetChooserDefaults">
+    <Behaviors><StrafeAreaTargetChooser id="ModuleTag_Strafe"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="StrafeAreaTargetChooserFiltered">
+    <Behaviors>
+      <StrafeAreaTargetChooser id="ModuleTag_StrafeFiltered" Radius="42.5" MaxAttacksPerTarget="5" OverflowOptions="CHOOSE_RANDOM_POSITION BREAK_OFF_ATTACK">
+        <ObjectFilter Rule="ANY" Include="VEHICLE"><IncludeThing>StrafeAreaTargetChooserDefaults</IncludeThing></ObjectFilter>
+      </StrafeAreaTargetChooser>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="StrafeAreaTargetChooserBreakOff">
+    <Behaviors><StrafeAreaTargetChooser id="ModuleTag_StrafeBreakOff" OverflowOptions="BREAK_OFF_ATTACK"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

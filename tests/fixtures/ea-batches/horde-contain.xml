@@ -1,0 +1,52 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeHordeMember">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeHordeDefault">
+    <Behaviors><HordeContain id="ModuleTag_Default"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeHordeStock">
+    <Behaviors>
+      <HordeContain id="ModuleTag_Horde" FrontAngle="4.7123" FlankedDelaySeconds="2.0" ShowPips="false" Formation="MAIN" MeleeAttackLeashDistance="1" ContainMax="4" ObjectStatusOfContained="" ConditionForEntry="INVALID">
+        <PassengerFilter Rule="NONE" Include="INFANTRY"/>
+        <DieMuxData/>
+        <InitialPayload Name="ProbeHordeMember" Count="4"/>
+        <RankInfo RankID="1" UnitType="ProbeHordeMember">
+          <Position X="0" Y="-10"/>
+          <Position X="0" Y="10"/>
+        </RankInfo>
+        <RankInfo RankID="2" UnitType="ProbeHordeMember">
+          <Position X="-20" Y="-10"/>
+          <Position X="-20" Y="10" LeaderRank="1" LeaderIndex="2"/>
+        </RankInfo>
+        <RankToReleaseWhenAttacking>1</RankToReleaseWhenAttacking>
+        <RankToReleaseWhenAttacking>2</RankToReleaseWhenAttacking>
+      </HordeContain>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <AttributeModifier id="ProbeHordeModifier"/>
+  <EvaEvent id="ProbeHordeEva"/>
+  <AudioEvent id="ProbeHordeAudio"/>
+  <GameObject id="ProbeHordeFull">
+    <Behaviors>
+      <HordeContain id="ModuleTag_Horde" AlternateFormation="ProbeHordeMember" EnterSound="ProbeHordeAudio" EvaEventLastMemberDeath="ProbeHordeEva" Formation="MAIN" ForcedLocomotorSet="NORMAL" UseSlowHordeMovement="false" MeleeAttackLeashDistance="11" GeometryFrontAngleRadians="0.75" FrontAngle="1.75" FlankedDelaySeconds="2" FlankedDurationSeconds="3" MinimumHordeSize="4" BackupMinDelayTime="5s" BackupMaxDelayTime="6s" BackupMinDistance="7" BackupMaxDistance="8" BackupPercentage="9" RadiusCowerOverride="10" VisionOverrideRear="12" VisionOverrideSide="13" SpawnBannerCarrierImmediately="true" BannerCarrierByUpgradeOnly="true" ForbiddenCoverStatus="UNDER_FROZEN">
+        <ModifierToGiveOnExit>ProbeHordeModifier</ModifierToGiveOnExit>
+        <InitialPayload Name="ProbeHordeMember" Count="4"/>
+        <RandomOffset x="1" y="-2"/>
+        <RankInfo RankID="7" UnitType="ProbeHordeMember">
+          <Position X="4" Y="-5" LeaderRank="6" LeaderIndex="8"/>
+        </RankInfo>
+        <RankThatStopsAdvance>-3</RankThatStopsAdvance>
+        <RankToReleaseWhenAttacking>-4</RankToReleaseWhenAttacking>
+        <LeaderPosition x="10" y="11"/>
+        <BannerCarrierPosition><UnitType>ProbeHordeMember</UnitType><Pos x="12" y="13"/></BannerCarrierPosition>
+        <BannerCarriersAllowed>ProbeHordeMember</BannerCarriersAllowed>
+        <LeadersAllowed>ProbeHordeMember</LeadersAllowed>
+        <AttributeModifier>ProbeHordeModifier</AttributeModifier>
+      </HordeContain>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

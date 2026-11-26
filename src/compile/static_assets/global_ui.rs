@@ -35,6 +35,38 @@ pub(super) fn radius_cursor(node: Node<'_, '_>, path: &Path) -> io::Result<Marsh
     Ok(result)
 }
 
+pub(super) fn purchase_player_tech_button(
+    node: Node<'_, '_>,
+    path: &Path,
+) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "PlayerTech", "StateData"], path)?;
+    if has_content(node) {
+        return Err(invalid(
+            path,
+            "unexpected PurchasePlayerTechButtonTemplate content",
+        ));
+    }
+    let mut data = BinaryData {
+        payload: vec![0; 12],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    for (field, kind, offset) in [
+        ("PlayerTech", "PlayerTech", 4),
+        ("StateData", "ButtonSingleStateData", 8),
+    ] {
+        write_import(
+            required(node, field, path)?,
+            kind,
+            offset,
+            &mut data,
+            &mut result,
+        )?;
+    }
+    Ok(data.finish(result))
+}
+
 pub(super) fn button_single_state(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     validate_attributes(node, &["id"], path)?;
     let mut children = significant_children(node);

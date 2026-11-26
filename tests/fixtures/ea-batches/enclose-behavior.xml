@@ -1,0 +1,17 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="EncloseDefaults">
+    <Behaviors><EncloseBehavior id="ModuleTag_Default"><Filter/></EncloseBehavior></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="EncloseExplicit">
+    <Behaviors>
+      <EncloseBehavior id="ModuleTag_Enclose" EnclosureHitFX="ProbeEncloseFx" ScalableDrawModuleId="ModuleTag_Draw"
+          ScaledBoneName="enclosure_socket" EnclosureRadius="312.5">
+        <Filter Rule="ANY" Relationship="ALLIES" StatusBitFlags="CAN_ATTACK">
+          <IncludeThing>EncloseDefaults</IncludeThing>
+        </Filter>
+      </EncloseBehavior>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

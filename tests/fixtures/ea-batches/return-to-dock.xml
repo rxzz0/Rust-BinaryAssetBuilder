@@ -1,0 +1,15 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeReturnToDockDefault">
+    <Behaviors><ReturnToDockSpecialPower id="DockDefault" SpecialPowerTemplate="SpecialPower_ReturnToDock"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeReturnToDockExplicit">
+    <Behaviors>
+      <ReturnToDockSpecialPower id="DockExplicit" SpecialPowerTemplate="SpecialPower_ReturnToDock"
+          AffectAllies="false" AvailableAtStart="false">
+        <RequirementsFilterMP Rule="ANY"><IncludeThing>ProbeReturnToDockDefault</IncludeThing></RequirementsFilterMP>
+      </ReturnToDockSpecialPower>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

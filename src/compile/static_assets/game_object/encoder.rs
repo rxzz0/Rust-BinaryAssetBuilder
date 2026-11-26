@@ -156,6 +156,8 @@ pub(in crate::compile::static_assets) fn compile(
     let mut material_float_names = Vec::new();
     let mut create_object_modules = Vec::new();
     let mut eject_passenger_modules = Vec::new();
+    let mut movement_power_modules = Vec::new();
+    let mut early_module_fields = Vec::new();
     let mut spawn_modules = Vec::new();
     let mut upgrade_relocation_anchors = Vec::new();
     let mut chooser_relocations = Vec::new();
@@ -242,6 +244,7 @@ pub(in crate::compile::static_assets) fn compile(
                     | "ModelConditionUpgrade"
                     | "GeometryUpgrade"
                     | "RemoveUpgradeUpgrade"
+                    | "ArmorUpgrade"
             ) {
                 let start = data.payload.len() as u32;
                 let result = super::tech_upgrade::encode(
@@ -275,8 +278,13 @@ pub(in crate::compile::static_assets) fn compile(
                 if module.has_tag_name((SAGE_NS, "AutoHealBehavior")) {
                     auto_heal_modules.push(data.payload.len() as u32);
                 }
-                if module.has_tag_name((SAGE_NS, "TransportContain")) {
-                    transport_modules.push(data.payload.len() as u32);
+                let transport_size = match module.tag_name().name() {
+                    "TransportContain" => Some(super::garrison::TRANSPORT_SIZE),
+                    "HordeContain" => Some(super::horde_contain::SIZE),
+                    _ => None,
+                };
+                if let Some(size) = transport_size {
+                    transport_modules.push((data.payload.len() as u32, size as u32));
                 }
                 if module.has_tag_name((SAGE_NS, "SlaughterHordeContain")) {
                     slaughter_modules.push(data.payload.len() as u32);
@@ -284,6 +292,20 @@ pub(in crate::compile::static_assets) fn compile(
                 let start = data.payload.len() as u32;
                 if module.has_tag_name((SAGE_NS, "EjectPassengersSpecialAbilityUpdate")) {
                     eject_passenger_modules.push(start);
+                }
+                if module.has_tag_name((SAGE_NS, "MovementSpecialPower")) {
+                    movement_power_modules.push(start);
+                }
+                let early_fields: &[u32] = match module.tag_name().name() {
+                    "SpecialDisguiseUpdate" => &[0x100],
+                    "MoneyGainAttachUpdate" => &[0x158],
+                    "DominateEnemySpecialPower" => &[super::dominate_enemy::FILTER_POINTER as u32],
+                    "BeamSpecialAbilityUpdate" => &[0xf8, 0x108],
+                    "AssembleStructureSpecialAbilityUpdate" => &[0xfc],
+                    _ => &[],
+                };
+                if !early_fields.is_empty() {
+                    early_module_fields.push((start, early_fields));
                 }
                 let result = behaviors_basic::encode(
                     module,
@@ -297,6 +319,9 @@ pub(in crate::compile::static_assets) fn compile(
                     "StealthDetectorUpdate" | "ObjectCreationUpgrade"
                 ) {
                     upgrade_relocation_anchors.push((start, data.payload.len() as u32 - 1));
+                }
+                if module.has_tag_name((SAGE_NS, "SubStructureBuild")) {
+                    upgrade_relocation_anchors.push((start, start + 0x34));
                 }
                 if module.has_tag_name((SAGE_NS, "FireWeaponWhenDead")) {
                     upgrade_relocation_anchors.push((start, start + 0x88));
@@ -458,6 +483,24 @@ pub(in crate::compile::static_assets) fn compile(
                 return (start + 0x110, offset);
             }
         }
+        // MovementSpecialPower emits the derived masks before inherited filter pointers.
+        let index = movement_power_modules.partition_point(|&start| start <= pointer);
+        if index > 0 {
+            let start = movement_power_modules[index - 1];
+            let offset = pointer - start;
+            if matches!(offset, 0x1cc | 0x1d0) {
+                return (start, offset);
+            }
+        }
+        // Some abilities emit derived pointers before inherited pointers.
+        let index = early_module_fields.partition_point(|&(start, _)| start <= pointer);
+        if index > 0 {
+            let (start, offsets) = early_module_fields[index - 1];
+            let offset = pointer - start;
+            if offsets.contains(&offset) {
+                return (start, offset);
+            }
+        }
         // EA emits the inherited status pointers after the two upgrade lists.
         let index = create_object_modules.partition_point(|&start| start <= pointer);
         if index > 0 {
@@ -521,12 +564,19 @@ pub(in crate::compile::static_assets) fn compile(
                 _ => {}
             }
         }
-        // TransportContain lists the derived pointers before its OpenContain pointers.
-        let index = transport_modules.partition_point(|&start| start <= pointer);
+        // The containment hierarchy emits derived pointers before inherited pointers.
+        let index = transport_modules.partition_point(|&(start, _)| start <= pointer);
         if index > 0 {
-            let start = transport_modules[index - 1];
-            if (0x94..0x14c).contains(&(pointer - start)) {
-                return (start, pointer - start);
+            let (start, size) = transport_modules[index - 1];
+            let offset = pointer - start;
+            let transport_size = super::garrison::TRANSPORT_SIZE as u32;
+            if (0x94..size).contains(&offset) {
+                let rank = if offset < transport_size && size > transport_size {
+                    offset + size
+                } else {
+                    offset
+                };
+                return (start, rank);
             }
         }
         let index = slaughter_modules.partition_point(|&start| start <= pointer);

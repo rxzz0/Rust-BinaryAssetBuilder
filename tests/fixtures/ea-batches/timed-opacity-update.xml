@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="TimedOpacityProbe">
+    <Behaviors>
+      <TimedOpacityUpdate id="ModuleTag_Default"/>
+      <TimedOpacityUpdate id="ModuleTag_Explicit" Opacity="0.375" Duration="2750ms"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

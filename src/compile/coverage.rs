@@ -23,7 +23,10 @@ const MODULES: &[(&str, &[&str])] = &[
             "TruckDraw",
         ],
     ),
-    ("AI", &["AIUpdate", "JetAIUpdate"]),
+    (
+        "AI",
+        &["AIUpdate", "AnimalAIUpdate", "HordeAIUpdate", "JetAIUpdate"],
+    ),
     (
         "Body",
         &[
@@ -41,6 +44,7 @@ const MODULES: &[(&str, &[&str])] = &[
         &[
             "AnimationSoundClientBehavior",
             "ModelConditionAudioLoopClientBehavior",
+            "ModelConditionEvaEventSelectorClientBehavior",
             "ModelConditionSoundSelectorClientBehavior",
             "UpgradeSoundSelectorClientBehavior",
         ],
@@ -49,6 +53,7 @@ const MODULES: &[(&str, &[&str])] = &[
         "Behaviors",
         &[
             "BridgeBuilder",
+            "CaptureAndGiveUpgradeBehavior",
             "ToppleUpdate",
             "WeaponSetUpdate",
             "LaserState",
@@ -89,6 +94,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "StatusBitsUpgrade",
             "SecondaryObjectListenerModule",
             "LiftObjectUpdate",
+            "GrapplingHookUpdate",
             "GarrisonContain",
             "ContestableGarrisonContain",
             "OpenContain",
@@ -152,6 +158,69 @@ const MODULES: &[(&str, &[&str])] = &[
             "StructureUnpackUpdate",
             "SubObjectsUpgrade",
             "TechUpgradeReceiver",
+            "ActivateModuleSpecialAbilityUpdate",
+            "ActivateModuleSpecialPower",
+            "AimWeapon",
+            "ArmorUpgrade",
+            "AssembleStructureSpecialAbilityUpdate",
+            "AttributeCrateCollide",
+            "BeamSpecialAbilityUpdate",
+            "BombardAreaUpdate",
+            "CaptureSpecialAbilityUpdate",
+            "CircularDamageUpdate",
+            "CrateCollide",
+            "CrushDie",
+            "DestroyObjectsUpdate",
+            "DieOnProducerDeathUpdate",
+            "DistributeEnergyToAlliesBehavior",
+            "DominateEnemySpecialPower",
+            "EmotionTrackerUpdate",
+            "EncloseBehavior",
+            "EnergyDisablingBehavior",
+            "FreefallUpdate",
+            "GrantUpgradeCreate",
+            "HealCrateCollide",
+            "HordeContain",
+            "HeightDieUpdate",
+            "HitReactionBehavior",
+            "InvalidTargetsDeathUpdate",
+            "InvisibilityBroadcastUpdate",
+            "LaserScatterUpdate",
+            "LoseHealthUpdate",
+            "MagneticEffectUpdate",
+            "MoneyCrateCollide",
+            "MoneyGainAttachUpdate",
+            "MovementSpecialPower",
+            "OCLMonitorUpdate",
+            "ParabolicCurveUpdate",
+            "ProjectileUpdate",
+            "RadarUpdate",
+            "RandomCrateCollide",
+            "ReconstituteStateSpecialAbility",
+            "RenderStoredThingTemplate",
+            "ReturnToDockSpecialPower",
+            "ReturnToProducerSpecialPower",
+            "SalvageCrateCollide",
+            "SelectiveVisibilityBehavior",
+            "SetLocomotorSpeedUpdate",
+            "ShieldSphereUpdate",
+            "ShipSlowDeath",
+            "SpawnCrateUpdate",
+            "SpecialAbilityUpdate",
+            "SpecialDisguiseUpdate",
+            "SpiderHoleUpdate",
+            "StoreCurrentStateUpdate",
+            "StrafeAreaTargetChooser",
+            "StrafeAreaUpdate",
+            "SubStructureBuild",
+            "SubStructureStorageBehavior",
+            "SuppressionUpdate",
+            "SwitchLocomotorUpdate",
+            "TimedOpacityUpdate",
+            "TrackDamage",
+            "TrackIncomingWeaponFireBehavior",
+            "UnitCrateCollide",
+            "UnitVisionBehavior",
         ],
     ),
 ];
@@ -485,8 +554,98 @@ mod tests {
     }
 
     #[test]
+    fn attack_target_special_power_matches_ea() {
+        assert_ea_fixture("attack-target-special-power", 2);
+    }
+
+    #[test]
     fn special_power_matches_ea_batch() {
         assert_ea_fixture("special-power", 1);
+    }
+
+    #[test]
+    fn return_to_producer_special_power_matches_ea() {
+        assert_ea_fixture("return-to-producer-power", 2);
+    }
+
+    #[test]
+    fn die_on_producer_death_update_matches_ea() {
+        assert_ea_fixture("producer-death-update", 2);
+    }
+
+    #[test]
+    fn magnetic_effect_update_matches_ea() {
+        assert_ea_fixture("magnetic-effect-update", 2);
+    }
+
+    #[test]
+    fn movement_special_power_matches_ea() {
+        assert_ea_fixture("movement-special-power", 2);
+    }
+
+    #[test]
+    fn reconstitute_state_matches_ea() {
+        assert_ea_fixture("reconstitute-state", 2);
+    }
+
+    #[test]
+    fn switch_locomotor_matches_ea() {
+        assert_ea_fixture("switch-locomotor", 2);
+    }
+
+    #[test]
+    fn special_disguise_update_matches_ea() {
+        assert_ea_fixture("special-disguise-update", 2);
+    }
+
+    #[test]
+    fn store_current_state_update_matches_ea() {
+        assert_ea_fixture("store-current-state-update", 2);
+    }
+
+    #[test]
+    fn aim_weapon_matches_ea() {
+        assert_ea_fixture("aim-weapon", 2);
+    }
+
+    #[test]
+    fn lose_health_update_matches_ea() {
+        assert_ea_fixture("lose-health-update", 2);
+    }
+
+    #[test]
+    fn hit_reaction_matches_ea() {
+        assert_ea_fixture("hit-reaction-behavior", 2);
+    }
+
+    #[test]
+    fn w3d_hierarchy_pivot_names_match_ea() {
+        assert_ea_fixture("w3d-hierarchy-pivot-names", 1);
+    }
+
+    #[test]
+    fn model_state_skeleton_matches_ea() {
+        assert_ea_fixture("model-state-skeleton", 1);
+    }
+
+    #[test]
+    fn dominate_enemy_matches_ea() {
+        assert_ea_fixture("dominate-enemy-special-power", 2);
+    }
+
+    #[test]
+    fn ocl_monitor_update_matches_ea() {
+        assert_ea_fixture("ocl-monitor-update", 2);
+    }
+
+    #[test]
+    fn sub_structure_storage_matches_ea() {
+        assert_ea_fixture("sub-structure-storage-behavior", 1);
+    }
+
+    #[test]
+    fn strafe_area_target_chooser_matches_ea() {
+        assert_ea_fixture("strafe-area-target-chooser", 3);
     }
 
     #[test]
@@ -1023,6 +1182,11 @@ mod tests {
     }
 
     #[test]
+    fn purchase_player_tech_button_matches_ea() {
+        assert_ea_fixture("purchase-player-tech-button", 2);
+    }
+
+    #[test]
     fn player_tech_store_matches_ea() {
         assert_ea_fixture("player-tech-store", 1);
     }
@@ -1045,6 +1209,11 @@ mod tests {
     #[test]
     fn weapon_fire_on_objects_matches_ea() {
         assert_ea_fixture("weapon-fire-on-objects", 1);
+    }
+
+    #[test]
+    fn weapon_fire_on_objects_inherited_fields_match_ea() {
+        assert_ea_fixture("weapon-fire-on-objects-inherited", 1);
     }
 
     #[test]
@@ -1140,6 +1309,11 @@ mod tests {
     }
 
     #[test]
+    fn draw_particle_actions_match_ea() {
+        assert_ea_fixture("particle-actions", 1);
+    }
+
+    #[test]
     fn simple_weapon_effects_match_ea_batch() {
         assert_ea_fixture("simple-weapon-effects", 2);
     }
@@ -1169,6 +1343,21 @@ mod tests {
     #[test]
     fn weapon_damage_matches_ea() {
         assert_ea_fixture("weapon-damage", 1);
+    }
+
+    #[test]
+    fn weapon_damage_subtypes_match_ea() {
+        assert_ea_fixture("damage-subtypes", 1);
+    }
+
+    #[test]
+    fn weapon_damage_references_match_ea() {
+        assert_ea_fixture("damage-reference-fields", 3);
+    }
+
+    #[test]
+    fn weapon_damage_invalid_target_status_matches_ea() {
+        assert_ea_fixture("damage-invalid-target-status", 4);
     }
 
     #[test]
@@ -1220,6 +1409,11 @@ mod tests {
     #[test]
     fn capture_special_ability_matches_ea() {
         assert_ea_fixture("capture-special-ability", 3);
+    }
+
+    #[test]
+    fn capture_and_give_upgrade_behavior_matches_ea() {
+        assert_ea_fixture("capture-and-give-upgrade", 4);
     }
 
     #[test]
@@ -1319,6 +1513,226 @@ mod tests {
     }
 
     #[test]
+    fn animal_ai_matches_ea() {
+        assert_ea_fixture("animal-ai", 2);
+    }
+
+    #[test]
+    fn strafe_area_update_matches_ea() {
+        assert_ea_fixture("strafe-area-update", 4);
+    }
+
+    #[test]
+    fn destroy_objects_matches_ea() {
+        assert_ea_fixture("destroy-objects-update", 2);
+    }
+
+    #[test]
+    fn projectile_update_matches_ea() {
+        assert_ea_fixture("projectile-update", 7);
+    }
+
+    #[test]
+    fn invalid_targets_death_update_matches_ea() {
+        assert_ea_fixture("invalid-targets-death-update", 2);
+    }
+
+    #[test]
+    fn parabolic_curve_update_matches_ea() {
+        assert_ea_fixture("parabolic-curve-update", 1);
+    }
+
+    #[test]
+    fn selective_visibility_matches_ea() {
+        assert_ea_fixture("selective-visibility", 2);
+    }
+
+    #[test]
+    fn grant_upgrade_create_matches_ea() {
+        assert_ea_fixture("grant-upgrade-create", 3);
+    }
+
+    #[test]
+    fn bombard_area_update_matches_ea() {
+        assert_ea_fixture("bombard-area-update", 3);
+    }
+
+    #[test]
+    fn laser_scatter_matches_ea() {
+        assert_ea_fixture("laser-scatter", 2);
+    }
+
+    #[test]
+    fn weapon_scatter_effect_matches_ea() {
+        assert_ea_fixture("weapon-scatter-effect-update", 3);
+    }
+
+    #[test]
+    fn set_locomotor_speed_matches_ea() {
+        assert_ea_fixture("set-locomotor-speed", 2);
+    }
+
+    #[test]
+    fn invisibility_broadcast_matches_ea() {
+        assert_ea_fixture("invisibility-broadcast", 3);
+    }
+
+    #[test]
+    fn shield_sphere_update_matches_ea() {
+        assert_ea_fixture("shield-sphere-update", 2);
+    }
+
+    #[test]
+    fn height_die_update_matches_ea() {
+        assert_ea_fixture("height-die-update", 4);
+    }
+
+    #[test]
+    fn return_to_dock_special_power_matches_ea() {
+        assert_ea_fixture("return-to-dock", 2);
+    }
+
+    #[test]
+    fn crate_collide_matches_ea() {
+        assert_ea_fixture("crate-collide", 5);
+    }
+
+    #[test]
+    fn unit_vision_behavior_matches_ea() {
+        assert_ea_fixture("unit-vision-behavior", 3);
+    }
+
+    #[test]
+    fn energy_disabling_behavior_matches_ea() {
+        assert_ea_fixture("energy-disabling-behavior", 1);
+    }
+
+    #[test]
+    fn ship_slow_death_matches_ea() {
+        assert_ea_fixture("ship-slow-death", 4);
+    }
+
+    #[test]
+    fn beam_special_ability_matches_ea() {
+        assert_ea_fixture("beam-special-ability", 2);
+    }
+
+    #[test]
+    fn armor_upgrade_matches_ea() {
+        assert_ea_fixture("armor-upgrade", 2);
+    }
+
+    #[test]
+    fn money_crate_collide_matches_ea() {
+        assert_ea_fixture("money-crate-collide", 2);
+    }
+
+    #[test]
+    fn heal_crate_collide_matches_ea() {
+        assert_ea_fixture("heal-crate-collide", 2);
+    }
+
+    #[test]
+    fn radar_update_matches_ea() {
+        assert_ea_fixture("radar-update", 2);
+    }
+
+    #[test]
+    fn veterancy_crate_collide_matches_ea() {
+        assert_ea_fixture("veterancy-crate-collide", 2);
+    }
+
+    #[test]
+    fn random_crate_collide_matches_ea() {
+        assert_ea_fixture("random-crate-collide", 2);
+    }
+
+    #[test]
+    fn spider_hole_update_matches_ea() {
+        assert_ea_fixture("spider-hole-update", 2);
+    }
+
+    #[test]
+    fn spawn_crate_update_matches_ea() {
+        assert_ea_fixture("spawn-crate-update", 5);
+    }
+
+    #[test]
+    fn enclose_behavior_matches_ea() {
+        assert_ea_fixture("enclose-behavior", 2);
+    }
+
+    #[test]
+    fn distribute_energy_to_allies_behavior_matches_ea() {
+        assert_ea_fixture("distribute-energy-to-allies-behavior", 2);
+    }
+
+    #[test]
+    fn eva_condition_selector_matches_ea() {
+        assert_ea_fixture("eva-condition-selector", 3);
+    }
+
+    #[test]
+    fn sub_structure_build_matches_ea() {
+        assert_ea_fixture("sub-structure-build", 4);
+    }
+
+    #[test]
+    fn unit_crate_collide_matches_ea() {
+        assert_ea_fixture("unit-crate-collide", 2);
+    }
+
+    #[test]
+    fn salvage_crate_collide_matches_ea() {
+        assert_ea_fixture("salvage-crate-collide", 7);
+    }
+
+    #[test]
+    fn attribute_crate_collide_matches_ea() {
+        assert_ea_fixture("attribute-crate-collide", 4);
+    }
+
+    #[test]
+    fn freefall_update_matches_ea() {
+        assert_ea_fixture("freefall-update", 1);
+    }
+
+    #[test]
+    fn timed_opacity_update_matches_ea() {
+        assert_ea_fixture("timed-opacity-update", 1);
+    }
+
+    #[test]
+    fn horde_ai_update_matches_ea() {
+        assert_ea_fixture("horde-ai-update", 2);
+    }
+
+    #[test]
+    fn render_stored_thing_template_matches_ea() {
+        assert_ea_fixture("render-stored-thing-template", 1);
+    }
+
+    #[test]
+    fn money_gain_attach_update_matches_ea() {
+        assert_ea_fixture("money-gain-attach-update", 1);
+    }
+
+    #[test]
+    fn assemble_structure_special_ability_matches_ea() {
+        assert_ea_fixture("assemble-structure-special-ability", 3);
+    }
+
+    #[test]
+    fn horde_contain_matches_ea() {
+        assert_ea_fixture("horde-contain", 7);
+    }
+
+    #[test]
+    fn circular_damage_update_matches_ea() {
+        assert_ea_fixture("circular-damage", 4);
+    }
+
+    #[test]
     fn linear_damage_updates_match_ea() {
         assert_ea_fixture("linear-damage", 4);
     }
@@ -1367,6 +1781,11 @@ mod tests {
     #[test]
     fn game_maps_match_ea() {
         assert_ea_fixture("game-map", 5);
+    }
+
+    #[test]
+    fn map_override_types_match_ea() {
+        assert_ea_fixture("map-encoder-types", 3);
     }
 
     #[test]

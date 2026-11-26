@@ -1,0 +1,14 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="UnitVisionObserver">
+    <Behaviors><UnitVisionBehavior id="ModuleTag_UnitVisionBehavior" UpdateRate="5"/></Behaviors>
+    <Body><PropBody id="ModuleTag_Body"/></Body>
+  </GameObject>
+  <GameObject id="ProbeUnitVisionDefault">
+    <Behaviors><UnitVisionBehavior id="ModuleTag_UnitVisionBehavior"/></Behaviors>
+    <Body><PropBody id="ModuleTag_Body"/></Body>
+  </GameObject>
+  <GameObject id="ProbeUnitVisionSigned">
+    <Behaviors><UnitVisionBehavior id="ModuleTag_UnitVisionBehavior" UpdateRate="-2"/></Behaviors>
+    <Body><PropBody id="ModuleTag_Body"/></Body>
+  </GameObject>
+</AssetDeclaration>

@@ -1,6 +1,6 @@
-use binary_asset_builder::linked_stream::link_assets;
+use binary_asset_builder::linked_stream::{compare_linked_streams, link_assets};
 use binary_asset_builder::manifest::{ByteOrder, ChunkSizes, Manifest};
-use std::io;
+use std::{fs, io};
 
 const FIXTURES: [&[u8]; 2] = [
     include_bytes!("fixtures/manifest-v5-le.manifest"),
@@ -124,4 +124,49 @@ fn asset_file(byte_order: ByteOrder, header: [u32; 8], payload: &[u8]) -> Vec<u8
     }
     bytes.extend(payload);
     bytes
+}
+
+#[test]
+fn compares_linked_payloads_at_asset_offsets() {
+    let root = std::env::temp_dir().join(format!("bab-linked-comparison-{}", std::process::id()));
+    fs::create_dir(&root).unwrap();
+    let ea = root.join("ea.manifest");
+    let rust = root.join("rust.manifest");
+    for (extension, bytes) in [
+        (
+            "manifest",
+            include_bytes!("fixtures/game-object-default-health.manifest").as_slice(),
+        ),
+        (
+            "bin",
+            include_bytes!("fixtures/game-object-default-health.bin").as_slice(),
+        ),
+        (
+            "relo",
+            include_bytes!("fixtures/game-object-default-health.relo").as_slice(),
+        ),
+        (
+            "imp",
+            include_bytes!("fixtures/game-object-default-health.imp").as_slice(),
+        ),
+    ] {
+        fs::write(ea.with_extension(extension), bytes).unwrap();
+        fs::write(rust.with_extension(extension), bytes).unwrap();
+    }
+    let mut report = Vec::new();
+    compare_linked_streams(&ea, &rust, &mut report).unwrap();
+    assert_eq!(report, b"Matched 1 linked assets\n");
+
+    let mut payload = fs::read(rust.with_extension("bin")).unwrap();
+    payload[11] ^= 1;
+    fs::write(rust.with_extension("bin"), payload).unwrap();
+    report.clear();
+    let error = compare_linked_streams(&ea, &rust, &mut report).unwrap_err();
+    assert_eq!(error.to_string(), "1 linked stream differences");
+    assert!(
+        String::from_utf8(report)
+            .unwrap()
+            .contains("payload at byte 0x7")
+    );
+    fs::remove_dir_all(root).unwrap();
 }

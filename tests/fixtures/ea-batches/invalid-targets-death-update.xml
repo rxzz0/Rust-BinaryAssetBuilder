@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeInvalidTargetsDefault">
+    <Behaviors><InvalidTargetsDeathUpdate id="ModuleTag_Default"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeInvalidTargetsStatus">
+    <Behaviors><InvalidTargetsDeathUpdate id="ModuleTag_Status" InvalidStatus="CAN_ATTACK GENERIC_TOGGLE_STATE MAGNETIZED"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

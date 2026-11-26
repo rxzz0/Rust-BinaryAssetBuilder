@@ -1,15 +1,15 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, asset_reference, finite_number, sage_time, significant_children,
+    AssetReference, asset_reference, finite_number, hash_name, sage_time, significant_children,
     validate_attributes,
 };
 use super::behaviors_basic::{base, module_base};
 use super::draws::{boolean, model_condition_index};
-use super::eject_passengers;
-use super::secondary_damage::write_status_flags;
+use super::secondary_damage::{STATUS_BYTES, write_status_flags};
 use super::spawn::{id_list, weak_reference};
 use super::tech_upgrade::encode_anim;
+use super::{beam_special_ability, dominate_enemy, eject_passengers, special_disguise};
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::{Document, Node};
 use std::{io, sync::OnceLock};
@@ -19,6 +19,19 @@ const TOGGLE: u32 = 0xed1a_e55c;
 const ABILITY: u32 = 0xac59_8f82;
 const CAPTURE: u32 = 0x3139_98b5;
 const WEAPON: u32 = 0x1e45_a393;
+const RECONSTITUTE: u32 = 0x3f9b_9ef1;
+const ASSEMBLE: u32 = 0x7737_ac69;
+const ASSEMBLE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("NewObjectAssemblyTime", 0x9986_69e8, 0xf0, "time", "0s"),
+    ("BusyDuringAssembly", 0x77e3_f4f7, 0x100, "bool", "false"),
+    (
+        "ModelConditionsOnAssembly",
+        0x1572_3e0b,
+        0xf4,
+        "model",
+        "INVALID",
+    ),
+];
 const TOGGLE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[(
     "ReloadAllWeaponsOnToggle",
     0x77e3_f4f7,
@@ -134,6 +147,20 @@ const REPLACE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
     ("ClearTriggerDistance", 0x645864f3, 0xf8, "real", "120"),
 ];
 
+const RECONSTITUTE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("UpdateModuleId", 0xbdf0_7965, 0xf0, "poid", ""),
+    ("TimeStepsBack", 0x9986_69e8, 0xf4, "time", "0s"),
+    ("LeavePositionFX", 0x0d1c_8e83, 0xf8, "ref", "FXList"),
+    ("ReturnPositionFX", 0x0d1c_8e83, 0xfc, "ref", "FXList"),
+    (
+        "PostReconstituteAttributeModifier",
+        0x09dd_cff3,
+        0x100,
+        "ref",
+        "AttributeModifier",
+    ),
+];
+
 const WEAPON_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
     ("SpecialWeapon", 0xd046_dd22, 0xf0, "ref", "WeaponTemplate"),
     ("WhichSpecialWeapon", 0x23e6_50b8, 0xf4, "int", "0"),
@@ -215,6 +242,12 @@ pub(super) fn encode(
         "ToggleStatusSpecialAbilityUpdate" => (TOGGLE, 0xfc, TOGGLE_FIELDS),
         "ActivateModuleSpecialAbilityUpdate" => (ACTIVATE_MODULE, 0xf8, &[][..]),
         "SpecialAbilityUpdate" => (ABILITY, 0xf0, &[][..]),
+        "AssembleStructureSpecialAbilityUpdate" => (ASSEMBLE, 0x104, ASSEMBLE_FIELDS),
+        "BeamSpecialAbilityUpdate" => (
+            beam_special_ability::KIND,
+            beam_special_ability::SIZE,
+            beam_special_ability::FIELDS,
+        ),
         "CaptureSpecialAbilityUpdate" => (CAPTURE, 0xf0, &[][..]),
         "EjectPassengersSpecialAbilityUpdate" => (
             eject_passengers::KIND,
@@ -222,6 +255,17 @@ pub(super) fn encode(
             eject_passengers::FIELDS,
         ),
         "ReplaceSelfSpecialAbility" => (KIND, 0x104, REPLACE_FIELDS),
+        "DominateEnemySpecialPower" => (
+            dominate_enemy::KIND,
+            dominate_enemy::SIZE,
+            dominate_enemy::FIELDS,
+        ),
+        "ReconstituteStateSpecialAbility" => (RECONSTITUTE, 0x104, RECONSTITUTE_FIELDS),
+        "SpecialDisguiseUpdate" => (
+            special_disguise::KIND,
+            special_disguise::SIZE,
+            special_disguise::FIELDS,
+        ),
         name => {
             return Err(invalid(
                 data.path,
@@ -274,9 +318,25 @@ pub(super) fn encode(
         };
         data.word(start + offset, word);
     }
-    for &(name, tag, offset, storage, default) in all_fields {
+    let disguise = (kind == special_disguise::KIND)
+        .then(|| special_disguise::terrain(children.by_ref(), start, data, reference_types))
+        .transpose()?;
+    let dominate = (kind == dominate_enemy::KIND)
+        .then(|| dominate_enemy::filter(children.by_ref(), start, data, reference_types))
+        .transpose()?;
+    let assemble = (kind == ASSEMBLE)
+        .then(|| assembly_templates(children.by_ref(), start + 0xf8, data, reference_types))
+        .transpose()?;
+    // Beam allocates its derived status list and string before inherited data.
+    let ordered_fields = if kind == beam_special_ability::KIND {
+        variant.iter().chain(FIELDS)
+    } else {
+        all_fields
+    };
+    for &(name, tag, offset, storage, default) in ordered_fields {
         let value = node.attribute(name).unwrap_or(default);
         let offset = start + offset;
+        let mut target = Target::Data(offset);
         match storage {
             "ref" | "weak" | "audio" | "preencoded" => {}
             "string" => {
@@ -286,6 +346,16 @@ pub(super) fn encode(
             }
             "bool" => data.payload[offset] = boolean(node, name, default == "true", path)?,
             "status" => write_status_flags(value, offset, data)?,
+            "optional_status" => {
+                target = match node.attribute(name) {
+                    Some(value) => {
+                        let start = data.allocate(offset, STATUS_BYTES)?;
+                        write_status_flags(value, start, data)?;
+                        Target::Data(start)
+                    }
+                    None => Target::Null,
+                };
+            }
             storage => {
                 let word = match storage {
                     "int" => value
@@ -299,6 +369,7 @@ pub(super) fn encode(
                         .map_err(|_| invalid(path, format!("invalid {name}")))?,
                     "real" => finite_number(value, name, path)?.to_bits(),
                     "time" => sage_time(value, name, path)?.to_bits(),
+                    "poid" => hash_name(required(node, name, path)?),
                     "options" => options(value, path)?,
                     "conditions" => flags(value, &["MOUNTED", "WEAPON_TOGGLE", "MOVING"], path)?,
                     "disabled" => flags(value, super::production::DISABLED, path)?,
@@ -324,7 +395,7 @@ pub(super) fn encode(
                 data.word(offset, word);
             }
         }
-        let entry = Entry::named(name, tag, Target::Data(offset));
+        let entry = Entry::named(name, tag, target);
         if offset >= start + 0xf0 {
             derived.push(entry);
         } else {
@@ -350,6 +421,10 @@ pub(super) fn encode(
     let mut entries = vec![base(ABILITY, Table::record(ability))];
     entries.extend(derived);
     entries.extend(ejection);
+    if let Some(derived_child) = disguise.or(dominate).or(assemble) {
+        entries.push(derived_child);
+        return Ok((kind, Table::record(entries)));
+    }
     if kind == TOGGLE {
         let states: Vec<_> = children.collect();
         if states.is_empty() {
@@ -389,7 +464,10 @@ pub(super) fn encode(
         )?);
         return Ok((kind, Table::record(entries)));
     }
-    if matches!(kind, WEAPON | CAPTURE | eject_passengers::KIND) {
+    if matches!(
+        kind,
+        WEAPON | CAPTURE | RECONSTITUTE | eject_passengers::KIND | beam_special_ability::KIND
+    ) {
         if children.next().is_some() {
             return Err(invalid(
                 path,
@@ -412,6 +490,30 @@ pub(super) fn encode(
         Target::Table(replacements),
     ));
     Ok((kind, Table::record(entries)))
+}
+
+fn assembly_templates<'a, 'input: 'a>(
+    children: impl Iterator<Item = Node<'a, 'input>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Entry> {
+    let mut ids = Vec::new();
+    for child in children {
+        if !child.has_tag_name((SAGE_NS, "StructureTemplate")) {
+            return Err(invalid(
+                data.path,
+                "unexpected AssembleStructureSpecialAbilityUpdate child",
+            ));
+        }
+        ids.push(weak_reference(child, "GameObject", data, reference_types)?);
+    }
+    let list = id_list(data, count, ids)?;
+    Ok(Entry::named(
+        "StructureTemplate",
+        0x148e_d75d,
+        Target::Table(list),
+    ))
 }
 
 fn toggle_state(

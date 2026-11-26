@@ -1,0 +1,21 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="EvaSelectorDefaults">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+    <ClientBehaviors><ModelConditionEvaEventSelectorClientBehavior id="ModuleTag_Default"><Override/></ModelConditionEvaEventSelectorClientBehavior></ClientBehaviors>
+  </GameObject>
+  <GameObject id="EvaSelectorExplicit">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+    <ClientBehaviors>
+      <ModelConditionEvaEventSelectorClientBehavior id="ModuleTag_Eva">
+        <Override RequiredFlags="MOVING USER_1" ExcludedFlags="USER_5">
+          <EvaEventArray>
+            <EvaEntry EvaEvent="ProbeEvaEvent" EvaType="productionComplete"/>
+            <EvaEntry EvaEvent="" EvaType="damagedOwner"/>
+          </EvaEventArray>
+        </Override>
+        <Override RequiredFlags="USER_6"><EvaEventArray/></Override>
+      </ModelConditionEvaEventSelectorClientBehavior>
+    </ClientBehaviors>
+  </GameObject>
+  <EvaEvent id="ProbeEvaEvent"/>
+</AssetDeclaration>

@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <Includes><Include type="instance" source="base.xml"/></Includes>
+  <LogicCommand id="First" Type="ATTACK_MOVE"/>
+  <LogicCommand id="Second" Type="ATTACK_MOVE"/>
+  <LogicCommandSet id="Derived" inheritFrom="Base"><Cmd>Second</Cmd></LogicCommandSet>
+</AssetDeclaration>

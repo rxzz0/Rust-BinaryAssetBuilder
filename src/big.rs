@@ -23,6 +23,11 @@ pub struct PackResult {
 /// Packages a directory in SDK order, excluding loose .asset intermediates.
 /// Publishes the archive only after every input has been copied successfully.
 pub fn pack_big(input: &Path, output: &Path) -> io::Result<PackResult> {
+    stage_big(input, output, output)
+}
+
+/// Writes a replacement only when the previously published BIG differs from the input.
+pub fn stage_big(input: &Path, output: &Path, previous: &Path) -> io::Result<PackResult> {
     let input = fs::canonicalize(input)?;
     let output = absolute(output)?;
     let name = output
@@ -48,7 +53,7 @@ pub fn pack_big(input: &Path, output: &Path) -> io::Result<PackResult> {
         .ok_or_else(|| invalid("BIG archive exceeds 4 GiB"))?;
     let count = u32::try_from(entries.len()).map_err(|_| invalid("too many BIG entries"))?;
     let index = encode_index(&entries, size, count, index_end);
-    if existing_matches(&output, &entries, &index, size)? {
+    if existing_matches(previous, &entries, &index, size)? {
         return Ok(PackResult {
             entries: entries.len(),
             reused: true,

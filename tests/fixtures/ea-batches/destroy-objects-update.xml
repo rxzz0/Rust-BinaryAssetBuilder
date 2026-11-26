@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DestroyObjectsDefaults">
+    <Behaviors><DestroyObjectsUpdate id="ModuleTag_Default"><ObjectFilter/></DestroyObjectsUpdate></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="DestroyObjectsExplicit">
+    <Behaviors>
+      <DestroyObjectsUpdate id="ModuleTag_Custom" Radius="123.5">
+        <ObjectFilter Rule="ANY" Relationship="ENEMIES" Include="INFANTRY" Exclude="STRUCTURE" StatusBitFlags="CAN_ATTACK">
+          <IncludeThing>DestroyObjectsDefaults</IncludeThing>
+        </ObjectFilter>
+      </DestroyObjectsUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

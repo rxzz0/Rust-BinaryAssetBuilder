@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AudioEvent id="CratePickup"/>
+  <GameObject id="ProbeMoneyCrateCollide">
+    <Behaviors>
+      <MoneyCrateCollide id="ModuleTag_Default"/>
+<MoneyCrateCollide id="ModuleTag_Explicit" MoneyProvided="12345" KindOf="INFANTRY" IsForbidOwnerPlayer="true"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

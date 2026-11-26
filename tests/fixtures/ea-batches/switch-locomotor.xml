@@ -1,0 +1,15 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="SwitchLocomotorDefaults">
+    <Behaviors><SwitchLocomotorUpdate id="ModuleTag_Default"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="SwitchLocomotorExplicit">
+    <Behaviors>
+      <SwitchLocomotorUpdate id="ModuleTag_A" LocomotorSet="NORMAL" UpdatePeriod="1250ms"
+        RevealShroudToAllPlayersRadius="45.25" MinimumHealth="25%"
+        ObjectStatusWhileActive="UNSELECTABLE NO_ATTACK" ModelConditionWhileActive="MOVING FIRING_A"/>
+      <SwitchLocomotorUpdate id="ModuleTag_B" LocomotorSet="WANDER" UpdatePeriod="2s" MinimumHealth="90%" />
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

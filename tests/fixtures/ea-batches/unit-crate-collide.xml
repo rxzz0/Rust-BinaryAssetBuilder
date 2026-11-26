@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AudioEvent id="CratePickup"/>
+
+  <GameObject id="ProbeunitCrate">
+    <Behaviors>
+      <UnitCrateCollide id="ModuleTag_Default"/>
+<UnitCrateCollide id="ModuleTag_Explicit" UnitCount="7" UnitType="ProbeunitCrate"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

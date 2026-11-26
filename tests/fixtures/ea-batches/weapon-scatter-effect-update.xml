@@ -1,0 +1,24 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="ProbeScatterWeapon"/>
+  <GameObject id="ProbeScatterDefault">
+    <Behaviors>
+      <WeaponScatterEffectUpdate id="ModuleTag_Scatter">
+        <ScatterSettings/>
+        <Filter/>
+      </WeaponScatterEffectUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeScatterExplicit">
+    <Behaviors>
+      <WeaponScatterEffectUpdate id="ModuleTag_Scatter" WeaponTemplate="ProbeScatterWeapon" RandomScatter3D="true">
+        <ScatterSettings ScatterAmount="7" ScatterDelay="0.25s"/>
+        <Filter Rule="NONE" Relationship="ENEMIES" Include="AIRCRAFT">
+          <IncludeThing>ProbeScatterDefault</IncludeThing>
+          <ExcludeThing>ProbeScatterExplicit</ExcludeThing>
+        </Filter>
+      </WeaponScatterEffectUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

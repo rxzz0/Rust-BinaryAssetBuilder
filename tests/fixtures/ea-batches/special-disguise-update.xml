@@ -1,0 +1,20 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="SpecialDisguiseUpdateDefaults">
+    <Behaviors><SpecialDisguiseUpdate id="ModuleTag_Disguise"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="SpecialDisguiseUpdateTerrain">
+    <Behaviors>
+      <SpecialDisguiseUpdate id="ModuleTag_Disguise" DisguiseFX="FXList:DisguiseFx" SpecialPowerTemplate="DisguisePower"
+        TriggerInstantlyOnCreate="true" ScanRadiusForPropDisguise="82.5" OpacityTarget="0.625"
+        SpecialObjectAttachToBone="TestBone" ContactPointOverride="TestContact" UnpackTime="1.25s">
+        <CustomAnimAndDuration AnimState="MOVING" Frames="12" Trigger="3"/>
+        <TerrainData TerrainClass="Grass" ObjectTemplate="SpecialDisguiseUpdateDefaults"/>
+        <TerrainData TerrainClass="Snow"/>
+        <TerrainData ObjectTemplate="SpecialDisguiseUpdateTerrain"/>
+        <TerrainData/>
+      </SpecialDisguiseUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

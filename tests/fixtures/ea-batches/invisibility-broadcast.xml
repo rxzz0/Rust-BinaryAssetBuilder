@@ -1,0 +1,18 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <InvisibilityTemplate id="ProbeBroadcastTemplate"/>
+  <GameObject id="ProbeInvisibilityBroadcastDefault">
+    <Behaviors><InvisibilityBroadcastUpdate id="BroadcastDefault" InvisibilityTemplate="ProbeBroadcastTemplate"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeInvisibilityBroadcastExplicit">
+    <Behaviors>
+      <InvisibilityBroadcastUpdate id="BroadcastExplicit" InvisibilityTemplate="ProbeBroadcastTemplate"
+          AffectsSelf="false" UpdatePeriod="375ms" BroadcastRange="25.75"
+          ScalableDrawModuleId="ModuleTag_Draw" ScaledBoneName="Bone_01">
+        <BroadcastObjectFilter Rule="ANY" Relationship="ALLIES" Include="INFANTRY" StatusBitFlags="CAN_ATTACK"/>
+        <ObjectStatusValidation RequiredStatus="GENERIC_TOGGLE_STATE" ForbiddenStatus="MAGNETIZED"/>
+      </InvisibilityBroadcastUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

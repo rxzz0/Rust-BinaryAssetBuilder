@@ -1,0 +1,15 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeStrafeAreaDefault">
+    <Behaviors><StrafeAreaUpdate id="StrafeDefault"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeStrafeAreaCustom">
+    <Behaviors>
+      <StrafeAreaUpdate id="StrafeCustom" SecondaryWeaponName="ProbeStrafeSecondary" WeaponName="ProbeStrafePrimary" Radius="250" MinRadius="11" PreattackDistance="40" SweepFrequency="22.5" SweepAmplitude="30" DivingFloor="-20" InitialSweepPhase="90" TargetJitterOffset="12.5" ShotsToFirePerFrame="4" Options="FLEE_STRAIGHT_AHEAD DO_NOT_AVOID_TALLBUILDING"/>
+      <StrafeAreaUpdate id="StrafeOtherFlags" Options="USE_TARGET_CHOOSER CANNOT_IDLE"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <WeaponTemplate id="ProbeStrafePrimary"/>
+  <WeaponTemplate id="ProbeStrafeSecondary"/>
+</AssetDeclaration>

@@ -1,9 +1,15 @@
-use crate::compile::{CompiledStream, CustomData, compile_apt_ui, hash_source_file};
+use crate::compile::asset_workers::worker_count;
+use crate::compile::build_log;
+use crate::compile::{
+    CompiledStream, CustomData, capture_stream_warnings, compile_apt_ui, hash_source_file,
+    write_warnings,
+};
 use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::thread;
 
 const GENERATED: [&str; 5] = ["manifest", "bin", "relo", "imp", "version"];
 
@@ -12,7 +18,7 @@ pub(crate) enum Contents {
     CustomData(Vec<(String, CustomData)>),
 }
 
-type Output = (OsString, Contents);
+pub(crate) type Output = (OsString, Contents);
 
 pub fn compile_apt_ui_directory(input: &Path, root: &Path, output: &Path) -> io::Result<()> {
     let sources = xml_sources(input, |_| true)?;
@@ -47,30 +53,86 @@ pub(crate) fn xml_sources(
 pub(crate) fn compile_streams(
     sources: &[PathBuf],
     version: &[u8],
-    compile: impl Fn(&Path) -> io::Result<CompiledStream>,
+    compile: impl Fn(&Path) -> io::Result<CompiledStream> + Sync,
 ) -> io::Result<Vec<Output>> {
+    let workers = if sources.len() > 1 {
+        worker_count()?
+    } else {
+        1
+    };
     let mut names = HashSet::new();
+    let jobs: Vec<_> = sources
+        .iter()
+        .map(|source| (source, source.file_stem().unwrap().to_ascii_lowercase()))
+        .take_while(|(_, stem)| names.insert(stem.clone()))
+        .collect();
     let mut outputs = Vec::new();
-    for source in sources {
-        let stem = source.file_stem().unwrap().to_ascii_lowercase();
-        if !names.insert(stem.clone()) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "duplicate stream output name",
-            ));
+    let mut append =
+        |stem: &OsStr, stream| append_versioned_stream(stem, stream, version, &mut outputs);
+    for batch in jobs.chunks(workers) {
+        if let [(source, stem)] = batch {
+            println!("Compiling XML with Rust {}", source.display());
+            append(stem, compile(source)?);
+            continue;
         }
-        println!("Compiling XML with Rust {}", source.display());
-        let stream = compile(source)?;
-        stream_outputs(&stem, &stem, stream, &mut outputs);
-        outputs.push((
-            with_suffix(&stem, ".version"),
-            Contents::Bytes(version.to_vec()),
+        thread::scope(|scope| {
+            let compile = &compile;
+            let workers: Vec<_> = batch
+                .iter()
+                .map(|(source, _)| {
+                    thread::Builder::new().spawn_scoped(scope, move || {
+                        build_log::capture(|| capture_stream_warnings(|| compile(source)))
+                    })
+                })
+                .collect();
+            let mut result = Ok(());
+            for ((source, stem), worker) in batch.iter().zip(workers) {
+                let compiled = worker.and_then(|worker| {
+                    worker.join().map_err(|_| {
+                        io::Error::other(format!(
+                            "{}: stream compiler worker panicked",
+                            source.display()
+                        ))
+                    })
+                });
+                // Join every worker, but report diagnostics only through the first failure.
+                if result.is_ok() {
+                    println!("Compiling XML with Rust {}", source.display());
+                    result = compiled.and_then(|((stream, warnings), log)| {
+                        if let Some(log) = log {
+                            build_log::write_log(&log);
+                        }
+                        write_warnings(&warnings);
+                        append(stem, stream?);
+                        Ok(())
+                    });
+                }
+            }
+            result
+        })?;
+    }
+    if jobs.len() < sources.len() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "duplicate stream output name",
         ));
     }
     Ok(outputs)
 }
+pub(crate) fn append_versioned_stream(
+    stem: &OsStr,
+    stream: CompiledStream,
+    version: &[u8],
+    outputs: &mut Vec<Output>,
+) {
+    stream_outputs(stem, stem, stream, outputs);
+    outputs.push((
+        with_suffix(stem, ".version"),
+        Contents::Bytes(version.to_vec()),
+    ));
+}
 
-fn stream_outputs(
+pub(crate) fn stream_outputs(
     stem: &OsStr,
     custom_data_stem: &OsStr,
     stream: CompiledStream,
@@ -179,7 +241,10 @@ pub(crate) fn publish_prepared(
         for (name, contents) in &outputs {
             let destination = fresh.join(name);
             match contents {
-                Contents::Bytes(bytes) => fs::write(destination, bytes)?,
+                Contents::Bytes(bytes) => {
+                    fs::create_dir_all(destination.parent().unwrap())?;
+                    fs::write(destination, bytes)?;
+                }
                 Contents::CustomData(files) => {
                     fs::create_dir_all(&destination)?;
                     for (file, data) in files {
@@ -221,7 +286,10 @@ pub(crate) fn publish_prepared(
             }
         }
         for (name, contents) in &outputs {
-            if matches!(contents, Contents::CustomData(_)) && output.join(name).exists() {
+            if (matches!(contents, Contents::CustomData(_))
+                || Path::new(name).components().count() > 1)
+                && output.join(name).exists()
+            {
                 previous.push(name.clone());
             }
         }

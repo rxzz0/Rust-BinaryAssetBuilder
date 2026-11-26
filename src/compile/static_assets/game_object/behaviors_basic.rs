@@ -41,6 +41,188 @@ pub(super) fn module_base(
     })
 }
 
+fn die_on_producer_death(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x1c43_6dd2;
+    const FIELDS: [(&str, u32, usize); 2] = [
+        ("SleepInterval", 0x9986_69e8, 8),
+        ("DieOnProducerDisabled", 0x77e3_f4f7, 12),
+    ];
+    let path = data.path;
+    validate_attributes(
+        node,
+        &["id", "SleepInterval", "DieOnProducerDisabled"],
+        path,
+    )?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected DieOnProducerDeathUpdate content"));
+    }
+    let start = data.allocate(pointer, 16)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    let interval = node.attribute("SleepInterval").unwrap_or("0.5s");
+    data.word(
+        start + 8,
+        sage_time(interval, "SleepInterval", path)?.to_bits(),
+    );
+    data.payload[start + 12] = boolean(node, "DieOnProducerDisabled", false, path)?;
+    entries.extend(fields(start, &FIELDS));
+    Ok((KIND, Table::record(entries)))
+}
+
+fn store_current_state(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0xbed1_542a;
+    const TIME: u32 = 0x9986_69e8;
+    let path = data.path;
+    validate_attributes(node, &["id", "SleepTime", "MaxTime"], path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected StoreCurrentStateUpdate content"));
+    }
+    let start = data.allocate(pointer, 16)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    for (name, default, offset) in [("SleepTime", "0s", 8), ("MaxTime", "5s", 12)] {
+        let value = node.attribute(name).unwrap_or(default);
+        data.word(start + offset, sage_time(value, name, path)?.to_bits());
+        entries.push(Entry::named(name, TIME, Target::Data(start + offset)));
+    }
+    Ok((KIND, Table::record(entries)))
+}
+
+fn magnetic_effect(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x7ca3_739b;
+    const FIELDS: [(&str, u32, usize); 6] = [
+        ("ScalableDrawModuleId", 0xbdf0_7965, 8),
+        ("ScaledBoneName", 0x1a29_33aa, 0xc),
+        ("Radius", 0x6458_64f3, 0x14),
+        ("MaximumPullVelocity", 0x6458_64f3, 0x18),
+        ("MinimumPullVelocity", 0x6458_64f3, 0x1c),
+        ("VictimStatusToSet", 0xfa0d_e777, 0x20),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(FIELDS.map(|(name, ..)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let mut children = significant_children(node).peekable();
+    let status = children.next_if(|child| child.has_tag_name((SAGE_NS, "ObjectStatusValidation")));
+    let filter = super::super::required_element(&mut children, "ObjectFilter", path)?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected MagneticEffectUpdate child"));
+    }
+    let start = data.allocate(pointer, 0x98)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    if let Some(id) = node
+        .attribute("ScalableDrawModuleId")
+        .filter(|id| !id.is_empty())
+    {
+        data.word(start + 8, hash_name(id));
+    }
+    if let Some(name) = node.attribute("ScaledBoneName") {
+        data.string(start + 0xc, name)?;
+    }
+    for (name, offset, default) in [
+        ("Radius", 0x14, "250"),
+        ("MaximumPullVelocity", 0x18, "20"),
+        ("MinimumPullVelocity", 0x1c, "4"),
+    ] {
+        let value = finite_number(node.attribute(name).unwrap_or(default), name, path)?;
+        data.word(start + offset, value.to_bits());
+    }
+    let victim_status = node.attribute("VictimStatusToSet").unwrap_or("MAGNETIZED");
+    data.word(
+        start + 0x20,
+        super::secondary_damage::status_index(victim_status, path)? as u32,
+    );
+    entries.extend(fields(start, &FIELDS));
+    let status = match status {
+        Some(status) => Target::Table(super::secondary_damage::encode_status(
+            status,
+            start + 0x24,
+            data,
+        )?),
+        None => Target::Null,
+    };
+    let filter = super::parking::encode_inline_filter(filter, start + 0x28, data, reference_types)?;
+    entries.push(Entry::named("ObjectStatusValidation", 0x3e8f_938c, status));
+    entries.push(Entry::named(
+        "ObjectFilter",
+        0xe46e_a3b2,
+        Target::Table(filter),
+    ));
+    Ok((KIND, Table::record(entries)))
+}
+
+fn switch_locomotor(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x4edf_b24b;
+    const FIELDS: [(&str, u32, usize); 6] = [
+        ("LocomotorSet", 0x845d_12b2, 8),
+        ("UpdatePeriod", 0x9986_69e8, 0xc),
+        ("RevealShroudToAllPlayersRadius", 0x6458_64f3, 0x10),
+        ("MinimumHealth", 0x6458_64f3, 0x14),
+        ("ObjectStatusWhileActive", 0xa7bd_811e, 0x18),
+        ("ModelConditionWhileActive", 0x67db_bfc9, 0x34),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(FIELDS.map(|(name, ..)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected SwitchLocomotorUpdate content"));
+    }
+    let start = data.allocate(pointer, 0x70)?;
+    let parent = module_base(node, KIND, start, data, true)?;
+    data.word(
+        start + 8,
+        super::ai_update::locomotor_condition(
+            node.attribute("LocomotorSet").unwrap_or("NORMAL"),
+            "LocomotorSet",
+            path,
+        )?,
+    );
+    let period = node.attribute("UpdatePeriod").unwrap_or("1.0s");
+    data.word(
+        start + 0xc,
+        sage_time(period, "UpdatePeriod", path)?.to_bits(),
+    );
+    let radius = node
+        .attribute("RevealShroudToAllPlayersRadius")
+        .unwrap_or("0");
+    data.word(
+        start + 0x10,
+        finite_number(radius, "RevealShroudToAllPlayersRadius", path)?.to_bits(),
+    );
+    let health = node.attribute("MinimumHealth").unwrap_or("0%");
+    data.word(
+        start + 0x14,
+        percentage(health, "MinimumHealth", path)?.to_bits(),
+    );
+    if let Some(flags) = node.attribute("ObjectStatusWhileActive") {
+        super::secondary_damage::write_status_flags(flags, start + 0x18, data)?;
+    }
+    if let Some(flags) = node.attribute("ModelConditionWhileActive") {
+        super::draws::write_model_conditions(flags, start + 0x34, data)?;
+    }
+    let mut entries = vec![parent];
+    entries.extend(fields(start, &FIELDS));
+    Ok((KIND, Table::record(entries)))
+}
+
 fn monitor_condition(
     node: Node<'_, '_>,
     pointer: usize,
@@ -356,7 +538,7 @@ fn status_bits_upgrade(
     Ok((KIND, Table::record(entries)))
 }
 
-fn upgrade_parent<'a, 'input: 'a>(
+pub(super) fn upgrade_parent<'a, 'input: 'a>(
     node: Node<'_, '_>,
     kind: u32,
     start: usize,
@@ -1114,6 +1296,16 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
     match node.tag_name().name() {
+        "CaptureAndGiveUpgradeBehavior" => {
+            return super::capture_upgrade::encode(
+                node,
+                pointer,
+                data,
+                references,
+                reference_types,
+            )
+            .map(Some);
+        }
         "ToppleUpdate" => {
             return topple_update(node, pointer, data, references, reference_types).map(Some);
         }
@@ -1125,9 +1317,34 @@ pub(super) fn encode(
                 .map(Some);
         }
         "AutoDepositUpdate" => return super::auto_deposit::encode(node, pointer, data).map(Some),
+        "GrapplingHookUpdate" => {
+            return super::grappling_hook::encode(node, pointer, data, references, reference_types)
+                .map(Some);
+        }
         "OreMinerBehavior" => return super::ore::miner(node, pointer, data).map(Some),
         "OreNodeBehavior" => {
             return super::ore::deposit(node, pointer, data, references, reference_types).map(Some);
+        }
+        "DieOnProducerDeathUpdate" => return die_on_producer_death(node, pointer, data).map(Some),
+        "StoreCurrentStateUpdate" => return store_current_state(node, pointer, data).map(Some),
+        "AimWeapon" => return super::aim_weapon::encode(node, pointer, data).map(Some),
+        "LoseHealthUpdate" => {
+            return super::lose_health_update::encode(node, pointer, data).map(Some);
+        }
+        "HitReactionBehavior" => return super::hit_reaction::encode(node, pointer, data).map(Some),
+        "OCLMonitorUpdate" => {
+            return super::ocl_monitor_update::encode(node, pointer, data).map(Some);
+        }
+        "StrafeAreaTargetChooser" => {
+            return super::strafe_area_target_chooser::encode(node, pointer, data, reference_types)
+                .map(Some);
+        }
+        "SubStructureStorageBehavior" => {
+            return super::sub_structure_storage::encode(node, pointer, data).map(Some);
+        }
+        "SwitchLocomotorUpdate" => return switch_locomotor(node, pointer, data).map(Some),
+        "MagneticEffectUpdate" => {
+            return magnetic_effect(node, pointer, data, reference_types).map(Some);
         }
         "MonitorConditionUpdate" => {
             return monitor_condition(node, pointer, data, references, reference_types).map(Some);
@@ -1266,6 +1483,7 @@ pub(super) fn encode(
         "GarrisonContain"
             | "ContestableGarrisonContain"
             | "SlaughterHordeContain"
+            | "HordeContain"
             | "OpenContain"
             | "TransportContain"
     ) {
@@ -1335,7 +1553,11 @@ pub(super) fn encode(
         node.tag_name().name(),
         "RecallUnitsSpecialPower"
             | "SpecialPower"
+            | "ReturnToProducerSpecialPower"
+            | "ReturnToDockSpecialPower"
+            | "MovementSpecialPower"
             | "AssignSlavesTargetObjectSpecialPower"
+            | "AttackTargetSpecialPower"
             | "OCLSpecialPower"
             | "ActivateModuleSpecialPower"
             | "PrematureDischargeSpecialPower"
@@ -1461,19 +1683,205 @@ pub(super) fn encode(
         return super::passive_area::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
-    if node.has_tag_name((SAGE_NS, "AttachUpdate")) {
+    if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(
+            node.tag_name().name(),
+            "AttachUpdate" | "MoneyGainAttachUpdate"
+        )
+    {
         return super::attach::encode(node, pointer, data, references, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "TeleportStoredObjectsUpdate")) {
         return super::teleport_stored::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
-    if node.has_tag_name((SAGE_NS, "SlowDeath")) {
+    if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(node.tag_name().name(), "SlowDeath" | "ShipSlowDeath")
+    {
         return super::slow_death::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
     if node.has_tag_name((SAGE_NS, "ChargeWeaponUpdate")) {
         return charge_weapon(node, pointer, data).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "StrafeAreaUpdate")) {
+        return super::strafe_area_update::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "DestroyObjectsUpdate")) {
+        return super::destroy_objects::encode(node, pointer, data, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "ProjectileUpdate")) {
+        return super::projectile_update::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "InvalidTargetsDeathUpdate")) {
+        return super::invalid_targets_death_update::encode(node, pointer, data).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "ParabolicCurveUpdate")) {
+        return super::parabolic_curve_update::encode(node, pointer, data).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "SelectiveVisibilityBehavior")) {
+        return super::selective_visibility::encode(node, pointer, data).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "GrantUpgradeCreate")) {
+        return super::grant_upgrade_create::encode(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "BombardAreaUpdate")) {
+        return super::bombard_area_update::encode(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "LaserScatterUpdate")) {
+        return super::laser_scatter::encode(node, pointer, data).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "WeaponScatterEffectUpdate")) {
+        return super::weapon_scatter_effect::encode(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "SetLocomotorSpeedUpdate")) {
+        return super::set_locomotor_speed::encode(node, pointer, data, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "InvisibilityBroadcastUpdate")) {
+        return super::invisibility_broadcast::encode(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "ShieldSphereUpdate")) {
+        return super::shield_sphere_update::encode(node, pointer, data, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "HeightDieUpdate")) {
+        return super::height_die_update::encode(node, pointer, data).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "MoneyCrateCollide")) {
+        return super::crate_collide::encode_money(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "HealCrateCollide")) {
+        return super::crate_collide::encode_heal(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "VeterancyCrateCollide")) {
+        return super::crate_collide::encode_veterancy(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "RandomCrateCollide")) {
+        return super::crate_collide::encode_random(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "UnitCrateCollide")) {
+        return super::crate_collide::encode_unit(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "SalvageCrateCollide")) {
+        return super::crate_collide::encode_salvage(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "AttributeCrateCollide")) {
+        return super::crate_collide::encode_attribute(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "CrateCollide")) {
+        return super::crate_collide::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "UnitVisionBehavior")) {
+        return super::unit_vision_behavior::encode(node, pointer, data).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "EnergyDisablingBehavior")) {
+        return super::energy_disabling_behavior::encode(node, pointer, data).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "RadarUpdate")) {
+        return super::radar_update::encode(node, pointer, data).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "SpiderHoleUpdate")) {
+        return super::spider_hole_update::encode(node, pointer, data, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "SpawnCrateUpdate")) {
+        return super::spawn_crate_update::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "EncloseBehavior")) {
+        return super::enclose_behavior::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "DistributeEnergyToAlliesBehavior")) {
+        return super::distribute_energy_to_allies_behavior::encode(
+            node,
+            pointer,
+            data,
+            reference_types,
+        )
+        .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "SubStructureBuild")) {
+        return super::sub_structure_build::encode(node, pointer, data, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "FreefallUpdate")) {
+        return super::freefall_update::encode(node, pointer, data).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "TimedOpacityUpdate")) {
+        return super::timed_opacity_update::encode(node, pointer, data).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "RenderStoredThingTemplate")) {
+        return super::render_stored_thing_template::encode(node, pointer, data).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "CircularDamageUpdate")) {
+        return super::circular_damage::encode(node, pointer, data, references, reference_types)
+            .map(Some);
     }
     if node.has_tag_name((SAGE_NS, "LinearDamageUpdate")) {
         return super::linear_damage::encode(node, pointer, data, references, reference_types)
@@ -1548,7 +1956,12 @@ pub(super) fn encode(
     if matches!(
         node.tag_name().name(),
         "SpecialAbilityUpdate"
+            | "BeamSpecialAbilityUpdate"
+            | "AssembleStructureSpecialAbilityUpdate"
             | "ReplaceSelfSpecialAbility"
+            | "DominateEnemySpecialPower"
+            | "ReconstituteStateSpecialAbility"
+            | "SpecialDisguiseUpdate"
             | "WeaponFireSpecialAbilityUpdate"
             | "EjectPassengersSpecialAbilityUpdate"
             | "ToggleStatusSpecialAbilityUpdate"

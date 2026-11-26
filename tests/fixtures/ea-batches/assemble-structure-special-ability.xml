@@ -1,0 +1,19 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <SpecialPowerTemplate id="SpecialPower_ProbeAssembly" TargetType="NONE"/>
+  <GameObject id="OtherStructure">
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="AssembleStructureProbe">
+    <Behaviors>
+      <AssembleStructureSpecialAbilityUpdate id="ModuleTag_Default" SpecialPowerTemplate="SpecialPower_ProbeAssembly"/>
+      <AssembleStructureSpecialAbilityUpdate id="ModuleTag_Explicit" SpecialPowerTemplate="SpecialPower_ProbeAssembly"
+          NewObjectAssemblyTime="2750ms" BusyDuringAssembly="true" ModelConditionsOnAssembly="MOVING"
+          SpecialObjectAttachToBone="assembly_socket">
+        <CustomAnimAndDuration AnimState="MOVING" Frames="12" Trigger="3"/>
+        <StructureTemplate>AssembleStructureProbe</StructureTemplate>
+        <StructureTemplate>OtherStructure</StructureTemplate>
+      </AssembleStructureSpecialAbilityUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

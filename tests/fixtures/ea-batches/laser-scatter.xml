@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeLaserScatterDefault">
+    <Behaviors><LaserScatterUpdate id="LaserScatterDefault"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeLaserScatterExplicit">
+    <Behaviors><LaserScatterUpdate id="LaserScatterExplicit" LaserHitGroundWidthMultiplier="37.5%" LaserLifetime="375ms"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

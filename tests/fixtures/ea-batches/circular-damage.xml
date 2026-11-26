@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeCircularDamageDefault">
+    <Behaviors><CircularDamageUpdate id="CircularDefault"><ObjectFilter/></CircularDamageUpdate></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeCircularDamageCustom">
+    <Behaviors>
+      <CircularDamageUpdate id="CircularCustom" SweepWeapon="ProbeCircularWeapon" Flags="ONLY_ON_WATER" FXTimeout="900ms" ArcDistance="17.5" SweepFXList="ProbeCircularFX" MaxRadius="225">
+        <ObjectFilter Rule="ANY" Relationship="ENEMIES" Include="INFANTRY" Exclude="STRUCTURE"/>
+      </CircularDamageUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <FXList id="ProbeCircularFX"><NuggetList/></FXList>
+  <WeaponTemplate id="ProbeCircularWeapon"/>
+</AssetDeclaration>

@@ -8,6 +8,7 @@ mod behaviors_basic;
 pub(super) use behaviors_basic::optional_vector;
 mod bezier_projectile;
 mod building_destruction;
+mod capture_upgrade;
 pub(super) mod children;
 mod client_behaviors;
 mod client_updates;
@@ -17,19 +18,50 @@ mod dynamics;
 mod eject_passengers;
 mod enable_dynamics_collide;
 pub(in crate::compile) use draws::SCRIPTED_FLAGS;
+mod animal_ai;
 mod attach;
+mod beam_special_ability;
+mod bombard_area_update;
+mod circular_damage;
+mod crate_collide;
+mod destroy_objects;
+mod distribute_energy_to_allies_behavior;
+mod enclose_behavior;
 mod encoder;
+mod energy_disabling_behavior;
 mod engineer;
 mod fields;
+mod freefall_update;
 mod fx_list_behavior;
 mod garrison;
+mod grant_upgrade_create;
+mod height_die_update;
+mod horde_contain;
 mod infiltrator;
+mod invalid_targets_death_update;
+mod invisibility_broadcast;
 mod laser_draw;
+mod laser_scatter;
 mod laser_state;
 mod line_segment_damage;
 mod linear_damage;
 pub(super) mod material;
+mod parabolic_curve_update;
+mod projectile_update;
+mod radar_update;
+mod render_stored_thing_template;
+mod selective_visibility;
+mod set_locomotor_speed;
+mod shield_sphere_update;
+mod spawn_crate_update;
+mod spider_hole_update;
+mod strafe_area_update;
+mod sub_structure_build;
+mod timed_opacity_update;
+mod unit_vision_behavior;
+mod weapon_scatter_effect;
 pub(super) use material::encode_render_material;
+mod grappling_hook;
 mod ore;
 mod parking;
 pub(super) use parking::encode_filter as encode_object_filter;
@@ -44,14 +76,22 @@ mod schema;
 mod secondary_damage;
 mod secondary_listener;
 pub(super) use shadow::encode_settings_shadow;
+mod aim_weapon;
+mod dominate_enemy;
+mod hit_reaction;
+mod lose_health_update;
+mod ocl_monitor_update;
 mod shadow;
 mod slaved;
 mod slow_death;
 mod spawn;
+mod special_disguise;
 pub(super) mod special_power;
 mod squeeze_fling;
+mod strafe_area_target_chooser;
 mod stream_draw;
 mod structures;
+mod sub_structure_storage;
 mod subobjects;
 mod tech_upgrade;
 mod teleport_stored;
@@ -61,6 +101,7 @@ pub(super) use behaviors_basic::{encode_die_mux, weapon_slot};
 pub(super) use client_behaviors::audio_reference;
 pub(super) use draws::{model_condition_index, write_model_conditions};
 pub(super) use encoder::compile;
+pub(super) use parking::encode_inline_filter;
 pub(super) use passive_area::category_flags;
 pub(super) use secondary_damage::write_status_flags;
 pub(super) use spawn::{id_list as weak_id_list, weak_reference as weak_xml_reference};
@@ -189,7 +230,24 @@ impl Compiler<'_> {
         use_base: impl FnOnce(Node<'_, '_>, &Path, bool) -> io::Result<T>,
     ) -> io::Result<T> {
         let kind = node.tag_name().name();
-        let parent_id = asset_reference(inherit_from, kind, path)?;
+        let parent_id = asset_reference(inherit_from, kind, path)?.id();
+        let alternate = if kind == "AudioEventOverridable" {
+            let name = inherit_from
+                .trim()
+                .rsplit_once(':')
+                .map_or(inherit_from.trim(), |(_, name)| name);
+            // The RA3 SDK has the original forms of these Uprising templates.
+            match name {
+                "BaseSoundEffectOverridable" => Some("BaseSoundEffect"),
+                "BaseUnitResponseOverridable" => Some("BaseUnitResponse"),
+                _ => None,
+            }
+            .map(|name| asset_reference(name, "AudioEvent", path).map(|reference| reference.id()))
+            .transpose()?
+        } else {
+            None
+        };
+        let parents = || std::iter::once(parent_id).chain(alternate);
         let declaration = node.document().root_element();
         if let Some(parent) = declaration.children().find(|candidate| {
             *candidate != node
@@ -212,21 +270,53 @@ impl Compiler<'_> {
                 instance_paths.push(self.resolve(path, source)?);
             }
         }
-        let mut candidates = self
-            .tentative
-            .get(&parent_id)
-            .into_iter()
-            .flatten()
-            .filter(|candidate| instance_paths.contains(&candidate.path));
-        let candidate = candidates
-            .next()
-            .filter(|_| candidates.next().is_none())
-            .ok_or_else(|| {
-                invalid(
-                    path,
-                    format!("expected one instance include for {kind} {inherit_from}"),
-                )
-            })?;
+        let candidate = if self.reference_mode == crate::compile::ReferenceMode::Map {
+            // A document can expose declarations through nested all-includes.
+            // Instance includes of those children are only visible to the child.
+            let mut pending = instance_paths;
+            pending.extend(
+                self.map_all_includes
+                    .get(path)
+                    .into_iter()
+                    .flatten()
+                    .cloned(),
+            );
+            let mut reachable = std::collections::HashSet::new();
+            while let Some(candidate) = pending.pop() {
+                if reachable.insert(candidate.clone()) {
+                    pending.extend(
+                        self.map_all_includes
+                            .get(&candidate)
+                            .into_iter()
+                            .flatten()
+                            .cloned(),
+                    );
+                }
+            }
+            parents().find_map(|parent_id| {
+                Self::map_candidate(self.tentative.get(&parent_id).into_iter().flatten().filter(
+                    |candidate| candidate.path != path && reachable.contains(&candidate.path),
+                ))
+            })
+        } else {
+            parents()
+                .find_map(|parent_id| {
+                    let mut candidates = self
+                        .tentative
+                        .get(&parent_id)
+                        .into_iter()
+                        .flatten()
+                        .filter(|candidate| instance_paths.contains(&candidate.path));
+                    candidates.next().map(|first| (first, candidates.next()))
+                })
+                .and_then(|(candidate, other)| other.is_none().then_some(candidate))
+        }
+        .ok_or_else(|| {
+            invalid(
+                path,
+                format!("expected one included base for {kind} {inherit_from}"),
+            )
+        })?;
         let document =
             Document::parse(&candidate.xml).map_err(|error| invalid(&candidate.path, error))?;
         let parent = document

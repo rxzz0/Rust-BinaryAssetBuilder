@@ -74,6 +74,19 @@ const TELEPORT_FIELDS: &[(&str, u32, usize)] = &[
     ("OCL", 0x42e4_e9d1, 0x1c8),
 ];
 
+const MOVEMENT_POWER: u32 = 0x6712_612b;
+const MOVEMENT_FIELDS: &[(&str, u32, usize)] = &[
+    ("MovementType", 0x1e43_cb28, 0x1c4),
+    ("Duration", 0x9986_69e8, 0x1c8),
+    ("ModelCondition", 0x67db_bfc9, 0x1cc),
+    ("ObjectStatus", 0xa7bd_811e, 0x1d0),
+    ("LocomotorSet", 0x845d_12b2, 0x1d4),
+    ("BusyDurationOnExit", 0x9986_69e8, 0x1d8),
+    ("CollisionBounceHeight", REAL, 0x1dc),
+    ("CollisionBounceDistance", REAL, 0x1e0),
+    ("CollisionBounceSpeedScalar", REAL, 0x1e4),
+];
+
 const OCL_POWER: u32 = 0x8999_c6a4;
 const OCL_FIELDS: &[(&str, u32, usize)] = &[
     ("OCL", 0x42e4_e9d1, 0x1c4),
@@ -110,7 +123,11 @@ pub(super) fn encode(
         "StoreObjectsSpecialPower" => (0xa74a_234c, 0x1d4, STORE_FIELDS),
         "TeleportStoredObjectsSpecialPower" => (0x318d_c4d6, 0x1d0, TELEPORT_FIELDS),
         "RecallUnitsSpecialPower" => (KIND, 0x1cc, RECALL_FIELDS),
+        "MovementSpecialPower" => (MOVEMENT_POWER, 0x1e8, MOVEMENT_FIELDS),
+        "ReturnToDockSpecialPower" => (0x07fe_a222, 0x1c4, &[][..]),
+        "ReturnToProducerSpecialPower" => (0x2800_4ab1, 0x1c4, &[][..]),
         "AssignSlavesTargetObjectSpecialPower" => (0x9daf_d38c, 0x1c4, &[][..]),
+        "AttackTargetSpecialPower" => (0x239d_954f, 0x1c4, &[][..]),
         "PrematureDischargeSpecialPower" => (0x8e22_e8c8, 0x1c4, &[][..]),
         "GiveProductionBonusSpecialPower" => (PRODUCTION_BONUS, 0x1dc, BONUS_FIELDS),
         "ActivateModuleSpecialPower" => (ACTIVATE_MODULE, 0x1cc, &[][..]),
@@ -127,7 +144,12 @@ pub(super) fn encode(
     let start = data.allocate(pointer, size)?;
     data.word(start, kind);
     data.word(start + 4, hash_name(required(node, "id", path)?));
-    for &(name, field_type, offset) in POWER_FIELDS.iter().chain(derived) {
+    // EA allocates the derived masks before variable-length base filters.
+    let movement = (kind == MOVEMENT_POWER)
+        .then(|| movement_fields(node, start, data))
+        .transpose()?;
+    let scalar_fields = if movement.is_some() { &[] } else { derived };
+    for &(name, field_type, offset) in POWER_FIELDS.iter().chain(scalar_fields) {
         match field_type {
             BOOL => {
                 let default = matches!(
@@ -363,7 +385,11 @@ pub(super) fn encode(
         return Ok((kind, Table::record(power)));
     }
     let mut entries = vec![base(SPECIAL_POWER, Table::record(power))];
-    entries.extend(fields(start, derived));
+    if let Some(movement) = movement {
+        entries.extend(movement);
+    } else {
+        entries.extend(fields(start, derived));
+    }
     if kind == PLAYER_UPGRADE {
         let mut upgrades = Vec::new();
         for child in children.by_ref() {
@@ -402,6 +428,51 @@ pub(super) fn encode(
         )?);
     }
     Ok((kind, Table::record(entries)))
+}
+
+fn movement_fields(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Vec<Entry>> {
+    use super::super::global_ui::enum_value;
+    let path = data.path;
+    let mut entries = Vec::with_capacity(MOVEMENT_FIELDS.len());
+    let defaults = ["NONE", "0s", "", "", "INVALID", "0s", "20", "50", "0.5"];
+    for (&(name, kind, offset), default) in MOVEMENT_FIELDS.iter().zip(defaults) {
+        let field = start + offset;
+        let explicit = node.attribute(name);
+        let value = explicit.unwrap_or(default);
+        let word = match name {
+            "ModelCondition" | "ObjectStatus" => {
+                let target = match explicit {
+                    Some(value) => {
+                        let flags = if name == "ModelCondition" {
+                            let flags = data.allocate(field, 0x3c)?;
+                            super::draws::write_model_conditions(value, flags, data)?;
+                            flags
+                        } else {
+                            let flags =
+                                data.allocate(field, super::secondary_damage::STATUS_BYTES)?;
+                            super::secondary_damage::write_status_flags(value, flags, data)?;
+                            flags
+                        };
+                        Target::Data(flags)
+                    }
+                    None => Target::Null,
+                };
+                entries.push(Entry::named(name, kind, target));
+                continue;
+            }
+            "MovementType" => enum_value(value, &["NONE", "STRAIGHT_AHEAD", "TARGETED"], path)?,
+            "LocomotorSet" => super::ai_update::locomotor_condition(value, name, path)?,
+            "Duration" | "BusyDurationOnExit" => sage_time(value, name, path)?.to_bits(),
+            _ => finite_number(value, name, path)?.to_bits(),
+        };
+        data.word(field, word);
+        entries.push(Entry::named(name, kind, Target::Data(field)));
+    }
+    Ok(entries)
 }
 
 fn ocl_children<'a, 'input: 'a>(

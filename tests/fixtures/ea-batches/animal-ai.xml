@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ProbeAnimalAIDefault">
+    <AI><AnimalAIUpdate id="AnimalDefault"/></AI>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeAnimalAIExplicit">
+    <AI><AnimalAIUpdate id="AnimalExplicit" FleeRadius="41" FleeDistance="122" WanderPercentage="89"
+        MinDistance="16" MaxDistance="74" Radius="31" FleeUpdateTimer="333ms" WanderUpdateTimer="3s"
+        AfraidOfCastles="false" InitialFleeBlindlyRadius="33.125" AttackPriority="AnimalPriority"
+        AutoAcquireEnemiesWhenIdle="NO" SpecialContactPoints="PointA PointB" StandGround="true"/></AI>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

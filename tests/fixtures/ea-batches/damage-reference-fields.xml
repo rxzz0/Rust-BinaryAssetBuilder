@@ -1,0 +1,18 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="DamageEvaOnly">
+    <Nuggets>
+      <DamageNugget Damage="42" UnderAttackOverrideEvaEvent="EnemyAttackWarning"/>
+    </Nuggets>
+  </WeaponTemplate>
+  <WeaponTemplate id="DamageShroudOnly">
+    <Nuggets>
+      <DamageNugget Damage="43" VictimShroudRevealer="GameObject:ArtilleryShroudRevealer"/>
+    </Nuggets>
+  </WeaponTemplate>
+  <WeaponTemplate id="DamageBothRefs">
+    <Nuggets>
+      <DamageNugget Damage="44" UnderAttackOverrideEvaEvent="EvaEvent:SpecialAttackWarning" VictimShroudRevealer="ArtilleryShroudRevealer"/>
+      <DamageNugget Damage="45" UnderAttackOverrideEvaEvent=""/>
+    </Nuggets>
+  </WeaponTemplate>
+</AssetDeclaration>

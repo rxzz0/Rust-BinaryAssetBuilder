@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <UIConfigList id="UiAssetIdProbe">
+    <UIDynamicConfig Name="Probe" Type="INGAME">
+      <ComponentList>
+        <xi:include href="victory-defeat.xml"/>
+      </ComponentList>
+    </UIDynamicConfig>
+  </UIConfigList>
+</AssetDeclaration>

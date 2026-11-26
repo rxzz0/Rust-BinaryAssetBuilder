@@ -15,6 +15,7 @@ const ANIMATION_SOUND: u32 = 0x27ef_791d;
 const LOOP: u32 = 0x5a3e_dbf4;
 const SELECTOR: u32 = 0x327c_fb76;
 const UPGRADE_SELECTOR: u32 = 0xf911_5aa9;
+const EVA_SELECTOR: u32 = 0x61c8_c467;
 const SOUND: u32 = 0x63d7_b468;
 const INT: u32 = 0x23e6_50b8;
 
@@ -42,6 +43,9 @@ pub(super) fn encode(
             "ModelConditionSoundSelectorClientBehavior" => {
                 (SELECTOR, "Override", 0xbfa5_beba, 0x84)
             }
+            "ModelConditionEvaEventSelectorClientBehavior" => {
+                (EVA_SELECTOR, "Override", 0xc0f5_1451, 0x7c)
+            }
             "UpgradeSoundSelectorClientBehavior" => {
                 (UPGRADE_SELECTOR, "Override", 0x94f2_5492, 0x94)
             }
@@ -65,7 +69,7 @@ pub(super) fn encode(
         };
         validate_attributes(node, allowed, encoder.data.path)?;
         let children = elements(node, name, encoder.data.path)?;
-        if matches!(kind, ANIMATION_SOUND | SELECTOR) && children.is_empty() {
+        if matches!(kind, ANIMATION_SOUND | SELECTOR | EVA_SELECTOR) && children.is_empty() {
             return Err(invalid(
                 encoder.data.path,
                 format!("client behavior requires {name}"),
@@ -104,6 +108,8 @@ pub(super) fn encode(
                     encoder.sound_loop(child, offset)?
                 } else if is_animation {
                     encoder.animation_sound(child, offset)?
+                } else if kind == EVA_SELECTOR {
+                    encoder.eva_override(child, offset)?
                 } else {
                     encoder.sound_override(child, offset, kind == UPGRADE_SELECTOR)?
                 }),
@@ -154,7 +160,7 @@ pub(super) fn encode_object_audio(
     match node.tag_name().name() {
         "AudioArrayVoice" => encoder.audio_array(Some(node), 0x208, true),
         "AudioArraySound" => encoder.audio_array(Some(node), 0x20c, false),
-        "EvaEventArray" => encoder.eva_array(node),
+        "EvaEventArray" => encoder.eva_array(node, 0x210),
         name => Err(invalid(
             encoder.data.path,
             format!("unsupported GameObject audio array {name}"),
@@ -216,10 +222,10 @@ impl AudioEncoder<'_, '_> {
         Ok(Table::record(entries))
     }
 
-    fn eva_array(&mut self, node: Node<'_, '_>) -> io::Result<Target> {
+    fn eva_array(&mut self, node: Node<'_, '_>, pointer: usize) -> io::Result<Target> {
         validate_attributes(node, &[], self.data.path)?;
         let children = elements(node, "EvaEntry", self.data.path)?;
-        let start = self.data.allocate(0x210, 8)?;
+        let start = self.data.allocate(pointer, 8)?;
         let first = self.data.list(start, children.len(), 8)?;
         let mut items = Vec::with_capacity(children.len());
         for (index, child) in children.into_iter().enumerate() {
@@ -250,6 +256,24 @@ impl AudioEncoder<'_, '_> {
             items,
         )])))
     }
+    fn eva_override(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
+        let path = self.data.path;
+        let names = ["RequiredFlags", "ExcludedFlags"];
+        validate_attributes(node, &names, path)?;
+        let [required, excluded] = named_condition_fields(node, start, self.data, names)?;
+        let arrays = elements(node, "EvaEventArray", path)?;
+        let array = match arrays.as_slice() {
+            [] => Target::Null,
+            [array] => self.eva_array(*array, start + 0x78)?,
+            _ => return Err(invalid(path, "repeated EVA override EvaEventArray")),
+        };
+        Ok(Table::record(vec![
+            required,
+            excluded,
+            Entry::new(0xf677_aaae, 0xf677_aaae, array),
+        ]))
+    }
+
     fn sound_loop(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
         validate_attributes(
             node,
@@ -551,20 +575,22 @@ pub(in crate::compile::static_assets) fn audio_reference(
     }
     let reference = match name.trim().split_once(':') {
         Some((
-            kind @ ("AudioEvent" | "Multisound" | "AmbientStream" | "DialogEvent" | "MusicTrack"),
+            kind @ ("AudioEvent"
+            | "AudioEventOverridable"
+            | "Multisound"
+            | "AmbientStream"
+            | "DialogEvent"
+            | "MusicTrack"
+            | "MP3AmbientStream"
+            | "MP3DialogEvent"
+            | "MP3MusicTrack"),
             _,
         )) => asset_reference(name, kind, path)?.into(),
         Some((_, plain)) => {
-            let base = asset_reference(name, kind, path)?;
-            AssetReference {
-                id: asset_reference(plain, "AudioEvent", path)?,
-                external_type: Some(base.type_id),
-            }
+            asset_reference(name, kind, path)?;
+            asset_reference(plain, "AudioEvent", path)?.with_external_type(kind)
         }
-        None => AssetReference {
-            id: asset_reference(name, "AudioEvent", path)?,
-            external_type: Some(super::super::fast_hash(kind.as_bytes())),
-        },
+        None => asset_reference(name, "AudioEvent", path)?.with_external_type(kind),
     };
     references.push(reference);
     reference_types.push(super::super::fast_hash(kind.as_bytes()));

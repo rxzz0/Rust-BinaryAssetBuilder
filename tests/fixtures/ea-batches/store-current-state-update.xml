@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="StoreStateDefaults">
+    <Behaviors><StoreCurrentStateUpdate id="ModuleTag_Default"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="StoreStateExplicit">
+    <Behaviors>
+      <StoreCurrentStateUpdate id="ModuleTag_Explicit" SleepTime="250ms" MaxTime="30s"/>
+      <StoreCurrentStateUpdate id="ModuleTag_Zero" SleepTime="1ms" MaxTime="0s"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

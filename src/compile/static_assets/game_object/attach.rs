@@ -1,17 +1,18 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, finite_number, sage_time, significant_children, validate_attributes,
+    AssetReference, finite_number, percentage, sage_time, significant_children, validate_attributes,
 };
-use super::behaviors_basic::{death_flags, module_base};
+use super::behaviors_basic::{base, death_flags, module_base};
 use super::draws::write_model_conditions;
-use super::secondary_damage::{STATUS_BYTES, write_status_flags};
-use crate::compile::{SAGE_NS, invalid};
+use super::secondary_damage::{STATUS_BYTES, encode_status, write_status_flags};
+use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::Node;
 use std::io;
 use std::sync::OnceLock;
 
 const KIND: u32 = 0xe9fd_14c9;
+const MONEY_GAIN: u32 = 0xb1a5_4585;
 const STATUS: u32 = 0xa7bd_811e;
 const MODEL: u32 = 0x67db_bfc9;
 const REAL: u32 = 0x6458_64f3;
@@ -66,15 +67,59 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
+    const MODIFIER: &str = "ModifierToLeechFromParent";
+    const MONEY_STATUS: &str = "MoneyGainObjectStatusValidation";
+
     let path = data.path;
+    let money = node.has_tag_name((SAGE_NS, "MoneyGainAttachUpdate"));
+    let kind = if money { MONEY_GAIN } else { KIND };
     let allowed: Vec<_> = FIELDS
         .iter()
         .map(|&(name, _, _, _)| name)
         .chain(["id"])
+        .chain(
+            ["ActionType", "PurchasePricePercent"]
+                .into_iter()
+                .filter(|_| money),
+        )
         .collect();
     validate_attributes(node, &allowed, path)?;
-    let start = data.allocate(pointer, 0x150)?;
-    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    let mut children = significant_children(node).peekable();
+    let filter_node = children.next_if(|child| child.has_tag_name((SAGE_NS, "ObjectFilter")));
+    let mut modifiers = Vec::new();
+    while let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, MODIFIER))) {
+        modifiers.push(child);
+    }
+    let status = children.next_if(|child| money && child.has_tag_name((SAGE_NS, MONEY_STATUS)));
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected AttachUpdate child"));
+    }
+
+    let start = data.allocate(pointer, if money { 0x15c } else { 0x150 })?;
+    let mut entries = vec![module_base(node, kind, start, data, true)?];
+    let money_fields = if money {
+        let action = required(node, "ActionType", path)?;
+        if action != "ON_DETACH_PARENT_DEAD" {
+            return Err(invalid(path, format!("invalid ActionType {action:?}")));
+        }
+        let price = percentage(
+            node.attribute("PurchasePricePercent").unwrap_or("100%"),
+            "PurchasePricePercent",
+            path,
+        )?;
+        data.word(start + 0x154, price.to_bits());
+        let status = match status {
+            Some(child) => Target::Table(encode_status(child, start + 0x158, data)?),
+            None => Target::Null,
+        };
+        Some([
+            Entry::named("ActionType", 0x9d83_510b, Target::Data(start + 0x150)),
+            Entry::named("PurchasePricePercent", REAL, Target::Data(start + 0x154)),
+            Entry::named(MONEY_STATUS, 0x3e8f_938c, status),
+        ])
+    } else {
+        None
+    };
     let mut ref_words = [0; 8];
     for attr in node.attributes() {
         if let Some(&(_, token, relative, _)) = FIELDS
@@ -165,10 +210,7 @@ pub(super) fn encode(
         };
         entries.push(Entry::named(name, token, target));
     }
-    let mut children = significant_children(node).peekable();
-    let filter = if let Some(child) =
-        children.next_if(|child| child.has_tag_name((SAGE_NS, "ObjectFilter")))
-    {
+    let filter = if let Some(child) = filter_node {
         let first = data.allocate(start + 0x144, 0x70)?;
         Target::Table(super::parking::encode_inline_filter(
             child,
@@ -180,10 +222,9 @@ pub(super) fn encode(
         Target::Null
     };
     entries.push(Entry::named("ObjectFilter", 0xe46e_a3b2, filter));
-    let name = "ModifierToLeechFromParent";
-    let mut refs = Vec::new();
-    for child in children {
-        if !child.has_tag_name((SAGE_NS, name)) || child.children().any(|node| node.is_element()) {
+    let mut refs = Vec::with_capacity(modifiers.len());
+    for child in modifiers {
+        if child.children().any(|node| node.is_element()) {
             return Err(invalid(path, "unexpected AttachUpdate child"));
         }
         validate_attributes(child, &[], path)?;
@@ -212,11 +253,16 @@ pub(super) fn encode(
         })
         .collect();
     entries.push(Entry::named(
-        name,
+        MODIFIER,
         0x09dd_cff3,
         Target::Table(Table::array(count, items)),
     ));
-    Ok((KIND, Table::record(entries)))
+    if let Some(money_fields) = money_fields {
+        let mut derived = vec![base(KIND, Table::record(entries))];
+        derived.extend(money_fields);
+        entries = derived;
+    }
+    Ok((kind, Table::record(entries)))
 }
 
 fn enum_index(

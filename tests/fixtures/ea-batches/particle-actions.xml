@@ -1,0 +1,19 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ParticleActionProbe">
+    <Draws><ScriptedModelDraw id="Draw">
+      <ModelConditionState ParseCondStateType="PARSE_DEFAULT">
+        <Model Name=""/>
+        <ParticleSysBone BoneName="ModelBone" FXParticleSystemTemplate="ProbeParticle" FXAction="SPAWN" PersistID="29" id="ModelFX"/>
+      </ModelConditionState>
+      <AnimationState ParseCondStateType="PARSE_DEFAULT">
+        <Animation AnimationName="ProbeAnimation" AnimationMode="LOOP"/>
+        <ParticleSysBone BoneName="Root"/>
+        <ParticleSysBone BoneName="ExplicitNone" FXAction="NONE" FXTrigger="NONE"/>
+        <ParticleSysBone BoneName="Hold" FXAction="HOLD" FXTrigger="CATAPULT_ROCK" PersistID="12"/>
+        <ParticleSysBone BoneName="Kill" FXAction="KILL" FXTrigger="TREBUCHET_ROCK" PersistID="17"/>
+        <ParticleSysBone BoneName="Spawn" FXAction="SPAWN" PersistID="23"/>
+      </AnimationState>
+    </ScriptedModelDraw></Draws>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

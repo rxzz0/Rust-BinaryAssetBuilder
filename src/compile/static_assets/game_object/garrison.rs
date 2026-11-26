@@ -6,6 +6,7 @@ use super::super::{
 };
 use super::behaviors_basic::{base, encode_die_mux, module_base, optional_vector};
 use super::draws::{boolean, fields};
+use super::horde_contain;
 use super::parking::{encode_filter, encode_inline_filter};
 use super::secondary_damage::{status_index, write_status_flags};
 use super::spawn::id_list;
@@ -14,6 +15,7 @@ use roxmltree::Node;
 use std::io;
 
 const TRANSPORT: u32 = 0x578c_272f;
+pub(super) const TRANSPORT_SIZE: usize = 0x14c;
 const OPEN: u32 = 0xd7cc_2e35;
 const GARRISON: u32 = 0xbae3_bc7d;
 const CONTESTABLE: u32 = 0x8c50_f0d7;
@@ -118,7 +120,8 @@ pub(super) fn encode(
     let path = data.path;
     let (kind, size) = match node.tag_name().name() {
         "OpenContain" => (OPEN, 0x94),
-        "TransportContain" => (TRANSPORT, 0x14c),
+        "TransportContain" => (TRANSPORT, TRANSPORT_SIZE),
+        "HordeContain" => (horde_contain::KIND, horde_contain::SIZE),
         "ContestableGarrisonContain" => (CONTESTABLE, 0xdc),
         "SlaughterHordeContain" => (SLAUGHTER, 0x144),
         _ => (GARRISON, 0xa0),
@@ -127,11 +130,16 @@ pub(super) fn encode(
         .chain(OPEN_FIELDS.iter().map(|&(name, _, _, _)| name))
         .collect();
     match kind {
-        TRANSPORT => allowed.extend(TRANSPORT_FIELDS.iter().map(|&(name, ..)| name)),
+        TRANSPORT | horde_contain::KIND => {
+            allowed.extend(TRANSPORT_FIELDS.iter().map(|&(name, ..)| name));
+        }
         GARRISON | CONTESTABLE | SLAUGHTER => {
             allowed.extend(GARRISON_FLAGS.map(|(name, _, _)| name))
         }
         _ => {}
+    }
+    if kind == horde_contain::KIND {
+        allowed.extend(horde_contain::FIELDS.iter().map(|&(name, ..)| name));
     }
     if kind == CONTESTABLE {
         allowed.extend(CONTESTABLE_FIELDS.map(|(name, ..)| name));
@@ -159,15 +167,25 @@ pub(super) fn encode(
     } else {
         None
     };
-    let ordered_imports = matches!(kind, OPEN | TRANSPORT | CONTESTABLE);
+    let ordered_imports = matches!(kind, OPEN | TRANSPORT | CONTESTABLE | horde_contain::KIND);
     if ordered_imports {
-        contain_attribute_references(node, start, data, references, reference_types)?;
+        contain_attribute_references(node, kind, start, data, references, reference_types)?;
     }
-    // Transport stores derived blocks first, but EA hashes references in XML order.
+    // Derived blocks are allocated before base blocks, but EA hashes references in XML order.
+    let horde = if kind == horde_contain::KIND {
+        let first_horde = children
+            .iter()
+            .position(horde_contain::is_child)
+            .unwrap_or(children.len());
+        let derived = children.split_off(first_horde);
+        Some(horde_contain::encode(node, derived, start, data)?)
+    } else {
+        None
+    };
     let mut modifiers = Vec::new();
     let mut modifier_reference_types = Vec::new();
     let mut derived_reference_types = Vec::new();
-    let transport = if kind == TRANSPORT {
+    let transport = if matches!(kind, TRANSPORT | horde_contain::KIND) {
         for child in children
             .iter()
             .filter(|child| child.has_tag_name((SAGE_NS, "ModifierToGiveOnExit")))
@@ -336,7 +354,7 @@ pub(super) fn encode(
             Target::Table(Table::array(start + 0x80, member_items)),
         ),
     ]);
-    if matches!(kind, OPEN | TRANSPORT) {
+    if matches!(kind, OPEN | TRANSPORT | horde_contain::KIND) {
         if children.next().is_some() {
             return Err(invalid(
                 path,
@@ -346,7 +364,17 @@ pub(super) fn encode(
         if let Some(mut entries) = transport {
             reference_types.extend(derived_reference_types);
             entries.insert(0, base(OPEN, Table::record(open)));
-            return Ok((kind, Table::record(entries)));
+            let transport = Table::record(entries);
+            let fields = match horde {
+                Some(horde) => horde.finish(
+                    base(TRANSPORT, transport),
+                    data,
+                    references,
+                    reference_types,
+                )?,
+                None => transport,
+            };
+            return Ok((kind, fields));
         }
         return Ok((kind, Table::record(open)));
     }
@@ -412,6 +440,7 @@ pub(super) fn encode(
 
 fn contain_attribute_references(
     node: Node<'_, '_>,
+    module_kind: u32,
     start: usize,
     data: &mut BinaryData<'_>,
     references: &mut Vec<AssetReference>,
@@ -419,6 +448,14 @@ fn contain_attribute_references(
 ) -> io::Result<()> {
     for attr in node.attributes() {
         let (kind, offset) = match attr.name() {
+            "AlternateFormation" if module_kind == horde_contain::KIND => {
+                if !attr.value().trim().is_empty() {
+                    let id = object_id(attr.value(), data.path, reference_types)?;
+                    data.word(start + 0x150, id);
+                }
+                continue;
+            }
+            "EvaEventLastMemberDeath" if module_kind == horde_contain::KIND => ("EvaEvent", 0x160),
             "EnterSound" => ("BaseAudioEventInfo", 0xc),
             "ExitSound" => ("BaseAudioEventInfo", 0x10),
             "ThrowOutPassengersLandingWarhead" => ("WeaponTemplate", 0x118),
@@ -740,7 +777,7 @@ fn passenger_data(
     Ok(Table::record(entries))
 }
 
-fn signed(value: &str, name: &str, path: &std::path::Path) -> io::Result<u32> {
+pub(super) fn signed(value: &str, name: &str, path: &std::path::Path) -> io::Result<u32> {
     value
         .trim()
         .parse::<i32>()
@@ -748,7 +785,11 @@ fn signed(value: &str, name: &str, path: &std::path::Path) -> io::Result<u32> {
         .map_err(|_| invalid(path, format!("invalid {name}")))
 }
 
-fn named_leaf(node: Node<'_, '_>, attributes: &[&str], path: &std::path::Path) -> io::Result<()> {
+pub(super) fn named_leaf(
+    node: Node<'_, '_>,
+    attributes: &[&str],
+    path: &std::path::Path,
+) -> io::Result<()> {
     validate_attributes(node, attributes, path)?;
     if has_content(node) {
         return Err(invalid(
@@ -759,7 +800,7 @@ fn named_leaf(node: Node<'_, '_>, attributes: &[&str], path: &std::path::Path) -
     Ok(())
 }
 
-fn object_id(
+pub(super) fn object_id(
     value: &str,
     path: &std::path::Path,
     reference_types: &mut Vec<u32>,
