@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 429: Added native freefall update with model-condition flags and SDK defaults. The EA asset matches. Next: TimedOpacityUpdate.
 - Checkpoint 428: Added native attribute crates, including default and explicit modifier references in EA order. All four EA assets match. Next: FreefallUpdate.
 - Checkpoint 427: Added native salvage crates with signed resource limits and source-order upgrade references. All seven EA assets match. Next: AttributeCrateCollide.
 - Checkpoint 426: Added native unit crates and hashed explicit unit types before default pickup audio as EA does. Both EA assets match. Next: SalvageCrateCollide.

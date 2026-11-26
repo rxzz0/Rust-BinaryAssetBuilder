@@ -1611,6 +1611,11 @@ mod tests {
     }
 
     #[test]
+    fn freefall_update_matches_ea() {
+        assert_ea_fixture("freefall-update", 1);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

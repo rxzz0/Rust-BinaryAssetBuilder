@@ -31,6 +31,7 @@ mod encoder;
 mod energy_disabling_behavior;
 mod engineer;
 mod fields;
+mod freefall_update;
 mod fx_list_behavior;
 mod garrison;
 mod grant_upgrade_create;

@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="FreefallProbe">
+    <Behaviors>
+      <FreefallUpdate id="ModuleTag_Default"/>
+      <FreefallUpdate id="ModuleTag_Explicit" ModelConditionsToSet="MOVING USER_4" InitialVelocity="-13.25" Acceleration="3.5" TerminalVelocity="37.25"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

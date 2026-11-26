@@ -1863,6 +1863,9 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "SubStructureBuild")) {
         return super::sub_structure_build::encode(node, pointer, data, reference_types).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "FreefallUpdate")) {
+        return super::freefall_update::encode(node, pointer, data).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "CircularDamageUpdate")) {
         return super::circular_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);
