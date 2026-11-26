@@ -42,7 +42,6 @@ pub(in crate::compile) struct Field {
     pub(super) repeated: bool,
     minimum: usize,
     maximum: usize,
-    explicitly_optional: bool,
     reference_target: Option<String>,
 }
 
@@ -226,8 +225,6 @@ impl Schema {
                 occurs(node, "minOccurs")
             },
             maximum: occurs(node, "maxOccurs"),
-            explicitly_optional: node.attribute("use") == Some("optional")
-                || node.attribute("minOccurs") == Some("0"),
             reference_target: node.attribute((SAGE_SCHEMA, "refType")).map(str::to_owned),
         })
     }
@@ -373,10 +370,9 @@ impl Schema {
         &self,
         node: Node<'_, '_>,
         path: &Path,
-        map: bool,
     ) -> io::Result<Vec<AssetReference>> {
         let mut references = Vec::new();
-        self.find_weak_references(node, node.tag_name().name(), path, map, &mut references)?;
+        self.find_weak_references(node, node.tag_name().name(), path, &mut references)?;
         Ok(references)
     }
 
@@ -466,7 +462,6 @@ impl Schema {
         node: Node<'_, '_>,
         kind: &str,
         path: &Path,
-        map: bool,
         references: &mut Vec<AssetReference>,
     ) -> io::Result<()> {
         if !self.types.contains_key(kind) {
@@ -478,9 +473,9 @@ impl Schema {
                 .fields
                 .iter()
                 .find(|field| field.name == attribute.name())
-                && let Some(target) = self.weak_reference_target(field, map)
+                && let Some(target) = self.weak_reference_target(field)
             {
-                add_weak_reference(attribute.value(), target, path, map, references)?;
+                add_weak_reference(attribute.value(), target, path, references)?;
             }
         }
         for child in node
@@ -494,32 +489,21 @@ impl Schema {
             else {
                 continue;
             };
-            if let Some(target) = self.weak_reference_target(field, map) {
-                add_weak_reference(
-                    child.text().unwrap_or_default(),
-                    target,
-                    path,
-                    map,
-                    references,
-                )?;
+            if let Some(target) = self.weak_reference_target(field) {
+                add_weak_reference(child.text().unwrap_or_default(), target, path, references)?;
             } else {
-                self.find_weak_references(child, &field.kind, path, map, references)?;
+                self.find_weak_references(child, &field.kind, path, references)?;
             }
         }
         Ok(())
     }
 
-    fn weak_reference_target<'a>(&'a self, field: &'a Field, map: bool) -> Option<&'a str> {
+    fn weak_reference_target<'a>(&'a self, field: &'a Field) -> Option<&'a str> {
         let mut kind = field.kind.as_str();
         let mut target = field.reference_target.as_deref();
         for _ in 0..64 {
             if kind == "WeakReference" {
-                return target.filter(|target| {
-                    map || matches!(
-                        *target,
-                        "GameObject" | "LogicCommandSet" | "PackedTextureImage" | "UpgradeTemplate"
-                    )
-                });
+                return target;
             }
             let entry = self.types.get(kind)?;
             target = target.or(entry.reference_target.as_deref());
@@ -533,17 +517,12 @@ fn add_weak_reference(
     value: &str,
     target: &str,
     path: &Path,
-    map: bool,
     references: &mut Vec<AssetReference>,
 ) -> io::Result<()> {
     let value = value.trim();
     if !value.is_empty() {
         let kind = value.split_once(':').map_or(target, |(kind, _)| kind);
-        match asset_reference(value, kind, path) {
-            Ok(reference) => references.push(reference.into()),
-            Err(error) if map => return Err(error),
-            Err(_) => {}
-        }
+        references.push(asset_reference(value, kind, path)?.into());
     }
     Ok(())
 }

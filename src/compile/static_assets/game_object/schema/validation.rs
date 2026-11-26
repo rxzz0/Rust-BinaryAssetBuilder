@@ -29,16 +29,8 @@ impl Schema {
             asset: &asset,
             removals: Vec::new(),
             reported: HashSet::new(),
-            missing: Vec::new(),
         };
         validation.check(node, kind, true)?;
-        if !validation.missing.is_empty() {
-            warning(format_args!(
-                "Missing optional settings for '{asset}' in '{}': {}",
-                display_path(path),
-                validation.missing.join(", ")
-            ));
-        }
         if validation.removals.is_empty() {
             return Ok(None);
         }
@@ -158,7 +150,6 @@ struct Validation<'a> {
     asset: &'a str,
     removals: Vec<Range<usize>>,
     reported: HashSet<String>,
-    missing: Vec<String>,
 }
 
 impl Validation<'_> {
@@ -194,11 +185,6 @@ impl Validation<'_> {
                     "Missing required attribute '{}' on '{}'",
                     field.name, element
                 )));
-            } else if field.explicitly_optional
-                && field.default.is_none()
-                && field.name != "typeHashCode"
-            {
-                self.note_missing(format!("{element}.{}", field.name));
             }
         }
         self.check_children(node, &shape)
@@ -265,13 +251,6 @@ impl Validation<'_> {
                     field.name, element
                 )));
             }
-            if count == 0
-                && field.explicitly_optional
-                && field.default.is_none()
-                && self.schema.is_module_container(&field.kind)
-            {
-                self.note_missing(format!("{} module section", field.name));
-            }
         }
         Ok(())
     }
@@ -283,12 +262,6 @@ impl Validation<'_> {
         self.warn(issue);
         self.removals.push(range);
         Ok(())
-    }
-
-    fn note_missing(&mut self, field: String) {
-        if !self.missing.contains(&field) {
-            self.missing.push(field);
-        }
     }
 
     fn warn(&mut self, issue: &str) {
@@ -328,18 +301,5 @@ impl Shape<'_> {
                 .children
                 .iter()
                 .any(|field| field.kind.ends_with("ModuleData"))
-    }
-}
-
-impl Schema {
-    fn is_module_container(&self, kind: &str) -> bool {
-        self.types.get(kind).is_some_and(|entry| {
-            entry.choice
-                && !entry.children.is_empty()
-                && entry
-                    .children
-                    .iter()
-                    .any(|field| field.kind.ends_with("ModuleData"))
-        })
     }
 }

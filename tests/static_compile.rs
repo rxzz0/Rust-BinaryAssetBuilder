@@ -617,7 +617,7 @@ fn sdk_static_copies_mp3_sidecars_and_links_music_tracks() {
 }
 
 #[test]
-fn sdk_warns_with_strong_and_weak_asset_names_without_changing_streams() {
+fn sdk_warns_only_for_strong_references_without_changing_streams() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data");
     let built = root.join("BuiltMods");
@@ -698,19 +698,13 @@ fn sdk_warns_with_strong_and_weak_asset_names_without_changing_streams() {
         .lines()
         .filter(|line| line.starts_with("Warning: Unknown asset "))
         .collect::<Vec<_>>();
-    assert_eq!(missing.len(), 3, "{warnings}");
-    for (name, owner) in [
-        ("LogicCommandSet:MissingCommands", "GameObject:Owner"),
-        ("GameObject:MissingUnit", "GameObject:Owner"),
-        ("LogicCommand:MissingAction", "LogicCommandSet:TestCommands"),
-    ] {
-        assert!(
-            missing
-                .iter()
-                .any(|line| line.contains(&format!("'{name}' referenced from '{owner}'"))),
-            "{warnings}"
-        );
-    }
+    assert_eq!(missing.len(), 1, "{warnings}");
+    assert!(
+        missing[0].contains(
+            "'LogicCommand:MissingAction' referenced from 'LogicCommandSet:TestCommands'"
+        )
+    );
+    assert!(missing[0].contains("in 'file://"));
     let output = built.join("mods/example/data");
     let read_stream = || {
         ["manifest", "bin", "relo", "imp"]
@@ -789,9 +783,7 @@ fn sdk_schema_reports_required_errors_and_keeps_building_after_optional_warnings
     assert!(valid.status.success(), "{warnings}");
     for message in [
         "Invalid value 'bad' for attribute 'InitialHealth'",
-        "ActiveBody.CheerRadius",
         "Unexpected module 'Typo' in 'Behaviors'",
-        "AI module section",
     ] {
         assert!(
             warnings.lines().any(|line| {
@@ -802,6 +794,7 @@ fn sdk_schema_reports_required_errors_and_keeps_building_after_optional_warnings
             "{warnings}"
         );
     }
+    assert_eq!(warnings.lines().count(), 2, "{warnings}");
     let path = built.join("mods/example/data/mod.manifest");
     let manifest = fs::read(&path).unwrap();
     let quiet = compile(optional_issues, true);
@@ -1434,30 +1427,45 @@ fn sdk_builds_resolve_base_manifests_under_sagexml() {
             <AICommander Faction="Allies" Portrait="Giles"/>
             <IntroMovie FileName="Intro"/>
         </MissionTemplate>"#;
+    let other_mission = mission.replace("Allies_1", "OtherMission");
+    let campaign = r#"<CampaignTemplate id="Campaign">
+        <Mission>Allies_1</Mission>
+        <Mission>OtherMission</Mission>
+        <FinalMovie FileName="Final"/>
+        <AlternateFinalMovie FileName="Alt"/>
+    </CampaignTemplate>"#;
     fs::write(
         global.join("MapMetaData_Campaign.xml"),
-        format!(r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">{mission}</AssetDeclaration>"#),
+        format!(r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">{campaign}{other_mission}{mission}</AssetDeclaration>"#),
     )
     .unwrap();
-    let error = compile_sdk_global(&global, &root, &built)
-        .unwrap_err()
-        .to_string();
-    assert!(
-        error.contains("OnDemandTextureImage:Giles in MissionTemplate:Allies_1"),
-        "{error}"
-    );
-    assert!(
-        error.contains("base SDK manifests") && error.contains("sagexml"),
-        "{error}"
-    );
+    let compile_global = |silence| {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_binary-asset-builder"))
+            .arg("compile-global-sdk")
+            .arg(&global)
+            .arg("--sdk-root")
+            .arg(&root)
+            .arg("--output")
+            .arg(&built)
+            .env("BAB_NO_WARNINGS", if silence { "1" } else { "0" })
+            .output()
+            .unwrap();
+        let warnings = String::from_utf8(output.stderr).unwrap();
+        assert!(output.status.success(), "{warnings}");
+        warnings
+    };
+    let warnings = compile_global(false);
+    assert_eq!(warnings.lines().count(), 1, "{warnings}");
+    assert!(warnings.contains("Unknown asset 'OnDemandTextureImage:Giles' referenced from 'MissionTemplate:Allies_1' in 'file://"), "{warnings}");
+    assert!(compile_global(true).is_empty());
 
     let primary = built.join("static.manifest");
     fs::write(&primary, &stock.manifest).unwrap();
-    compile_sdk_global(&global, &root, &built).unwrap();
+    assert_eq!(compile_global(false), warnings);
     let output = built.join("mods/example/data/additionalmaps/mapmetadata_campaign.manifest");
     let expected = fs::read(&output).unwrap();
     fs::rename(primary, nested.join("static.manifest")).unwrap();
-    compile_sdk_global(&global, &root, &built).unwrap();
+    assert_eq!(compile_global(false), warnings);
     assert_eq!(fs::read(output).unwrap(), expected);
 
     let input = data.join("Mod.xml");

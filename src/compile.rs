@@ -998,14 +998,10 @@ impl Compiler<'_> {
         source: &str,
     ) -> io::Result<CompiledAsset> {
         let mut asset = static_assets::compile_asset(node, path, source)?;
-        if let Some(schema) = &self.game_object_schema {
-            if self.reference_mode == ReferenceMode::Map {
-                asset.weak_references = schema.weak_references(node, path, true)?;
-            } else if self.reference_mode == ReferenceMode::SdkStatic && warnings_enabled() {
-                asset.weak_references = schema
-                    .weak_references(node, path, false)
-                    .unwrap_or_default();
-            }
+        if self.reference_mode == ReferenceMode::Map
+            && let Some(schema) = &self.game_object_schema
+        {
+            asset.weak_references = schema.weak_references(node, path)?;
         }
         Ok(asset)
     }
@@ -1320,53 +1316,59 @@ impl Compiler<'_> {
         })
     }
 
-    fn warn_missing_weak_references(&self) {
-        let unresolved = self.assets.iter().flat_map(|asset| {
-            asset.weak_references.iter().filter_map(move |reference| {
-                (reference.local_id(&self.ids).is_none()
-                    && reference.external_id(&self.external_ids).is_none())
-                .then_some((asset, reference))
-            })
-        });
-        let mut unresolved = unresolved.peekable();
-        if unresolved.peek().is_none() {
-            return;
-        }
-
-        let directory = self.reference_directory.unwrap();
-        let mut stock = HashSet::new();
-        for name in [
-            AUDIO_BASE,
-            AUDIO_PATCH,
-            "global.manifest",
-            "static.manifest",
-            "sagexml/worldbuilder.manifest",
-            "worldbuilder.manifest",
-        ] {
-            // These catalogs supplement the declared references for diagnostics only.
-            let path = directory.join(name);
-            if let Ok(bytes) = fs::read(&path)
-                && let Ok(manifest) = Manifest::parse(&bytes)
-                && manifest.version == 6
-                && manifest.byte_order == ByteOrder::Little
-                && (manifest.all_types_hash == RA3_ALL_TYPES_HASH
-                    || is_stock_audio_catalog(&path, &manifest))
-            {
-                stock.extend(manifest.assets.iter().map(|asset| asset.id));
-            }
-        }
+    fn warn_implicit_references(&self, worldbuilder_ids: &HashSet<AssetId>) {
+        let assets: HashMap<_, _> = self.assets.iter().map(|asset| (asset.id, asset)).collect();
+        let mut visited = HashSet::new();
         let mut reported = HashSet::new();
-        for (asset, reference) in unresolved {
-            if reference.external_id(&stock).is_none() && reported.insert((asset.id, reference.id))
-            {
-                warning(format_args!(
-                    "Unknown asset '{}' referenced from '{}' in '{}'",
-                    reference.diagnostic_name(),
-                    asset.name,
-                    asset.source
-                ));
+        let mut stack = Vec::new();
+        for root in &self.assets {
+            if !visited.insert(root.id) {
+                continue;
+            }
+            stack.push((root, root.references.iter()));
+            // EA follows dependencies before continuing with the next declaration.
+            while let Some((asset, references)) = stack.last_mut() {
+                let Some(reference) = references.next() else {
+                    stack.pop();
+                    continue;
+                };
+                if let Some(local) = reference.local_id(&self.ids) {
+                    if let Some(target) = assets.get(&local)
+                        && visited.insert(local)
+                    {
+                        stack.push((target, target.references.iter()));
+                    }
+                } else if reference.external_id(&self.external_ids).is_none()
+                    && reference.external_id(worldbuilder_ids).is_none()
+                    && reported.insert(reference.declared_id())
+                {
+                    self.warn_missing_reference(asset, reference);
+                }
             }
         }
+    }
+
+    fn warn_missing_reference(&self, asset: &CompiledAsset, reference: &AssetReference) {
+        let path = asset.source.strip_prefix("DATA:").map_or_else(
+            || asset.source.clone(),
+            |relative| {
+                let path = self.root.join(relative);
+                let name = path.to_string_lossy();
+                format!(
+                    "file://{}",
+                    name.strip_prefix(r"\\?\")
+                        .unwrap_or(&name)
+                        .replace('/', std::path::MAIN_SEPARATOR_STR)
+                        .to_ascii_lowercase()
+                )
+            },
+        );
+        warning(format_args!(
+            "Unknown asset '{}' referenced from '{}' in '{}'",
+            reference.diagnostic_name(),
+            asset.name,
+            path
+        ));
     }
 
     fn finish(mut self) -> io::Result<(CompiledStream, HashSet<AssetId>)> {
@@ -1375,6 +1377,7 @@ impl Compiler<'_> {
         {
             return Err(invalid(&self.root, "input contains no supported assets"));
         }
+        let worldbuilder_ids: HashSet<_> = self.worldbuilder_hashes.keys().copied().collect();
         if self.reference_mode == ReferenceMode::Implicit
             && self
                 .assets
@@ -1383,8 +1386,13 @@ impl Compiler<'_> {
                 .any(|reference| {
                     reference.local_id(&self.ids).is_none()
                         && reference.external_id(&self.external_ids).is_none()
+                        && reference.external_id(&worldbuilder_ids).is_none()
                 })
         {
+            if warnings_enabled() {
+                self.warn_implicit_references(&worldbuilder_ids);
+            }
+            // Preserve stock reference resolution without hiding missing declared dependencies.
             let root = self.reference_directory.unwrap();
             for file in SDK_BASE_MANIFESTS {
                 let path = sdk_manifest_path(root, Path::new(file), file);
@@ -1395,9 +1403,6 @@ impl Compiler<'_> {
         }
         self.assets
             .sort_by_cached_key(|asset| (asset.sort_order, asset_name_order(&asset.name)));
-        if self.reference_mode == ReferenceMode::SdkStatic {
-            self.warn_missing_weak_references();
-        }
         let mut files = LinkedFiles {
             bin: vec![0; 4],
             relo: vec![0; 4],
@@ -1409,7 +1414,6 @@ impl Compiler<'_> {
             relocations: 0,
             imports: 0,
         };
-        let worldbuilder_ids: HashSet<_> = self.worldbuilder_hashes.keys().copied().collect();
         let mut resolved_references = Vec::with_capacity(self.assets.len());
         let mut deferred = HashSet::new();
         for asset in &self.assets {
@@ -1423,16 +1427,14 @@ impl Compiler<'_> {
                     .external_id(&self.external_ids)
                     .or_else(|| reference.external_id(&worldbuilder_ids))
                 else {
-                    if self.reference_mode == ReferenceMode::SdkStatic {
+                    if matches!(
+                        self.reference_mode,
+                        ReferenceMode::SdkStatic | ReferenceMode::Implicit
+                    ) {
                         let id = reference.declared_id();
                         resolved.push(id);
-                        if deferred.insert(id) {
-                            warning(format_args!(
-                                "Unknown asset '{}' referenced from '{}' in '{}'",
-                                reference.diagnostic_name(),
-                                asset.name,
-                                asset.source
-                            ));
+                        if self.reference_mode == ReferenceMode::SdkStatic && deferred.insert(id) {
+                            self.warn_missing_reference(asset, reference);
                         }
                         continue;
                     }
@@ -1450,21 +1452,15 @@ impl Compiler<'_> {
                         }
                         continue;
                     }
-                    let mut message = format!(
-                        "unresolved reference {} in {} ({})",
-                        reference.diagnostic_name(),
-                        asset.name,
-                        asset.source
-                    );
-                    if self.reference_mode == ReferenceMode::Implicit {
-                        let directory = self.reference_directory.unwrap();
-                        message.push_str(&format!(
-                            ". Check that the base SDK manifests are present and current in '{}' or '{}'",
-                            directory.display(),
-                            directory.join("sagexml").display()
-                        ));
-                    }
-                    return Err(invalid(&self.root, message));
+                    return Err(invalid(
+                        &self.root,
+                        format!(
+                            "unresolved reference {} in {} ({})",
+                            reference.diagnostic_name(),
+                            asset.name,
+                            asset.source
+                        ),
+                    ));
                 };
                 resolved.push(external);
             }

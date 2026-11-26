@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 440: Matched EA warning behavior for Surge. Valid optional omissions and unresolved weak references are silent. Surge global and static compilation and linking passed with the same nine campaign portrait warnings as EA, in the same order. Next: verify warning parity on the next tester mod.
 - Checkpoint 439: Matched EA for whitespace and omitted W3DHierarchy pivot names. The Ursa Major skeleton and synthetic fixture match byte for byte. Insurrection static compile and linking passed with 3,566 verified assets. Next: verify a full ModStudio build of Insurrection.
 - Checkpoint 438: Added native AttackTargetSpecialPower using the shared SpecialPower layout. Both EA fixture assets match. Insurrection advances to the Ursa Major W3X Name validation error. Next: compare the Ursa Major skeleton with EA.
 - Checkpoint 437: Encoded inherited FireOnObjectsNugget damage fields and EA filter allocation order. The new fixture matches EA byte for byte. Insurrection static compilation advances to AttackTargetSpecialPower. Next: encode AttackTargetSpecialPower.
