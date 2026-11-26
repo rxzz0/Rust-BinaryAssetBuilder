@@ -163,12 +163,12 @@ pub(crate) fn publish_map_stream(
             // Map versions select the linked stream suffix. The compiler's
             // custom-data directory still uses the original map stream name.
             stream_outputs(
-                OsStr::new("map_mod"),
+                OsStr::new("map.1.12"),
                 OsStr::new("map"),
                 compile()?,
                 &mut outputs,
             );
-            outputs.push(("map.version".into(), Contents::Bytes(b"_mod\r\n".to_vec())));
+            outputs.push(("map.version".into(), Contents::Bytes(b".1.12\r\n".to_vec())));
             Ok(outputs)
         },
         |_| false,

@@ -1,6 +1,8 @@
 use super::{compile_map, invalid};
 use crate::compile_batch::publish_map_stream;
+use crate::manifest::{AssetEntry, AssetId};
 use crate::sdk_references::prepare_references;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -77,6 +79,26 @@ pub fn compile_sdk_map_overrides(
         }
     }
     Ok(compiled)
+}
+
+pub(super) fn worldbuilder_dependencies(
+    stock: &HashMap<AssetId, &AssetEntry<'_>>,
+    local: &HashSet<AssetId>,
+    external: &HashSet<AssetId>,
+    references: &[Vec<AssetId>],
+) -> HashSet<AssetId> {
+    let mut needed = HashSet::new();
+    let mut pending: Vec<_> = references.iter().flatten().copied().collect();
+    while let Some(id) = pending.pop() {
+        if !local.contains(&id)
+            && !external.contains(&id)
+            && let Some(asset) = stock.get(&id)
+            && needed.insert(id)
+        {
+            pending.extend(asset.references.iter());
+        }
+    }
+    needed
 }
 
 fn map_source(directory: &Path) -> io::Result<Option<std::path::PathBuf>> {

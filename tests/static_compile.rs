@@ -2903,7 +2903,24 @@ fn maps_link_worldbuilder_models_and_keep_local_overrides() {
         .iter()
         .find(|a| a.id == stock_prop.id)
         .unwrap();
-    assert_eq!(actual.assets.len(), 4);
+    assert_eq!(actual.assets.len(), 5);
+    let inherited = &actual.assets[0];
+    assert_eq!(inherited.id, stock_model.id);
+    assert_eq!(inherited.instance_hash, stock_model.instance_hash);
+    assert_eq!(inherited.source_file_name, stock_model.source_file_name);
+    assert_eq!(
+        inherited.chunk_sizes,
+        binary_asset_builder::manifest::ChunkSizes {
+            instance: 0,
+            relocations: 0,
+            imports: 0
+        }
+    );
+    assert_eq!(inherited.tokenized, Some(0));
+    assert_eq!(
+        actual.total_instance_data_size as usize,
+        stream.files.bin.len() - 4 + stock_model.chunk_sizes.instance as usize
+    );
     assert!(
         actual
             .assets
@@ -2990,10 +3007,10 @@ fn sdk_map_publishing_preserves_sources_and_previous_stream_on_failure() {
     for _ in 0..2 {
         assert_eq!(compile_sdk_maps(&maps, &root, &root, &maps).unwrap(), 1);
     }
-    let path = map.join("map_mod.manifest");
+    let path = map.join("map.1.12.manifest");
     let prior = fs::read(&path).unwrap();
     check_linked_files(&path, &Manifest::parse(&prior).unwrap()).unwrap();
-    assert_eq!(fs::read(map.join("map.version")).unwrap(), b"_mod\r\n");
+    assert_eq!(fs::read(map.join("map.version")).unwrap(), b".1.12\r\n");
     assert_eq!(fs::read(map.join("MapOne.map")).unwrap(), b"terrain");
     assert_eq!(fs::read_to_string(&source).unwrap(), xml);
     assert!(!maps.join("PrecompiledMap/map.version").exists());
@@ -3001,7 +3018,7 @@ fn sdk_map_publishing_preserves_sources_and_previous_stream_on_failure() {
     fs::write(&source, "<invalid").unwrap();
     assert!(compile_sdk_maps(&maps, &root, &root, &maps).is_err());
     assert_eq!(fs::read(&path).unwrap(), prior);
-    assert_eq!(fs::read(map.join("map.version")).unwrap(), b"_mod\r\n");
+    assert_eq!(fs::read(map.join("map.version")).unwrap(), b".1.12\r\n");
     check_linked_files(&path, &Manifest::parse(&prior).unwrap()).unwrap();
 }
 
@@ -3050,7 +3067,7 @@ fn sdk_map_skip_preserves_complete_versioned_streams_and_builds_partial_ones() {
         "{errors}"
     );
     assert!(!broken.join("map.version").exists());
-    let manifest = partial.join("map_mod.manifest");
+    let manifest = partial.join("map.1.12.manifest");
     check_linked_files(
         &manifest,
         &Manifest::parse(&fs::read(&manifest).unwrap()).unwrap(),

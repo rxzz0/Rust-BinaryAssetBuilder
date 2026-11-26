@@ -182,15 +182,19 @@ pub(crate) fn external_ids(
     Ok(ids)
 }
 
-pub(crate) fn worldbuilder_hashes(references: &Path) -> io::Result<HashMap<AssetId, u32>> {
+pub(crate) fn read_worldbuilder_manifest(references: &Path) -> io::Result<Vec<u8>> {
     let schema_copy = references.join("sagexml").join("worldbuilder.manifest");
     let path = if schema_copy.is_file() {
         schema_copy
     } else {
         references.join("worldbuilder.manifest")
     };
-    let bytes = fs::read(&path)
-        .map_err(|error| io::Error::new(error.kind(), format!("{} ({error})", path.display())))?;
+    fs::read(&path)
+        .map_err(|error| io::Error::new(error.kind(), format!("{} ({error})", path.display())))
+}
+
+fn worldbuilder_hashes(references: &Path) -> io::Result<HashMap<AssetId, u32>> {
+    let bytes = read_worldbuilder_manifest(references)?;
     let manifest = Manifest::parse(&bytes).map_err(invalid)?;
     Ok(manifest
         .assets

@@ -171,11 +171,14 @@ fn compile_with_source_references(
             sdk_directory,
         )
     };
-    let worldbuilder_hashes = if is_map {
-        crate::fix_assets::worldbuilder_hashes(reference_directory.unwrap())?
-    } else {
-        HashMap::new()
-    };
+    let worldbuilder = is_map
+        .then(|| crate::fix_assets::read_worldbuilder_manifest(reference_directory.unwrap()))
+        .transpose()?;
+    let worldbuilder = worldbuilder
+        .as_deref()
+        .map(Manifest::parse)
+        .transpose()
+        .map_err(io::Error::other)?;
     let schema_root = root.join("Schemas/xsd");
     let game_object_schema =
         if reference_directory.is_some() && schema_root.join("CnC3Types.xsd").try_exists()? {
@@ -221,7 +224,7 @@ fn compile_with_source_references(
         source_references,
         referenced_manifests: Vec::new(),
         external_ids: HashSet::new(),
-        worldbuilder_hashes,
+        map_mod_ids: HashSet::new(),
     };
     if let (true, Some(mod_root), Some(references)) = (is_map, mod_root, reference_directory) {
         let relative = mod_root.strip_prefix(&compiler.root).unwrap();
@@ -231,6 +234,7 @@ fn compile_with_source_references(
             // ModStudio loads the mod before the map. Its assets are available for
             // reference resolution without adding a map-relative manifest import.
             compiler.read_reference_manifest_with_dependencies(&manifest, Some(&stream_root))?;
+            compiler.map_mod_ids = std::mem::take(&mut compiler.external_ids);
         }
     }
     let traversal = compiler.read_document(&resolved_input, false, false);
@@ -239,7 +243,7 @@ fn compile_with_source_references(
     }
     traversal?;
     compiler.add_referenced_instances()?;
-    compiler.finish()
+    compiler.finish(worldbuilder)
 }
 
 struct RedirectedAptUi {
@@ -337,7 +341,7 @@ struct Compiler<'a> {
     map_art_path: Option<PathBuf>,
     referenced_manifests: Vec<String>,
     external_ids: HashSet<AssetId>,
-    worldbuilder_hashes: HashMap<AssetId, u32>,
+    map_mod_ids: HashSet<AssetId>,
 }
 
 struct PendingAsset {
@@ -1420,7 +1424,10 @@ impl Compiler<'_> {
         ));
     }
 
-    fn finish(mut self) -> io::Result<(CompiledStream, HashSet<AssetId>)> {
+    fn finish(
+        mut self,
+        worldbuilder: Option<Manifest<'_>>,
+    ) -> io::Result<(CompiledStream, HashSet<AssetId>)> {
         if self.assets.is_empty()
             && (self.reference_directory.is_none() || self.reference_mode == ReferenceMode::Map)
         {
@@ -1429,7 +1436,12 @@ impl Compiler<'_> {
         if let Some(log) = &self.log {
             log.phase("Resolving references");
         }
-        let worldbuilder_ids: HashSet<_> = self.worldbuilder_hashes.keys().copied().collect();
+        let worldbuilder_assets = worldbuilder.map_or_else(Vec::new, |manifest| manifest.assets);
+        let worldbuilder_by_id: HashMap<_, _> = worldbuilder_assets
+            .iter()
+            .map(|asset| (asset.id, asset))
+            .collect();
+        let worldbuilder_ids: HashSet<_> = worldbuilder_by_id.keys().copied().collect();
         if self.reference_mode == ReferenceMode::Implicit
             && self
                 .assets
@@ -1481,6 +1493,11 @@ impl Compiler<'_> {
                 let Some(external) = reference
                     .external_id(&self.external_ids)
                     .or_else(|| reference.external_id(&worldbuilder_ids))
+                    .or_else(|| {
+                        reference
+                            .external_id(&self.map_mod_ids)
+                            .map(|_| reference.declared_id())
+                    })
                 else {
                     if matches!(
                         self.reference_mode,
@@ -1521,7 +1538,10 @@ impl Compiler<'_> {
             }
             resolved_references.push(resolved);
         }
-        let order = if self.reference_mode == ReferenceMode::SdkStatic {
+        let order = if matches!(
+            self.reference_mode,
+            ReferenceMode::SdkStatic | ReferenceMode::Map
+        ) {
             stream_order::stable_order(
                 &self.assets,
                 &resolved_references,
@@ -1541,48 +1561,83 @@ impl Compiler<'_> {
                 log.stream_event(data);
             }
         }
-        let assets = order
-            .into_iter()
-            .map(|index| {
-                let asset = &self.assets[index];
-                let references = &resolved_references[index];
-                files.bin.extend_from_slice(&asset.payload);
-                files.relo.extend_from_slice(&asset.relocations);
-                files.imp.extend_from_slice(&asset.imports);
-                for word in [
-                    asset.id.type_id,
-                    asset.type_hash,
-                    asset.id.instance_id,
-                    asset.instance_hash,
-                    asset.references.len() as u32,
-                ] {
-                    checksums.extend(word.to_le_bytes());
-                }
-                let chunk_sizes = ChunkSizes {
-                    instance: asset.payload.len() as u32,
-                    relocations: asset.relocations.len() as u32,
-                    imports: asset.imports.len() as u32,
-                };
+        let mut stock_size = 0u32;
+        let mut assets = Vec::new();
+        if !worldbuilder_assets.is_empty() {
+            let required = sdk_maps::worldbuilder_dependencies(
+                &worldbuilder_by_id,
+                &self.ids,
+                &self.external_ids,
+                &resolved_references,
+            );
+            for stock in worldbuilder_assets
+                .iter()
+                .filter(|stock| required.contains(&stock.id))
+            {
+                let chunk_sizes = stock.chunk_sizes;
+                stock_size = stock_size
+                    .checked_add(chunk_sizes.instance)
+                    .ok_or_else(|| invalid(&self.root, "stream is too large"))?;
                 max_chunk_sizes.instance = max_chunk_sizes.instance.max(chunk_sizes.instance);
                 max_chunk_sizes.relocations =
                     max_chunk_sizes.relocations.max(chunk_sizes.relocations);
                 max_chunk_sizes.imports = max_chunk_sizes.imports.max(chunk_sizes.imports);
-                AssetEntry {
-                    id: asset.id,
-                    type_hash: asset.type_hash,
-                    instance_hash: self
-                        .worldbuilder_hashes
-                        .get(&asset.id)
-                        .copied()
-                        .unwrap_or(asset.instance_hash),
-                    chunk_sizes,
-                    name: asset.name.as_bytes(),
-                    source_file_name: asset.source.as_bytes(),
-                    references: AssetReferences::from_ids(references),
-                    tokenized: Some(u32::from(asset.tokenized)),
+                for word in [
+                    stock.id.type_id,
+                    stock.type_hash,
+                    stock.id.instance_id,
+                    stock.instance_hash,
+                    stock.references.iter().len() as u32,
+                ] {
+                    checksums.extend(word.to_le_bytes());
                 }
-            })
-            .collect();
+                // The map patch gets these chunks from WorldBuilder at runtime.
+                let mut entry = stock.clone();
+                entry.chunk_sizes = ChunkSizes {
+                    instance: 0,
+                    relocations: 0,
+                    imports: 0,
+                };
+                entry.tokenized = Some(0);
+                assets.push(entry);
+            }
+        }
+        assets.extend(order.into_iter().map(|index| {
+            let asset = &self.assets[index];
+            let references = &resolved_references[index];
+            files.bin.extend_from_slice(&asset.payload);
+            files.relo.extend_from_slice(&asset.relocations);
+            files.imp.extend_from_slice(&asset.imports);
+            for word in [
+                asset.id.type_id,
+                asset.type_hash,
+                asset.id.instance_id,
+                asset.instance_hash,
+                asset.references.len() as u32,
+            ] {
+                checksums.extend(word.to_le_bytes());
+            }
+            let chunk_sizes = ChunkSizes {
+                instance: asset.payload.len() as u32,
+                relocations: asset.relocations.len() as u32,
+                imports: asset.imports.len() as u32,
+            };
+            max_chunk_sizes.instance = max_chunk_sizes.instance.max(chunk_sizes.instance);
+            max_chunk_sizes.relocations = max_chunk_sizes.relocations.max(chunk_sizes.relocations);
+            max_chunk_sizes.imports = max_chunk_sizes.imports.max(chunk_sizes.imports);
+            AssetEntry {
+                id: asset.id,
+                type_hash: asset.type_hash,
+                instance_hash: worldbuilder_by_id
+                    .get(&asset.id)
+                    .map_or(asset.instance_hash, |stock| stock.instance_hash),
+                chunk_sizes,
+                name: asset.name.as_bytes(),
+                source_file_name: asset.source.as_bytes(),
+                references: AssetReferences::from_ids(references),
+                tokenized: Some(u32::from(asset.tokenized)),
+            }
+        }));
         let stream_checksum = if checksums.is_empty() {
             0
         } else {
@@ -1598,7 +1653,9 @@ impl Compiler<'_> {
             stream_checksum,
             all_types_hash: RA3_ALL_TYPES_HASH,
             total_instance_data_size: u32::try_from(files.bin.len() - 4)
-                .map_err(|_| invalid(&self.root, "stream is too large"))?,
+                .ok()
+                .and_then(|size| size.checked_add(stock_size))
+                .ok_or_else(|| invalid(&self.root, "stream is too large"))?,
             max_chunk_sizes,
             assets,
             referenced_manifests: (self.reference_mode == ReferenceMode::Map)
