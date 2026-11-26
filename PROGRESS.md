@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 462: Added both build queue tab types and nested quick-chat menus with faction groups, weak message references and optional menu destinations. Matched all nine EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release. The previous release also passed separate SampleMod and Surge native static compile smoke checks.
 - Checkpoint 461: Added co-op tinting, drag selection feedback, HUD hotkey gates, voice chat, quick-chat messages, and the tech-store button. Matched all 14 EA fixture assets including the existing threat meter. All 392 tests and Clippy passed. Installed and verified the SDK release.
 - Checkpoint 460: Added CaptureBehavior, PowerUpdate, StorePurchasedUpgradeBehavior, and TiberiumGrowthModBehavior using the existing behavior and death-module encoders. Matched eight EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release.
 - Checkpoint 459: Added ally messaging, entry, AI beacons, selection, and selling, including faction cursors and beacon filters. Matched ten EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release.

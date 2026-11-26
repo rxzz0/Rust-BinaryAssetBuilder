@@ -1,0 +1,20 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UIQuickChatMessage id="ChatOne" MessageText="GUI:One"/>
+  <UIQuickChatMessage id="ChatTwo" MessageText="GUI:Two"/>
+  <UIMouseTacticalBuildQueueTab id="Default" />
+  <UIMouseTacticalBuildQueueTab id="Custom"><QueueTypeSettings QueueType="VEHICLE"><MouseOverHelp Title="GUI:Vehicles" /></QueueTypeSettings><QueueTypeSettings QueueType="INFANTRY"><MouseOverHelp Title="GUI:Infantry" /></QueueTypeSettings></UIMouseTacticalBuildQueueTab>
+  <UIMouseTacticalBuildQueueTypeTab id="Default" />
+  <UIMouseTacticalBuildQueueTypeTab id="Custom"><QueueTypeSettings QueueType="AIRCRAFT"><MouseOverHelp Title="GUI:Aircraft" Description="GUI:Desc" /></QueueTypeSettings></UIMouseTacticalBuildQueueTypeTab>
+  <UIMouseTacticalSelectionRefinementTab id="Default"><MouseOverHelp Title="GUI:Selection" /></UIMouseTacticalSelectionRefinementTab>
+  <UIMouseTacticalQuickChatDisplay id="Default" CloseKey="Close"><MenuItem Title="GUI:Menu" /><CloseMenuItem Title="GUI:Close" /></UIMouseTacticalQuickChatDisplay>
+  <UIMouseTacticalQuickChatDisplay id="Custom" CloseKey="Close" DelayDuration="0.5s">
+    <MenuItem Title="GUI:Global" ChatDestination="Everyone">
+      <ChatMessageGroup Faction="Allies"><ChatMessage MessageRef="ChatOne" /><ChatMessage MessageRef="ChatTwo" /></ChatMessageGroup>
+      <ChatMessageGroup />
+      <MenuItem Title="GUI:Menu" ChatDestination="Allies"><ChatMessageGroup><ChatMessage MessageRef="ChatTwo" /></ChatMessageGroup></MenuItem>
+      <CloseMenuItem Title="GUI:Back" />
+    </MenuItem>
+    <MenuItem Title="GUI:Other" />
+    <CloseMenuItem Title="GUI:Close" />
+  </UIMouseTacticalQuickChatDisplay>
+</AssetDeclaration>

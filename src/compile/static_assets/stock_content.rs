@@ -128,6 +128,7 @@ enum UiCodec {
     Faction,
     Enum(&'static [&'static str]),
     EnumWithInvalid(&'static [&'static str]),
+    EnumPointer(&'static [&'static str]),
     Weak(&'static str),
     WeakPointer(&'static str),
     Strong(&'static str),
@@ -205,7 +206,7 @@ pub(super) fn ui_display(node: Node<'_, '_>, path: &Path) -> io::Result<Marshale
     };
     let mut result = Marshaled::default();
     write_ui_layout(node, name, layout, 0, &mut data, &mut result)?;
-    if name == "UIMouseVoiceChat" {
+    if matches!(name, "UIMouseVoiceChat" | "UIMouseTacticalQuickChatDisplay") {
         data.relocations.sort_unstable();
     }
     Ok(data.finish(result))
@@ -293,6 +294,10 @@ fn write_ui_layout(
         "SellFactionCursorSet" => &["Faction"],
         "HUDElementHotKeyMapping" => &["ElementId", "HotKeySlot"],
         "UIQuickChatMessage" => &["MessageText"],
+        "BuildQueueTypeSettings" => &["QueueType"],
+        "UIMouseTacticalQuickChatDisplay" => &["CloseKey"],
+        "QuickChatMenuItem" | "QuickChatCloseItem" => &["Title"],
+        "QuickChatMessageReference" => &["MessageRef"],
         _ => &[],
     };
     for attribute in required_attributes {
@@ -420,6 +425,15 @@ fn write_ui_layout(
                         "UIMouseTacticalGroupSelection accepts at most ten groups",
                     ));
                 }
+                if field.name == "MenuItem"
+                    && ((name == "UIMouseTacticalQuickChatDisplay" && children.is_empty())
+                        || children.len() > 9)
+                {
+                    return Err(invalid(
+                        data.path,
+                        format!("{name} has an invalid menu item count"),
+                    ));
+                }
                 let start = data.list(offset, children.len(), stride)?;
                 for (index, child) in children.into_iter().enumerate() {
                     write_ui_child(*codec, child, start + index * stride, data, result)?;
@@ -433,7 +447,8 @@ fn write_ui_layout(
                 ));
             } else if let Some(value) = field.default {
                 write_ui_value(field.codec, value, offset, data, result)?;
-            } else if (is_asset || name == "SellFactionCursorSet")
+            } else if (is_asset
+                || matches!(name, "SellFactionCursorSet" | "BuildQueueTypeSettings"))
                 && matches!(field.codec, UiCodec::Inline(_))
             {
                 return Err(invalid(
@@ -533,13 +548,20 @@ fn write_ui_value(
                 .ok_or_else(parse_error)?;
             data.word(offset, (index as u32).wrapping_sub(1));
         }
-        UiCodec::Enum(variants) | UiCodec::EnumWithInvalid(variants) => {
+        UiCodec::Enum(variants)
+        | UiCodec::EnumWithInvalid(variants)
+        | UiCodec::EnumPointer(variants) => {
             let index = variants
                 .iter()
                 .position(|&variant| variant == value.trim())
                 .ok_or_else(parse_error)?;
             let bias = u32::from(matches!(codec, UiCodec::EnumWithInvalid(_)));
-            data.word(offset, (index as u32).wrapping_sub(bias));
+            let value = (index as u32).wrapping_sub(bias);
+            if matches!(codec, UiCodec::EnumPointer(_)) {
+                data.optional_word(offset, value)?;
+            } else {
+                data.word(offset, value);
+            }
         }
         UiCodec::KindOf => {
             for (index, word) in super::global_ui::kind_of_flags(value, data.path)?
@@ -723,6 +745,123 @@ const MOUSE_HUD_FIXED_ELEMENT_IDS: [&str; 36] = [
 fn ui_layout(name: &str) -> Option<UiLayout> {
     use UiCodec::*;
     let (size, fields): (_, &[_]) = match name {
+        "UIMouseTacticalBuildQueueTab" | "UIMouseTacticalBuildQueueTypeTab" => (
+            12,
+            &[ui_field!(
+                "QueueTypeSettings",
+                4,
+                false,
+                None,
+                Repeated(36, &Inline("BuildQueueTypeSettings"))
+            )],
+        ),
+        "BuildQueueTypeSettings" => (
+            36,
+            &[
+                ui_field!(
+                    "QueueType",
+                    0,
+                    true,
+                    None,
+                    EnumWithInvalid(&[
+                        "INVALID",
+                        "MAIN_STRUCTURE",
+                        "OTHER_STRUCTURE",
+                        "INFANTRY",
+                        "VEHICLE",
+                        "AIRCRAFT",
+                        "UPGRADE",
+                        "WATERCRAFT"
+                    ])
+                ),
+                ui_field!(
+                    "MouseOverHelp",
+                    4,
+                    false,
+                    None,
+                    Inline("InGameUISimpleHelpTemplate")
+                ),
+            ],
+        ),
+        "QuickChatMessageReference" => (
+            4,
+            &[ui_field!(
+                "MessageRef",
+                0,
+                true,
+                None,
+                Weak("UIQuickChatMessage")
+            )],
+        ),
+        "QuickChatMessageGroup" => (
+            12,
+            &[
+                ui_field!("Faction", 0, true, Some("Neutral"), Faction),
+                ui_field!(
+                    "ChatMessage",
+                    4,
+                    false,
+                    None,
+                    Repeated(4, &Inline("QuickChatMessageReference"))
+                ),
+            ],
+        ),
+        "QuickChatCloseItem" => (8, &[ui_field!("Title", 0, true, None, Text)]),
+        "QuickChatMenuItem" => (
+            32,
+            &[
+                ui_field!("Title", 0, true, None, Text),
+                ui_field!(
+                    "ChatDestination",
+                    8,
+                    true,
+                    None,
+                    EnumPointer(&["Allies", "Everyone"])
+                ),
+                ui_field!(
+                    "ChatMessageGroup",
+                    12,
+                    false,
+                    None,
+                    Repeated(12, &Inline("QuickChatMessageGroup"))
+                ),
+                ui_field!(
+                    "MenuItem",
+                    20,
+                    false,
+                    None,
+                    Repeated(32, &Inline("QuickChatMenuItem"))
+                ),
+                ui_field!(
+                    "CloseMenuItem",
+                    28,
+                    false,
+                    None,
+                    Pointer("QuickChatCloseItem")
+                ),
+            ],
+        ),
+        "UIMouseTacticalQuickChatDisplay" => (
+            28,
+            &[
+                ui_field!("CloseKey", 4, true, None, Strong("HotKeySlot")),
+                ui_field!("DelayDuration", 8, true, Some("0s"), Time),
+                ui_field!(
+                    "MenuItem",
+                    12,
+                    false,
+                    None,
+                    Repeated(32, &Inline("QuickChatMenuItem"))
+                ),
+                ui_field!(
+                    "CloseMenuItem",
+                    20,
+                    false,
+                    None,
+                    Inline("QuickChatCloseItem")
+                ),
+            ],
+        ),
         "UICoopTinting" => (
             28,
             &[
