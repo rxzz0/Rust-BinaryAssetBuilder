@@ -1586,6 +1586,11 @@ mod tests {
     }
 
     #[test]
+    fn eva_condition_selector_matches_ea() {
+        assert_ea_fixture("eva-condition-selector", 3);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
