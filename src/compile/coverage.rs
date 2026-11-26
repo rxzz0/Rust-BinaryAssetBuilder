@@ -1576,6 +1576,11 @@ mod tests {
     }
 
     #[test]
+    fn enclose_behavior_matches_ea() {
+        assert_ea_fixture("enclose-behavior", 2);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

@@ -25,6 +25,7 @@ mod bombard_area_update;
 mod circular_damage;
 mod crate_collide;
 mod destroy_objects;
+mod enclose_behavior;
 mod encoder;
 mod energy_disabling_behavior;
 mod engineer;

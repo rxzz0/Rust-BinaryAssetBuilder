@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 422: Added native enclosure behavior and its strong references. Both EA assets match. Next: DistributeEnergyToAlliesBehavior.
 - Checkpoint 421: Added native spawn-crate selection and references. All five EA assets match. Next: EncloseBehavior.
 - Checkpoint 420: Added native spider hole update with stock and explicit settings. Two EA assets match.
 - Checkpoint 419: Added native random crates with seven chances and AI pickup. Two EA assets match.
