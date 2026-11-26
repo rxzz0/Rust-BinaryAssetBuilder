@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 455: Added native layouts for joypad command bars and eight UI wrappers. Matched 11 EA fixture assets. All 392 tests and Clippy passed. Installed and verified the release compiler in the active SDK.
 - Checkpoint 454: Added 22 tactical button types using the shared MouseOverHelp layout. All 23 EA fixture assets match with minimal and populated tooltips. Next: joypad command bars.
 - Checkpoint 453: Added Collide, Damager, Destroy, FiringTracker, DeletionUpdate, AIGateUpdate, and ConstructionYardAIUpdate. All eight EA fixture assets match. Next: tactical buttons that share a tooltip layout.
 - Checkpoint 452: Added 15 tactical mouse command types using the shared MouseCursor reference encoder. All 19 EA fixture assets match, including omitted cursors and reverse XML attribute order. Next: common behavior and AI update modules.

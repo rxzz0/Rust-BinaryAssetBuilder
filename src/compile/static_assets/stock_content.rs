@@ -279,6 +279,10 @@ fn write_ui_layout(
 ) -> io::Result<()> {
     let is_asset = offset == 0;
     match name {
+        "JoypadCommandBarTemplateButtonSlot" => {
+            required(node, "Ordinal", data.path)?;
+            required(node, "Button", data.path)?;
+        }
         "InGameUISimpleHelpTemplate" => {
             required(node, "Title", data.path)?;
         }
@@ -721,6 +725,103 @@ fn ui_layout(name: &str) -> Option<UiLayout> {
                 ui_field!("VisionCamZoom", 48, true, Some("1"), Signed),
                 ui_field!("ScrollSpeedMin", 52, true, Some("0.2"), Real),
                 ui_field!("ScrollSpeedMax", 56, true, Some("2.0"), Real),
+            ],
+        ),
+        "JoypadCommandBarTemplate" => (
+            24,
+            &[
+                ui_field!(
+                    "HomeButton",
+                    4,
+                    true,
+                    None,
+                    Strong("JoypadCommandBarButtonTemplate")
+                ),
+                ui_field!(
+                    "Slot",
+                    8,
+                    false,
+                    None,
+                    Repeated(8, &Inline("JoypadCommandBarTemplateButtonSlot"))
+                ),
+                ui_field!(
+                    "GeneralButton",
+                    16,
+                    false,
+                    None,
+                    Repeated(4, &Strong("JoypadCommandBarButtonTemplate"))
+                ),
+            ],
+        ),
+        "JoypadCommandBarTemplateButtonSlot" => (
+            8,
+            &[
+                ui_field!("Ordinal", 0, true, None, Unsigned),
+                ui_field!(
+                    "Button",
+                    4,
+                    true,
+                    None,
+                    Strong("JoypadCommandBarButtonTemplate")
+                ),
+            ],
+        ),
+        "UIJoypadCommandBarControlGroups"
+        | "UIJoypadCommandBarHomogenousGroup"
+        | "UIJoypadCommandBarMixedGroup"
+        | "UIJoypadCommandBarPlayerPowers"
+        | "UIJoypadCommandBarStances"
+        | "UIJoypadCommandBarTopMenu" => (
+            8,
+            &[ui_field!(
+                "Template",
+                4,
+                true,
+                None,
+                Strong("JoypadCommandBarTemplate")
+            )],
+        ),
+        "UIJoypadCommandBarCoopCommunicator" => (
+            8,
+            &[ui_field!(
+                "AICoopTemplate",
+                4,
+                true,
+                None,
+                Strong("JoypadCommandBarTemplate")
+            )],
+        ),
+        "UIJoypadCommandBarSingleUnit" => (
+            20,
+            &[
+                ui_field!(
+                    "UnitTemplate",
+                    4,
+                    true,
+                    None,
+                    Strong("JoypadCommandBarTemplate")
+                ),
+                ui_field!(
+                    "ProductionStructureTemplate",
+                    8,
+                    true,
+                    None,
+                    Strong("JoypadCommandBarTemplate")
+                ),
+                ui_field!(
+                    "NonProductionStructureTemplate",
+                    12,
+                    true,
+                    None,
+                    Strong("JoypadCommandBarTemplate")
+                ),
+                ui_field!(
+                    "HotSpotTemplate",
+                    16,
+                    true,
+                    None,
+                    Strong("JoypadCommandBarTemplate")
+                ),
             ],
         ),
         "UIMouseSimpleFixedButton" => (

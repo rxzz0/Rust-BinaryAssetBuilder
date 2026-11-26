@@ -1,0 +1,13 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <JoypadCommandBarButtonTemplate id="ReadyButton"><Data><PlaceReadyStructure /></Data></JoypadCommandBarButtonTemplate>
+  <JoypadCommandBarTemplate id="EmptyBar" />
+  <JoypadCommandBarTemplate id="MainBar" HomeButton="ReadyButton"><Slot Ordinal="5" Button="ReadyButton" /><Slot Button="ReadyButton" Ordinal="1" /><GeneralButton>ReadyButton</GeneralButton></JoypadCommandBarTemplate>
+  <UIJoypadCommandBarControlGroups id="Probe" Template="MainBar" />
+  <UIJoypadCommandBarCoopCommunicator id="Probe" AICoopTemplate="MainBar" />
+  <UIJoypadCommandBarHomogenousGroup id="Probe" Template="MainBar" />
+  <UIJoypadCommandBarMixedGroup id="Probe" Template="MainBar" />
+  <UIJoypadCommandBarPlayerPowers id="Probe" Template="MainBar" />
+  <UIJoypadCommandBarSingleUnit id="Probe" HotSpotTemplate="EmptyBar" NonProductionStructureTemplate="MainBar" ProductionStructureTemplate="EmptyBar" UnitTemplate="MainBar" />
+  <UIJoypadCommandBarStances id="Probe" Template="MainBar" />
+  <UIJoypadCommandBarTopMenu id="Probe" Template="MainBar" />
+</AssetDeclaration>
