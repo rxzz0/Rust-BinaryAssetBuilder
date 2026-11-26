@@ -1,0 +1,25 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UIMouseTacticalAttackMoveButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalAttackMoveButton>
+  <UIMouseTacticalCoOpAIButtonsAssaultButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalCoOpAIButtonsAssaultButton>
+  <UIMouseTacticalCoOpAIButtonsHelpButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalCoOpAIButtonsHelpButton>
+  <UIMouseTacticalCoOpAIButtonsHoldObjectButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalCoOpAIButtonsHoldObjectButton>
+  <UIMouseTacticalCoOpAIButtonsHoldPositionButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalCoOpAIButtonsHoldPositionButton>
+  <UIMouseTacticalCoOpAIButtonsNormalButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalCoOpAIButtonsNormalButton>
+  <UIMouseTacticalDeactivateMissionHotSpotsButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalDeactivateMissionHotSpotsButton>
+  <UIMouseTacticalFastForwardButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalFastForwardButton>
+  <UIMouseTacticalForceAttackButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalForceAttackButton>
+  <UIMouseTacticalForceAttackMoveButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalForceAttackMoveButton>
+  <UIMouseTacticalForceMoveButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalForceMoveButton>
+  <UIMouseTacticalOpenAdvancedCommandsButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalOpenAdvancedCommandsButton>
+  <UIMouseTacticalPauseButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalPauseButton>
+  <UIMouseTacticalPlanningModeButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalPlanningModeButton>
+  <UIMouseTacticalReverseMoveButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalReverseMoveButton>
+  <UIMouseTacticalSelectionRefinementTab id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalSelectionRefinementTab>
+  <UIMouseTacticalSellModeButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalSellModeButton>
+  <UIMouseTacticalStopButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalStopButton>
+  <UIMouseTacticalThreatMeter id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalThreatMeter>
+  <UIMouseTacticalToggleRepairModeButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalToggleRepairModeButton>
+  <UIMouseTacticalUnitIntroButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalUnitIntroButton>
+  <UIMouseTacticalWaypointModeButton id="Probe"><MouseOverHelp Title="Title" Description="Details" TypeDescription="Type" Instructions="Instructions" /></UIMouseTacticalWaypointModeButton>
+  <UIMouseTacticalAttackMoveButton id="Minimal"><MouseOverHelp Title="OnlyTitle" /></UIMouseTacticalAttackMoveButton>
+</AssetDeclaration>

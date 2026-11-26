@@ -249,6 +249,9 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "MissionTemplate" => (0xd299_ec3a, 25, campaign::mission),
         "CampaignTemplate" => (0xd0c4_5a63, 26, campaign::campaign),
         "CampaignEnumerator" => (0x0714_c282, 27, campaign_enumerator),
+        _ if let Some(type_hash) = stock_content::simple_button_type_hash(type_name) => {
+            (type_hash, 84, stock_content::ui_display)
+        }
         _ if let Some((type_hash, _)) = ui_media::tactical_cursor_layout(type_name) => {
             (type_hash, 84, ui_media::tactical_cursors)
         }

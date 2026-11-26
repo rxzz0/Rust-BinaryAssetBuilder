@@ -161,9 +161,42 @@ macro_rules! ui_field {
     };
 }
 
+pub(super) fn simple_button_type_hash(name: &str) -> Option<u32> {
+    Some(match name.strip_prefix("UIMouseTactical")? {
+        "AttackMoveButton" => 0x5656_3ed8,
+        "CoOpAIButtonsAssaultButton" => 0xe640_a7f2,
+        "CoOpAIButtonsHelpButton" => 0xbc5a_9f70,
+        "CoOpAIButtonsHoldObjectButton" => 0x3432_f9f7,
+        "CoOpAIButtonsHoldPositionButton" => 0x7390_ffc7,
+        "CoOpAIButtonsNormalButton" => 0x11f9_6319,
+        "DeactivateMissionHotSpotsButton" => 0xeaa8_3cd0,
+        "FastForwardButton" => 0xba95_a6f2,
+        "ForceAttackButton" => 0x089a_2d65,
+        "ForceAttackMoveButton" => 0xf9dd_687d,
+        "ForceMoveButton" => 0x99e2_501f,
+        "OpenAdvancedCommandsButton" => 0x8d93_4671,
+        "PauseButton" => 0x3c06_fac3,
+        "PlanningModeButton" => 0xee0d_a44f,
+        "ReverseMoveButton" => 0x6f0d_7455,
+        "SelectionRefinementTab" => 0xf154_81f9,
+        "SellModeButton" => 0xb2d8_1257,
+        "StopButton" => 0xe76f_f3ab,
+        "ThreatMeter" => 0x1c30_f868,
+        "ToggleRepairModeButton" => 0x8752_45f7,
+        "UnitIntroButton" => 0xf0b7_2ba3,
+        "WaypointModeButton" => 0xad5f_905f,
+        _ => return None,
+    })
+}
+
 pub(super) fn ui_display(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     let name = node.tag_name().name();
-    let layout = require_ui_layout(name, path)?;
+    let layout_name = if simple_button_type_hash(name).is_some() {
+        "UIMouseSimpleFixedButton"
+    } else {
+        name
+    };
+    let layout = require_ui_layout(layout_name, path)?;
     let mut data = BinaryData {
         payload: vec![0; layout.size],
         relocations: Vec::new(),
@@ -246,6 +279,9 @@ fn write_ui_layout(
 ) -> io::Result<()> {
     let is_asset = offset == 0;
     match name {
+        "InGameUISimpleHelpTemplate" => {
+            required(node, "Title", data.path)?;
+        }
         "ObjectFilter" => {
             return super::game_object::encode_inline_object_filter(
                 node,
@@ -685,6 +721,25 @@ fn ui_layout(name: &str) -> Option<UiLayout> {
                 ui_field!("VisionCamZoom", 48, true, Some("1"), Signed),
                 ui_field!("ScrollSpeedMin", 52, true, Some("0.2"), Real),
                 ui_field!("ScrollSpeedMax", 56, true, Some("2.0"), Real),
+            ],
+        ),
+        "UIMouseSimpleFixedButton" => (
+            36,
+            &[ui_field!(
+                "MouseOverHelp",
+                4,
+                false,
+                None,
+                Inline("InGameUISimpleHelpTemplate")
+            )],
+        ),
+        "InGameUISimpleHelpTemplate" => (
+            32,
+            &[
+                ui_field!("Title", 0, true, None, Text),
+                ui_field!("Description", 8, true, None, Text),
+                ui_field!("TypeDescription", 16, true, None, Text),
+                ui_field!("Instructions", 24, true, None, Text),
             ],
         ),
         "HeaderTemplate" => (20, &[ui_field!("Font", 4, false, None, Inline("FontDesc"))]),
