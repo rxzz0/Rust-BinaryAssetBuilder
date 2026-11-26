@@ -1294,12 +1294,16 @@ impl Compiler<'_> {
         let attribute_count = if texture {
             if node.attribute("OutputFormat") != Some("A8R8G8B8")
                 || node.attribute("GenerateMipMaps") != Some("false")
-                || node.attribute("AllowAutomaticResize") != Some("false")
+                || !node.attribute("AllowAutomaticResize").is_none_or(|value| {
+                    let value = value.trim();
+                    value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("false")
+                })
                 || !matches!(node.attribute("Type"), None | Some("StandardTexture"))
             {
                 return Err(invalid(path, "unsupported AptUI texture settings"));
             }
-            5 + usize::from(node.attribute("Type").is_some())
+            4 + usize::from(node.attribute("Type").is_some())
+                + usize::from(node.attribute("AllowAutomaticResize").is_some())
         } else {
             2 + usize::from(geometry)
         };
@@ -1332,7 +1336,14 @@ impl Compiler<'_> {
         let processing_hash = if texture { 0x9f5f_e8b0 } else { type_hash ^ 4 };
         let instance_hash = hash_asset(node, processing_hash, &bytes, path)?;
         let bytes = if texture {
-            texture::tga_to_dds(&bytes).map_err(|error| invalid(&input, error))?
+            if bytes.starts_with(b"DDS ") {
+                // EA embeds supplied DDS data unchanged for either resize setting.
+                texture::prepare_dds(&bytes, false, false)
+                    .map_err(|error| invalid(&input, error))?;
+                bytes
+            } else {
+                texture::tga_to_dds(&bytes).map_err(|error| invalid(&input, error))?
+            }
         } else {
             bytes
         };

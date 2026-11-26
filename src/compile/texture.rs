@@ -125,7 +125,7 @@ impl Compiler<'_> {
     }
 }
 
-fn prepare_dds(bytes: &[u8], mipmaps: bool, resizing: bool) -> Result<(), &'static str> {
+pub(super) fn prepare_dds(bytes: &[u8], mipmaps: bool, resizing: bool) -> Result<(), &'static str> {
     let (header, pixels) = bytes
         .split_first_chunk::<128>()
         .ok_or("truncated DDS header")?;

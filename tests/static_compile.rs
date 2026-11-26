@@ -21,6 +21,47 @@ fn scratch_root() -> PathBuf {
     root
 }
 
+#[test]
+fn apt_ui_preserves_dds_with_optional_resize_setting() {
+    use binary_asset_builder::compile::compile_apt_ui;
+
+    let root = scratch_root();
+    let xml = root.join("briefing.xml");
+    let dds = include_bytes!("fixtures/on-demand-texture/probe-rgba.dds");
+    fs::write(root.join("briefing.dds"), dds).unwrap();
+
+    for resize in [
+        "",
+        r#" AllowAutomaticResize="true""#,
+        r#" AllowAutomaticResize="false""#,
+        r#" AllowAutomaticResize="invalid""#,
+    ] {
+        fs::write(
+            &xml,
+            format!(
+                r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+                    <Texture id="Briefing" File="briefing.dds" OutputFormat="A8R8G8B8" GenerateMipMaps="false"{resize}/>
+                </AssetDeclaration>"#
+            ),
+        )
+        .unwrap();
+
+        let result = compile_apt_ui(&xml, &root);
+        if resize.contains("invalid") {
+            assert!(
+                result
+                    .err()
+                    .unwrap()
+                    .to_string()
+                    .contains("unsupported AptUI texture settings")
+            );
+        } else {
+            assert!(result.unwrap().files.bin.ends_with(dds));
+        }
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[cfg(windows)]
 #[test]
 fn apt_ui_accepts_redirected_directory_without_allowing_external_files() {

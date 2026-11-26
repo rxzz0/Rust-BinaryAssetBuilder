@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 445: Accepts the optional AptUI AllowAutomaticResize setting and embeds DDS textures as EA does. The tester’s six-asset Objective Briefing stream matched EA byte for byte across all four linked files. Next: handle linked SDK paths for global data.
 - Checkpoint 444: Restored map_mod filenames and the _mod map.version selector for future builds. The WorldBuilder dependency fix remains in place. Next: verify the installed Brighton Beach build in game.
 - Checkpoint 443: Rust map patches emit transitive WorldBuilder entries, retain their stock metadata and order, and publish the SDK map.1.12 stream. Brighton Beach was rebuilt from source in Surge; all 1,922 asset IDs and all 794 inherited records match the working stream. Forty-six locally encoded assets still differ. Next: verify Brighton Beach in game.
 - Checkpoint 442: Updated ModStudio Step 9 to build uncompiled official maps in place and report per-map errors without stopping the build. Complete streams are skipped with or without map.version. Map references now resolve against the owning mod stream, and Surge Brighton Beach compiled and passed linked-stream validation. Next: verify the built map in game.
