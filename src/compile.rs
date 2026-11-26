@@ -18,9 +18,13 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, mpsc};
 
+use std::time::{Duration, Instant};
+
 use asset_workers::Encoders;
+use build_log::BuildLog;
 
 pub(crate) mod asset_workers;
+pub(crate) mod build_log;
 mod coverage;
 mod expressions;
 mod merge_assets;
@@ -180,6 +184,7 @@ fn compile_with_source_references(
             None
         };
     let mut compiler = Compiler {
+        log: BuildLog::start(&resolved_input, &root),
         data_paths: paths("Data", "SageXml"),
         art_paths: paths("Art", "Art"),
         audio_paths: paths("Audio", "Audio"),
@@ -293,6 +298,7 @@ fn search_paths(
 }
 
 struct Compiler<'a> {
+    log: Option<BuildLog>,
     root: PathBuf,
     redirected_apt: Option<RedirectedAptUi>,
     data_paths: Vec<PathBuf>,
@@ -331,8 +337,19 @@ struct PendingAsset {
 }
 
 enum AssetResult {
-    Ready(io::Result<Box<CompiledAsset>>),
-    Running(mpsc::Receiver<io::Result<CompiledAsset>>),
+    Ready(io::Result<Box<TimedAsset>>),
+    Running(mpsc::Receiver<io::Result<TimedAsset>>),
+}
+
+type TimedAsset = (CompiledAsset, Duration);
+
+fn time_asset(
+    detailed: bool,
+    encode: impl FnOnce() -> io::Result<CompiledAsset>,
+) -> io::Result<TimedAsset> {
+    let start = detailed.then(Instant::now);
+    let asset = encode()?;
+    Ok((asset, start.map_or(Duration::ZERO, |start| start.elapsed())))
 }
 
 #[derive(Clone)]
@@ -477,6 +494,9 @@ impl Compiler<'_> {
         if !self.visited.insert((path.to_path_buf(), tentative)) {
             return Ok(());
         }
+        if let Some(log) = &self.log {
+            log.line(format_args!("Loading 'file://{}'.", path.display()));
+        }
         let document_order = self.next_document_order;
         self.next_document_order += 1;
         self.active.insert(path.to_path_buf());
@@ -607,11 +627,13 @@ impl Compiler<'_> {
                         result,
                     });
                 } else {
-                    let asset = if self.reference_directory.is_some() {
-                        self.compile_static_node(node, path, &source)?
-                    } else {
-                        self.compile_apt_asset(node, path, &source)?
-                    };
+                    let asset = time_asset(self.log.is_some(), || {
+                        if self.reference_directory.is_some() {
+                            self.compile_static_node(node, path, &source)
+                        } else {
+                            self.compile_apt_asset(node, path, &source)
+                        }
+                    })?;
                     self.commit_asset(asset, path, document_order)?;
                 }
             }
@@ -628,11 +650,12 @@ impl Compiler<'_> {
         xml: &str,
         shared_xml: &mut Option<Arc<str>>,
     ) -> io::Result<AssetResult> {
+        let detailed = self.log.is_some();
         let kind = node.tag_name().name();
         if !matches!(kind, "AudioFile" | "W3DAnimation") || node.attribute("inheritFrom").is_some()
         {
             return Ok(AssetResult::Ready(
-                self.compile_static_node(node, path, source).map(Box::new),
+                time_asset(detailed, || self.compile_static_node(node, path, source)).map(Box::new),
             ));
         }
 
@@ -643,7 +666,7 @@ impl Compiler<'_> {
         let result = if kind == "AudioFile" {
             let document = reparse_cleaned(cleaned.as_deref(), &path)?;
             let input = self.prepare_audio_file(cleaned_node(node, document.as_ref()), &path)?;
-            encoders.submit(move || input.encode(&path, &source))?
+            encoders.submit(move || time_asset(detailed, || input.encode(&path, &source)))?
         } else {
             let position = node.range().start;
             let node_id = node.id();
@@ -651,16 +674,18 @@ impl Compiler<'_> {
                 .is_none()
                 .then(|| Arc::clone(shared_xml.get_or_insert_with(|| xml.into())));
             encoders.submit(move || {
-                let text = cleaned.as_deref().or(xml.as_deref()).unwrap();
-                let doc = Document::parse(text).map_err(|error| invalid(&path, error))?;
-                let node = if cleaned.is_some() {
-                    doc.descendants()
-                        .find(|node| node.is_element() && node.range().start == position)
-                } else {
-                    doc.get_node(node_id)
-                }
-                .ok_or_else(|| invalid(&path, "missing animation declaration"))?;
-                static_assets::compile_asset(node, &path, &source)
+                time_asset(detailed, || {
+                    let text = cleaned.as_deref().or(xml.as_deref()).unwrap();
+                    let doc = Document::parse(text).map_err(|error| invalid(&path, error))?;
+                    let node = if cleaned.is_some() {
+                        doc.descendants()
+                            .find(|node| node.is_element() && node.range().start == position)
+                    } else {
+                        doc.get_node(node_id)
+                    }
+                    .ok_or_else(|| invalid(&path, "missing animation declaration"))?;
+                    static_assets::compile_asset(node, &path, &source)
+                })
             })?
         };
         Ok(AssetResult::Running(result))
@@ -679,10 +704,13 @@ impl Compiler<'_> {
 
     fn commit_asset(
         &mut self,
-        asset: CompiledAsset,
+        (asset, elapsed): TimedAsset,
         path: &Path,
         document_order: usize,
     ) -> io::Result<()> {
+        if let Some(log) = &mut self.log {
+            log.asset(path, &asset, elapsed);
+        }
         if self.reference_directory.is_some() {
             if self.asset_document != Some(document_order) {
                 self.local_assets.clear();
@@ -884,7 +912,12 @@ impl Compiler<'_> {
                 let node = document
                     .get_node(candidate.node)
                     .ok_or_else(|| invalid(&candidate.path, "missing instance declaration"))?;
-                let asset = self.compile_static_node(node, &candidate.path, &candidate.source)?;
+                let (asset, elapsed) = time_asset(self.log.is_some(), || {
+                    self.compile_static_node(node, &candidate.path, &candidate.source)
+                })?;
+                if let Some(log) = &mut self.log {
+                    log.asset(&candidate.path, &asset, elapsed);
+                }
                 self.ids.insert(asset.id);
                 self.assets.push(asset);
             }
@@ -1189,6 +1222,12 @@ impl Compiler<'_> {
         path: &Path,
         stream_root: Option<&Path>,
     ) -> io::Result<()> {
+        if let Some(log) = &self.log {
+            log.line(format_args!(
+                "Loading reference manifest '{}'.",
+                path.display()
+            ));
+        }
         let bytes = read_with_context(path, fs::read)?;
         let manifest = Manifest::parse(&bytes).map_err(|error| invalid(path, error))?;
         if manifest.version != 6
@@ -1377,6 +1416,9 @@ impl Compiler<'_> {
         {
             return Err(invalid(&self.root, "input contains no supported assets"));
         }
+        if let Some(log) = &self.log {
+            log.phase("Resolving references");
+        }
         let worldbuilder_ids: HashSet<_> = self.worldbuilder_hashes.keys().copied().collect();
         if self.reference_mode == ReferenceMode::Implicit
             && self
@@ -1400,6 +1442,9 @@ impl Compiler<'_> {
                     self.read_reference_manifest(&path)?;
                 }
             }
+        }
+        if let Some(log) = &self.log {
+            log.line(format_args!("Stable sorting assets"));
         }
         self.assets
             .sort_by_cached_key(|asset| (asset.sort_order, asset_name_order(&asset.name)));
@@ -1471,10 +1516,21 @@ impl Compiler<'_> {
                 &self.assets,
                 &resolved_references,
                 self.game_object_schema.as_ref(),
+                self.log.as_ref(),
             )
         } else {
             (0..self.assets.len()).collect()
         };
+        if let Some(log) = &self.log {
+            log.phase("Generating stream");
+            for data in [
+                "Linking binary data",
+                "Linking import data",
+                "Linking relocation data",
+            ] {
+                log.stream_event(data);
+            }
+        }
         let assets = order
             .into_iter()
             .map(|index| {
@@ -1553,6 +1609,9 @@ impl Compiler<'_> {
         }
         .encode()
         .map_err(io::Error::other)?;
+        if let Some(log) = &self.log {
+            log.complete();
+        }
         let custom_data = self
             .assets
             .into_iter()

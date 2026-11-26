@@ -240,6 +240,7 @@ namespace EALABuild
             modGUIData.Add(new GUIElementData("sp2", "", GUIElementData.LabelType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step10", "Create BIG Files", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step11", "Create Skudef File", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
+            modGUIData.Add(new GUIElementData("showDetailedBuildlog", "Show detailed buildlog", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
             modGUIData.Add(new GUIElementData("hideRustWarnings", "Hide Rust warnings", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
             modGUIData.Add(new GUIElementData("mv", "Mod Version:", GUIElementData.LabelType, ScriptIndex.ModScript));
             modGUIData.Add(new GUIElementData("modversion", DEFAULT_MOD_VERSION, GUIElementData.InputBoxType, ScriptIndex.ModScript));
@@ -250,8 +251,9 @@ namespace EALABuild
 
         private string bigStage;
         private System.Diagnostics.Process miscBig;
+        private StringBuilder miscBigLog;
 
-        private System.Diagnostics.Process StartBig(string input, string name)
+        private System.Diagnostics.Process StartBig(string input, string name, out StringBuilder output)
         {
             if (bigStage == null)
             {
@@ -265,13 +267,34 @@ namespace EALABuild
             start.UseShellExecute = false;
             start.CreateNoWindow = true;
             start.RedirectStandardError = true;
-            return System.Diagnostics.Process.Start(start);
+            bool detailed = ShowDetailedBuildlog();
+            start.EnvironmentVariables["BAB_DETAILED_BUILDLOG"] = detailed ? "1" : "0";
+            start.RedirectStandardOutput = detailed;
+            StringBuilder log = detailed ? new StringBuilder() : null;
+            output = log;
+            System.Diagnostics.Process process = System.Diagnostics.Process.Start(start);
+            if (detailed)
+            {
+                process.OutputDataReceived += delegate(object sender, System.Diagnostics.DataReceivedEventArgs line)
+                {
+                    if (line.Data != null)
+                        log.AppendLine(line.Data);
+                };
+                process.BeginOutputReadLine();
+            }
+            return process;
         }
 
-        private static void WaitForBig(System.Diagnostics.Process process)
+        private void WaitForBig(System.Diagnostics.Process process, StringBuilder log)
         {
             string error = process.StandardError.ReadToEnd();
             process.WaitForExit();
+            if (log != null)
+            {
+                using (StringReader lines = new StringReader(log.ToString()))
+                    for (string line = lines.ReadLine(); line != null; line = lines.ReadLine())
+                        BuildHelper.DisplayLine(line);
+            }
             if (process.ExitCode != 0)
                 throw new IOException(error.Trim());
         }
@@ -309,6 +332,7 @@ namespace EALABuild
             finally
             {
                 miscBig = null;
+                miscBigLog = null;
                 bigStage = null;
             }
         }
@@ -324,7 +348,7 @@ namespace EALABuild
                 return;
             try
             {
-                miscBig = StartBig(ModAdditionalFilesPath, ModBigMisc);
+                miscBig = StartBig(ModAdditionalFilesPath, ModBigMisc, out miscBigLog);
             }
             catch (Exception error)
             {
@@ -383,13 +407,14 @@ namespace EALABuild
             {
                 if (Directory.Exists(BuiltModPath))
                 {
-                    using (System.Diagnostics.Process streams = StartBig(BuiltModPath, ModBigStreams))
-                        WaitForBig(streams);
+                    StringBuilder streamsLog;
+                    using (System.Diagnostics.Process streams = StartBig(BuiltModPath, ModBigStreams, out streamsLog))
+                        WaitForBig(streams, streamsLog);
                 }
                 if (miscBig == null && Directory.Exists(ModAdditionalFilesPath))
-                    miscBig = StartBig(ModAdditionalFilesPath, ModBigMisc);
+                    miscBig = StartBig(ModAdditionalFilesPath, ModBigMisc, out miscBigLog);
                 if (miscBig != null)
-                    WaitForBig(miscBig);
+                    WaitForBig(miscBig, miscBigLog);
                 if (bigStage != null)
                     PublishBigs();
                 success = true;
@@ -407,8 +432,16 @@ namespace EALABuild
             BuildHelper.RunStep(StepType.RunExecutable, result);
         }
 
+        private bool ShowDetailedBuildlog()
+        {
+            object value;
+            return currentGUIData.TryGetValue("showDetailedBuildlog", out value) && value is bool && (bool)value;
+        }
+
         private void RunRustBuildStep(RunExecutableArguments args)
         {
+            args.Arguments = args.Arguments.Insert(3, ShowDetailedBuildlog()
+                ? "(set \"BAB_DETAILED_BUILDLOG=1\") & " : "(set \"BAB_DETAILED_BUILDLOG=0\") & ");
             args.Arguments = args.Arguments.Insert(3, "(if not defined BAB_ASSET_WORKERS set \"BAB_ASSET_WORKERS=4\") & ");
             object hideWarnings;
             if (currentGUIData.TryGetValue("hideRustWarnings", out hideWarnings) && hideWarnings is bool && (bool)hideWarnings)

@@ -1,4 +1,4 @@
-use super::CompiledAsset;
+use super::TimedAsset;
 use std::io;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
@@ -62,8 +62,8 @@ impl Encoders {
 
     pub(super) fn submit(
         &self,
-        encode: impl FnOnce() -> io::Result<CompiledAsset> + Send + 'static,
-    ) -> io::Result<mpsc::Receiver<io::Result<CompiledAsset>>> {
+        encode: impl FnOnce() -> io::Result<TimedAsset> + Send + 'static,
+    ) -> io::Result<mpsc::Receiver<io::Result<TimedAsset>>> {
         let (output, result) = mpsc::channel();
         self.jobs
             .as_ref()

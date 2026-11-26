@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 441: Added the opt-in Show detailed buildlog checkbox in ModStudio. Detailed mode reports XML loads, asset IDs, reference resolution, sorting, stream linking, per-type timings, and BIG file counts. SampleMod, Surge, and Insurrection produced byte-identical streams and BIGs with logging on and off. Verified the checkbox defaults to off, warning visibility is independent, and the release compiler and script are installed in the active SDK.
 - Checkpoint 440: Matched EA warning behavior for Surge. Valid optional omissions and unresolved weak references are silent. Surge global and static compilation and linking passed with the same nine campaign portrait warnings as EA, in the same order. Next: verify warning parity on the next tester mod.
 - Checkpoint 439: Matched EA for whitespace and omitted W3DHierarchy pivot names. The Ursa Major skeleton and synthetic fixture match byte for byte. Insurrection static compile and linking passed with 3,566 verified assets. Next: verify a full ModStudio build of Insurrection.
 - Checkpoint 438: Added native AttackTargetSpecialPower using the shared SpecialPower layout. Both EA fixture assets match. Insurrection advances to the Ursa Major W3X Name validation error. Next: compare the Ursa Major skeleton with EA.

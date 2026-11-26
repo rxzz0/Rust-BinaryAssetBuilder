@@ -1,4 +1,6 @@
-use super::{CompiledAsset, asset_name_order, static_assets::game_object::Schema};
+use super::{
+    CompiledAsset, asset_name_order, build_log::BuildLog, static_assets::game_object::Schema,
+};
 use crate::manifest::AssetId;
 use std::collections::{HashMap, HashSet};
 
@@ -6,12 +8,16 @@ pub(super) fn stable_order(
     assets: &[CompiledAsset],
     references: &[Vec<AssetId>],
     schema: Option<&Schema>,
+    log: Option<&BuildLog>,
 ) -> Vec<usize> {
     let mut order: Vec<_> = (0..assets.len()).collect();
     if assets.len() < 2 {
         return order;
     }
     if let Some(schema) = schema {
+        if let Some(log) = log {
+            log.line(format_args!("Sorting by schema dependencies"));
+        }
         let counts = schema.dependency_counts();
         order.sort_by_cached_key(|&index| {
             let (kind, name) = assets[index].name.split_once(':').expect("asset name");
@@ -23,6 +29,9 @@ pub(super) fn stable_order(
         });
     }
 
+    if let Some(log) = log {
+        log.line(format_args!("Sorting by asset dependencies"));
+    }
     let positions: HashMap<_, _> = order
         .iter()
         .enumerate()

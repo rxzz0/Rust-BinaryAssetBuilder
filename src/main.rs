@@ -52,6 +52,16 @@ fn diagnostic(result: io::Result<()>) -> ExitCode {
 
 fn main() -> ExitCode {
     let args: Vec<_> = env::args_os().skip(1).collect();
+    let detailed = env::var_os("BAB_DETAILED_BUILDLOG").is_some_and(|value| value == "1");
+    if detailed
+        && args.first().is_some_and(|command| {
+            let command = command.to_string_lossy();
+            command.starts_with("compile-")
+                || matches!(command.as_ref(), "merge-assets" | "fix-assets" | "pack-big")
+        })
+    {
+        println!("Command Line: {:?}", env::args_os().collect::<Vec<_>>());
+    }
     match args.as_slice() {
         [flag] if flag == "--help" || flag == "-h" || flag == "/?" => {
             println!("{USAGE}");
@@ -110,6 +120,9 @@ fn main() -> ExitCode {
             let start = std::time::Instant::now();
             match stage_big(Path::new(input), Path::new(output), Path::new(previous)) {
                 Ok(result) => {
+                    if detailed && !result.reused {
+                        println!("{} Files added", result.entries);
+                    }
                     let action = if result.reused {
                         "Verified existing BIG with"
                     } else {

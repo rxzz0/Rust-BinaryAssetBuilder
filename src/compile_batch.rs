@@ -1,4 +1,5 @@
 use crate::compile::asset_workers::worker_count;
+use crate::compile::build_log;
 use crate::compile::{
     CompiledStream, CustomData, capture_stream_warnings, compile_apt_ui, hash_source_file,
     write_warnings,
@@ -79,8 +80,9 @@ pub(crate) fn compile_streams(
             let workers: Vec<_> = batch
                 .iter()
                 .map(|(source, _)| {
-                    thread::Builder::new()
-                        .spawn_scoped(scope, move || capture_stream_warnings(|| compile(source)))
+                    thread::Builder::new().spawn_scoped(scope, move || {
+                        build_log::capture(|| capture_stream_warnings(|| compile(source)))
+                    })
                 })
                 .collect();
             let mut result = Ok(());
@@ -96,7 +98,10 @@ pub(crate) fn compile_streams(
                 // Join every worker, but report diagnostics only through the first failure.
                 if result.is_ok() {
                     println!("Compiling XML with Rust {}", source.display());
-                    result = compiled.and_then(|(stream, warnings)| {
+                    result = compiled.and_then(|((stream, warnings), log)| {
+                        if let Some(log) = log {
+                            build_log::write_log(&log);
+                        }
                         write_warnings(&warnings);
                         append(stem, stream?);
                         Ok(())
