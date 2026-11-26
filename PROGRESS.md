@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 458: Added seven UI asset types covering group selection, camera controls, tactical and player power hotkeys, selection detail hotkeys, and both telestrators. Matched 14 EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release.
 - Checkpoint 457: Added DeployStyleAIUpdate, TransportAIUpdate, WanderAIUpdate, and SupplyTruckAIUpdate. Every AI slot type listed in the bundled SDK schema now has a native encoder. Matched eight EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release.
 - Checkpoint 456: Added HordeDispatch, MoveToPositionAndEvacuate, MoveToPositionAndReplaceSelf, Repair, SpecialPowerTimerRefresh, and Uncombine special powers. Matched seven EA fixture assets. All 392 tests and Clippy passed. Installed and verified the release compiler in the active SDK.
 - Checkpoint 455: Added native layouts for joypad command bars and eight UI wrappers. Matched 11 EA fixture assets. All 392 tests and Clippy passed. Installed and verified the release compiler in the active SDK.

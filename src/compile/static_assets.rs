@@ -211,6 +211,15 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "UISubtitleDisplay" => (0x434c_6a31, 84, stock_content::ui_display),
         "UIMessageDisplay" => (0xd6d6_efaa, 84, stock_content::ui_display),
         "UITimerDisplay" => (0x7c1a_f1f2, 84, stock_content::ui_display),
+        "UIMouseTacticalGroupSelection" => (0x4b91_c129, 84, stock_content::ui_display),
+        "UIMouseTacticalLookAt" => (0x63e9_948b, 84, stock_content::ui_display),
+        "UIMouseTacticalMiscHotKeys" => (0xd346_b6af, 84, stock_content::ui_display),
+        "UIMouseTacticalPlayerPowerHotKeys" => (0x8aa6_bad8, 84, stock_content::ui_display),
+        "UIMouseTacticalRadarTelestrator" => (0xab66_5329, 84, stock_content::ui_display),
+        "UIMouseTacticalTelestrator" => (0x36a0_014e, 84, stock_content::ui_display),
+        "UIMouseTacticalSelectionDetailsButtonHotKeys" => {
+            (0x46c4_afe8, 84, stock_content::ui_display)
+        }
         "UIMilitaryCaptionDisplay" => (0x2e7c_50c8, 84, stock_content::ui_display),
         "AssetReportTable" => (0x6a9e_6e8b, 84, stock_settings::asset_report),
         "DLContent" => (0x629b_d41c, 84, stock_settings::downloadable_content),

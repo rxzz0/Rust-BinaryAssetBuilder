@@ -394,6 +394,12 @@ fn write_ui_layout(
                 .filter(|child| child.has_tag_name(field.name))
                 .collect();
             if let UiCodec::Repeated(stride, codec) = field.codec {
+                if name == "UIMouseTacticalGroupSelection" && children.len() > 10 {
+                    return Err(invalid(
+                        data.path,
+                        "UIMouseTacticalGroupSelection accepts at most ten groups",
+                    ));
+                }
                 let start = data.list(offset, children.len(), stride)?;
                 for (index, child) in children.into_iter().enumerate() {
                     write_ui_child(*codec, child, start + index * stride, data, result)?;
@@ -656,6 +662,207 @@ const UICONFIGTYPE: [&str; 4] = ["INGAME", "SHELL", "BOOTUP", "LOADSCREEN"];
 fn ui_layout(name: &str) -> Option<UiLayout> {
     use UiCodec::*;
     let (size, fields): (_, &[_]) = match name {
+        "UIMouseTacticalGroupSelectionGroup" => (
+            16,
+            &[
+                ui_field!("CreateHotKeySlot", 0, true, None, Strong("HotKeySlot")),
+                ui_field!("AddToHotKeySlot", 4, true, None, Strong("HotKeySlot")),
+                ui_field!("SelectHotKeySlot", 8, true, None, Strong("HotKeySlot")),
+                ui_field!("ViewHotKeySlot", 12, true, None, Strong("HotKeySlot")),
+            ],
+        ),
+        "UIMouseTacticalGroupSelection" => (
+            12,
+            &[ui_field!(
+                "Group",
+                4,
+                false,
+                None,
+                Repeated(16, &Inline("UIMouseTacticalGroupSelectionGroup"))
+            )],
+        ),
+        "UIMouseTacticalLookAtViewBookmark" => (
+            8,
+            &[
+                ui_field!("GoToHotKeySlot", 0, true, None, Strong("HotKeySlot")),
+                ui_field!("SaveHotKeySlot", 4, true, None, Strong("HotKeySlot")),
+            ],
+        ),
+        "UIMouseTacticalLookAt" => (
+            60,
+            &[
+                ui_field!("ScrollCursor", 4, true, None, Strong("MouseCursor")),
+                ui_field!("ScrollLeftHotKeySlot", 8, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "ScrollRightHotKeySlot",
+                    12,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!("ScrollUpHotKeySlot", 16, true, None, Strong("HotKeySlot")),
+                ui_field!("ScrollDownHotKeySlot", 20, true, None, Strong("HotKeySlot")),
+                ui_field!("RotateLeftHotKeySlot", 24, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "RotateRightHotKeySlot",
+                    28,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!("ZoomInHotKeySlot", 32, true, None, Strong("HotKeySlot")),
+                ui_field!("ZoomOutHotKeySlot", 36, true, None, Strong("HotKeySlot")),
+                ui_field!("KeyScrollFactor", 40, true, Some("100%"), Percentage),
+                ui_field!("MouseDragScrollFactor", 44, true, Some("100%"), Percentage),
+                ui_field!("MouseEdgeScrollFactor", 48, true, Some("100%"), Percentage),
+                ui_field!(
+                    "ViewBookmark",
+                    52,
+                    false,
+                    None,
+                    Repeated(8, &Inline("UIMouseTacticalLookAtViewBookmark"))
+                ),
+            ],
+        ),
+        "UIMouseTacticalMiscHotKeysStanceSettings" => (
+            8,
+            &[
+                ui_field!(
+                    "Stance",
+                    0,
+                    true,
+                    None,
+                    Enum(&["GUARD", "AGGRESSIVE", "HOLD_POSITION", "HOLD_FIRE"])
+                ),
+                ui_field!("Slot", 4, true, None, Strong("HotKeySlot")),
+            ],
+        ),
+        "UIMouseTacticalMiscHotKeys" => (
+            200,
+            &[
+                ui_field!("AllCheer", 4, true, None, Strong("HotKeySlot")),
+                ui_field!("AttackMove", 8, true, None, Strong("HotKeySlot")),
+                ui_field!("CameraReset", 12, true, None, Strong("HotKeySlot")),
+                ui_field!("ChatWithAllies", 16, true, None, Strong("HotKeySlot")),
+                ui_field!("ChatWithBuddies", 20, true, None, Strong("HotKeySlot")),
+                ui_field!("ChatWithEveryone", 24, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "CommunicateWithAlliesMode",
+                    28,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!("CreateFormation", 32, true, None, Strong("HotKeySlot")),
+                ui_field!("CycleHarvesters", 36, true, None, Strong("HotKeySlot")),
+                ui_field!("DeleteBeacon", 40, true, None, Strong("HotKeySlot")),
+                ui_field!("ForceAttack", 44, true, None, Strong("HotKeySlot")),
+                ui_field!("ForceAttackMove", 48, true, None, Strong("HotKeySlot")),
+                ui_field!("ForceMove", 52, true, None, Strong("HotKeySlot")),
+                ui_field!("GoToNextBuildQueue", 56, true, None, Strong("HotKeySlot")),
+                ui_field!("GoToPriorBuildQueue", 60, true, None, Strong("HotKeySlot")),
+                ui_field!("GoToNextSubGroup", 64, true, None, Strong("HotKeySlot")),
+                ui_field!("GoToPriorSubGroup", 68, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenAdvancedCommands", 72, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenLoadGameScreen", 76, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenMessenger", 80, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenPauseScreen", 84, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenPlayerTechStore", 88, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenSaveGameScreen", 92, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenStatusScreen", 96, true, None, Strong("HotKeySlot")),
+                ui_field!("PlaceRallyPoint", 100, true, None, Strong("HotKeySlot")),
+                ui_field!("PlanningMode", 104, true, None, Strong("HotKeySlot")),
+                ui_field!("PreferSelection", 108, true, None, Strong("HotKeySlot")),
+                ui_field!("QuickChatMenu", 112, true, None, Strong("HotKeySlot")),
+                ui_field!("ReverseMove", 116, true, None, Strong("HotKeySlot")),
+                ui_field!("Scatter", 120, true, None, Strong("HotKeySlot")),
+                ui_field!("SelectAll", 124, true, None, Strong("HotKeySlot")),
+                ui_field!("SelectMatchingUnits", 128, true, None, Strong("HotKeySlot")),
+                ui_field!("SellMode", 132, true, None, Strong("HotKeySlot")),
+                ui_field!("ShowAllHealthBars", 136, true, None, Strong("HotKeySlot")),
+                ui_field!("Stop", 140, true, None, Strong("HotKeySlot")),
+                ui_field!("TelestratorErase", 144, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "TelestratorNextColor",
+                    148,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!(
+                    "TelestratorNextLineWidth",
+                    152,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!(
+                    "TelestratorPriorColor",
+                    156,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!("TelestratorToggle", 160, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "ToggleFastForwardMode",
+                    164,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!("ToggleHUD", 168, true, None, Strong("HotKeySlot")),
+                ui_field!("TogglePowerMode", 172, true, None, Strong("HotKeySlot")),
+                ui_field!("ToggleRepairMode", 176, true, None, Strong("HotKeySlot")),
+                ui_field!("ViewHomeBase", 180, true, None, Strong("HotKeySlot")),
+                ui_field!("ViewLastEvaEvent", 184, true, None, Strong("HotKeySlot")),
+                ui_field!("WaypointMode", 188, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "StanceSettings",
+                    192,
+                    false,
+                    None,
+                    Repeated(8, &Inline("UIMouseTacticalMiscHotKeysStanceSettings"))
+                ),
+            ],
+        ),
+        "UIMouseTacticalPlayerPowerHotKeys" => (
+            12,
+            &[ui_field!(
+                "Slot",
+                4,
+                false,
+                None,
+                Repeated(4, &Strong("HotKeySlot"))
+            )],
+        ),
+        "UIMouseTacticalRadarTelestrator" => (
+            12,
+            &[
+                ui_field!("StrokeSustainDuration", 4, true, Some("10s"), Time),
+                ui_field!("StrokeFadeDuration", 8, true, Some("2s"), Time),
+            ],
+        ),
+        "UIMouseTacticalTelestrator" => (
+            8,
+            &[ui_field!(
+                "DrawCursor",
+                4,
+                true,
+                None,
+                Strong("MouseCursor")
+            )],
+        ),
+        "UIMouseTacticalSelectionDetailsButtonHotKeys" => (
+            12,
+            &[ui_field!(
+                "UnitAbilitySlot",
+                4,
+                false,
+                None,
+                Repeated(4, &Strong("HotKeySlot"))
+            )],
+        ),
         "AIDifficultySetting" => (
             12,
             &[

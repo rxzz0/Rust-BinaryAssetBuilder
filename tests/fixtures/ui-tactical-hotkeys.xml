@@ -1,0 +1,31 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UIMouseTacticalGroupSelection id="Default" />
+  <UIMouseTacticalGroupSelection id="Custom">
+    <Group CreateHotKeySlot="Slot00" AddToHotKeySlot="Slot01" SelectHotKeySlot="Slot02" ViewHotKeySlot="Slot03" />
+    <Group CreateHotKeySlot="Slot10" AddToHotKeySlot="Slot11" SelectHotKeySlot="Slot12" ViewHotKeySlot="Slot13" />
+  </UIMouseTacticalGroupSelection>
+  <UIMouseTacticalLookAt id="Default" />
+  <UIMouseTacticalLookAt id="Custom" ScrollCursor="Pointer" ScrollLeftHotKeySlot="Slot1" ScrollRightHotKeySlot="Slot2" ScrollUpHotKeySlot="Slot3" ScrollDownHotKeySlot="Slot4" RotateLeftHotKeySlot="Slot5" RotateRightHotKeySlot="Slot6" ZoomInHotKeySlot="Slot7" ZoomOutHotKeySlot="Slot8" KeyScrollFactor="26%" MouseDragScrollFactor="27%" MouseEdgeScrollFactor="28%">
+    <ViewBookmark GoToHotKeySlot="Slot00" SaveHotKeySlot="Slot01" />
+    <ViewBookmark GoToHotKeySlot="Slot10" SaveHotKeySlot="Slot11" />
+  </UIMouseTacticalLookAt>
+  <UIMouseTacticalMiscHotKeys id="Default" />
+  <UIMouseTacticalMiscHotKeys id="Custom" AllCheer="Slot0" AttackMove="Slot1" CameraReset="Slot2" ChatWithAllies="Slot3" ChatWithBuddies="Slot4" ChatWithEveryone="Slot5" CommunicateWithAlliesMode="Slot6" CreateFormation="Slot7" CycleHarvesters="Slot8" DeleteBeacon="Slot9" ForceAttack="Slot10" ForceAttackMove="Slot11" ForceMove="Slot12" GoToNextBuildQueue="Slot13" GoToPriorBuildQueue="Slot14" GoToNextSubGroup="Slot15" GoToPriorSubGroup="Slot16" OpenAdvancedCommands="Slot17" OpenLoadGameScreen="Slot18" OpenMessenger="Slot19" OpenPauseScreen="Slot20" OpenPlayerTechStore="Slot21" OpenSaveGameScreen="Slot22" OpenStatusScreen="Slot23" PlaceRallyPoint="Slot24" PlanningMode="Slot25" PreferSelection="Slot26" QuickChatMenu="Slot27" ReverseMove="Slot28" Scatter="Slot29" SelectAll="Slot30" SelectMatchingUnits="Slot31" SellMode="Slot32" ShowAllHealthBars="Slot33" Stop="Slot34" TelestratorErase="Slot35" TelestratorNextColor="Slot36" TelestratorNextLineWidth="Slot37" TelestratorPriorColor="Slot38" TelestratorToggle="Slot39" ToggleFastForwardMode="Slot40" ToggleHUD="Slot41" TogglePowerMode="Slot42" ToggleRepairMode="Slot43" ViewHomeBase="Slot44" ViewLastEvaEvent="Slot45" WaypointMode="Slot46">
+    <StanceSettings Stance="AGGRESSIVE" Slot="Slot01" />
+    <StanceSettings Stance="AGGRESSIVE" Slot="Slot11" />
+  </UIMouseTacticalMiscHotKeys>
+  <UIMouseTacticalPlayerPowerHotKeys id="Default" />
+  <UIMouseTacticalPlayerPowerHotKeys id="Custom">
+    <Slot>Nested0</Slot>
+    <Slot>Nested1</Slot>
+  </UIMouseTacticalPlayerPowerHotKeys>
+  <UIMouseTacticalRadarTelestrator id="Default" />
+  <UIMouseTacticalRadarTelestrator id="Custom" StrokeSustainDuration="3s" StrokeFadeDuration="4s" />
+  <UIMouseTacticalTelestrator id="Default" />
+  <UIMouseTacticalTelestrator id="Custom" DrawCursor="Pointer" />
+  <UIMouseTacticalSelectionDetailsButtonHotKeys id="Default" />
+  <UIMouseTacticalSelectionDetailsButtonHotKeys id="Custom">
+    <UnitAbilitySlot>Nested0</UnitAbilitySlot>
+    <UnitAbilitySlot>Nested1</UnitAbilitySlot>
+  </UIMouseTacticalSelectionDetailsButtonHotKeys>
+</AssetDeclaration>
