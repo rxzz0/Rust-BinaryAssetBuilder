@@ -554,6 +554,11 @@ mod tests {
     }
 
     #[test]
+    fn attack_target_special_power_matches_ea() {
+        assert_ea_fixture("attack-target-special-power", 2);
+    }
+
+    #[test]
     fn special_power_matches_ea_batch() {
         assert_ea_fixture("special-power", 1);
     }

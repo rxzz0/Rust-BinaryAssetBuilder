@@ -1557,6 +1557,7 @@ pub(super) fn encode(
             | "ReturnToDockSpecialPower"
             | "MovementSpecialPower"
             | "AssignSlavesTargetObjectSpecialPower"
+            | "AttackTargetSpecialPower"
             | "OCLSpecialPower"
             | "ActivateModuleSpecialPower"
             | "PrematureDischargeSpecialPower"

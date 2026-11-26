@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <SpecialPowerTemplate id="AttackTargetProbePower" TargetType="OBJECT"/>
+  <GameObject id="AttackTargetPowerProbe">
+    <Behaviors>
+      <AttackTargetSpecialPower id="ModuleTag_Default" SpecialPowerTemplate="AttackTargetProbePower"/>
+      <AttackTargetSpecialPower id="ModuleTag_Attack" SpecialPowerTemplate="AttackTargetProbePower" StartsPaused="true" UpdateModuleStartsAttack="true">
+        <RequirementsFilterMP Rule="ANY"><IncludeThing>AttackTargetPowerProbe</IncludeThing></RequirementsFilterMP>
+      </AttackTargetSpecialPower>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

@@ -127,6 +127,7 @@ pub(super) fn encode(
         "ReturnToDockSpecialPower" => (0x07fe_a222, 0x1c4, &[][..]),
         "ReturnToProducerSpecialPower" => (0x2800_4ab1, 0x1c4, &[][..]),
         "AssignSlavesTargetObjectSpecialPower" => (0x9daf_d38c, 0x1c4, &[][..]),
+        "AttackTargetSpecialPower" => (0x239d_954f, 0x1c4, &[][..]),
         "PrematureDischargeSpecialPower" => (0x8e22_e8c8, 0x1c4, &[][..]),
         "GiveProductionBonusSpecialPower" => (PRODUCTION_BONUS, 0x1dc, BONUS_FIELDS),
         "ActivateModuleSpecialPower" => (ACTIVATE_MODULE, 0x1cc, &[][..]),
