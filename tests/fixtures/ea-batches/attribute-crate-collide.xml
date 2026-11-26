@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AudioEvent id="CratePickup"/>
+  <AttributeModifier id="AttributeModifier_InvulnerabilityCrate"/><AttributeModifier id="ProbeAttributeCrateMod"/>
+  <GameObject id="ProbeattributeCrate">
+    <Behaviors>
+      <AttributeCrateCollide id="ModuleTag_Default"/>
+<AttributeCrateCollide id="ModuleTag_Explicit" ExecuteAudioEvent="CratePickup" AttributeModifier="ProbeAttributeCrateMod"/>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

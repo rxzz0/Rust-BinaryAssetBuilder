@@ -1606,6 +1606,11 @@ mod tests {
     }
 
     #[test]
+    fn attribute_crate_collide_matches_ea() {
+        assert_ea_fixture("attribute-crate-collide", 4);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

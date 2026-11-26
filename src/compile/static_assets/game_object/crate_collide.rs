@@ -19,6 +19,7 @@ use crate::compile::{has_content, invalid};
 const KIND: u32 = 0x2027_962a;
 const UNIT: u32 = 0xee96_1694;
 const SALVAGE: u32 = 0x1e20_5942;
+const ATTRIBUTE_CRATE: u32 = 0x4843_b2e7;
 const FIELDS: [(&str, u32, usize); 12] = [
     ("KindOf", 0x9afc_9193, 8),
     ("KindOfNot", 0x9afc_9193, 0x2c),
@@ -90,6 +91,16 @@ fn encode_base(
                     reference(value, "UpgradeTemplate", path, references, reference_types)?;
                 data.word(start + 0x88, ordinal);
             }
+            "AttributeModifier" if kind == ATTRIBUTE_CRATE => {
+                let ordinal = reference(
+                    value,
+                    "AttributeModifier",
+                    path,
+                    references,
+                    reference_types,
+                )?;
+                data.word(start + 0x6c, ordinal);
+            }
             "ExecuteFX" => {
                 let ordinal = reference(value, "FXList", path, references, reference_types)?;
                 data.word(start + 0x50, ordinal);
@@ -112,6 +123,16 @@ fn encode_base(
             }
             _ => {}
         }
+    }
+    if kind == ATTRIBUTE_CRATE && node.attribute("AttributeModifier").is_none() {
+        let ordinal = reference(
+            "AttributeModifier_InvulnerabilityCrate",
+            "AttributeModifier",
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + 0x6c, ordinal);
     }
     if node.attribute("ExecuteAudioEvent").is_none() {
         let ordinal = audio_reference("CratePickup", path, references, reference_types)?;
@@ -361,4 +382,36 @@ pub(super) fn encode_salvage(
     entries.extend(fields(start, &RESOURCE_FIELDS));
     entries.extend(fields(start, &EXTRA_FIELDS));
     Ok((SALVAGE, Table::record(entries)))
+}
+
+pub(super) fn encode_attribute(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    validate_crate_attributes(node, &["AttributeModifier"], data)?;
+    if has_content(node) {
+        return Err(invalid(
+            data.path,
+            "unexpected AttributeCrateCollide content",
+        ));
+    }
+    let start = data.allocate(pointer, 0x70)?;
+    let crate_table = encode_base(
+        node,
+        ATTRIBUTE_CRATE,
+        start,
+        data,
+        references,
+        reference_types,
+    )?;
+    Ok((
+        ATTRIBUTE_CRATE,
+        Table::record(vec![
+            base(KIND, crate_table),
+            Entry::named("AttributeModifier", 0x09dd_cff3, Target::Data(start + 0x6c)),
+        ]),
+    ))
 }

@@ -1817,6 +1817,16 @@ pub(super) fn encode(
         )
         .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "AttributeCrateCollide")) {
+        return super::crate_collide::encode_attribute(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "CrateCollide")) {
         return super::crate_collide::encode(node, pointer, data, references, reference_types)
             .map(Some);
