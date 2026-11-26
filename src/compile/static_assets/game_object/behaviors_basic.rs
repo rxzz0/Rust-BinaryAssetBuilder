@@ -1483,6 +1483,7 @@ pub(super) fn encode(
         "GarrisonContain"
             | "ContestableGarrisonContain"
             | "SlaughterHordeContain"
+            | "HordeContain"
             | "OpenContain"
             | "TransportContain"
     ) {

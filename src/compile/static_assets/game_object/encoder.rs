@@ -278,8 +278,13 @@ pub(in crate::compile::static_assets) fn compile(
                 if module.has_tag_name((SAGE_NS, "AutoHealBehavior")) {
                     auto_heal_modules.push(data.payload.len() as u32);
                 }
-                if module.has_tag_name((SAGE_NS, "TransportContain")) {
-                    transport_modules.push(data.payload.len() as u32);
+                let transport_size = match module.tag_name().name() {
+                    "TransportContain" => Some(super::garrison::TRANSPORT_SIZE),
+                    "HordeContain" => Some(super::horde_contain::SIZE),
+                    _ => None,
+                };
+                if let Some(size) = transport_size {
+                    transport_modules.push((data.payload.len() as u32, size as u32));
                 }
                 if module.has_tag_name((SAGE_NS, "SlaughterHordeContain")) {
                     slaughter_modules.push(data.payload.len() as u32);
@@ -559,12 +564,19 @@ pub(in crate::compile::static_assets) fn compile(
                 _ => {}
             }
         }
-        // TransportContain lists the derived pointers before its OpenContain pointers.
-        let index = transport_modules.partition_point(|&start| start <= pointer);
+        // The containment hierarchy emits derived pointers before inherited pointers.
+        let index = transport_modules.partition_point(|&(start, _)| start <= pointer);
         if index > 0 {
-            let start = transport_modules[index - 1];
-            if (0x94..0x14c).contains(&(pointer - start)) {
-                return (start, pointer - start);
+            let (start, size) = transport_modules[index - 1];
+            let offset = pointer - start;
+            let transport_size = super::garrison::TRANSPORT_SIZE as u32;
+            if (0x94..size).contains(&offset) {
+                let rank = if offset < transport_size && size > transport_size {
+                    offset + size
+                } else {
+                    offset
+                };
+                return (start, rank);
             }
         }
         let index = slaughter_modules.partition_point(|&start| start <= pointer);

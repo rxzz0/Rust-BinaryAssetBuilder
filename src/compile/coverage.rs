@@ -180,6 +180,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "FreefallUpdate",
             "GrantUpgradeCreate",
             "HealCrateCollide",
+            "HordeContain",
             "HeightDieUpdate",
             "HitReactionBehavior",
             "InvalidTargetsDeathUpdate",
@@ -1704,6 +1705,11 @@ mod tests {
     #[test]
     fn assemble_structure_special_ability_matches_ea() {
         assert_ea_fixture("assemble-structure-special-ability", 3);
+    }
+
+    #[test]
+    fn horde_contain_matches_ea() {
+        assert_ea_fixture("horde-contain", 7);
     }
 
     #[test]
