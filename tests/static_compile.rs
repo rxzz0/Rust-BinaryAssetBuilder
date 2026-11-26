@@ -3007,10 +3007,10 @@ fn sdk_map_publishing_preserves_sources_and_previous_stream_on_failure() {
     for _ in 0..2 {
         assert_eq!(compile_sdk_maps(&maps, &root, &root, &maps).unwrap(), 1);
     }
-    let path = map.join("map.1.12.manifest");
+    let path = map.join("map_mod.manifest");
     let prior = fs::read(&path).unwrap();
     check_linked_files(&path, &Manifest::parse(&prior).unwrap()).unwrap();
-    assert_eq!(fs::read(map.join("map.version")).unwrap(), b".1.12\r\n");
+    assert_eq!(fs::read(map.join("map.version")).unwrap(), b"_mod\r\n");
     assert_eq!(fs::read(map.join("MapOne.map")).unwrap(), b"terrain");
     assert_eq!(fs::read_to_string(&source).unwrap(), xml);
     assert!(!maps.join("PrecompiledMap/map.version").exists());
@@ -3018,7 +3018,7 @@ fn sdk_map_publishing_preserves_sources_and_previous_stream_on_failure() {
     fs::write(&source, "<invalid").unwrap();
     assert!(compile_sdk_maps(&maps, &root, &root, &maps).is_err());
     assert_eq!(fs::read(&path).unwrap(), prior);
-    assert_eq!(fs::read(map.join("map.version")).unwrap(), b".1.12\r\n");
+    assert_eq!(fs::read(map.join("map.version")).unwrap(), b"_mod\r\n");
     check_linked_files(&path, &Manifest::parse(&prior).unwrap()).unwrap();
 }
 
@@ -3067,7 +3067,7 @@ fn sdk_map_skip_preserves_complete_versioned_streams_and_builds_partial_ones() {
         "{errors}"
     );
     assert!(!broken.join("map.version").exists());
-    let manifest = partial.join("map.1.12.manifest");
+    let manifest = partial.join("map_mod.manifest");
     check_linked_files(
         &manifest,
         &Manifest::parse(&fs::read(&manifest).unwrap()).unwrap(),
