@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 460: Added CaptureBehavior, PowerUpdate, StorePurchasedUpgradeBehavior, and TiberiumGrowthModBehavior using the existing behavior and death-module encoders. Matched eight EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release.
 - Checkpoint 459: Added ally messaging, entry, AI beacons, selection, and selling, including faction cursors and beacon filters. Matched ten EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release.
 - Checkpoint 458: Added seven UI asset types covering group selection, camera controls, tactical and player power hotkeys, selection detail hotkeys, and both telestrators. Matched 14 EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release.
 - Checkpoint 457: Added DeployStyleAIUpdate, TransportAIUpdate, WanderAIUpdate, and SupplyTruckAIUpdate. Every AI slot type listed in the bundled SDK schema now has a native encoder. Matched eight EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release.

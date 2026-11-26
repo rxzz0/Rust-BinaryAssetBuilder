@@ -1329,6 +1329,106 @@ fn topple_update(
     Ok((KIND, Table::record(entries)))
 }
 
+fn scalar_behavior(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Option<(u32, Table)>> {
+    const CAPTURE: u32 = 0xf8c4_aa6b;
+    const POWER: u32 = 0xf46e_b384;
+    const STORE: u32 = 0x2eb6_c99c;
+    const GROWTH: u32 = 0xae3a_906c;
+    const UINT: u32 = 0x7631_77a4;
+    const BOOL: u32 = 0x77e3_f4f7;
+    const GAME_OBJECT_WEAK: u32 = 0x148e_d75d;
+    const TIME: u32 = 0x9986_69e8;
+    const POWER_TYPE: u32 = 0xe0ed_8382;
+    const REAL: u32 = 0x6458_64f3;
+    let (kind, size, layout): (_, _, &[(_, _, _, _)]) = match node.tag_name().name() {
+        "CaptureBehavior" => (
+            CAPTURE,
+            20,
+            &[
+                ("GrantMoney", UINT, 8, "0"),
+                ("GrantMoneyOneTime", BOOL, 16, "false"),
+                ("SlavedCaptureObject", GAME_OBJECT_WEAK, 12, ""),
+            ],
+        ),
+        "PowerUpdate" => (
+            POWER,
+            24,
+            &[
+                ("UpdatePeriod", TIME, 8, "1s"),
+                ("ReloadTime", TIME, 12, "0s"),
+                ("Duration", TIME, 16, "0s"),
+                ("Type", POWER_TYPE, 20, "INVALID"),
+            ],
+        ),
+        "StorePurchasedUpgradeBehavior" => (STORE, 12, &[("MaxPlayerUpgrades", UINT, 8, "9999")]),
+        "TiberiumGrowthModBehavior" => (
+            GROWTH,
+            60,
+            &[
+                ("GreenTiberiumMultiplier", REAL, 52, "1.0"),
+                ("BlueTiberiumMultiplier", REAL, 56, "1.0"),
+            ],
+        ),
+        _ => return Ok(None),
+    };
+    let path = data.path;
+    let names: Vec<_> = std::iter::once("id")
+        .chain(layout.iter().map(|&(name, _, _, _)| name))
+        .collect();
+    validate_attributes(node, &names, path)?;
+    let start = data.allocate(pointer, size)?;
+    let behavior = module_base(node, kind, start, data, kind == POWER)?;
+    let parent = if kind == GROWTH {
+        die_parent(node, start, behavior, data)?
+    } else {
+        if has_content(node) {
+            return Err(invalid(
+                path,
+                format!("unexpected {} content", node.tag_name().name()),
+            ));
+        }
+        behavior
+    };
+    let mut entries = vec![parent];
+    for &(name, field_kind, offset, default) in layout {
+        let value = node.attribute(name).unwrap_or(default);
+        let field = start + offset;
+        match field_kind {
+            UINT => data.word(field, super::super::sage_uint(value, name, path)?),
+            BOOL => data.payload[field] = boolean(node, name, false, path)?,
+            TIME => data.word(field, sage_time(value, name, path)?.to_bits()),
+            REAL => data.word(field, finite_number(value, name, path)?.to_bits()),
+            POWER_TYPE => {
+                let value = match value.trim() {
+                    "BACKUP_GENERATOR" => 0,
+                    "INVALID" => 1,
+                    _ => return Err(invalid(path, format!("invalid PowerUpdate Type {value}"))),
+                };
+                data.word(field, value);
+            }
+            GAME_OBJECT_WEAK => {
+                if !value.trim().is_empty() {
+                    let id = asset_reference(
+                        value.split_once('\\').map_or(value, |(name, _)| name),
+                        "GameObject",
+                        path,
+                    )?;
+                    reference_types.push(id.type_id);
+                    data.word(field, id.instance_id);
+                }
+            }
+            _ => unreachable!("unexpected scalar behavior field type"),
+        }
+        entries.push(Entry::named(name, field_kind, Target::Data(field)));
+    }
+    Ok(Some((kind, Table::record(entries))))
+}
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,
@@ -1336,6 +1436,9 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
+    if let Some(module) = scalar_behavior(node, pointer, data, reference_types)? {
+        return Ok(Some(module));
+    }
     let fieldless = match node.tag_name().name() {
         "Collide" => Some((0x70e5_c103, false)),
         "Damager" => Some((0x2a79_518f, false)),

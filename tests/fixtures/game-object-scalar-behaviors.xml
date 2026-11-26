@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="CaptureDefault"><Behaviors><CaptureBehavior id="ModuleTag_Test"/></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100" /></Body></GameObject>
+  <GameObject id="CaptureCustom"><Behaviors><CaptureBehavior id="ModuleTag_Test" GrantMoney="120" GrantMoneyOneTime="true" SlavedCaptureObject="CaptureDefault"/></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100" /></Body></GameObject>
+  <GameObject id="PowerDefault"><Behaviors><PowerUpdate id="ModuleTag_Test"/></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100" /></Body></GameObject>
+  <GameObject id="PowerCustom"><Behaviors><PowerUpdate id="ModuleTag_Test" UpdatePeriod="0.25s" ReloadTime="3s" Duration="5s" Type="BACKUP_GENERATOR"/></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100" /></Body></GameObject>
+  <GameObject id="StoreDefault"><Behaviors><StorePurchasedUpgradeBehavior id="ModuleTag_Test"/></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100" /></Body></GameObject>
+  <GameObject id="StoreCustom"><Behaviors><StorePurchasedUpgradeBehavior id="ModuleTag_Test" MaxPlayerUpgrades="7"/></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100" /></Body></GameObject>
+  <GameObject id="TiberiumDefault"><Behaviors><TiberiumGrowthModBehavior id="ModuleTag_Test"><DieMuxData DeathTypes="ALL"/></TiberiumGrowthModBehavior></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100" /></Body></GameObject>
+  <GameObject id="TiberiumCustom"><Behaviors><TiberiumGrowthModBehavior id="ModuleTag_Test" GreenTiberiumMultiplier="1.5" BlueTiberiumMultiplier="0.75"><DieMuxData DeathTypes="ALL"/></TiberiumGrowthModBehavior></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100" /></Body></GameObject>
+</AssetDeclaration>
