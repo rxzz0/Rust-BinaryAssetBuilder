@@ -1,6 +1,6 @@
 use super::{
-    CompiledStream, ReferenceMode, compile_with_source_references, invalid, string_hash_stream,
-    string_hashes::StringHashes,
+    CompiledStream, ReferenceMode, compile_with_source_references, invalid,
+    redirected_sdk_directory, sdk_relative_path, string_hash_stream, string_hashes::StringHashes,
 };
 use crate::compile_batch::{
     Contents, append_versioned_stream, compile_streams, is_generated, publish, publish_prepared,
@@ -33,7 +33,7 @@ fn compile_sdk_static_impl(
     output: &Path,
     string_hashes: bool,
 ) -> io::Result<()> {
-    let (input, relative) = sdk_input(input, sdk_root)?;
+    let (input, relative) = sdk_input(input, sdk_root, None)?;
     let relative_directory = relative.parent().unwrap();
     let directory = output.join(relative_directory);
     let stem = stream_stem(&input)?;
@@ -203,7 +203,7 @@ fn stream_stem(source: &Path) -> io::Result<String> {
 
 /// Compiles all map metadata streams in the SDK additionalmaps directory.
 pub fn compile_sdk_global(input: &Path, sdk_root: &Path, output: &Path) -> io::Result<()> {
-    let (input, relative) = sdk_input(input, sdk_root)?;
+    let (input, relative) = sdk_input(input, sdk_root, Some("AdditionalMaps"))?;
     let sources = xml_sources(&input, is_map_metadata)?;
     if sources.is_empty() {
         return Ok(());
@@ -221,23 +221,36 @@ pub fn compile_sdk_global(input: &Path, sdk_root: &Path, output: &Path) -> io::R
     })
 }
 
-fn sdk_input(input: &Path, sdk_root: &Path) -> io::Result<(PathBuf, PathBuf)> {
+fn sdk_input(
+    input: &Path,
+    sdk_root: &Path,
+    redirected_directory: Option<&str>,
+) -> io::Result<(PathBuf, PathBuf)> {
     let root = fs::canonicalize(sdk_root)?;
-    let input = fs::canonicalize(input)?;
-    let relative = input
-        .strip_prefix(root)
-        .map_err(|_| invalid(&input, "input lies outside the SDK"))?;
+    let resolved = fs::canonicalize(input)?;
+    let redirect = redirected_directory
+        .filter(|_| !resolved.starts_with(&root))
+        .and_then(|directory| redirected_sdk_directory(input, sdk_root, &resolved, directory));
+    let relative = sdk_relative_path(&resolved, &root, redirect.as_ref())
+        .ok_or_else(|| invalid(&resolved, "input lies outside the SDK"))?;
     let mut parts = relative.iter();
     let (Some(mods), Some(_), Some(data), Some(_)) =
         (parts.next(), parts.next(), parts.next(), parts.next())
     else {
-        return Err(invalid(&input, "expected an SDK Mods/<mod>/Data input"));
+        return Err(invalid(input, "expected an SDK Mods/<mod>/Data input"));
     };
     if !mods.eq_ignore_ascii_case("mods") || !data.eq_ignore_ascii_case("data") {
-        return Err(invalid(&input, "expected an SDK Mods/<mod>/Data input"));
+        return Err(invalid(input, "expected an SDK Mods/<mod>/Data input"));
     }
     let relative = PathBuf::from(relative.as_os_str().to_ascii_lowercase());
-    Ok((input, relative))
+    // Keep the SDK spelling for batch entries so the compiler can recover their
+    // logical names after canonicalizing each file.
+    let source = if redirect.is_some() {
+        input.to_path_buf()
+    } else {
+        resolved
+    };
+    Ok((source, relative))
 }
 
 fn is_map_metadata(path: &Path) -> bool {

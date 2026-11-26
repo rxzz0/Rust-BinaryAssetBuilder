@@ -63,23 +63,24 @@ fn apt_ui_preserves_dds_with_optional_resize_setting() {
 }
 
 #[cfg(windows)]
+fn junction(link: &Path, target: &Path) {
+    let result = std::process::Command::new("cmd.exe")
+        .args(["/D", "/C", "mklink", "/J"])
+        .arg(link.components().collect::<PathBuf>())
+        .arg(target.components().collect::<PathBuf>())
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+}
+
+#[cfg(windows)]
 #[test]
 fn apt_ui_accepts_redirected_directory_without_allowing_external_files() {
     use binary_asset_builder::compile::{compile_apt_ui, compile_apt_ui_directory};
-
-    fn junction(link: &Path, target: &Path) {
-        let result = std::process::Command::new("cmd.exe")
-            .args(["/D", "/C", "mklink", "/J"])
-            .arg(link.components().collect::<PathBuf>())
-            .arg(target.components().collect::<PathBuf>())
-            .output()
-            .unwrap();
-        assert!(
-            result.status.success(),
-            "{}",
-            String::from_utf8_lossy(&result.stderr)
-        );
-    }
 
     let root = scratch_root();
     let sdk = root.join("RA3 MOD SDK");
@@ -1524,6 +1525,79 @@ fn sdk_builds_resolve_base_manifests_under_sagexml() {
     let manifest = fs::read(built.join("mods/example/data/mod.manifest")).unwrap();
     let manifest = Manifest::parse(&manifest).unwrap();
     assert_eq!(manifest.referenced_manifests[0].path, b"static.manifest");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn sdk_global_preserves_output_layout_through_a_linked_mod() {
+    let root = scratch_root();
+    let sdk = root.join("RA3 MOD SDK");
+    let mod_dir = sdk.join("Mods/Reborn");
+    let additional_maps = mod_dir.join("Data/AdditionalMaps");
+    let output = sdk.join("builtmods");
+    fs::create_dir_all(additional_maps.join("fragments")).unwrap();
+    fs::write(
+        additional_maps.join("MapMetaData_Colors.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes><Include type="all" source="DATA:AdditionalMaps/fragments/colors.xml"/></Includes>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let colors = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <MultiplayerColor id="ColorPurple">
+            <RGBColor R="125" G="25" B="200" A="255"/>
+            <RGBNightColor R="125" G="25" B="200" A="255"/>
+            <TooltipName>Color:Purple</TooltipName>
+            <AvailableInMetaGame>true</AvailableInMetaGame>
+        </MultiplayerColor>
+    </AssetDeclaration>"#;
+    fs::write(additional_maps.join("fragments/colors.xml"), colors).unwrap();
+    compile_sdk_global(&additional_maps, &sdk, &output).unwrap();
+    let stream = ["manifest", "bin", "imp", "relo", "version"].map(|ext| {
+        output.join(format!(
+            "mods/reborn/data/additionalmaps/mapmetadata_colors.{ext}"
+        ))
+    });
+    let expected = stream.each_ref().map(|path| fs::read(path).unwrap());
+
+    let redirected = root.join("OneDrive/CNC Files/Reborn");
+    fs::create_dir_all(redirected.parent().unwrap()).unwrap();
+    fs::rename(&mod_dir, &redirected).unwrap();
+    junction(&mod_dir, &redirected);
+    compile_sdk_global(&additional_maps, &sdk, &output).unwrap();
+    assert_eq!(
+        stream.each_ref().map(|path| fs::read(path).unwrap()),
+        expected
+    );
+
+    assert!(
+        compile_sdk_global(&redirected.join("Data/AdditionalMaps"), &sdk, &output)
+            .unwrap_err()
+            .to_string()
+            .contains("input lies outside the SDK")
+    );
+    let external = root.join("external");
+    fs::create_dir(&external).unwrap();
+    fs::write(external.join("colors.xml"), colors).unwrap();
+    fs::rename(
+        additional_maps.join("fragments"),
+        additional_maps.join("original"),
+    )
+    .unwrap();
+    junction(&additional_maps.join("fragments"), &external);
+    assert!(
+        compile_sdk_global(&additional_maps, &sdk, &output)
+            .unwrap_err()
+            .to_string()
+            .contains("path lies outside the data root")
+    );
+    assert_eq!(
+        stream.each_ref().map(|path| fs::read(path).unwrap()),
+        expected
+    );
+    fs::remove_dir(additional_maps.join("fragments")).unwrap();
+    fs::remove_dir(mod_dir).unwrap();
     fs::remove_dir_all(root).unwrap();
 }
 
