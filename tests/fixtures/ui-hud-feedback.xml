@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UICoopTinting id="Default"><TintColor R="51" G="102" B="153" /></UICoopTinting>
+  <UICoopTinting id="Custom" FadeInFrames="4" FadeOutFrames="6" SustainFrames="12" TintFrequency="0.5" TintAmplitude="0.75"><TintColor R="204" G="76" B="51" /></UICoopTinting>
+  <UIMouseDragSelectionFeedback id="Default"><BoxColor R="51" G="102" B="153" A="204" /><LassoColor R="255" G="0" B="0" A="64" /></UIMouseDragSelectionFeedback>
+  <UIMouseDragSelectionFeedback id="Custom" BoxEdgeWidth="1.5" LassoWidth="3.5"><BoxColor R="255" G="0" B="0" A="102" /><LassoColor R="0" G="0" B="255" A="153" /></UIMouseDragSelectionFeedback>
+  <UIMouseHUDElementHotKeyGate id="Default" />
+  <UIMouseHUDElementHotKeyGate id="Custom"><ElementHotKeyMapping ElementId="Resources" HotKeySlot="ShowResources" /><ElementHotKeyMapping HotKeySlot="ToggleSell" ElementId="SellButton" /></UIMouseHUDElementHotKeyGate>
+  <UIMouseTacticalThreatMeter id="Default"><MouseOverHelp Title="GUI:Title" /></UIMouseTacticalThreatMeter>
+  <UIMouseTacticalThreatMeter id="Custom"><MouseOverHelp Title="GUI:Threat" Description="GUI:ThreatDesc" /></UIMouseTacticalThreatMeter>
+  <UIMouseVoiceChat id="Default" />
+  <UIMouseVoiceChat id="Custom" TalkHotKeySlot="VoiceTalk" ToggleModeHotKeySlot="VoiceMode"><ModeButtonHelp Title="GUI:Mode" /><TalkButtonHelp Title="GUI:Talk" Description="GUI:TalkDesc" /></UIMouseVoiceChat>
+  <UIQuickChatMessage id="Default" MessageText="GUI:QuickChat" />
+  <UIQuickChatMessage id="Custom" MessageText="GUI:QuickChatCustom" Sound="ChatSound" />
+  <UIMouseTacticalPlayerTechStoreButton id="Default"><MouseOverHelp Title="GUI:Title" /></UIMouseTacticalPlayerTechStoreButton>
+  <UIMouseTacticalPlayerTechStoreButton id="Custom" TechPointAwardedSound="TechSound"><MouseOverHelp Title="GUI:Tech" /></UIMouseTacticalPlayerTechStoreButton>
+</AssetDeclaration>

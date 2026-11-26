@@ -205,6 +205,9 @@ pub(super) fn ui_display(node: Node<'_, '_>, path: &Path) -> io::Result<Marshale
     };
     let mut result = Marshaled::default();
     write_ui_layout(node, name, layout, 0, &mut data, &mut result)?;
+    if name == "UIMouseVoiceChat" {
+        data.relocations.sort_unstable();
+    }
     Ok(data.finish(result))
 }
 
@@ -288,6 +291,8 @@ fn write_ui_layout(
         "InfiltratorEffectSettings" => &["Effect"],
         "AIBeaconSettings" => &["Type"],
         "SellFactionCursorSet" => &["Faction"],
+        "HUDElementHotKeyMapping" => &["ElementId", "HotKeySlot"],
+        "UIQuickChatMessage" => &["MessageText"],
         _ => &[],
     };
     for attribute in required_attributes {
@@ -677,9 +682,137 @@ const POSTGAMESTATTYPE: [&str; 17] = [
     "CommanderPowersUsed",
 ];
 const UICONFIGTYPE: [&str; 4] = ["INGAME", "SHELL", "BOOTUP", "LOADSCREEN"];
+const MOUSE_HUD_FIXED_ELEMENT_IDS: [&str; 36] = [
+    "Invalid",
+    "EnergyMeter",
+    "Resources",
+    "SellButton",
+    "RepairButton",
+    "PauseButton",
+    "Radar",
+    "SelectionRefinementTab",
+    "MainStructuresTab",
+    "OtherStructuresTab",
+    "InfantryTab",
+    "VehicleTab",
+    "AircraftTab",
+    "WatercraftTab",
+    "AttackMoveButton",
+    "ForceAttackButton",
+    "ForceMoveButton",
+    "ReverseMoveButton",
+    "ForceAttackMoveButton",
+    "StopButton",
+    "PlanningModeButton",
+    "WaypointModeButton",
+    "AggressiveStanceButton",
+    "GuardStanceButton",
+    "HoldFireStanceButton",
+    "HoldGroundStanceButton",
+    "OpenAdvancedCommandsButton",
+    "ThreatMeter",
+    "OpenPlayerTechStoreButton",
+    "CoOpAINormalOrderButton",
+    "CoOpAIAssaultOrderButton",
+    "CoOpAIHoldObjectOrderButton",
+    "CoOpAIHoldPositionOrderButton",
+    "DeactivateHotSpotButton",
+    "UnitIntroButton",
+    "CoOpAIOrderPanel",
+];
 fn ui_layout(name: &str) -> Option<UiLayout> {
     use UiCodec::*;
     let (size, fields): (_, &[_]) = match name {
+        "UICoopTinting" => (
+            28,
+            &[
+                ui_field!("FadeInFrames", 4, true, Some("3"), Signed),
+                ui_field!("FadeOutFrames", 8, true, Some("3"), Signed),
+                ui_field!("SustainFrames", 12, true, Some("10"), Signed),
+                ui_field!("TintFrequency", 16, true, Some("1.0"), Real),
+                ui_field!("TintAmplitude", 20, true, Some("1.0"), Real),
+                ui_field!("TintColor", 24, false, None, Inline("Color3")),
+            ],
+        ),
+        "UIMouseDragSelectionFeedback" => (
+            20,
+            &[
+                ui_field!("BoxEdgeWidth", 4, true, Some("2"), Real),
+                ui_field!("LassoWidth", 8, true, Some("2"), Real),
+                ui_field!("BoxColor", 12, false, None, Inline("Color4")),
+                ui_field!("LassoColor", 16, false, None, Inline("Color4")),
+            ],
+        ),
+        "HUDElementHotKeyMapping" => (
+            8,
+            &[
+                ui_field!(
+                    "ElementId",
+                    0,
+                    true,
+                    None,
+                    EnumWithInvalid(&MOUSE_HUD_FIXED_ELEMENT_IDS)
+                ),
+                ui_field!("HotKeySlot", 4, true, None, Strong("HotKeySlot")),
+            ],
+        ),
+        "UIMouseHUDElementHotKeyGate" => (
+            12,
+            &[ui_field!(
+                "ElementHotKeyMapping",
+                4,
+                false,
+                None,
+                Repeated(8, &Inline("HUDElementHotKeyMapping"))
+            )],
+        ),
+        "UIMouseTacticalPlayerTechStoreButton" => (
+            40,
+            &[
+                ui_field!(
+                    "TechPointAwardedSound",
+                    36,
+                    true,
+                    None,
+                    StrongPointer("BaseAudioEventInfo")
+                ),
+                ui_field!(
+                    "MouseOverHelp",
+                    4,
+                    false,
+                    None,
+                    Inline("InGameUISimpleHelpTemplate")
+                ),
+            ],
+        ),
+        "UIMouseVoiceChat" => (
+            20,
+            &[
+                ui_field!("ToggleModeHotKeySlot", 4, true, None, Strong("HotKeySlot")),
+                ui_field!("TalkHotKeySlot", 8, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "ModeButtonHelp",
+                    12,
+                    false,
+                    None,
+                    Pointer("InGameUISimpleHelpTemplate")
+                ),
+                ui_field!(
+                    "TalkButtonHelp",
+                    16,
+                    false,
+                    None,
+                    Pointer("InGameUISimpleHelpTemplate")
+                ),
+            ],
+        ),
+        "UIQuickChatMessage" => (
+            16,
+            &[
+                ui_field!("MessageText", 4, true, None, Text),
+                ui_field!("Sound", 12, true, None, Strong("BaseAudioEventInfo")),
+            ],
+        ),
         "UIMouseTacticalCommandCommunicateWithAllies" => (
             20,
             &[

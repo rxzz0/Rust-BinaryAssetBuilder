@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 461: Added co-op tinting, drag selection feedback, HUD hotkey gates, voice chat, quick-chat messages, and the tech-store button. Matched all 14 EA fixture assets including the existing threat meter. All 392 tests and Clippy passed. Installed and verified the SDK release.
 - Checkpoint 460: Added CaptureBehavior, PowerUpdate, StorePurchasedUpgradeBehavior, and TiberiumGrowthModBehavior using the existing behavior and death-module encoders. Matched eight EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release.
 - Checkpoint 459: Added ally messaging, entry, AI beacons, selection, and selling, including faction cursors and beacon filters. Matched ten EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release.
 - Checkpoint 458: Added seven UI asset types covering group selection, camera controls, tactical and player power hotkeys, selection detail hotkeys, and both telestrators. Matched 14 EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release.

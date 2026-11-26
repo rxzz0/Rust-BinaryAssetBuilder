@@ -227,6 +227,12 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "UIMouseTacticalSelectionDetailsButtonHotKeys" => {
             (0x46c4_afe8, 84, stock_content::ui_display)
         }
+        "UICoopTinting" => (0x054f_5ace, 84, stock_content::ui_display),
+        "UIMouseDragSelectionFeedback" => (0x20c1_0a91, 84, stock_content::ui_display),
+        "UIMouseHUDElementHotKeyGate" => (0xcd31_1e8e, 84, stock_content::ui_display),
+        "UIMouseTacticalPlayerTechStoreButton" => (0x51e4_4cef, 84, stock_content::ui_display),
+        "UIMouseVoiceChat" => (0xb3ee_cc17, 84, stock_content::ui_display),
+        "UIQuickChatMessage" => (0x2c49_8c12, 84, stock_content::ui_display),
         "UIMilitaryCaptionDisplay" => (0x2e7c_50c8, 84, stock_content::ui_display),
         "AssetReportTable" => (0x6a9e_6e8b, 84, stock_settings::asset_report),
         "DLContent" => (0x629b_d41c, 84, stock_settings::downloadable_content),
