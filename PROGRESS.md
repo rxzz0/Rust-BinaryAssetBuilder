@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 432: Added native stored-item rendering with EA consumption defaults. The EA asset matches. Next: MoneyGainAttachUpdate.
 - Checkpoint 431: Added HordeAIUpdate with the EA inheritance token and shared AI payload. Both EA assets match. Next: RenderStoredThingTemplate.
 - Checkpoint 430: Added native timed opacity with EA time rounding. The EA asset matches. Next: measure remaining stock module coverage.
 - Checkpoint 429: Added native freefall update with model-condition flags and SDK defaults. The EA asset matches. Next: TimedOpacityUpdate.

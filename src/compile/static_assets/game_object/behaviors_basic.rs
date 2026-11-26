@@ -1869,6 +1869,9 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "TimedOpacityUpdate")) {
         return super::timed_opacity_update::encode(node, pointer, data).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "RenderStoredThingTemplate")) {
+        return super::render_stored_thing_template::encode(node, pointer, data).map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "CircularDamageUpdate")) {
         return super::circular_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);
