@@ -1636,6 +1636,11 @@ mod tests {
     }
 
     #[test]
+    fn assemble_structure_special_ability_matches_ea() {
+        assert_ea_fixture("assemble-structure-special-ability", 3);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }

@@ -20,6 +20,18 @@ const ABILITY: u32 = 0xac59_8f82;
 const CAPTURE: u32 = 0x3139_98b5;
 const WEAPON: u32 = 0x1e45_a393;
 const RECONSTITUTE: u32 = 0x3f9b_9ef1;
+const ASSEMBLE: u32 = 0x7737_ac69;
+const ASSEMBLE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("NewObjectAssemblyTime", 0x9986_69e8, 0xf0, "time", "0s"),
+    ("BusyDuringAssembly", 0x77e3_f4f7, 0x100, "bool", "false"),
+    (
+        "ModelConditionsOnAssembly",
+        0x1572_3e0b,
+        0xf4,
+        "model",
+        "INVALID",
+    ),
+];
 const TOGGLE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[(
     "ReloadAllWeaponsOnToggle",
     0x77e3_f4f7,
@@ -230,6 +242,7 @@ pub(super) fn encode(
         "ToggleStatusSpecialAbilityUpdate" => (TOGGLE, 0xfc, TOGGLE_FIELDS),
         "ActivateModuleSpecialAbilityUpdate" => (ACTIVATE_MODULE, 0xf8, &[][..]),
         "SpecialAbilityUpdate" => (ABILITY, 0xf0, &[][..]),
+        "AssembleStructureSpecialAbilityUpdate" => (ASSEMBLE, 0x104, ASSEMBLE_FIELDS),
         "BeamSpecialAbilityUpdate" => (
             beam_special_ability::KIND,
             beam_special_ability::SIZE,
@@ -310,6 +323,9 @@ pub(super) fn encode(
         .transpose()?;
     let dominate = (kind == dominate_enemy::KIND)
         .then(|| dominate_enemy::filter(children.by_ref(), start, data, reference_types))
+        .transpose()?;
+    let assemble = (kind == ASSEMBLE)
+        .then(|| assembly_templates(children.by_ref(), start + 0xf8, data, reference_types))
         .transpose()?;
     // Beam allocates its derived status list and string before inherited data.
     let ordered_fields = if kind == beam_special_ability::KIND {
@@ -405,7 +421,7 @@ pub(super) fn encode(
     let mut entries = vec![base(ABILITY, Table::record(ability))];
     entries.extend(derived);
     entries.extend(ejection);
-    if let Some(derived_child) = disguise.or(dominate) {
+    if let Some(derived_child) = disguise.or(dominate).or(assemble) {
         entries.push(derived_child);
         return Ok((kind, Table::record(entries)));
     }
@@ -474,6 +490,30 @@ pub(super) fn encode(
         Target::Table(replacements),
     ));
     Ok((kind, Table::record(entries)))
+}
+
+fn assembly_templates<'a, 'input: 'a>(
+    children: impl Iterator<Item = Node<'a, 'input>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Entry> {
+    let mut ids = Vec::new();
+    for child in children {
+        if !child.has_tag_name((SAGE_NS, "StructureTemplate")) {
+            return Err(invalid(
+                data.path,
+                "unexpected AssembleStructureSpecialAbilityUpdate child",
+            ));
+        }
+        ids.push(weak_reference(child, "GameObject", data, reference_types)?);
+    }
+    let list = id_list(data, count, ids)?;
+    Ok(Entry::named(
+        "StructureTemplate",
+        0x148e_d75d,
+        Target::Table(list),
+    ))
 }
 
 fn toggle_state(

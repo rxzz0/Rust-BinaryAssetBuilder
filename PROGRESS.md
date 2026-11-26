@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 434: Added native structure assembly using shared special ability data and EA list relocation order. All three EA assets match. Next: HordeContain.
 - Checkpoint 433: Added native purchase-price refunds and optional status validation using the inherited attachment layout. The EA asset matches. Next: AssembleStructureSpecialAbilityUpdate.
 - Checkpoint 432: Added native stored-item rendering with EA consumption defaults. The EA asset matches. Next: MoneyGainAttachUpdate.
 - Checkpoint 431: Added HordeAIUpdate with the EA inheritance token and shared AI payload. Both EA assets match. Next: RenderStoredThingTemplate.

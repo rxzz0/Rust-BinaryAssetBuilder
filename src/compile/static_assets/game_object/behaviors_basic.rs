@@ -1955,6 +1955,7 @@ pub(super) fn encode(
         node.tag_name().name(),
         "SpecialAbilityUpdate"
             | "BeamSpecialAbilityUpdate"
+            | "AssembleStructureSpecialAbilityUpdate"
             | "ReplaceSelfSpecialAbility"
             | "DominateEnemySpecialPower"
             | "ReconstituteStateSpecialAbility"
