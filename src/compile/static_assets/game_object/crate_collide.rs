@@ -17,6 +17,7 @@ use crate::compile::SAGE_NS;
 use crate::compile::{has_content, invalid};
 
 const KIND: u32 = 0x2027_962a;
+const UNIT: u32 = 0xee96_1694;
 const FIELDS: [(&str, u32, usize); 12] = [
     ("KindOf", 0x9afc_9193, 8),
     ("KindOfNot", 0x9afc_9193, 0x2c),
@@ -92,6 +93,12 @@ fn encode_base(
                 let asset = asset_reference(name, "GameObject", path)?;
                 data.word(start + 0x54, asset.instance_id);
                 reference_types.push(asset.type_id);
+            }
+            "UnitType" if kind == UNIT && !value.trim().is_empty() => {
+                let name = value.split_once('\\').map_or(value, |(name, _)| name);
+                let unit = asset_reference(name, "GameObject", path)?;
+                data.word(start + 0x70, unit.instance_id);
+                reference_types.push(unit.type_id);
             }
             "ExecuteAudioEvent" => {
                 let ordinal = audio_reference(value, path, references, reference_types)?;
@@ -262,4 +269,34 @@ pub(super) fn encode_random(
     let mut entries = vec![base(KIND, crate_table)];
     entries.extend(fields(start, &EXTRA_FIELDS));
     Ok((RANDOM, Table::record(entries)))
+}
+
+pub(super) fn encode_unit(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const EXTRA_FIELDS: [(&str, u32, usize); 2] = [
+        ("UnitCount", 0x7631_77a4, 0x6c),
+        ("UnitType", 0x148e_d75d, 0x70),
+    ];
+    let path = data.path;
+    validate_crate_attributes(node, &EXTRA_FIELDS.map(|(name, ..)| name), data)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected UnitCrateCollide content"));
+    }
+    let start = data.allocate(pointer, 0x74)?;
+    let crate_table = encode_base(node, UNIT, start, data, references, reference_types)?;
+    let count = node
+        .attribute("UnitCount")
+        .unwrap_or("0")
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| invalid(path, "invalid UnitCount"))?;
+    data.word(start + 0x6c, count);
+    let mut entries = vec![base(KIND, crate_table)];
+    entries.extend(fields(start, &EXTRA_FIELDS));
+    Ok((UNIT, Table::record(entries)))
 }
