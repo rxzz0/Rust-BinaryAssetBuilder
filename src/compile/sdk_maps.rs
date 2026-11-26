@@ -16,6 +16,7 @@ pub fn compile_sdk_maps(
 }
 
 /// Builds SDK maps, preparing reference catalogs when the first source is found.
+/// In unbuilt-only mode, reports failures per map and continues with the rest.
 pub fn compile_sdk_map_overrides(
     input: &Path,
     sdk_root: &Path,
@@ -35,36 +36,68 @@ pub fn compile_sdk_map_overrides(
     let mut maps = fs::read_dir(&input)?.collect::<io::Result<Vec<_>>>()?;
     maps.sort_by_key(|entry| entry.file_name());
     let mut compiled = 0;
+    let mut catalogs_ready = game_data.is_none();
     for map in maps {
         if !map.file_type()?.is_dir() || map.file_name().eq_ignore_ascii_case("official") {
             continue;
         }
-        let source = map.path().join("map.xml");
-        if !source.try_exists()? {
-            continue;
-        }
-        if skip_precompiled && has_precompiled_map(&map.path())? {
+        let name = map.file_name();
+        let path = map.path();
+        let result = (|| {
+            if skip_precompiled && has_precompiled_map(&path)? {
+                println!("Skipping precompiled map {}", name.to_string_lossy());
+                return Ok(false);
+            }
+            let source = match map_source(&path)? {
+                Some(source) => source,
+                None => return Ok(false),
+            };
+            if !catalogs_ready && let Some(game_data) = game_data {
+                prepare_references(references, game_data)?;
+                catalogs_ready = true;
+            }
             println!(
-                "Skipping precompiled map {}",
-                map.file_name().to_string_lossy()
+                "Compiling map overrides with Rust {}",
+                name.to_string_lossy()
             );
-            continue;
+            publish_map_stream(&output.join(&name), || {
+                compile_map(&source, &sdk_root, references)
+            })?;
+            Ok(true)
+        })();
+        match result {
+            Ok(built) => compiled += usize::from(built),
+            Err(error) if skip_precompiled => {
+                eprintln!(
+                    "Error: Map '{}' failed to compile. {error}",
+                    name.to_string_lossy()
+                );
+            }
+            Err(error) => return Err(error),
         }
-        if compiled == 0
-            && let Some(game_data) = game_data
-        {
-            prepare_references(references, game_data)?;
-        }
-        println!(
-            "Compiling map overrides with Rust {}",
-            map.file_name().to_string_lossy()
-        );
-        publish_map_stream(&output.join(map.file_name()), || {
-            compile_map(&source, &sdk_root, references)
-        })?;
-        compiled += 1;
     }
     Ok(compiled)
+}
+
+fn map_source(directory: &Path) -> io::Result<Option<std::path::PathBuf>> {
+    let mut terrain = false;
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_file() {
+            continue;
+        }
+        if entry.file_name().eq_ignore_ascii_case("map.xml") {
+            return Ok(Some(entry.path()));
+        }
+        terrain |= entry
+            .path()
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("map"));
+    }
+    if terrain {
+        return Err(invalid(directory, "unbuilt map is missing map.xml"));
+    }
+    Ok(None)
 }
 
 fn has_precompiled_map(directory: &Path) -> io::Result<bool> {

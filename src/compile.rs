@@ -223,6 +223,16 @@ fn compile_with_source_references(
         external_ids: HashSet::new(),
         worldbuilder_hashes,
     };
+    if let (true, Some(mod_root), Some(references)) = (is_map, mod_root, reference_directory) {
+        let relative = mod_root.strip_prefix(&compiler.root).unwrap();
+        let stream_root = references.join(relative).join("data");
+        let manifest = stream_root.join("mod.manifest");
+        if manifest.try_exists()? {
+            // ModStudio loads the mod before the map. Its assets are available for
+            // reference resolution without adding a map-relative manifest import.
+            compiler.read_reference_manifest_with_dependencies(&manifest, Some(&stream_root))?;
+        }
+    }
     let traversal = compiler.read_document(&resolved_input, false, false);
     while !compiler.pending.is_empty() {
         compiler.commit_pending()?;

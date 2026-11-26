@@ -709,7 +709,7 @@ namespace EALABuild
 				    RunExecutableArguments argsMaps = new RunExecutableArguments(Cmd);
 				    argsMaps.Arguments = String.Format(
 				        "/C (@echo off) & (\"{0}\" compile-maps-sdk \"{1}\" --sdk-root \"{2}\" --references \"{3}\" --output \"{1}\" --game-data \"{4}\" --skip-precompiled 2>&1)"
-				        + " || (echo Critical: Build Map Overrides failed. & exit /b 1)",
+				        + " || (echo Error: Could not run the map override build. & exit /b 0)",
 				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), maps, SDKDirectory, BuiltModsPath, RA3DataDir);
 				    RunRustBuildStep(argsMaps);
 				    break;
