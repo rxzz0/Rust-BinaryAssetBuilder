@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 448: Added InactiveBody, ShieldBody, and ShieldBodyUpdate using the existing body and update layouts. All five EA fixture assets match, including source-order shield references. Next: add font-based UI displays.
 - Checkpoint 447: Decodes RLE-compressed true-color TGAs for AptUI. Reborn's 11-asset co-op staging stream matches EA across all four linked files. Next: verify the tester's full Reborn build.
 - Checkpoint 446: Step 5 follows linked AdditionalMaps directories while preserving SDK-relative asset names and outputs. A Windows junction produced the same five files as a local build. Next: verify Step 6 in the tester's linked SDK.
 - Checkpoint 445: Accepts the optional AptUI AllowAutomaticResize setting and embeds DDS textures as EA does. The tester’s six-asset Objective Briefing stream matched EA byte for byte across all four linked files. Next: handle linked SDK paths for global data.

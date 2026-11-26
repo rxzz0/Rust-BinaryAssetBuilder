@@ -131,7 +131,7 @@ pub(in crate::compile::static_assets) fn compile(
             active_body::TOKEN_LAYOUT,
             active_body::encode(module, kind, path)?,
         ),
-        None if body_name == "PropBody" => (TOKENS, [0; BODY_SIZE]),
+        None if matches!(body_name, "PropBody" | "InactiveBody") => (TOKENS, [0; BODY_SIZE]),
         None => {
             return Err(invalid(
                 path,
@@ -370,13 +370,17 @@ pub(in crate::compile::static_assets) fn compile(
     }
     let body_shift = data.payload.len() - ROOT_SIZE;
     table.shift_data_from(ROOT_SIZE, body_shift);
-    if module.has_tag_name((SAGE_NS, "PropBody")) {
+    if variant.is_none() {
         validate_attributes(module, &["id"], path)?;
         if has_content(module) {
-            return Err(invalid(path, "PropBody cannot contain content"));
+            return Err(invalid(path, format!("{body_name} cannot contain content")));
         }
         let start = data.allocate(0x1dc, 8)?;
-        let kind = 0xff88_404b;
+        let kind = if body_name == "InactiveBody" {
+            0x2923_4e6e
+        } else {
+            0xff88_404b
+        };
         let inherited = behaviors_basic::module_base(module, kind, start, &mut data, false)?;
         let body = Table::sequence(vec![Entry::new(
             2,
@@ -388,7 +392,13 @@ pub(in crate::compile::static_assets) fn compile(
         )]);
         child_targets.push(("Body", Target::Table(body)));
     } else {
-        let body_start = data.allocate(0x1dc, BODY_SIZE)?;
+        let shield = body_name == "ShieldBody";
+        let body_size = if shield {
+            active_body::SHIELD_SIZE
+        } else {
+            BODY_SIZE
+        };
+        let body_start = data.allocate(0x1dc, body_size)?;
         data.payload[body_start..body_start + BODY_SIZE].copy_from_slice(&body_bytes);
         if let Some(target) = active_body::damage_ranges(
             module,
@@ -406,6 +416,20 @@ pub(in crate::compile::static_assets) fn compile(
                     "GameObject layout is missing DamageRangeModifier",
                 ));
             }
+        }
+        if shield {
+            let fields = table
+                .variant_fields("Body")
+                .ok_or_else(|| invalid(path, "GameObject layout is missing Body variant"))?;
+            let inherited = std::mem::replace(fields, Table::record(Vec::new()));
+            *fields = active_body::shield(
+                module,
+                body_start,
+                inherited,
+                &mut data,
+                &mut references,
+                &mut reference_types,
+            )?;
         }
     }
     if let Some((kind, bases)) = variant

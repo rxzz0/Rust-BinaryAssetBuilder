@@ -1873,6 +1873,16 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "FreefallUpdate")) {
         return super::freefall_update::encode(node, pointer, data).map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "ShieldBodyUpdate")) {
+        const KIND: u32 = 0x643a_2ac3;
+        validate_attributes(node, &["id"], data.path)?;
+        if has_content(node) {
+            return Err(invalid(data.path, "unexpected ShieldBodyUpdate content"));
+        }
+        let start = data.allocate(pointer, 8)?;
+        let update = module_base(node, KIND, start, data, true)?;
+        return Ok(Some((KIND, Table::record(vec![update]))));
+    }
     if node.has_tag_name((SAGE_NS, "TimedOpacityUpdate")) {
         return super::timed_opacity_update::encode(node, pointer, data).map(Some);
     }

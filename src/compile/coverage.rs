@@ -37,6 +37,8 @@ const MODULES: &[(&str, &[&str])] = &[
             "ManagedImmortalBody",
             "ManagerBody",
             "PropBody",
+            "InactiveBody",
+            "ShieldBody",
         ],
     ),
     (
@@ -217,6 +219,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "SuppressionUpdate",
             "SwitchLocomotorUpdate",
             "TimedOpacityUpdate",
+            "ShieldBodyUpdate",
             "TrackDamage",
             "TrackIncomingWeaponFireBehavior",
             "UnitCrateCollide",
