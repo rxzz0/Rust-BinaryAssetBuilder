@@ -1202,6 +1202,11 @@ mod tests {
     }
 
     #[test]
+    fn weapon_fire_on_objects_inherited_fields_match_ea() {
+        assert_ea_fixture("weapon-fire-on-objects-inherited", 1);
+    }
+
+    #[test]
     fn weapon_tint_objects_matches_ea() {
         assert_ea_fixture("weapon-tint-objects", 1);
     }

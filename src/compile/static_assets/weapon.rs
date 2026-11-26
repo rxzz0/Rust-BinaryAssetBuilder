@@ -463,6 +463,8 @@ fn encode_nuggets(
         let variant = damage_variants::Variant::for_node(child);
         let (kind, target) = match (child.tag_name().namespace(), child.tag_name().name()) {
             (Some(SAGE_NS), "FireOnObjectsNugget") => {
+                let start = data.payload.len() as u32;
+                derived_relocations.push((start, start + 0x9c, start + 0xa0));
                 (0x7814_daf0, fire_on_objects(child, pointer, data, out)?)
             }
             (Some(SAGE_NS), "TintObjectsNugget") => {
@@ -844,7 +846,7 @@ fn fire_on_objects(
     let contained = node.has_tag_name((SAGE_NS, "DamageContainedNugget"));
     let line = node.has_tag_name((SAGE_NS, "LineDamageNugget"));
     let variant = damage_variants::Variant::for_node(node);
-    let is_damage = dot || direct || contained || line || variant.is_some();
+    let fire = node.has_tag_name((SAGE_NS, "FireOnObjectsNugget"));
     const LINE_FIELDS: &[(&str, u32, usize)] = &[
         ("OffsetAngle", 0x4e16_ea4d, 0x98),
         ("LineWidth", 0x6458_64f3, 0x9c),
@@ -889,6 +891,11 @@ fn fire_on_objects(
     .chain(DAMAGE_REALS.map(|(name, _)| name))
     .chain(DAMAGE_BOOLS.map(|(name, _)| name))
     .chain(
+        fire.then_some(["Weapon", "FireOnVictimObject", "VictimMustBeAlive"])
+            .into_iter()
+            .flatten(),
+    )
+    .chain(
         dot.then_some(["DamageInterval", "DamageDuration", "RemoveIfHealed"])
             .into_iter()
             .flatten(),
@@ -911,15 +918,7 @@ fn fire_on_objects(
             .flat_map(|variant| variant.attributes().iter().copied()),
     )
     .collect();
-    validate_effect_attributes(
-        node,
-        if is_damage {
-            &extended
-        } else {
-            &["Weapon", "FireOnVictimObject", "VictimMustBeAlive"]
-        },
-        path,
-    )?;
+    validate_effect_attributes(node, &extended, path)?;
     let start = data.allocate(
         pointer,
         if let Some(variant) = variant {
@@ -935,7 +934,6 @@ fn fire_on_objects(
         },
     )?;
     for (offset, value) in [
-        (0, 0x7814_daf0),
         (0x2c, (-1f32).to_bits()),
         (0x34, std::f32::consts::TAU.to_bits()),
         (0x38, (-1f32).to_bits()),
@@ -951,70 +949,70 @@ fn fire_on_objects(
     ] {
         data.word(start + offset, value);
     }
-    if is_damage {
-        if let Some(value) = node.attribute("InvalidTargetStatus") {
-            // An explicit list replaces the schema's default mask.
-            data.payload[start + 0x6c..start + 0x88].fill(0);
-            super::game_object::write_status_flags(value, start + 0x6c, data)?;
-        }
-        if let Some(value) = node.attribute("DamageArc") {
-            data.word(
-                start + 0x34,
-                sage_angle(value, "DamageArc", path)?.to_bits(),
-            );
-        }
-        for (name, offset) in DAMAGE_REALS {
-            if let Some(value) = node.attribute(name) {
-                data.word(start + offset, finite_number(value, name, path)?.to_bits());
-            }
-        }
-        for (name, offset) in DAMAGE_BOOLS {
-            data.payload[start + offset] = flag(node, name, name == "AcceptDamageAdd", path)?;
-        }
-        if let Some(value) = node.attribute("DelayTimeSeconds") {
-            data.word(
-                start + 0x48,
-                sage_time(value, "DelayTimeSeconds", path)?.to_bits(),
-            );
-        }
+    if let Some(value) = node.attribute("InvalidTargetStatus") {
+        // An explicit list replaces the schema's default mask.
+        data.payload[start + 0x6c..start + 0x88].fill(0);
+        super::game_object::write_status_flags(value, start + 0x6c, data)?;
+    }
+    if let Some(value) = node.attribute("DamageArc") {
         data.word(
-            start,
-            if let Some(variant) = variant {
-                variant.type_id()
-            } else if dot {
-                0xefbb_5226
-            } else if line {
-                LINE_DAMAGE
-            } else if contained {
-                0x929b_5398
-            } else {
-                0xc0f5_3e99
-            },
+            start + 0x34,
+            sage_angle(value, "DamageArc", path)?.to_bits(),
         );
-        data.word(
-            start + 0x28,
-            finite_number(node.attribute("Damage").unwrap_or("0"), "Damage", path)?.to_bits(),
-        );
-        for (index, (name, default)) in [
-            ("DamageType", "UNDEFINED"),
-            ("DeathType", "NORMAL"),
-            ("DamageFXType", "UNDEFINED"),
-            ("DamageSubType", "NORMAL"),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            data.word(
-                start + 0x4c + index * 4,
-                damage_enum(index, node.attribute(name).unwrap_or(default), path)?,
-            );
+    }
+    for (name, offset) in DAMAGE_REALS {
+        if let Some(value) = node.attribute(name) {
+            data.word(start + offset, finite_number(value, name, path)?.to_bits());
         }
+    }
+    for (name, offset) in DAMAGE_BOOLS {
+        data.payload[start + offset] = flag(node, name, name == "AcceptDamageAdd", path)?;
+    }
+    if let Some(value) = node.attribute("DelayTimeSeconds") {
+        data.word(
+            start + 0x48,
+            sage_time(value, "DelayTimeSeconds", path)?.to_bits(),
+        );
+    }
+    data.word(
+        start,
+        if let Some(variant) = variant {
+            variant.type_id()
+        } else if dot {
+            0xefbb_5226
+        } else if line {
+            LINE_DAMAGE
+        } else if fire {
+            0x7814_daf0
+        } else if contained {
+            0x929b_5398
+        } else {
+            0xc0f5_3e99
+        },
+    );
+    data.word(
+        start + 0x28,
+        finite_number(node.attribute("Damage").unwrap_or("0"), "Damage", path)?.to_bits(),
+    );
+    for (index, (name, default)) in [
+        ("DamageType", "UNDEFINED"),
+        ("DeathType", "NORMAL"),
+        ("DamageFXType", "UNDEFINED"),
+        ("DamageSubType", "NORMAL"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        data.word(
+            start + 0x4c + index * 4,
+            damage_enum(index, node.attribute(name).unwrap_or(default), path)?,
+        );
     }
     for (name, offset, default) in [
         ("FireOnVictimObject", 0xa0, "false"),
         ("VictimMustBeAlive", 0xa1, "true"),
     ] {
-        if is_damage {
+        if !fire {
             break;
         }
         data.payload[start + offset] = match node.attribute(name).unwrap_or(default).trim() {
@@ -1036,6 +1034,18 @@ fn fire_on_objects(
         out.references.push(id.into());
         data.word(start + 0x98, out.references.len() as u32);
     }
+    let filter = match node
+        .children()
+        .find(|child| fire && child.has_tag_name((SAGE_NS, "Filter")))
+    {
+        Some(filter) => Target::Table(super::game_object::encode_object_filter(
+            filter,
+            start + 0x9c,
+            data,
+            &mut out.reference_types,
+        )?),
+        None => Target::Null,
+    };
     if contained
         && let Some(value) = node
             .attribute("WindowBlastFX")
@@ -1050,38 +1060,25 @@ fn fire_on_objects(
         out.references.push(id.into());
         data.word(start + 0x9c, out.references.len() as u32);
     }
+    for (name, kind, offset) in [
+        ("UnderAttackOverrideEvaEvent", "EvaEvent", 0x64),
+        ("VictimShroudRevealer", "GameObject", 0x68),
+    ] {
+        let reference = nugget_reference(node.attribute(name), kind, path, out)?;
+        data.word(start + offset, reference);
+    }
     let mut scalar_reference_types = Vec::new();
-    let scalars = if is_damage {
-        for (name, kind, offset) in [
-            ("UnderAttackOverrideEvaEvent", "EvaEvent", 0x64),
-            ("VictimShroudRevealer", "GameObject", 0x68),
-        ] {
-            let reference = nugget_reference(node.attribute(name), kind, path, out)?;
-            data.word(start + offset, reference);
-        }
-        encode_damage_scalars(node, start + 0x88, data, &mut scalar_reference_types)?
-    } else {
-        Table::array(start + 0x88, [])
-    };
+    let scalars = encode_damage_scalars(node, start + 0x88, data, &mut scalar_reference_types)?;
     let mut children = significant_children(node).peekable();
     let effect = encode_effect(node, start, data, out, &mut children)?;
-    let filter =
-        match children.next_if(|child| !is_damage && child.has_tag_name((SAGE_NS, "Filter"))) {
-            Some(filter) => Target::Table(super::game_object::encode_object_filter(
-                filter,
-                start + 0x9c,
-                data,
-                &mut out.reference_types,
-            )?),
-            None => Target::Null,
-        };
-    if is_damage {
-        while children
-            .next_if(|child| child.has_tag_name((SAGE_NS, "DamageScalarDetails")))
-            .is_some()
-        {}
-    }
+    while children
+        .next_if(|child| child.has_tag_name((SAGE_NS, "DamageScalarDetails")))
+        .is_some()
+    {}
     out.reference_types.extend(scalar_reference_types);
+    if fire {
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "Filter")));
+    }
     let contained_filter = if contained {
         let child = children
             .next_if(|child| child.has_tag_name((SAGE_NS, "DamageObjectFilter")))

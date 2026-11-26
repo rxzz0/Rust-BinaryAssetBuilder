@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 437: Encoded inherited FireOnObjectsNugget damage fields and EA filter allocation order. The new fixture matches EA byte for byte. Insurrection static compilation advances to AttackTargetSpecialPower. Next: encode AttackTargetSpecialPower.
 - Checkpoint 436: Added native horde containment with inherited transport, rank positions, banner carrier and EA relocation order. All seven EA assets match. Next: prioritize uncovered schema modules outside the stock XML examples.
 - Checkpoint 435: Reconciled SDK coverage with 65 implemented module dispatches. Next: HordeContain.
 - Checkpoint 434: Added native structure assembly using shared special ability data and EA list relocation order. All three EA assets match. Next: HordeContain.

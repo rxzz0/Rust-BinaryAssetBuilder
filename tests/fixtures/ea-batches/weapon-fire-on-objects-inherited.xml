@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="FireOnObjectsInheritedProbe">
+    <Nuggets>
+      <FireOnObjectsNugget Radius="225" MinRadius="150" DamageArc="35d" Damage="60" DamageArcInverted="true" Weapon="NestedWeapon">
+        <DamageScalarDetails Scalar="50%"><Filter Rule="ANY" Include="AIRCRAFT"><ExcludeThing>ScalarVictim</ExcludeThing></Filter></DamageScalarDetails>
+        <Filter Rule="ANY" Include="VEHICLE"><ExcludeThing>FilterVictim</ExcludeThing></Filter>
+      </FireOnObjectsNugget>
+    </Nuggets>
+  </WeaponTemplate>
+</AssetDeclaration>
