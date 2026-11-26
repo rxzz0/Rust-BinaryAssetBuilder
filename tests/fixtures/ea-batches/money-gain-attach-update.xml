@@ -1,0 +1,15 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="MoneyGainAttachProbe">
+    <Behaviors>
+      <MoneyGainAttachUpdate id="ModuleTag_Default" ActionType="ON_DETACH_PARENT_DEAD"/>
+      <MoneyGainAttachUpdate id="ModuleTag_Explicit" ActionType="ON_DETACH_PARENT_DEAD" PurchasePricePercent="27.5%"
+          Flags="TELEPORT STICK_TO_PARENT USE_GEOMETRY DIE_WHEN_DETACH_ALWAYS TRANSFER_ON_REPLACE_SELF"
+          CloseEnoughRange="1.25" ParentStatusToCopy="CAN_ATTACK">
+        <ObjectFilter Rule="ANY" Relationship="ALLIES"><IncludeThing>MoneyGainAttachProbe</IncludeThing></ObjectFilter>
+        <ModifierToLeechFromParent>ProbeAttachModifier</ModifierToLeechFromParent>
+        <MoneyGainObjectStatusValidation ForbiddenStatus="NO_REFUND" RequiredStatus="CAN_ATTACK"/>
+      </MoneyGainAttachUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

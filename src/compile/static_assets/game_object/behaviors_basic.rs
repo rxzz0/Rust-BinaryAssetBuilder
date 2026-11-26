@@ -1681,7 +1681,12 @@ pub(super) fn encode(
         return super::passive_area::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
-    if node.has_tag_name((SAGE_NS, "AttachUpdate")) {
+    if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(
+            node.tag_name().name(),
+            "AttachUpdate" | "MoneyGainAttachUpdate"
+        )
+    {
         return super::attach::encode(node, pointer, data, references, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "TeleportStoredObjectsUpdate")) {
