@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 427: Added native salvage crates with signed resource limits and source-order upgrade references. All seven EA assets match. Next: AttributeCrateCollide.
 - Checkpoint 426: Added native unit crates and hashed explicit unit types before default pickup audio as EA does. Both EA assets match. Next: SalvageCrateCollide.
 - Checkpoint 425: Added native substructure upgrades with EA relocation order and inherited references hashed first. All four EA assets match. Next: UnitCrateCollide.
 - Checkpoint 424: Added native condition-based EVA event selection and optional audio overrides. All three EA assets match. Next: SubStructureBuild.

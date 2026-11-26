@@ -18,6 +18,7 @@ use crate::compile::{has_content, invalid};
 
 const KIND: u32 = 0x2027_962a;
 const UNIT: u32 = 0xee96_1694;
+const SALVAGE: u32 = 0x1e20_5942;
 const FIELDS: [(&str, u32, usize); 12] = [
     ("KindOf", 0x9afc_9193, 8),
     ("KindOfNot", 0x9afc_9193, 0x2c),
@@ -84,6 +85,11 @@ fn encode_base(
     for attribute in node.attributes() {
         let value = attribute.value();
         match attribute.name() {
+            "Upgrade" if kind == SALVAGE => {
+                let ordinal =
+                    reference(value, "UpgradeTemplate", path, references, reference_types)?;
+                data.word(start + 0x88, ordinal);
+            }
             "ExecuteFX" => {
                 let ordinal = reference(value, "FXList", path, references, reference_types)?;
                 data.word(start + 0x50, ordinal);
@@ -299,4 +305,60 @@ pub(super) fn encode_unit(
     let mut entries = vec![base(KIND, crate_table)];
     entries.extend(fields(start, &EXTRA_FIELDS));
     Ok((UNIT, Table::record(entries)))
+}
+
+pub(super) fn encode_salvage(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const REAL_FIELDS: [(&str, u32, usize); 5] = [
+        ("PorterChance", 0x6458_64f3, 0x6c),
+        ("BannerChance", 0x6458_64f3, 0x70),
+        ("LevelUpChance", 0x6458_64f3, 0x74),
+        ("LevelUpRadius", 0x6458_64f3, 0x78),
+        ("ResourceChance", 0x6458_64f3, 0x7c),
+    ];
+    const RESOURCE_FIELDS: [(&str, u32, usize); 2] = [
+        ("MinimumResource", 0x23e6_50b8, 0x80),
+        ("MaximumResource", 0x23e6_50b8, 0x84),
+    ];
+    const EXTRA_FIELDS: [(&str, u32, usize); 2] = [
+        ("Upgrade", 0x4aba_1f29, 0x88),
+        ("AllowAIPickup", 0x77e3_f4f7, 0x8c),
+    ];
+    let scalars = REAL_FIELDS
+        .iter()
+        .chain(&RESOURCE_FIELDS)
+        .chain(&EXTRA_FIELDS);
+    let allowed: Vec<_> = scalars.clone().map(|&(name, ..)| name).collect();
+    validate_crate_attributes(node, &allowed, data)?;
+    if has_content(node) {
+        return Err(invalid(data.path, "unexpected SalvageCrateCollide content"));
+    }
+
+    let start = data.allocate(pointer, 0x90)?;
+    let crate_table = encode_base(node, SALVAGE, start, data, references, reference_types)?;
+    let path = data.path;
+    for (name, _, offset) in REAL_FIELDS {
+        let value = finite_number(node.attribute(name).unwrap_or("0"), name, path)?;
+        data.word(start + offset, value.to_bits());
+    }
+    for (name, _, offset) in RESOURCE_FIELDS {
+        let value = node
+            .attribute(name)
+            .unwrap_or("0")
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| invalid(path, format!("invalid {name}")))?;
+        data.word(start + offset, value as u32);
+    }
+    data.payload[start + 0x8c] = boolean(node, "AllowAIPickup", false, path)?;
+    let mut entries = vec![base(KIND, crate_table)];
+    entries.extend(fields(start, &REAL_FIELDS));
+    entries.extend(fields(start, &RESOURCE_FIELDS));
+    entries.extend(fields(start, &EXTRA_FIELDS));
+    Ok((SALVAGE, Table::record(entries)))
 }

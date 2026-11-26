@@ -1807,6 +1807,16 @@ pub(super) fn encode(
         return super::crate_collide::encode_unit(node, pointer, data, references, reference_types)
             .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "SalvageCrateCollide")) {
+        return super::crate_collide::encode_salvage(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "CrateCollide")) {
         return super::crate_collide::encode(node, pointer, data, references, reference_types)
             .map(Some);

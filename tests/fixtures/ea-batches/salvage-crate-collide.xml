@@ -1,0 +1,18 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AudioEvent id="CratePickup"/>
+  <AudioEvent id="ProbeSalvageAudio"/>
+  <FXList id="ProbeSalvageFX"><NuggetList /></FXList>
+  <UpgradeTemplate id="ProbeSalvageUpgrade"/>
+  <GameObject id="ProbeSalvageDefault">
+    <Behaviors><SalvageCrateCollide id="ModuleTag_Salvage"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeSalvageExplicit">
+    <Behaviors><SalvageCrateCollide id="ModuleTag_Salvage" Upgrade="ProbeSalvageUpgrade" ExecuteFX="ProbeSalvageFX" ExecuteAudioEvent="ProbeSalvageAudio" PorterChance="1.5" BannerChance="2.5" LevelUpChance="3.5" LevelUpRadius="4.5" ResourceChance="5.5" MinimumResource="-6" MaximumResource="7" AllowAIPickup="true"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProbeSalvageWithDefaultAudio">
+    <Behaviors><SalvageCrateCollide id="ModuleTag_Salvage" Upgrade="ProbeSalvageUpgrade" ExecuteFX="ProbeSalvageFX"/></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
