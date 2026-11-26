@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <HeaderTemplate id="HeaderProbe"><Font Name="Arial" Size="15" /></HeaderTemplate>
+  <UIFloatingTextDisplay id="FloatDefault"><Font Name="Arial" Size="16" /></UIFloatingTextDisplay>
+  <UIFloatingTextDisplay id="FloatExplicit" TimeOut="2s" MoveUpSpeed="3.5" MoveVanishRate="0.25"><Font Name="Verdana" Size="19" Bold="true" /></UIFloatingTextDisplay>
+  <UISubtitleDisplay id="SubtitleProbe" HoldTime="3s" LineCount="4"><Font Name="Arial" Size="20" Bold="true" /><PanelColor R="128" G="64" B="255" A="192" /><TextColor R="64" G="128" B="192" /></UISubtitleDisplay>
+</AssetDeclaration>

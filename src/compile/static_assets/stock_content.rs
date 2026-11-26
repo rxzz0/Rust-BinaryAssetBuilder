@@ -120,6 +120,8 @@ enum UiCodec {
     Unsigned,
     Signed,
     Real,
+    Time,
+    Velocity,
     Hash,
     KindOf,
     Percentage,
@@ -157,6 +159,19 @@ macro_rules! ui_field {
             codec: $codec,
         }
     };
+}
+
+pub(super) fn ui_display(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    let name = node.tag_name().name();
+    let layout = require_ui_layout(name, path)?;
+    let mut data = BinaryData {
+        payload: vec![0; layout.size],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    write_ui_layout(node, name, layout, 0, &mut data, &mut result)?;
+    Ok(data.finish(result))
 }
 
 pub(super) fn ui_config_list(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
@@ -218,7 +233,7 @@ pub(super) fn ui_config_list(node: Node<'_, '_>, path: &Path) -> io::Result<Mars
 }
 
 fn require_ui_layout(name: &str, path: &Path) -> io::Result<UiLayout> {
-    ui_layout(name).ok_or_else(|| invalid(path, format!("unsupported UIConfigList type {name}")))
+    ui_layout(name).ok_or_else(|| invalid(path, format!("unsupported UI layout {name}")))
 }
 
 fn write_ui_layout(
@@ -229,6 +244,7 @@ fn write_ui_layout(
     data: &mut BinaryData<'_>,
     result: &mut Marshaled,
 ) -> io::Result<()> {
+    let is_asset = offset == 0;
     match name {
         "ObjectFilter" => {
             return super::game_object::encode_inline_object_filter(
@@ -239,8 +255,13 @@ fn write_ui_layout(
             )
             .map(|_| ());
         }
-        "Color4" => {
-            data.word(offset, super::color4(node, data.path)?);
+        "Color3" | "Color4" => {
+            let color = if name == "Color3" {
+                super::color(node, &["B", "G", "R"], 255, data.path)?
+            } else {
+                super::color4(node, data.path)?
+            };
+            data.word(offset, color);
             return Ok(());
         }
         "Vector2" | "RGBColor" => {
@@ -262,6 +283,9 @@ fn write_ui_layout(
 
     for attribute in node.attributes() {
         if attribute.namespace() == Some(crate::compile::XML_NS) && attribute.name() == "base" {
+            continue;
+        }
+        if is_asset && attribute.namespace().is_none() && attribute.name() == "id" {
             continue;
         }
         if attribute.namespace().is_none()
@@ -343,6 +367,11 @@ fn write_ui_layout(
                 ));
             } else if let Some(value) = field.default {
                 write_ui_value(field.codec, value, offset, data, result)?;
+            } else if is_asset && matches!(field.codec, UiCodec::Inline(_)) {
+                return Err(invalid(
+                    data.path,
+                    format!("{name} requires {}", field.name),
+                ));
             }
         }
     }
@@ -388,7 +417,7 @@ fn write_ui_value(
 ) -> io::Result<()> {
     use super::asset_reference;
 
-    let parse_error = || invalid(data.path, format!("invalid UIConfigList value {value:?}"));
+    let parse_error = || invalid(data.path, format!("invalid UI value {value:?}"));
     match codec {
         UiCodec::Text => {
             if value.contains(r"\=") {
@@ -412,6 +441,14 @@ fn write_ui_value(
         UiCodec::Real => data.word(
             offset,
             super::finite_number(value, "UI real number", data.path)?.to_bits(),
+        ),
+        UiCodec::Time => data.word(
+            offset,
+            super::sage_time(value, "UI time", data.path)?.to_bits(),
+        ),
+        UiCodec::Velocity => data.word(
+            offset,
+            (super::finite_number(value, "UI velocity", data.path)? * 0.2).to_bits(),
         ),
         UiCodec::Hash => {
             let bytes = crate::compile::windows_1252(value).ok_or_else(parse_error)?;
@@ -650,6 +687,27 @@ fn ui_layout(name: &str) -> Option<UiLayout> {
                 ui_field!("ScrollSpeedMax", 56, true, Some("2.0"), Real),
             ],
         ),
+        "HeaderTemplate" => (20, &[ui_field!("Font", 4, false, None, Inline("FontDesc"))]),
+        "UIFloatingTextDisplay" => (
+            32,
+            &[
+                ui_field!("TimeOut", 4, true, Some("333ms"), Time),
+                ui_field!("MoveUpSpeed", 8, true, Some("1.0"), Velocity),
+                ui_field!("MoveVanishRate", 12, true, Some("0.1"), Velocity),
+                ui_field!("Font", 16, false, None, Inline("FontDesc")),
+            ],
+        ),
+        "UISubtitleDisplay" => (
+            36,
+            &[
+                ui_field!("HoldTime", 4, true, Some("20s"), Time),
+                ui_field!("LineCount", 8, true, Some("8"), Signed),
+                ui_field!("Font", 12, false, None, Inline("FontDesc")),
+                ui_field!("PanelColor", 28, false, None, Inline("Color4")),
+                ui_field!("TextColor", 32, false, None, Inline("Color3")),
+            ],
+        ),
+        "Color3" => (4, &[]),
         "FontDesc" => (
             16,
             &[
