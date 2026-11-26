@@ -1616,6 +1616,11 @@ mod tests {
     }
 
     #[test]
+    fn timed_opacity_update_matches_ea() {
+        assert_ea_fixture("timed-opacity-update", 1);
+    }
+
+    #[test]
     fn circular_damage_update_matches_ea() {
         assert_ea_fixture("circular-damage", 4);
     }
