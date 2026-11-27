@@ -587,6 +587,18 @@ pub(super) fn upgrade_parent<'a, 'input: 'a>(
     reference_types: &mut Vec<u32>,
     children: &mut std::iter::Peekable<impl Iterator<Item = Node<'a, 'input>>>,
 ) -> io::Result<Entry> {
+    upgrade_fields(node, kind, start, data, reference_types, children)
+        .map(|fields| base(0xae60_ae98, fields))
+}
+
+pub(super) fn upgrade_fields<'a, 'input: 'a>(
+    node: Node<'_, '_>,
+    kind: u32,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+    children: &mut std::iter::Peekable<impl Iterator<Item = Node<'a, 'input>>>,
+) -> io::Result<Table> {
     use super::spawn::{UPGRADE, id_list, weak_reference};
 
     let mut upgrade = vec![module_base(node, kind, start, data, false)?];
@@ -614,7 +626,7 @@ pub(super) fn upgrade_parent<'a, 'input: 'a>(
         let list = id_list(data, start + offset, ids)?;
         upgrade.push(Entry::named(name, 0x26fa_cfc7, Target::Table(list)));
     }
-    Ok(base(0xae60_ae98, Table::record(upgrade)))
+    Ok(Table::record(upgrade))
 }
 
 pub(in crate::compile::static_assets) fn optional_vector(
@@ -1892,6 +1904,21 @@ pub(super) fn encode(
         )
     {
         return super::create_variants::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(
+            node.tag_name().name(),
+            "Upgrade"
+                | "DelayedUpgrade"
+                | "ExperienceScalarUpgrade"
+                | "InvisibilityUpgrade"
+                | "LocomotorSetUpgrade"
+                | "MaxHealthUpgrade"
+                | "UnpauseSpecialPowerUpgrade"
+        )
+    {
+        return super::upgrade_variants::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
     if node.has_tag_name((SAGE_NS, "GrantUpgradeCreate")) {

@@ -97,6 +97,7 @@ mod subobjects;
 mod tech_upgrade;
 mod teleport_stored;
 mod transform_upgrades;
+mod upgrade_variants;
 
 pub(super) use behaviors_basic::{encode_die_mux, weapon_slot};
 pub(super) use client_behaviors::{audio_reference, encode_inline_voice};

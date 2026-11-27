@@ -1,0 +1,26 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="UpgradeDefaults">
+    <Behaviors>
+      <Upgrade id="ModuleTag_Base" />
+      <DelayedUpgrade id="ModuleTag_Delay" />
+      <ExperienceScalarUpgrade id="ModuleTag_Experience" />
+      <LocomotorSetUpgrade id="ModuleTag_Locomotor" />
+      <MaxHealthUpgrade id="ModuleTag_Health" />
+      <InvisibilityUpgrade id="ModuleTag_Invisibility" InvisibilityTemplate="TestCloak" />
+      <UnpauseSpecialPowerUpgrade id="ModuleTag_Unpause" />
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="UpgradeCustom">
+    <Behaviors>
+      <Upgrade id="ModuleTag_Base" RequiresAllTriggers="true" WaypointModeTerminal="false"><TriggeredBy>UpgradeOne</TriggeredBy><ConflictsWith>UpgradeTwo</ConflictsWith></Upgrade>
+      <DelayedUpgrade id="ModuleTag_Delay" DelayTime="123" Permanent="true"><TriggeredBy>DelayTrigger</TriggeredBy></DelayedUpgrade>
+      <ExperienceScalarUpgrade id="ModuleTag_Experience" AddXPScalar="2.75" />
+      <LocomotorSetUpgrade id="ModuleTag_Locomotor" KillLocomotorUpgrade="true" />
+      <MaxHealthUpgrade id="ModuleTag_Health" AddMaxHealth="34.5" ChangeType="PRESERVE_RATIO" />
+      <InvisibilityUpgrade id="ModuleTag_Invisibility" InvisibilityTemplate="TestCloakTwo"><TriggeredBy>CloakTrigger</TriggeredBy></InvisibilityUpgrade>
+      <UnpauseSpecialPowerUpgrade id="ModuleTag_Unpause" SpecialPowerTemplate="FixturePower" ObeyRechageOnTrigger="true"><TriggeredBy>PowerTrigger</TriggeredBy></UnpauseSpecialPowerUpgrade>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>
