@@ -1282,6 +1282,68 @@ fn static_xpointer_child_selection_matches_ea() {
 }
 
 #[test]
+fn static_animation_script_line_endings_match_ea() {
+    let root = scratch_root();
+    let input = root.join("probe.xml");
+    let script = "\r\n        local code = 42\r\n        return code\r\n      ";
+    let draw = |script: &str| {
+        format!(
+            r#"<ScriptedModelDraw id="ModuleTag_Draw"><AnimationState StateName="STATE_Idle" ParseCondStateType="PARSE_NORMAL"><Script>{script}</Script></AnimationState></ScriptedModelDraw>"#
+        )
+    };
+    for (fragment, hash) in [
+        (None, 0x1649_ffb3),
+        (Some("crlffragment.xml"), 0x7d44_d321),
+        (Some("cdatafragment.xml"), 0xfd4f_5604),
+    ] {
+        let draw_xml = if let Some(fragment) = fragment {
+            let fragment_script = if fragment == "cdatafragment.xml" {
+                format!("<![CDATA[{script}]]>")
+            } else {
+                script.to_owned()
+            };
+            fs::write(
+                root.join(fragment),
+                format!(
+                    r#"<Fragment xmlns="uri:ea.com:eala:asset">{}</Fragment>"#,
+                    draw(&fragment_script)
+                ),
+            )
+            .unwrap();
+            format!(
+                r#"<xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="{fragment}" xpointer="xmlns(n=uri:ea.com:eala:asset) xpointer(/n:Fragment/child::*)"/>"#
+            )
+        } else {
+            draw(script)
+        };
+        fs::write(
+            &input,
+            format!(
+                r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="Probe"><Draws>{draw_xml}</Draws><Body><ActiveBody id="ModuleTag_Body"/></Body></GameObject></AssetDeclaration>"#
+            ),
+        )
+        .unwrap();
+
+        let stream = compile_static(&input, &root, &root).unwrap();
+        let manifest = Manifest::parse(&stream.manifest).unwrap();
+        assert_eq!(manifest.assets[0].instance_hash, hash);
+        let expected = if fragment.is_some() {
+            script.to_owned()
+        } else {
+            script.replace("\r\n", "\n")
+        };
+        assert!(
+            stream
+                .files
+                .bin
+                .windows(expected.len())
+                .any(|bytes| bytes == expected.as_bytes())
+        );
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn static_expressions_use_transitive_defines_and_explicit_overrides() {
     let root = scratch_root();
     let defs = root.join("defs.xml");

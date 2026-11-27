@@ -1885,35 +1885,30 @@ fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
         .next()
         .expect("parsed XML element name");
     let prefix = name.split_once(':').map(|(prefix, _)| prefix);
-    let preserve_namespaces = node.attribute((XML_NS, "base")).is_some();
     let mut attribute_end = range.start + 1 + name.len();
     let mut has_namespace = false;
     xml.push('<');
     xml.push_str(name);
     for attr in node.attributes() {
-        if preserve_namespaces {
-            has_namespace |= write_namespace_attributes(
-                node,
-                prefix,
-                &input[attribute_end..attr.range().start],
-                xml,
-            );
-            attribute_end = attr.range().end;
-        }
+        has_namespace |= write_namespace_attributes(
+            node,
+            prefix,
+            &input[attribute_end..attr.range().start],
+            xml,
+        );
+        attribute_end = attr.range().end;
         xml.push(' ');
         xml.push_str(&input[attr.range_qname()]);
         xml.push_str("=\"");
         escape_xml(attr.value(), true, xml);
         xml.push('"');
     }
-    if preserve_namespaces {
-        has_namespace |= write_namespace_attributes(
-            node,
-            prefix,
-            &input[attribute_end..range.start + opening_tag_end(original)],
-            xml,
-        );
-    }
+    has_namespace |= write_namespace_attributes(
+        node,
+        prefix,
+        &input[attribute_end..range.start + opening_tag_end(original)],
+        xml,
+    );
     if root && !has_namespace {
         xml.push_str(" xmlns");
         if let Some(prefix) = prefix {
@@ -1935,10 +1930,10 @@ fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
                     || range.start + original.rfind("</").unwrap(),
                     |next| next.range().start,
                 );
-                // roxmltree merges adjacent text and CDATA, but XmlWriter
-                // retains the CDATA delimiters when hashing the asset XML.
+                // EA retains CDATA in the source document and treats included
+                // animation script CDATA as text when hashing the asset XML.
                 let source = &input[child.range().start..end];
-                if source.contains("<![CDATA[") {
+                if source.contains("<![CDATA[") && !xinclude::has_included_script_marker(node) {
                     write_xml_cdata_text(source, xml);
                 } else {
                     write_xml_text(child.text().unwrap(), xml);
@@ -1960,7 +1955,8 @@ fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
 fn write_xml_text(text: &str, xml: &mut String) {
     if !is_xml_whitespace(text) {
         // The Windows XmlWriter normalizes line breaks in text to CRLF.
-        for (index, line) in text.split('\n').enumerate() {
+        let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+        for (index, line) in normalized.split('\n').enumerate() {
             if index != 0 {
                 xml.push_str("\r\n");
             }
@@ -2013,29 +2009,40 @@ fn opening_tag_end(source: &str) -> usize {
 fn write_namespace_attributes(
     node: Node<'_, '_>,
     element_prefix: Option<&str>,
-    mut raw: &str,
+    raw: &str,
     xml: &mut String,
 ) -> bool {
     let mut has_namespace = false;
-    while let Some((name, value)) = raw.trim_start().split_once('=') {
+    for (name, uri) in namespace_attributes(node, raw) {
+        has_namespace |= name.strip_prefix("xmlns:") == element_prefix;
+        xml.push(' ');
+        xml.push_str(name);
+        xml.push_str("=\"");
+        escape_xml(uri, true, xml);
+        xml.push('"');
+    }
+    has_namespace
+}
+
+fn namespace_attributes<'a, 'input: 'a>(
+    node: Node<'a, 'input>,
+    mut raw: &'input str,
+) -> impl Iterator<Item = (&'input str, &'a str)> {
+    std::iter::from_fn(move || {
+        let (name, value) = raw.trim_start().split_once('=')?;
         let name = name.trim_end();
-        let prefix = name.strip_prefix("xmlns:");
         let value = value.trim_start();
         let delimiter = value.as_bytes()[0] as char;
         let (_, rest) = value[1..]
             .split_once(delimiter)
             .expect("parsed XML attribute");
-        has_namespace |= prefix == element_prefix;
-        if let Some(uri) = node.lookup_namespace_uri(prefix) {
-            xml.push(' ');
-            xml.push_str(name);
-            xml.push_str("=\"");
-            escape_xml(uri, true, xml);
-            xml.push('"');
-        }
         raw = rest;
-    }
-    has_namespace
+        Some((
+            name,
+            node.lookup_namespace_uri(name.strip_prefix("xmlns:"))
+                .unwrap_or(""),
+        ))
+    })
 }
 
 fn is_xml_whitespace(text: &str) -> bool {

@@ -597,13 +597,13 @@ mod tests {
         )
         .unwrap();
         let derived = Document::parse(
-            r#"<GameObject xmlns="uri:ea.com:eala:asset" xmlns:xai="uri:ea.com:eala:asset:instance"
+            r#"<GameObject xmlns="uri:ea.com:eala:asset"
                 id="Derived" inheritFrom="Base" KindOf="-STRUCTURE +SELECTABLE">
                 <Behaviors>
-                    <Replacement id="Replace" xai:joinAction="Replace"/>
-                    <Helper id="Remove" xai:joinAction="Remove"/>
+                    <Replacement id="Replace" xmlns:xai="uri:ea.com:eala:asset:instance" xai:joinAction="Replace"/>
+                    <Helper id="Remove" xmlns:xai="uri:ea.com:eala:asset:instance" xai:joinAction="Remove"/>
                 </Behaviors>
-                <DisplayName xai:joinAction="Replace">Derived name</DisplayName>
+                <DisplayName xai:joinAction="Replace" xmlns:xai="uri:ea.com:eala:asset:instance">Derived name</DisplayName>
             </GameObject>"#,
         )
         .unwrap();
@@ -620,7 +620,7 @@ mod tests {
         result.write_xml(&mut xml, true);
         assert_eq!(
             xml,
-            r#"<GameObject id="Derived" KindOf=" SELECTABLE" xmlns="uri:ea.com:eala:asset"><DisplayName>Derived name</DisplayName><Behaviors><Helper id="Keep" Weapon="First\0" Radius="5" Enabled="true" /><Replacement id="Replace" /></Behaviors></GameObject>"#,
+            r#"<GameObject id="Derived" KindOf=" SELECTABLE" xmlns="uri:ea.com:eala:asset"><DisplayName xmlns:xai="uri:ea.com:eala:asset:instance">Derived name</DisplayName><Behaviors><Helper id="Keep" Weapon="First\0" Radius="5" Enabled="true" /><Replacement id="Replace" xmlns:xai="uri:ea.com:eala:asset:instance" /></Behaviors></GameObject>"#,
         );
     }
 }

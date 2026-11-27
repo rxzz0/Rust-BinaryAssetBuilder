@@ -861,7 +861,7 @@ mod tests {
     #[test]
     fn unnamed_client_behaviors_use_eas_zero_id() {
         let document = Document::parse(
-            r#"<GameObject xmlns="uri:ea.com:eala:asset" id="Anonymous">
+            r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="Anonymous">
                 <Body><ActiveBody id="ModuleTag_Body" MaxHealth="75"/></Body>
                 <ClientBehaviors>
                     <ModelConditionEvaEventSelectorClientBehavior>
@@ -873,10 +873,11 @@ mod tests {
                         <ModelConditionSound Sound="ALL_Spy_VoiceDieYurikoFall" RequiredFlags="IMPENDING_DOOM"/>
                     </ModelConditionAudioLoopClientBehavior>
                 </ClientBehaviors>
-            </GameObject>"#,
+            </GameObject></AssetDeclaration>"#,
         )
         .unwrap();
-        let asset = compile_asset(document.root_element(), Path::new("mod.xml"), "").unwrap();
+        let node = document.root_element().first_element_child().unwrap();
+        let asset = compile_asset(node, Path::new("mod.xml"), "").unwrap();
         assert_eq!(asset.instance_hash, 0xc156_5e38);
         for (offset, kind) in [(0xc24, EVA_SELECTOR), (0xcc0, LOOP)] {
             assert_eq!(&asset.payload[offset..offset + 4], &kind.to_le_bytes());
