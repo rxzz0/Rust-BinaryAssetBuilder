@@ -117,6 +117,7 @@ pub(super) fn tutorial_map_data(node: Node<'_, '_>, path: &Path) -> io::Result<M
 enum UiCodec {
     Text,
     Boolean,
+    Byte,
     Unsigned,
     Signed,
     Real,
@@ -129,6 +130,7 @@ enum UiCodec {
     Enum(&'static [&'static str]),
     EnumWithInvalid(&'static [&'static str]),
     EnumPointer(&'static [&'static str]),
+    EnumValue(&'static [(&'static str, u32)]),
     Weak(&'static str),
     WeakPointer(&'static str),
     Strong(&'static str),
@@ -294,6 +296,8 @@ fn write_ui_layout(
         "SellFactionCursorSet" => &["Faction"],
         "HUDElementHotKeyMapping" => &["ElementId", "HotKeySlot"],
         "UIQuickChatMessage" => &["MessageText"],
+        "SiegeEvaEvent" => &["Seconds", "EvaEvent"],
+        "TechUpgradeBindingInfo" => &["TechDependency", "UpgradeToGrant"],
         "CommandButtonFactionSettings" => &["Faction"],
         "StanceButtonSettings" => &["Stance"],
         "UIDecalCloud" => &[
@@ -446,6 +450,12 @@ fn write_ui_layout(
                         format!("{name} has an invalid menu item count"),
                     ));
                 }
+                if children.is_empty() && matches!(field.name, "Binding" | "Scorch") {
+                    return Err(invalid(
+                        data.path,
+                        format!("{name} requires {}", field.name),
+                    ));
+                }
                 let start = data.list(offset, children.len(), stride)?;
                 for (index, child) in children.into_iter().enumerate() {
                     write_ui_child(*codec, child, start + index * stride, data, result)?;
@@ -536,6 +546,9 @@ fn write_ui_value(
                 _ => return Err(parse_error()),
             };
         }
+        UiCodec::Byte => {
+            data.payload[offset] = value.trim().parse().map_err(|_| parse_error())?;
+        }
         UiCodec::Unsigned => data.word(
             offset,
             super::sage_uint(value, "UI unsigned integer", data.path)?,
@@ -582,6 +595,13 @@ fn write_ui_value(
             } else {
                 data.word(offset, value);
             }
+        }
+        UiCodec::EnumValue(variants) => {
+            let (_, value) = variants
+                .iter()
+                .find(|&&(variant, _)| variant == value.trim())
+                .ok_or_else(parse_error)?;
+            data.word(offset, *value);
         }
         UiCodec::KindOf => {
             for (index, word) in super::global_ui::kind_of_flags(value, data.path)?
@@ -1028,6 +1048,150 @@ fn ui_layout(name: &str) -> Option<UiLayout> {
                 false,
                 None,
                 Repeated(8, &Inline("JoypadBuildButtonFactionSettings"))
+            )],
+        ),
+        "MissionHotSpotSettings" => (
+            16,
+            &[
+                ui_field!("WaypointMarker", 4, true, None, Strong("GameObject")),
+                ui_field!(
+                    "DecalTemplate",
+                    8,
+                    false,
+                    None,
+                    Inline("RadiusDecalTemplate")
+                ),
+            ],
+        ),
+        "ScorchMarkSetting" => (
+            12,
+            &[
+                ui_field!(
+                    "TerrainClass",
+                    0,
+                    true,
+                    None,
+                    Enum(&[
+                        "UNSPECIFIED",
+                        "Misc",
+                        "Dirt",
+                        "Cliff",
+                        "Grass",
+                        "Rock",
+                        "Road",
+                        "Mud",
+                        "Sand",
+                        "Shrub",
+                        "Snow",
+                    ])
+                ),
+                ui_field!(
+                    "Scorch",
+                    4,
+                    false,
+                    None,
+                    Repeated(
+                        4,
+                        &EnumWithInvalid(&[
+                            "RANDOM",
+                            "SCORCH_1",
+                            "SCORCH_2",
+                            "SCORCH_3",
+                            "SCORCH_4",
+                            "SCORCH_5",
+                            "SCORCH_6",
+                            "SCORCH_7",
+                            "SCORCH_8",
+                            "SCORCH_9",
+                            "SCORCH_10",
+                            "SCORCH_11",
+                            "SCORCH_12",
+                            "SCORCH_13",
+                            "SCORCH_14",
+                            "SCORCH_15",
+                            "SCORCH_16",
+                            "TERRAIN_MAPPED",
+                        ])
+                    )
+                ),
+            ],
+        ),
+        "ScorchMarkSettings" => (
+            12,
+            &[ui_field!(
+                "ScorchMarkSetting",
+                4,
+                false,
+                None,
+                Repeated(12, &Inline("ScorchMarkSetting"))
+            )],
+        ),
+        "W3DDeviceSettings" => (
+            168,
+            &[
+                ui_field!("MaxTerrainTracks", 4, true, Some("100"), Signed),
+                ui_field!(
+                    "OpacityOfSimpleMergeDecals",
+                    8,
+                    true,
+                    Some("35%"),
+                    Percentage
+                ),
+                ui_field!("OccludedColorLuminanceScale", 12, true, Some("0.5"), Real),
+                ui_field!("MaxRoadSegments", 16, true, Some("4000"), Signed),
+                ui_field!("MaxRoadVertex", 20, true, Some("5000"), Signed),
+                ui_field!("MaxRoadIndex", 24, true, Some("10000"), Signed),
+                ui_field!(
+                    "DefaultShroudStatus",
+                    28,
+                    true,
+                    Some("FOGGED"),
+                    EnumValue(&[("FOGGED", 0), ("CLEAR", 1), ("SHROUDED", 3)])
+                ),
+                ui_field!("ShroudColor", 32, false, None, Inline("RGBColor")),
+                ui_field!(
+                    "TreeFadeObjectFilter",
+                    44,
+                    false,
+                    None,
+                    Inline("ObjectFilter")
+                ),
+                ui_field!("StandardPublicBone", 156, false, None, Repeated(8, &Text)),
+                ui_field!("UseSimpleHordeDecals", 164, true, Some("false"), Boolean),
+                ui_field!("FogAlpha", 165, true, Some("63"), Byte),
+                ui_field!("ShroudAlpha", 166, true, Some("0"), Byte),
+                ui_field!("ClearAlpha", 167, true, Some("255"), Byte),
+            ],
+        ),
+        "SiegeEvaEvent" => (
+            16,
+            &[
+                ui_field!("Seconds", 4, true, None, Time),
+                ui_field!("EvaEvent", 8, true, None, Strong("EvaEvent")),
+                ui_field!(
+                    "EventType",
+                    12,
+                    true,
+                    Some("ALL"),
+                    Enum(&["SIEGE", "GENERIC", "ALL"])
+                ),
+            ],
+        ),
+        "TechUpgradeBindingInfo" => (
+            8,
+            &[
+                ui_field!("TechDependency", 0, true, None, Strong("PlayerTech")),
+                ui_field!("UpgradeToGrant", 4, true, None, Strong("UpgradeTemplate")),
+            ],
+        ),
+        "PlayerTechUpgradeBinding" => (
+            12,
+            &[ui_field!(
+                "Binding",
+                4,
+                false,
+                None,
+                Repeated(8, &Inline("TechUpgradeBindingInfo"))
             )],
         ),
         "UICoopTinting" => (
