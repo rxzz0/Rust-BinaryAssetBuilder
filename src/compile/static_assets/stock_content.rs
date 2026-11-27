@@ -209,8 +209,14 @@ pub(super) fn ui_display(node: Node<'_, '_>, path: &Path) -> io::Result<Marshale
     };
     let mut result = Marshaled::default();
     write_ui_layout(node, name, layout, 0, &mut data, &mut result)?;
-    if matches!(name, "UIMouseVoiceChat" | "UIMouseTacticalQuickChatDisplay") {
+    if matches!(
+        name,
+        "UIMouseVoiceChat" | "UIMouseTacticalQuickChatDisplay" | "CrowdResponse"
+    ) {
         data.relocations.sort_unstable();
+    }
+    if name == "CrowdResponse" {
+        result.imports.sort_unstable();
     }
     Ok(data.finish(result))
 }
@@ -397,6 +403,7 @@ fn write_ui_layout(
         "UIQuickChatMessage" => &["MessageText"],
         "MiscEvaBeaconSettings" => &["BeaconType"],
         "IntelDBEntry" => &["CategoryId", "EntryId"],
+        "TerrainAssetRecord" => &["id", "Texture", "Class"],
         "SiegeEvaEvent" => &["Seconds", "EvaEvent"],
         "TechUpgradeBindingInfo" => &["TechDependency", "UpgradeToGrant"],
         "CommandButtonFactionSettings" => &["Faction"],
@@ -427,6 +434,16 @@ fn write_ui_layout(
         }
         "InGameUISimpleHelpTemplate" => {
             required(node, "Title", data.path)?;
+        }
+        "AudioArrayVoice" => {
+            return super::game_object::encode_inline_voice(
+                node,
+                offset,
+                data,
+                &mut result.references,
+                &mut result.reference_types,
+                &mut result.imports,
+            );
         }
         "ObjectFilter" => {
             return super::game_object::encode_inline_object_filter(
@@ -552,7 +569,10 @@ fn write_ui_layout(
                     ));
                 }
                 if children.is_empty()
-                    && matches!(field.name, "Binding" | "Scorch" | "IntelDBEntry")
+                    && matches!(
+                        field.name,
+                        "Binding" | "Scorch" | "IntelDBEntry" | "Threshold"
+                    )
                 {
                     return Err(invalid(
                         data.path,
@@ -581,6 +601,7 @@ fn write_ui_layout(
                         | "DecalSettings"
                         | "RadarSpecialIcon"
                         | "StanceButtonSettings"
+                        | "CrowdThreshold"
                 ))
                 && matches!(field.codec, UiCodec::Inline(_))
             {
@@ -885,6 +906,19 @@ const MOUSE_HUD_FIXED_ELEMENT_IDS: [&str; 36] = [
     "UnitIntroButton",
     "CoOpAIOrderPanel",
 ];
+const TERRAIN_CLASSES: [&str; 11] = [
+    "UNSPECIFIED",
+    "Misc",
+    "Dirt",
+    "Cliff",
+    "Grass",
+    "Rock",
+    "Road",
+    "Mud",
+    "Sand",
+    "Shrub",
+    "Snow",
+];
 fn ui_layout(name: &str) -> Option<UiLayout> {
     use UiCodec::*;
     let (size, fields): (_, &[_]) = match name {
@@ -1166,28 +1200,93 @@ fn ui_layout(name: &str) -> Option<UiLayout> {
                 ),
             ],
         ),
+        "TerrainAssetRecord" => (
+            36,
+            &[
+                ui_field!("id", 0, true, None, Text),
+                ui_field!("Texture", 8, true, None, Text),
+                ui_field!("BumpTexture", 16, true, None, Text),
+                ui_field!("Class", 24, true, None, Enum(&TERRAIN_CLASSES)),
+                ui_field!("WBFolder", 28, true, None, Text),
+            ],
+        ),
+        "TerrainAssetCollection" => (
+            12,
+            &[ui_field!(
+                "TerrainAsset",
+                4,
+                false,
+                None,
+                Repeated(36, &Inline("TerrainAssetRecord"))
+            )],
+        ),
+        "ArmyDefinition" => (
+            64,
+            &[
+                ui_field!("Side", 4, true, None, Text),
+                ui_field!("MCVTemplate", 12, true, None, Weak("GameObject")),
+                ui_field!("GathererTemplate", 16, true, None, Weak("GameObject")),
+                ui_field!("ExpanderTemplate", 20, true, None, Weak("GameObject")),
+                ui_field!("EnergyProducer", 24, true, None, Weak("GameObject")),
+                ui_field!(
+                    "PrimaryResourceNodeCollector",
+                    28,
+                    true,
+                    None,
+                    Weak("GameObject")
+                ),
+                ui_field!(
+                    "PrimaryResourceThingToBuild",
+                    32,
+                    true,
+                    None,
+                    Weak("GameObject")
+                ),
+                ui_field!(
+                    "SecondaryResourceNodeCollector",
+                    36,
+                    true,
+                    None,
+                    Weak("GameObject")
+                ),
+                ui_field!("VehicleRepairFacility", 40, true, None, Weak("GameObject")),
+                ui_field!("NavalRepairFacility", 44, true, None, Weak("GameObject")),
+                ui_field!("AircraftRepairFacility", 48, true, None, Weak("GameObject")),
+                ui_field!("WallPiece", 52, true, None, Weak("GameObject")),
+                ui_field!(
+                    "TechStructure",
+                    56,
+                    false,
+                    None,
+                    Repeated(4, &Weak("GameObject"))
+                ),
+            ],
+        ),
+        "AudioArrayVoice" => (24, &[]),
+        "CrowdThreshold" => (
+            28,
+            &[
+                ui_field!("NumUnits", 0, true, Some("0"), Signed),
+                ui_field!("AudioArrayVoice", 4, false, None, Inline("AudioArrayVoice")),
+            ],
+        ),
+        "CrowdResponse" => (
+            16,
+            &[
+                ui_field!("Weight", 4, true, Some("100"), Signed),
+                ui_field!(
+                    "Threshold",
+                    8,
+                    false,
+                    None,
+                    Repeated(28, &Inline("CrowdThreshold"))
+                ),
+            ],
+        ),
         "ScorchMarkSetting" => (
             12,
             &[
-                ui_field!(
-                    "TerrainClass",
-                    0,
-                    true,
-                    None,
-                    Enum(&[
-                        "UNSPECIFIED",
-                        "Misc",
-                        "Dirt",
-                        "Cliff",
-                        "Grass",
-                        "Rock",
-                        "Road",
-                        "Mud",
-                        "Sand",
-                        "Shrub",
-                        "Snow",
-                    ])
-                ),
+                ui_field!("TerrainClass", 0, true, None, Enum(&TERRAIN_CLASSES)),
                 ui_field!(
                     "Scorch",
                     4,

@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <TerrainAssetCollection id="Default" />
+  <TerrainAssetCollection id="Custom">
+    <TerrainAsset id="GrassTile" Texture="Grass" BumpTexture="GrassBump" Class="Grass" WBFolder="Outdoor" />
+    <TerrainAsset id="DirtTile" Texture="Dirt" Class="Dirt" />
+  </TerrainAssetCollection>
+  <ArmyDefinition id="Default" />
+  <ArmyDefinition id="Custom" WallPiece="Wall" Side="Allies" MCVTemplate="MCV" GathererTemplate="Harvester" ExpanderTemplate="Scout" EnergyProducer="Power" PrimaryResourceNodeCollector="Collector" PrimaryResourceThingToBuild="Refinery" SecondaryResourceNodeCollector="Oil" VehicleRepairFacility="Garage" NavalRepairFacility="Dock" AircraftRepairFacility="Hangar">
+    <TechStructure>Garage</TechStructure><TechStructure>Dock</TechStructure>
+  </ArmyDefinition>
+  <CrowdResponse id="Default"><Threshold><AudioArrayVoice /></Threshold></CrowdResponse>
+  <CrowdResponse id="Custom" Weight="17">
+    <Threshold NumUnits="8"><AudioArrayVoice><AudioEntry AudioType="voiceSelect" Sound="CrowdSelect"/><NamedEntry Name="Ready" EvaEvent="ReadyEvent"/></AudioArrayVoice></Threshold>
+    <Threshold NumUnits="16"><AudioArrayVoice /></Threshold>
+  </CrowdResponse>
+</AssetDeclaration>

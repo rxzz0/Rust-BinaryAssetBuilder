@@ -29,6 +29,7 @@ pub(super) fn encode(
         data,
         references,
         reference_types,
+        imports: None,
     };
     let modules: Vec<_> = significant_children(group).collect();
     let count = encoder.data.allocate(0x1e4, 8)?;
@@ -144,6 +145,7 @@ struct AudioEncoder<'a, 'path> {
     data: &'a mut BinaryData<'path>,
     references: &'a mut Vec<AssetReference>,
     reference_types: &'a mut Vec<u32>,
+    imports: Option<&'a mut Vec<u32>>,
 }
 
 pub(super) fn encode_object_audio(
@@ -156,6 +158,7 @@ pub(super) fn encode_object_audio(
         data,
         references,
         reference_types,
+        imports: None,
     };
     match node.tag_name().name() {
         "AudioArrayVoice" => encoder.audio_array(Some(node), 0x208, true),
@@ -166,6 +169,24 @@ pub(super) fn encode_object_audio(
             format!("unsupported GameObject audio array {name}"),
         )),
     }
+}
+
+pub(in crate::compile::static_assets) fn encode_inline_voice(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+    imports: &mut Vec<u32>,
+) -> io::Result<()> {
+    AudioEncoder {
+        data,
+        references,
+        reference_types,
+        imports: Some(imports),
+    }
+    .audio_array_fields(node, start, true)?;
+    Ok(())
 }
 
 impl AudioEncoder<'_, '_> {
@@ -377,6 +398,17 @@ impl AudioEncoder<'_, '_> {
         let Some(node) = node else {
             return Ok(Target::Null);
         };
+        let start = self.data.allocate(pointer, if voice { 24 } else { 8 })?;
+        self.audio_array_fields(node, start, voice)
+            .map(Target::Table)
+    }
+
+    fn audio_array_fields(
+        &mut self,
+        node: Node<'_, '_>,
+        start: usize,
+        voice: bool,
+    ) -> io::Result<Table> {
         validate_attributes(node, &[], self.data.path)?;
         let mut children = Vec::new();
         let mut object_specific = Vec::new();
@@ -399,7 +431,6 @@ impl AudioEncoder<'_, '_> {
                 ));
             }
         }
-        let start = self.data.allocate(pointer, if voice { 24 } else { 8 })?;
         let size = if voice { 12 } else { 8 };
         let first = self.data.list(start, children.len(), size)?;
         let mut items = Vec::with_capacity(children.len());
@@ -446,7 +477,7 @@ impl AudioEncoder<'_, '_> {
             }
             fields.push(list("NamedEntry", 0xf8ed_487b, start + 16, items));
         }
-        Ok(Target::Table(Table::record(fields)))
+        Ok(Table::record(fields))
     }
 
     fn voice_entry(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
@@ -508,7 +539,7 @@ impl AudioEncoder<'_, '_> {
     fn sound_or_eva(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
         let sound = self.optional_sound(node, start)?;
         let event = self.reference(node.attribute("EvaEvent").unwrap_or(""), "EvaEvent")?;
-        self.data.word(start + 4, event);
+        self.write_import(start + 4, event);
         Ok(Table::record(vec![
             sound,
             field("EvaEvent", 0xc4ec_43b1, start + 4),
@@ -538,12 +569,21 @@ impl AudioEncoder<'_, '_> {
         let target = if let Some(value) = node.attribute("Sound") {
             let ordinal = self.reference(value, "BaseAudioEventInfo")?;
             let offset = self.data.allocate(pointer, 4)?;
-            self.data.word(offset, ordinal);
+            self.write_import(offset, ordinal);
             Target::Data(offset)
         } else {
             Target::Null
         };
         Ok(Entry::named("Sound", SOUND, target))
+    }
+
+    fn write_import(&mut self, offset: usize, ordinal: u32) {
+        self.data.word(offset, ordinal);
+        if ordinal != 0
+            && let Some(imports) = &mut self.imports
+        {
+            imports.push(offset as u32);
+        }
     }
 
     fn reference(&mut self, value: &str, kind: &str) -> io::Result<u32> {
