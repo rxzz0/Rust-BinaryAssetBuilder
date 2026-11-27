@@ -302,6 +302,7 @@ pub(in crate::compile::static_assets) fn compile(
                     "DominateEnemySpecialPower" => &[super::dominate_enemy::FILTER_POINTER as u32],
                     "BeamSpecialAbilityUpdate" => &[0xf8, 0x108],
                     "RadarFreezeSpecialPower" | "RadarSpySpecialPower" => &[0x1c8],
+                    "RefundDie" => &[0x3c, 0x44],
                     "AssembleStructureSpecialAbilityUpdate" => &[0xfc],
                     _ => &[],
                 };

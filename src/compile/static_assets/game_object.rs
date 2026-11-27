@@ -69,6 +69,7 @@ mod ore;
 mod parking;
 pub(super) use parking::encode_filter as encode_object_filter;
 pub(super) use parking::encode_inline_filter as encode_inline_object_filter;
+mod death_variants;
 mod passive_area;
 mod physics;
 mod production;
