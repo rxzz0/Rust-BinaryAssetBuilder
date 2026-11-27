@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 473: Added native AttachModel and EmbedPortal lists to the shared ScriptedModelDraw layout, including inherited SpotlightDraw. Both EA fixture GameObjects match byte for byte. Rust tests, Clippy and the release build passed.
 - Checkpoint 472: Added Upgrade, DelayedUpgrade, ExperienceScalarUpgrade, InvisibilityUpgrade, LocomotorSetUpgrade, MaxHealthUpgrade and UnpauseSpecialPowerUpgrade through the shared UpgradeModuleData layout. Both EA fixture assets matched. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: scripted draw attachments and embedded portals.
 - Checkpoint 471: Added TestTexture, TestTextureCollection and TestGameObject with file checksums, aligned blobs, typed references, and nested module lists. Matched all six EA fixture assets. Native static smoke, all 392 tests, and Clippy passed. Installed and verified the SDK release. Next: ScriptedModelDraw attachments and embedded portals.
 - Checkpoint 470: Added AttributeModifierNaval, CombinedInfoModule, ExperienceLevelCreate, InheritUpgradeCreate, RandomModelCondition and SupplyCenterCreate through the shared CreateModuleData layout. Both EA fixtures matched. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: SDK test pipeline assets.

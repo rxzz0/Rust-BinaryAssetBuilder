@@ -40,6 +40,27 @@ pub(in crate::compile) const SCRIPTED_FLAGS: &[(&str, usize, bool)] = &[
     ("HighDetailOnly", 0xd5, false),
 ];
 
+pub(in crate::compile) fn scripted_attributes() -> impl Iterator<Item = &'static str> {
+    [
+        "id",
+        "ExtraPublicBone",
+        "DependencySharedModelFlags",
+        "BirthFadeTime",
+        "MinLODRequired",
+        "ProjectileBoneFeedbackEnabledSlots",
+        "TrackMarks",
+        "WadingParticleSys",
+    ]
+    .into_iter()
+    .chain(SCRIPTED_FLAGS.iter().map(|&(name, _, _)| name))
+    .chain(
+        SCRIPTED_STRINGS
+            .into_iter()
+            .chain(SCRIPTED_REALS)
+            .map(|(name, _)| name),
+    )
+}
+
 fn scripted_flag(name: &'static str) -> (&'static str, u32, usize) {
     let &(_, offset, _) = SCRIPTED_FLAGS
         .iter()
@@ -505,41 +526,26 @@ fn scripted_model(
     let dynamics = kind == dynamics::DRAW_KIND;
     let spotlight = kind == SPOTLIGHT_DRAW;
     let spotlight_fields = ["RefreshTime", "SweepTime"];
-    let allowed: Vec<_> = [
-        "id",
-        "ExtraPublicBone",
-        "DependencySharedModelFlags",
-        "BirthFadeTime",
-        "MinLODRequired",
-        "ProjectileBoneFeedbackEnabledSlots",
-        "TrackMarks",
-        "WadingParticleSys",
-    ]
-    .into_iter()
-    .chain(spotlight_fields.into_iter().filter(|_| spotlight))
-    .chain(SCRIPTED_FLAGS.iter().map(|&(name, _, _)| name))
-    .chain(
-        SCRIPTED_STRINGS
-            .into_iter()
-            .chain(SCRIPTED_REALS)
-            .map(|(name, _)| name),
-    )
-    .chain(
-        TRUCK_FIELDS
-            .iter()
-            .filter(|_| truck)
-            .map(|&(name, _, _, _)| name),
-    )
-    .chain(
-        dynamics
-            .then_some(dynamics::DRAW_ATTRIBUTES)
-            .into_iter()
-            .flatten(),
-    )
-    .collect();
+    let allowed: Vec<_> = scripted_attributes()
+        .chain(spotlight_fields.into_iter().filter(|_| spotlight))
+        .chain(
+            TRUCK_FIELDS
+                .iter()
+                .filter(|_| truck)
+                .map(|&(name, _, _, _)| name),
+        )
+        .chain(
+            dynamics
+                .then_some(dynamics::DRAW_ATTRIBUTES)
+                .into_iter()
+                .flatten(),
+        )
+        .collect();
     validate_attributes(node, &allowed, data.path)?;
     let mut states = Vec::new();
     let mut animations = Vec::new();
+    let mut attachments = Vec::new();
+    let mut portals = Vec::new();
     let mut tread_particles = None;
     let mut tread_maps = Vec::new();
     let mut articulation_bones = Vec::new();
@@ -550,6 +556,10 @@ fn scripted_model(
             states.push(child);
         } else if child.has_tag_name((SAGE_NS, "AnimationState")) {
             animations.push(child);
+        } else if child.has_tag_name((SAGE_NS, "AttachModel")) {
+            attachments.push(child);
+        } else if child.has_tag_name((SAGE_NS, "EmbedPortal")) {
+            portals.push(child);
         } else if (truck || tank)
             && child.has_tag_name((SAGE_NS, "TreadTerrainParticles"))
             && tread_particles.is_none()
@@ -707,6 +717,8 @@ fn scripted_model(
     }
     let animation_table =
         super::animation::encode(animations, start + 0xac, data, references, reference_types)?;
+    let attachments = attach_models(attachments, start + 0xb4, data)?;
+    let portals = embed_portals(portals, start + 0xbc, data)?;
 
     let module = Table::record(vec![
         Entry::new(0x19b0_42a0, 0x23e6_50b8, Target::Data(start)),
@@ -777,8 +789,8 @@ fn scripted_model(
             0x99b3_42c4,
             Target::Table(animation_table),
         ),
-        array("AttachModel", 0xb4e5_23bf, start + 0xb4),
-        array("EmbedPortal", 0xafc5_e3e3, start + 0xbc),
+        Entry::named("AttachModel", 0xb4e5_23bf, Target::Table(attachments)),
+        Entry::named("EmbedPortal", 0xafc5_e3e3, Target::Table(portals)),
     ]);
     let table = Table::record(entries);
     if spotlight {
@@ -826,6 +838,110 @@ const WEAPON_BONE_LISTS: [(&str, usize); 4] = [
     ("WeaponMuzzleFlash", 0x8c),
     ("WeaponLaunchBone", 0x94),
 ];
+
+fn attach_models(
+    nodes: Vec<Node<'_, '_>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Table> {
+    const ITEM_SIZE: usize = 0x50;
+    let start = data.list(count, nodes.len(), ITEM_SIZE)?;
+    let mut items = Vec::with_capacity(nodes.len());
+    for (index, node) in nodes.into_iter().enumerate() {
+        validate_attributes(node, &["FlagMask", "Bone"], data.path)?;
+        let mut children = significant_children(node);
+        let model = required_element(&mut children, "Model", data.path)?;
+        if children.next().is_some() || has_content(model) {
+            return Err(invalid(data.path, "unexpected AttachModel content"));
+        }
+        validate_attributes(model, &["Object", "Probability"], data.path)?;
+
+        let offset = start + index * ITEM_SIZE;
+        if let Some(value) = node.attribute("FlagMask") {
+            write_model_conditions(value, offset, data)?;
+        }
+        if let Some(value) = node.attribute("Bone") {
+            data.string(offset + 0x3c, value)?;
+        }
+        if let Some(value) = model.attribute("Object") {
+            data.string(offset + 0x44, value)?;
+        }
+        let probability = super::super::sage_int(
+            model.attribute("Probability").unwrap_or("-1"),
+            "Probability",
+            data.path,
+        )?;
+        data.word(offset + 0x4c, probability);
+
+        let model_fields = Table::record(
+            fields(
+                offset,
+                &[
+                    ("Object", 0x805d_25f4, 0x44),
+                    ("Probability", 0x23e6_50b8, 0x4c),
+                ],
+            )
+            .collect(),
+        );
+        let mut entries: Vec<_> = fields(
+            offset,
+            &[("FlagMask", 0x67db_bfc9, 0), ("Bone", STRING, 0x3c)],
+        )
+        .collect();
+        entries.push(Entry::named(
+            "Model",
+            0x85e3_17bd,
+            Target::Table(model_fields),
+        ));
+        items.push((0, Target::Table(Table::record(entries))));
+    }
+    Ok(Table::array(count, items))
+}
+
+fn embed_portals(
+    nodes: Vec<Node<'_, '_>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Table> {
+    const PORTAL_TYPES: &[&str] = &[
+        "NORMAL",
+        "PORTAL",
+        "WALK_PORTAL",
+        "CLIMB_PORTAL",
+        "PRE_CLIMB_PORTAL",
+        "BEACON",
+        "SPLINE_CATMULL_ROM",
+        "FAKE_PATHFIND_PORTAL",
+        "MINESHAFT_PORTAL",
+    ];
+    const ITEM_SIZE: usize = 0x0c;
+    let start = data.list(count, nodes.len(), ITEM_SIZE)?;
+    let mut items = Vec::with_capacity(nodes.len());
+    for (index, node) in nodes.into_iter().enumerate() {
+        validate_attributes(node, &["PortalType", "BonePrefix"], data.path)?;
+        if has_content(node) {
+            return Err(invalid(data.path, "unexpected EmbedPortal content"));
+        }
+
+        let offset = start + index * ITEM_SIZE;
+        if let Some(value) = node.attribute("PortalType") {
+            let portal_type = PORTAL_TYPES
+                .iter()
+                .position(|&variant| variant == value.trim())
+                .ok_or_else(|| invalid(data.path, format!("invalid PortalType {value:?}")))?;
+            data.word(offset, portal_type as u32);
+        }
+        if let Some(value) = node.attribute("BonePrefix") {
+            data.string(offset + 4, value)?;
+        }
+        let entries = fields(
+            offset,
+            &[("PortalType", 0x7459_48b5, 0), ("BonePrefix", STRING, 4)],
+        );
+        items.push((0, Target::Table(Table::record(entries.collect()))));
+    }
+    Ok(Table::array(count, items))
+}
 
 fn model_state(
     node: Node<'_, '_>,

@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DrawAttachmentDefaults">
+    <Draws><ScriptedModelDraw id="ModuleTag_Draw"><AttachModel><Model /></AttachModel><EmbedPortal /></ScriptedModelDraw></Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="DrawAttachmentCustom">
+    <Draws><SpotlightDraw id="ModuleTag_Draw" RefreshTime="3s">
+      <ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name="ABAirfield" /></ModelConditionState>
+      <AttachModel FlagMask="SOLD REALLYDAMAGED" Bone="Dock_Bone"><Model Object="GameObject:FixtureDocked" Probability="76" /></AttachModel>
+      <AttachModel Bone="Bone2"><Model Object="Secondary" /></AttachModel>
+      <EmbedPortal PortalType="WALK_PORTAL" BonePrefix="PORTAL_A" />
+      <EmbedPortal PortalType="MINESHAFT_PORTAL" BonePrefix="Portal_B" />
+    </SpotlightDraw></Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

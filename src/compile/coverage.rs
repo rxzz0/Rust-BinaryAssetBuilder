@@ -1,4 +1,6 @@
-use super::static_assets::game_object::{SCRIPTED_FLAGS, Schema};
+#[cfg(test)]
+use super::static_assets::game_object::SCRIPTED_FLAGS;
+use super::static_assets::game_object::{Schema, scripted_attributes};
 use super::{SAGE_NS, invalid, static_assets};
 use crate::manifest::Manifest;
 use roxmltree::Document;
@@ -310,11 +312,7 @@ pub fn sdk_coverage(schema_root: &Path, mut out: impl Write) -> io::Result<()> {
             if group == "Draws" && name == "ScriptedModelDraw" {
                 let draw = schema.shape(kind, schema_root)?;
                 for field in draw.fields {
-                    let coverage = if matches!(field.name.as_str(), "id" | "ExtraPublicBone")
-                        || SCRIPTED_FLAGS
-                            .iter()
-                            .any(|&(name, _, _)| name == field.name)
-                    {
+                    let coverage = if scripted_attributes().any(|name| name == field.name) {
                         "encoded"
                     } else {
                         "missing"
@@ -326,13 +324,10 @@ pub fn sdk_coverage(schema_root: &Path, mut out: impl Write) -> io::Result<()> {
                     )?;
                 }
                 for field in draw.children {
-                    let coverage = if matches!(
-                        field.name.as_str(),
-                        "ModelConditionState" | "AnimationState"
-                    ) {
-                        "partial"
-                    } else {
-                        "missing"
+                    let coverage = match field.name.as_str() {
+                        "ModelConditionState" | "AnimationState" => "partial",
+                        "AttachModel" | "EmbedPortal" => "encoded",
+                        _ => "missing",
                     };
                     writeln!(out, "DrawChild\t{}\t{}\t{coverage}", field.name, field.kind)?;
                 }

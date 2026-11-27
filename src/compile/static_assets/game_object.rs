@@ -18,7 +18,9 @@ mod draws;
 mod dynamics;
 mod eject_passengers;
 mod enable_dynamics_collide;
+#[cfg(test)]
 pub(in crate::compile) use draws::SCRIPTED_FLAGS;
+pub(in crate::compile) use draws::scripted_attributes;
 mod animal_ai;
 mod attach;
 mod beam_special_ability;
