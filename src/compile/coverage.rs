@@ -9,8 +9,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 
-// Dispatch coverage, not a claim of complete field support. Draw field coverage
-// comes from the same flag table used by the encoder.
+// Dispatch coverage. ScriptedModelDraw also checks its direct schema fields.
 const MODULES: &[(&str, &[&str])] = &[
     (
         "Draws",
@@ -366,16 +365,31 @@ pub fn sdk_coverage(schema_root: &Path, mut out: impl Write) -> io::Result<()> {
             .map(|f| (&f.name, &f.kind))
             .collect::<BTreeSet<_>>()
         {
-            let coverage = match (group, name.as_str()) {
-                ("Draws", "ScriptedModelDraw") => "partial",
-                _ if supported.contains(&name.as_str()) => "encoder-present",
-                _ => "missing",
-            };
-            writeln!(out, "{group}\t{name}\t{kind}\t{coverage}")?;
             if group == "Draws" && name == "ScriptedModelDraw" {
                 let draw = schema.shape(kind, schema_root)?;
-                for field in draw.fields {
-                    let coverage = if scripted_attributes().any(|name| name == field.name) {
+                let attributes: HashSet<_> = scripted_attributes().collect();
+                let children = [
+                    "ModelConditionState",
+                    "AnimationState",
+                    "AttachModel",
+                    "EmbedPortal",
+                ];
+                let complete = draw
+                    .fields
+                    .iter()
+                    .all(|field| attributes.contains(field.name.as_str()))
+                    && draw
+                        .children
+                        .iter()
+                        .all(|field| children.contains(&field.name.as_str()));
+                let coverage = if complete {
+                    "encoder-present"
+                } else {
+                    "partial"
+                };
+                writeln!(out, "{group}\t{name}\t{kind}\t{coverage}")?;
+                for field in &draw.fields {
+                    let coverage = if attributes.contains(field.name.as_str()) {
                         "encoded"
                     } else {
                         "missing"
@@ -386,16 +400,21 @@ pub fn sdk_coverage(schema_root: &Path, mut out: impl Write) -> io::Result<()> {
                         field.name, field.kind
                     )?;
                 }
-                for field in draw.children {
-                    let coverage = match field.name.as_str() {
-                        "ModelConditionState"
-                        | "AnimationState"
-                        | "AttachModel"
-                        | "EmbedPortal" => "encoded",
-                        _ => "missing",
+                for field in &draw.children {
+                    let coverage = if children.contains(&field.name.as_str()) {
+                        "encoded"
+                    } else {
+                        "missing"
                     };
                     writeln!(out, "DrawChild\t{}\t{}\t{coverage}", field.name, field.kind)?;
                 }
+            } else {
+                let coverage = if supported.contains(&name.as_str()) {
+                    "encoder-present"
+                } else {
+                    "missing"
+                };
+                writeln!(out, "{group}\t{name}\t{kind}\t{coverage}")?;
             }
         }
     }
@@ -561,6 +580,11 @@ mod tests {
         assert_eq!(sdk_flags, rust_flags);
 
         assert_ea_fixture("scripted-model-draw", 2);
+    }
+
+    #[test]
+    fn scripted_draw_mixed_fields_match_ea_batch() {
+        assert_ea_fixture("scripted-draw-mixed", 1);
     }
 
     #[test]

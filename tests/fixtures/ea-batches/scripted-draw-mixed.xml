@@ -1,0 +1,30 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ScriptedDrawMixed">
+    <Draws>
+      <ScriptedModelDraw id="ModuleTag_Draw" WadingParticleSys="ProbeWade" TrackMarks="ProbeTracks" ExtraPublicBone="BONE_A BONE_B">
+        <ModelConditionState ParseCondStateType="PARSE_DEFAULT" ButtonImage="ProbeButton" PortraitImage="ProbePortrait">
+          <Model Name="ProbeModel"/>
+          <Texture Original="OldTexture" New="NewTexture"/>
+          <WeaponFireFXBone BoneName="FXBone"/>
+          <WeaponRecoilBone BoneName="RecoilBone"/>
+          <WeaponMuzzleFlash BoneName="MuzzleBone"/>
+          <WeaponLaunchBone BoneName="LaunchBone"/>
+          <ParticleSysBone FXParticleSystemTemplate="ProbeModelParticle" BoneName="SmokeBone" FollowBone="true"/>
+          <FXEvent Frame="7" Bone="FXBone" Effect="ProbeModelFX"/>
+          <Turret TurretNameKey="ProbeTurret"/>
+          <SubObject>ProbeObject</SubObject>
+        </ModelConditionState>
+        <AnimationState ParseCondStateType="PARSE_DEFAULT" EnteringStateFX="ProbeEnteringFX" SimilarRestart="true">
+          <Animation AnimationName="ProbeAnimation" AnimNickName="Idle" AnimationAbsoluteTime="1.25s"/>
+          <Script><![CDATA[return 1]]></Script>
+          <FXEvent Frame="9" Effect="ProbeAnimFX"/>
+          <LuaEvent Frame="11" Data="Payload"/>
+          <ParticleSysBone FXParticleSystemTemplate="ProbeAnimParticle" BoneName="AnimBone"/>
+        </AnimationState>
+        <AttachModel Bone="Mount"><Model Object="MountedModel" Probability="47"/></AttachModel>
+        <EmbedPortal BonePrefix="Portal"/>
+      </ScriptedModelDraw>
+    </Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

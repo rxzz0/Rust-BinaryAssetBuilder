@@ -1892,17 +1892,17 @@ fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
         match child.node_type() {
             roxmltree::NodeType::Element => write_xml(child, false, xml),
             roxmltree::NodeType::Text => {
-                let text = child.text().unwrap();
-                if !is_xml_whitespace(text) {
-                    // The Windows XmlWriter normalizes line breaks in text to CRLF.
-                    for line in text.split_inclusive('\n') {
-                        if let Some(line) = line.strip_suffix('\n') {
-                            escape_xml(line, false, xml);
-                            xml.push_str("\r\n");
-                        } else {
-                            escape_xml(line, false, xml);
-                        }
-                    }
+                let end = child.next_sibling().map_or_else(
+                    || range.start + original.rfind("</").unwrap(),
+                    |next| next.range().start,
+                );
+                // roxmltree merges adjacent text and CDATA, but XmlWriter
+                // retains the CDATA delimiters when hashing the asset XML.
+                let source = &input[child.range().start..end];
+                if source.contains("<![CDATA[") {
+                    write_xml_cdata_text(source, xml);
+                } else {
+                    write_xml_text(child.text().unwrap(), xml);
                 }
             }
             roxmltree::NodeType::Comment => {
@@ -1916,6 +1916,45 @@ fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
     xml.push_str("</");
     xml.push_str(name);
     xml.push('>');
+}
+
+fn write_xml_text(text: &str, xml: &mut String) {
+    if !is_xml_whitespace(text) {
+        // The Windows XmlWriter normalizes line breaks in text to CRLF.
+        for (index, line) in text.split('\n').enumerate() {
+            if index != 0 {
+                xml.push_str("\r\n");
+            }
+            escape_xml(line, false, xml);
+        }
+    }
+}
+
+fn write_xml_cdata_text(mut source: &str, xml: &mut String) {
+    while let Some((text, cdata)) = source.split_once("<![CDATA[") {
+        write_xml_text_fragment(text, xml);
+        let (content, rest) = cdata
+            .split_once("]]>")
+            .expect("parsed CDATA has a closing delimiter");
+        xml.push_str("<![CDATA[");
+        xml.push_str(
+            &content
+                .replace("\r\n", "\n")
+                .replace('\r', "\n")
+                .replace('\n', "\r\n"),
+        );
+        xml.push_str("]]>");
+        source = rest;
+    }
+    write_xml_text_fragment(source, xml);
+}
+
+fn write_xml_text_fragment(source: &str, xml: &mut String) {
+    if !is_xml_whitespace(source) {
+        let wrapped = format!("<text>{source}</text>");
+        let fragment = Document::parse(&wrapped).expect("text fragment from parsed XML");
+        write_xml_text(fragment.root_element().text().unwrap(), xml);
+    }
 }
 
 fn opening_tag_end(source: &str) -> usize {
