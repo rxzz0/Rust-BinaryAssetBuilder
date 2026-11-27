@@ -308,6 +308,8 @@ pub(in crate::compile::static_assets) fn compile(
                     "OCLSpecialPower" => &[0x1e0, 0x1e4, 0x1ec],
                     "CreateAndEnterObjectSpecialPower" => &[0x1f4, 0x1e0, 0x1e4, 0x1ec],
                     "ReplaceObjectUpdate" => &[0xfc],
+                    "ClearanceTestingSlowDeathBehavior" => &[0x84, 0x88],
+                    "HelicopterSlowDeath" => &[0xa0],
                     "DominateEnemySpecialPower" => &[super::dominate_enemy::FILTER_POINTER as u32],
                     "BeamSpecialAbilityUpdate" => &[0xf8, 0x108],
                     "RadarFreezeSpecialPower" | "RadarSpySpecialPower" => &[0x1c8],

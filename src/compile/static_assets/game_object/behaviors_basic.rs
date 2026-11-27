@@ -1974,7 +1974,13 @@ pub(super) fn encode(
             .map(Some);
     }
     if node.tag_name().namespace() == Some(SAGE_NS)
-        && matches!(node.tag_name().name(), "SlowDeath" | "ShipSlowDeath")
+        && matches!(
+            node.tag_name().name(),
+            "SlowDeath"
+                | "ShipSlowDeath"
+                | "ClearanceTestingSlowDeathBehavior"
+                | "HelicopterSlowDeath"
+        )
     {
         return super::slow_death::encode(node, pointer, data, references, reference_types)
             .map(Some);

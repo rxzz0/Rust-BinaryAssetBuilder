@@ -11,6 +11,7 @@ mod bezier_projectile;
 mod building_destruction;
 mod capture_upgrade;
 pub(super) mod children;
+mod clearance_geometry;
 mod client_behaviors;
 mod client_updates;
 mod create_object_die;

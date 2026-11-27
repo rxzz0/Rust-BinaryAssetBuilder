@@ -751,22 +751,9 @@ pub(super) fn encode_geometry(
     let mut points = Vec::with_capacity(contacts.len());
     for (index, contact) in contacts.into_iter().enumerate() {
         let offset = items + index * 0x14;
-        validate_attributes(contact, &["Label"], data.path)?;
-        if let Some(label) = contact.attribute("Label") {
-            data.string(offset, label)?;
-        }
-        let mut children = significant_children(contact);
-        let pos = super::super::required_element(&mut children, "Pos", data.path)?;
-        if children.next().is_some() {
-            return Err(invalid(data.path, "unexpected Geometry ContactPoint child"));
-        }
-        encode_geometry_vector(pos, offset + 8, &["x", "y", "z"], data)?;
         points.push((
             0,
-            Target::Table(Table::record(vec![
-                Entry::named("Label", 0x1a29_33aa, Target::Data(offset)),
-                Entry::named("Pos", 0x2936_8077, Target::Data(offset + 8)),
-            ])),
+            Target::Table(encode_geometry_contact(contact, offset, data)?),
         ));
     }
     Ok(Some(Target::Table(Table::record(vec![
@@ -786,7 +773,28 @@ pub(super) fn encode_geometry(
     ]))))
 }
 
-fn encode_geometry_vector(
+pub(super) fn encode_geometry_contact(
+    contact: Node<'_, '_>,
+    offset: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Table> {
+    validate_attributes(contact, &["Label"], data.path)?;
+    if let Some(label) = contact.attribute("Label") {
+        data.string(offset, label)?;
+    }
+    let mut children = super::super::significant_children(contact);
+    let pos = super::super::required_element(&mut children, "Pos", data.path)?;
+    if children.next().is_some() {
+        return Err(invalid(data.path, "unexpected Geometry ContactPoint child"));
+    }
+    encode_geometry_vector(pos, offset + 8, &["x", "y", "z"], data)?;
+    Ok(Table::record(vec![
+        Entry::named("Label", 0x1a29_33aa, Target::Data(offset)),
+        Entry::named("Pos", 0x2936_8077, Target::Data(offset + 8)),
+    ]))
+}
+
+pub(super) fn encode_geometry_vector(
     node: Node<'_, '_>,
     offset: usize,
     axes: &[&str],

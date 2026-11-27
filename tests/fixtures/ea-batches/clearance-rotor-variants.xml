@@ -1,0 +1,25 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <FXList id="ProbeSlowDeathFX"><NuggetList/></FXList>
+  <ObjectCreationList id="ProbeSlowDeathOCL"/>
+  <AudioEvent id="ProbeRotorSound"/>
+  <GameObject id="ClearanceRotorDefaults">
+    <Behaviors>
+      <ClearanceTestingSlowDeathBehavior id="Clearance"/>
+      <HelicopterSlowDeath id="Rotor"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ClearanceRotorCustom">
+    <Behaviors>
+      <ClearanceTestingSlowDeathBehavior id="Clearance" ClearanceMaxHeight="14.5" ClearanceMaxHeightFraction="0.75" ClearanceMinHeight="3.25" ClearanceMinHeightFraction="0.25" SinkDelay="1.25s" DeathFlags="DYING">
+        <FX Type="MIDPOINT"><FX>ProbeSlowDeathFX</FX></FX>
+        <ClearanceGeometry IsSmall="true" BoundingCircleRadius="25.5" BoundingSphereRadius="30.5" XWidth="12.5" YDepth="15.25"><Shapes Type="BOX" MajorRadius="18.25" MinorRadius="12.75" Height="9.5"><Offset x="2" y="3" z="4"/></Shapes><RotationAnchorOffset x="2" y="3"/><Center x="2" z="5"/><HighestContactPoint z="8"/><InnermostContactPoint x="2"/><ContactPoints Label="Probe"><Pos x="3" y="5" z="7"/></ContactPoints></ClearanceGeometry>
+        <ClearanceGeometryOffset x="1.25" y="-2.25" z="3.75"/>
+      </ClearanceTestingSlowDeathBehavior>
+      <HelicopterSlowDeath id="Rotor" DeathSound="ProbeRotorSound" FxBlade="ProbeSlowDeathFX" OclEjectPilot="ProbeSlowDeathOCL" FinalRubbleObject="ClearanceRotorDefaults" BladeBone="FXBlade" BladeObjectName="ObsoleteRotor" SpiralOrbitTurnRate="1.5" SpiralOrbitForwardSpeed="37.5" SpiralOrbitForwardSpeedDamping="0.95" MinSelfSpin="0.5" MaxSelfSpin="1.25" SelfSpinUpdateDelay="0.25s" SelfSpinUpdateAmount="2.5" FallHowFast="15.75" MinBladeFlyOffDelay="0.5s" MaxBladeFlyOffDelay="1.25s" DelayFromGroundToFinalDeath="2.25" MaxBraking="12345.5">
+        <FX Type="FINAL"><FX>ProbeSlowDeathFX</FX></FX>
+      </HelicopterSlowDeath>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

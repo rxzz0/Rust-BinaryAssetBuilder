@@ -277,6 +277,8 @@ const MODULES: &[(&str, &[&str])] = &[
             "SetLocomotorSpeedUpdate",
             "ShieldSphereUpdate",
             "ShipSlowDeath",
+            "ClearanceTestingSlowDeathBehavior",
+            "HelicopterSlowDeath",
             "SpawnCrateUpdate",
             "SpecialAbilityUpdate",
             "ObjectStatusSpecialAbilityUpdate",
@@ -1128,6 +1130,11 @@ mod tests {
     #[test]
     fn replace_auto_variants_match_ea_batch() {
         assert_ea_fixture("replace-auto-variants", 4);
+    }
+
+    #[test]
+    fn clearance_rotor_variants_match_ea_batch() {
+        assert_ea_fixture("clearance-rotor-variants", 5);
     }
 
     #[test]
