@@ -280,10 +280,26 @@ fn redirected_sdk_directory(
     {
         return None;
     }
-    let sdk_relative = PathBuf::from(mods).join(name).join(data).join(directory);
+    let mod_data = PathBuf::from(mods).join(name).join(data);
+    let sdk_relative = mod_data.join(directory);
     // Resolve the directory separately so a linked file inside it cannot
     // extend the allowed tree to an unrelated location.
     let physical = fs::canonicalize(data_root.join(&sdk_relative)).ok()?;
+    // A redirected mod Data tree can include siblings of AdditionalMaps.
+    // An independently linked AdditionalMaps directory keeps its own boundary.
+    if expected_directory == "AdditionalMaps"
+        && let Ok(physical_data) = fs::canonicalize(data_root.join(&mod_data))
+        && physical.parent() == Some(physical_data.as_path())
+        && physical
+            .file_name()
+            .is_some_and(|name| name.eq_ignore_ascii_case(directory))
+        && resolved.starts_with(&physical)
+    {
+        return Some(RedirectedSdkDirectory {
+            sdk_relative: mod_data,
+            physical: physical_data,
+        });
+    }
     resolved
         .starts_with(&physical)
         .then_some(RedirectedSdkDirectory {

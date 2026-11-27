@@ -1537,10 +1537,21 @@ fn sdk_global_preserves_output_layout_through_a_linked_mod() {
     let additional_maps = mod_dir.join("Data/AdditionalMaps");
     let output = sdk.join("builtmods");
     fs::create_dir_all(additional_maps.join("fragments")).unwrap();
+    fs::create_dir_all(mod_dir.join("Data/System")).unwrap();
+    fs::write(
+        mod_dir.join("Data/System/CameraSettings.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <CameraSettings id="RebornCamera"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
     fs::write(
         additional_maps.join("MapMetaData_Colors.xml"),
         r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
-            <Includes><Include type="all" source="DATA:AdditionalMaps/fragments/colors.xml"/></Includes>
+            <Includes>
+                <Include type="all" source="DATA:AdditionalMaps/fragments/colors.xml"/>
+                <Include type="all" source="DATA:System/CameraSettings.xml"/>
+            </Includes>
         </AssetDeclaration>"#,
     )
     .unwrap();
@@ -1560,6 +1571,11 @@ fn sdk_global_preserves_output_layout_through_a_linked_mod() {
         ))
     });
     let expected = stream.each_ref().map(|path| fs::read(path).unwrap());
+    let manifest = Manifest::parse(&expected[0]).unwrap();
+    assert!(manifest.assets.iter().any(|asset| {
+        asset.name == b"CameraSettings:RebornCamera"
+            && asset.source_file_name == b"DATA:mods/reborn/data/system/camerasettings.xml"
+    }));
 
     let redirected = root.join("OneDrive/CNC Files/Reborn");
     fs::create_dir_all(redirected.parent().unwrap()).unwrap();
