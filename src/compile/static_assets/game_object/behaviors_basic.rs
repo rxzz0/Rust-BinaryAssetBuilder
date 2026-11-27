@@ -1487,6 +1487,16 @@ pub(super) fn encode(
         "DockUpdate" | "SupplyCenterDockUpdate" | "SupplyWarehouseDockUpdate" => {
             return super::dock::encode(node, pointer, data, reference_types).map(Some);
         }
+        "ClusterBombUpdate" | "LaserUpdate" => {
+            return super::projectile_effects::encode(
+                node,
+                pointer,
+                data,
+                references,
+                reference_types,
+            )
+            .map(Some);
+        }
         "RestrictSpecialPowerBehavior"
         | "AreaRestrictSpecialPowerBehavior"
         | "SpecialPowerAssistResponseBehavior" => {

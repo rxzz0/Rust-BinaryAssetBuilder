@@ -51,6 +51,7 @@ mod line_segment_damage;
 mod linear_damage;
 pub(super) mod material;
 mod parabolic_curve_update;
+mod projectile_effects;
 mod projectile_update;
 mod radar_update;
 mod render_stored_thing_template;

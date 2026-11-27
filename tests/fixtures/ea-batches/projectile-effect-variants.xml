@@ -1,0 +1,21 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="ProbeClusterWeapon"/>
+  <WeaponTemplate id="ProbeInitialClusterWeapon"/>
+  <FXList id="ProbeClusterFX"><NuggetList/></FXList>
+  <FXParticleSystemTemplate id="ProbeLaserStart"><Physics/><Draw/><Volume/><Velocity/></FXParticleSystemTemplate>
+  <FXParticleSystemTemplate id="ProbeLaserTarget"><Physics/><Draw/><Volume/><Velocity/></FXParticleSystemTemplate>
+  <GameObject id="ProjectileEffectDefaults">
+    <Behaviors>
+      <ClusterBombUpdate id="Cluster"/>
+      <LaserUpdate id="Laser"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ProjectileEffectCustom">
+    <Behaviors>
+      <ClusterBombUpdate id="Cluster" BombletFX="ProbeClusterFX" InitialWeaponName="ProbeInitialClusterWeapon" WeaponName="ProbeClusterWeapon" Radius="22.5" NumBomblets="6" MinDelay="0.25s" MaxDelay="0.75s"/>
+      <LaserUpdate id="Laser" TargetParticleSystemId="ProbeLaserTarget" ParticleSystemId="ProbeLaserStart" ParentFireBoneName="FXMuzzle" ParentFireBoneOnTurret="true" LaserLifetime="2.5"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
