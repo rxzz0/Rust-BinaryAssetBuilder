@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <Video id="ProbeVideo" Filename="Probe"/>
+  <VideoEventList id="ProbeMixedFades">
+    <EventList>
+      <Movie MovieAsset="ProbeVideo"><FadeIn FrameCount="12"><StartColor r="0.25" g="0.5" b="0.75"/><EndColor r="1" g="0" b="0.5"/></FadeIn></Movie>
+      <Movie MovieAsset="ProbeVideo"><FadeOut FrameCount="30"><StartColor r="0" g="0.25" b="0.5"/><EndColor r="1" g="0.75" b="0"/></FadeOut></Movie>
+    </EventList>
+  </VideoEventList>
+</AssetDeclaration>

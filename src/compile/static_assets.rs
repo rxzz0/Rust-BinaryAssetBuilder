@@ -1011,50 +1011,69 @@ fn video_events(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     if children.next().is_some() || events.attributes().len() != 0 {
         return Err(invalid(path, "invalid VideoEventList"));
     }
-    let mut references = Vec::new();
-    for movie in events.children().filter(Node::is_element) {
-        if !movie.has_tag_name((SAGE_NS, "Movie"))
-            || movie.attributes().len() != 1
-            || has_content(movie)
-        {
-            return Err(invalid(
-                path,
-                "only Movie events without fades are supported",
-            ));
-        }
-        references
-            .push(asset_reference(required(movie, "MovieAsset", path)?, "Video", path)?.into());
-    }
-    let count = references.len() as u32;
-    if count == 0 {
-        return Ok(Marshaled {
-            payload: vec![0; 12],
-            ..Marshaled::default()
-        });
-    }
-    let start = 12 + 4 * count;
-    let mut words = vec![0, count, 12];
-    let mut relocations = vec![8];
-    let mut imports = Vec::new();
-    for index in 0..count {
-        words.push(start + 16 * index);
-        relocations.push(12 + 4 * index);
-    }
+    let events: Vec<_> = significant_children(events).collect();
+    let mut data = binary::BinaryData {
+        payload: vec![0; 12],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    let table = data.list(4, events.len(), 4)?;
     let movie_type = fast_hash(b"MovieEvent");
-    for index in 0..count {
-        words.extend([movie_type, 0, 0, index + 1]);
-        imports.push(start + 16 * index + 12);
+    for (index, movie) in events.into_iter().enumerate() {
+        if !movie.has_tag_name((SAGE_NS, "Movie")) {
+            return Err(invalid(path, "expected a Movie in VideoEventList"));
+        }
+        validate_attributes(movie, &["MovieAsset"], path)?;
+        let offset = data.allocate(table + index * 4, 16)?;
+        data.word(offset, movie_type);
+        let mut fades = significant_children(movie).peekable();
+        for (name, pointer) in [("FadeIn", offset + 4), ("FadeOut", offset + 8)] {
+            if let Some(fade) = fades.next_if(|fade| fade.has_tag_name((SAGE_NS, name))) {
+                video_fade(fade, pointer, &mut data)?;
+            }
+        }
+        if fades.next().is_some() {
+            return Err(invalid(path, "unexpected Movie fade data"));
+        }
+        write_import(
+            required(movie, "MovieAsset", path)?,
+            "Video",
+            offset + 12,
+            &mut data,
+            &mut result,
+        )?;
     }
-    relocations.push(u32::MAX);
-    imports.push(u32::MAX);
-    Ok(Marshaled {
-        payload: encode_words(words),
-        relocations,
-        imports,
-        reference_types: vec![fast_hash(b"Video"); count as usize],
-        references,
-        ..Marshaled::default()
-    })
+    data.relocations.sort_unstable();
+    Ok(data.finish(result))
+}
+
+fn video_fade(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut binary::BinaryData<'_>,
+) -> io::Result<()> {
+    let path = data.path;
+    validate_attributes(node, &["FrameCount"], path)?;
+    let frames = sage_int(required(node, "FrameCount", path)?, "FrameCount", path)?;
+    let offset = data.allocate(pointer, 28)?;
+    data.word(offset, frames);
+    let mut colors = significant_children(node);
+    for (name, start) in [("StartColor", offset + 4), ("EndColor", offset + 16)] {
+        let color = colors
+            .next()
+            .filter(|color| color.has_tag_name((SAGE_NS, name)))
+            .ok_or_else(|| invalid(path, format!("expected {name} in Movie fade")))?;
+        fx_list::validate_leaf(color, &["r", "g", "b"], path)?;
+        for (index, channel) in ["r", "g", "b"].into_iter().enumerate() {
+            let value = finite_number(color.attribute(channel).unwrap_or("0"), channel, path)?;
+            data.word(start + index * 4, value.to_bits());
+        }
+    }
+    if colors.next().is_some() {
+        return Err(invalid(path, "unexpected Movie fade color"));
+    }
+    Ok(())
 }
 
 fn player_tech_store(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
