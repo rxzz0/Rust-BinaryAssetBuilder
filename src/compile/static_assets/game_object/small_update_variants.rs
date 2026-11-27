@@ -1,7 +1,8 @@
 use super::super::binary::BinaryData;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, sage_int, sage_time, sage_uint, significant_children, validate_attributes,
+    AssetReference, finite_number, sage_int, sage_time, sage_uint, significant_children,
+    validate_attributes,
 };
 use super::behaviors_basic::{encode_die_mux, module_base};
 use super::draws::{boolean, fields, model_condition_index};
@@ -21,6 +22,8 @@ pub(super) fn encode(
     const ACTIVATE: u32 = 0xc54a_d4fb;
     const OCL: u32 = 0xb8b5_8445;
     const REPAIR: u32 = 0xc6f3_f62d;
+    const EMP: u32 = 0xd330_2d7e;
+    const ENVIRONMENT: u32 = 0x75fe_8d90;
     const OCL_FIELDS: &[(&str, u32, usize)] = &[
         ("OCL", 0x42e4_e9d1, 8),
         ("MinDelay", 0x6f6d_1ae7, 12),
@@ -35,6 +38,16 @@ pub(super) fn encode(
         ("InstantRepairModelCondition", 0x1572_3e0b, 20),
         ("InstantRepairAnimDuration", 0x9986_69e8, 24),
     ];
+    const EMP_FIELDS: &[(&str, u32, usize)] = &[
+        ("Lifetime", 0x9986_69e8, 8),
+        ("StartFadeDelay", 0x9986_69e8, 12),
+        ("DisabledDuration", 0x9986_69e8, 16),
+        ("StartScale", 0x6458_64f3, 20),
+        ("TargetScaleMin", 0x6458_64f3, 24),
+        ("TargetScaleMax", 0x6458_64f3, 28),
+    ];
+    const ENVIRONMENT_FIELDS: &[(&str, u32, usize)] =
+        &[("Enabled", 0x77e3_f4f7, 36), ("Size", 0x37da_54ab, 8)];
 
     let path = data.path;
     let name = node.tag_name().name();
@@ -42,6 +55,8 @@ pub(super) fn encode(
         "ActivateSpecialPowerOnCreate" => (ACTIVATE, 0x10, &[][..]),
         "OCLUpdate" => (OCL, 0x1c, OCL_FIELDS),
         "InitiateRepairDie" => (REPAIR, 0x20, REPAIR_FIELDS),
+        "EMPUpdate" => (EMP, 0x28, EMP_FIELDS),
+        "DestructibleEnvironmentUpdate" => (ENVIRONMENT, 0x28, ENVIRONMENT_FIELDS),
         _ => return Err(invalid(path, format!("unexpected update module {name}"))),
     };
     let allowed: Vec<_> = std::iter::once("id")
@@ -155,7 +170,72 @@ pub(super) fn encode(
             }
             entries.push(Entry::named("Die", 0x0084_001b, die));
         }
+        EMP => {
+            for &(field, tag, offset) in EMP_FIELDS {
+                let value = if tag == 0x9986_69e8 {
+                    sage_time(node.attribute(field).unwrap_or("0s"), field, path)?
+                } else {
+                    finite_number(node.attribute(field).unwrap_or("1"), field, path)?
+                };
+                data.word(start + offset, value.to_bits());
+            }
+            let mut children = significant_children(node).peekable();
+            for (field, offset) in [("StartColor", 32), ("EndColor", 36)] {
+                let target = match children.next_if(|child| child.has_tag_name((SAGE_NS, field))) {
+                    Some(child) => Target::Table(emp_color(child, start + offset, data)?),
+                    None => Target::Null,
+                };
+                entries.push(Entry::named(field, 0x0284_26a3, target));
+            }
+            if children.next().is_some() {
+                return Err(invalid(path, format!("unexpected {name} child")));
+            }
+        }
+        ENVIRONMENT => {
+            let size = super::super::global_ui::enum_value(
+                node.attribute("Size").unwrap_or("LIGHT"),
+                &["LIGHT", "MEDIUM", "HEAVY"],
+                path,
+            )?;
+            data.word(start + 8, size);
+            data.payload[start + 36] = boolean(node, "Enabled", false, path)?;
+            let mut children = significant_children(node);
+            for (field, offset) in [("LeftOffset", 12), ("RightOffset", 24)] {
+                let child = children
+                    .next()
+                    .filter(|child| child.has_tag_name((SAGE_NS, field)))
+                    .ok_or_else(|| invalid(path, format!("{name} requires {field}")))?;
+                super::super::fx_list::vector(child, false, start + offset, data)?;
+                entries.push(Entry::named(
+                    field,
+                    0x2936_8077,
+                    Target::Data(start + offset),
+                ));
+            }
+            if children.next().is_some() {
+                return Err(invalid(path, format!("unexpected {name} child")));
+            }
+        }
         _ => unreachable!("small update module"),
     }
     Ok((kind, Table::record(entries)))
+}
+
+fn emp_color(node: Node<'_, '_>, pointer: usize, data: &mut BinaryData<'_>) -> io::Result<Table> {
+    const CHANNELS: &[(&str, u32, usize)] = &[
+        ("r", 0x6458_64f3, 0),
+        ("g", 0x6458_64f3, 4),
+        ("b", 0x6458_64f3, 8),
+    ];
+    let path = data.path;
+    validate_attributes(node, &["r", "g", "b"], path)?;
+    if has_content(node) {
+        return Err(invalid(path, "unexpected EMP color content"));
+    }
+    let start = data.allocate(pointer, 12)?;
+    for &(name, _, offset) in CHANNELS {
+        let value = finite_number(node.attribute(name).unwrap_or("0"), name, path)?;
+        data.word(start + offset, value.to_bits());
+    }
+    Ok(Table::record(fields(start, CHANNELS).collect()))
 }

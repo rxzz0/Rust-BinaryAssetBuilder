@@ -1,0 +1,23 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="UpdateEffectDefaults">
+    <Behaviors>
+      <EMPUpdate id="EMP"/>
+      <DestructibleEnvironmentUpdate id="Environment"><LeftOffset/><RightOffset/></DestructibleEnvironmentUpdate>
+      <BeamTargetBehavior id="Beam"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="UpdateEffectCustom">
+    <Behaviors>
+      <EMPUpdate id="EMP" Lifetime="1.25s" StartFadeDelay="2.5s" DisabledDuration="3.75s" StartScale="2.5" TargetScaleMin="1.25" TargetScaleMax="5.5">
+        <StartColor r="0.125" g="0.5" b="0.75"/>
+        <EndColor r="0.375" g="0.625" b="1"/>
+      </EMPUpdate>
+      <DestructibleEnvironmentUpdate id="Environment" Enabled="true" Size="HEAVY">
+        <LeftOffset x="1" y="2" z="3"/><RightOffset x="4" y="5" z="6"/>
+      </DestructibleEnvironmentUpdate>
+      <BeamTargetBehavior id="Beam"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

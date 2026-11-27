@@ -227,6 +227,9 @@ const MODULES: &[(&str, &[&str])] = &[
             "DistributedMoney",
             "ActivateSpecialPowerOnCreate",
             "OCLUpdate",
+            "EMPUpdate",
+            "DestructibleEnvironmentUpdate",
+            "BeamTargetBehavior",
             "InitiateRepairDie",
             "CaptureAndGiveCommandSetSpecialPower",
             "CombineSpecialPower",
@@ -1039,6 +1042,11 @@ mod tests {
     #[test]
     fn special_ability_variants_match_ea_batch() {
         assert_ea_fixture("special-ability-variants", 3);
+    }
+
+    #[test]
+    fn update_effect_variants_match_ea_batch() {
+        assert_ea_fixture("update-effect-variants", 2);
     }
 
     #[test]

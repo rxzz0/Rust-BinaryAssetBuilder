@@ -1457,6 +1457,7 @@ pub(super) fn encode(
         "Destroy" => Some((0xcb90_9bfe, false)),
         "FiringTracker" => Some((0x9827_0bd0, true)),
         "ShieldBodyUpdate" => Some((0x643a_2ac3, true)),
+        "BeamTargetBehavior" => Some((0xc939_197b, false)),
         _ => None,
     };
     if let Some((kind, update)) = fieldless {
@@ -1772,7 +1773,11 @@ pub(super) fn encode(
     }
     if matches!(
         node.tag_name().name(),
-        "ActivateSpecialPowerOnCreate" | "OCLUpdate" | "InitiateRepairDie"
+        "ActivateSpecialPowerOnCreate"
+            | "OCLUpdate"
+            | "InitiateRepairDie"
+            | "EMPUpdate"
+            | "DestructibleEnvironmentUpdate"
     ) {
         return super::small_update_variants::encode(
             node,
