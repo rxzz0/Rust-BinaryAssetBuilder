@@ -3575,6 +3575,95 @@ fn sdk_map_skip_preserves_complete_versioned_streams_and_builds_partial_ones() {
     );
 }
 
+#[cfg(windows)]
+#[test]
+fn sdk_map_overrides_preserve_streams_through_a_linked_mod_or_map_tree() {
+    let root = scratch_root();
+    let sdk = root.join("RA3 MOD SDK");
+    let mod_dir = sdk.join("Mods/Reborn");
+    let maps = mod_dir.join("Misc/Data/Maps/Official");
+    let source = maps.join("ProbeMap/map.xml");
+    let data = mod_dir.join("Data");
+    fs::create_dir_all(source.parent().unwrap()).unwrap();
+    fs::create_dir_all(&data).unwrap();
+    fs::write(
+        &source,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes><Include type="all" source="DATA:SharedMapVideo.xml"/></Includes>
+            <GameMap id="ProbeMap"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let shared = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"><Video id="Shared" Filename="shared.bik"/></AssetDeclaration>"#;
+    fs::write(data.join("SharedMapVideo.xml"), shared).unwrap();
+    let stock = compile_static_without_includes(&root);
+    fs::write(root.join("worldbuilder.manifest"), stock.manifest).unwrap();
+
+    let build = |output: &Path| {
+        let result = std::process::Command::new(env!("CARGO_BIN_EXE_binary-asset-builder"))
+            .arg("compile-maps-sdk")
+            .arg(&maps)
+            .arg("--sdk-root")
+            .arg(sdk.join("."))
+            .arg("--references")
+            .arg(&root)
+            .arg("--output")
+            .arg(output)
+            .arg("--skip-precompiled")
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{:?}", result);
+        assert!(
+            result
+                .stdout
+                .ends_with(b"Compiled 1 map override streams with Rust\n"),
+            "{:?}",
+            result
+        );
+        ["manifest", "bin", "imp", "relo"].map(|extension| {
+            fs::read(output.join(format!("ProbeMap/map_mod.{extension}"))).unwrap()
+        })
+    };
+    let regular = build(&root.join("regular"));
+    let external = root.join("OneDrive/CNC Files");
+    fs::create_dir_all(&external).unwrap();
+    let linked_mod = external.join("Reborn");
+    fs::rename(&mod_dir, &linked_mod).unwrap();
+    junction(&mod_dir, &linked_mod);
+    assert_eq!(build(&root.join("linked-mod")), regular);
+    let unrelated = external.join("Unrelated");
+    fs::create_dir(&unrelated).unwrap();
+    fs::write(unrelated.join("SharedMapVideo.xml"), shared).unwrap();
+    fs::rename(&data, mod_dir.join("OriginalData")).unwrap();
+    junction(&data, &unrelated);
+    let error = compile_map(&source, &sdk, &root).err().unwrap();
+    assert!(
+        error
+            .to_string()
+            .contains("path lies outside the data root")
+    );
+    assert!(
+        compile_sdk_maps(
+            &linked_mod.join("Misc/Data/Maps/Official"),
+            &sdk,
+            &root,
+            &maps
+        )
+        .is_err()
+    );
+    fs::remove_dir(&data).unwrap();
+    fs::rename(mod_dir.join("OriginalData"), &data).unwrap();
+    fs::remove_dir(&mod_dir).unwrap();
+    fs::rename(&linked_mod, &mod_dir).unwrap();
+
+    let linked_maps = external.join("Official");
+    fs::rename(&maps, &linked_maps).unwrap();
+    junction(&maps, &linked_maps);
+    assert_eq!(build(&root.join("linked-official")), regular);
+    fs::remove_dir(&maps).unwrap();
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn inherited_stance_reference_omits_schema_ordinal() {
     let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/inherited-stance");

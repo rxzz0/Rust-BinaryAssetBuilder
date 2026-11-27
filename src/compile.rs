@@ -145,6 +145,14 @@ fn compile_with_source_references(
     let resolved_input = fs::canonicalize(input)?;
     let redirected_sdk = if let Some(references) = source_references.as_deref() {
         references.redirected_sdk.clone()
+    } else if reference_mode == ReferenceMode::Map {
+        if resolved_input.starts_with(&root) {
+            None
+        } else {
+            input.parent().and_then(|directory| {
+                redirected_sdk_map_directory(directory, data_root, &root, &resolved_input)
+            })
+        }
     } else {
         let redirected_directory = match (reference_mode, reference_directory) {
             (ReferenceMode::Implicit, _) => Some("AdditionalMaps"),
@@ -259,6 +267,54 @@ fn compile_with_source_references(
 struct RedirectedSdkDirectory {
     sdk_relative: PathBuf,
     physical: PathBuf,
+}
+
+fn redirected_sdk_map_directory(
+    directory: &Path,
+    sdk_root: &Path,
+    canonical_sdk: &Path,
+    resolved: &Path,
+) -> Option<RedirectedSdkDirectory> {
+    let sdk_root = std::path::absolute(sdk_root).ok()?;
+    let directory = std::path::absolute(directory).ok()?;
+    let relative = directory.strip_prefix(&sdk_root).ok()?;
+    if !relative
+        .components()
+        .all(|part| matches!(part, std::path::Component::Normal(_)))
+    {
+        return None;
+    }
+    let mut parts = relative.iter();
+    let (mods, name, misc, data, maps) = (
+        parts.next()?,
+        parts.next()?,
+        parts.next()?,
+        parts.next()?,
+        parts.next()?,
+    );
+    if !mods.eq_ignore_ascii_case("Mods")
+        || !misc.eq_ignore_ascii_case("Misc")
+        || !data.eq_ignore_ascii_case("Data")
+        || !maps.eq_ignore_ascii_case("Maps")
+    {
+        return None;
+    }
+    let mut sdk_relative = PathBuf::from(mods);
+    for part in [name, misc, data, maps].into_iter().chain(parts) {
+        sdk_relative.push(part);
+        let physical = fs::canonicalize(sdk_root.join(&sdk_relative)).ok()?;
+        if !physical.starts_with(canonical_sdk) {
+            // A linked mod can use its Art/Data siblings. A separately linked
+            // map tree can only use files under that tree or the SDK.
+            return resolved
+                .starts_with(&physical)
+                .then_some(RedirectedSdkDirectory {
+                    sdk_relative,
+                    physical,
+                });
+        }
+    }
+    None
 }
 
 fn redirected_sdk_directory(

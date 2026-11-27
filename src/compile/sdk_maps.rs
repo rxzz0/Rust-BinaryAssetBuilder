@@ -1,4 +1,4 @@
-use super::{compile_map, invalid};
+use super::{compile_map, invalid, redirected_sdk_map_directory};
 use crate::compile_batch::publish_map_stream;
 use crate::manifest::{AssetEntry, AssetId};
 use crate::sdk_references::prepare_references;
@@ -30,12 +30,17 @@ pub fn compile_sdk_map_overrides(
     if !input.try_exists()? {
         return Ok(0);
     }
-    let sdk_root = fs::canonicalize(sdk_root)?;
-    let input = fs::canonicalize(input)?;
-    if !input.starts_with(&sdk_root) {
-        return Err(invalid(&input, "map directory lies outside the SDK"));
-    }
-    let mut maps = fs::read_dir(&input)?.collect::<io::Result<Vec<_>>>()?;
+    let canonical_sdk = fs::canonicalize(sdk_root)?;
+    let resolved = fs::canonicalize(input)?;
+    let input = if resolved.starts_with(&canonical_sdk) {
+        &resolved
+    } else if redirected_sdk_map_directory(input, sdk_root, &canonical_sdk, &resolved).is_some() {
+        // Keep the logical SDK path when handing each map to compile_map.
+        input
+    } else {
+        return Err(invalid(&resolved, "map directory lies outside the SDK"));
+    };
+    let mut maps = fs::read_dir(input)?.collect::<io::Result<Vec<_>>>()?;
     maps.sort_by_key(|entry| entry.file_name());
     let mut compiled = 0;
     let mut catalogs_ready = game_data.is_none();
@@ -63,7 +68,7 @@ pub fn compile_sdk_map_overrides(
                 name.to_string_lossy()
             );
             publish_map_stream(&output.join(&name), || {
-                compile_map(&source, &sdk_root, references)
+                compile_map(&source, sdk_root, references)
             })?;
             Ok(true)
         })();
