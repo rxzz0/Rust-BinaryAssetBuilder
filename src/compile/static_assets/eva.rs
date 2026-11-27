@@ -107,7 +107,9 @@ pub(super) fn event(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
                 _ => {}
             }
         }
-        required(sound, "Sound", path)?;
+        if sound.attribute("Sound") != Some("") {
+            required(sound, "Sound", path)?;
+        }
         required(sound, "Side", path)?;
     }
 

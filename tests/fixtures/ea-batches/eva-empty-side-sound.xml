@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AudioEvent id="ProbeAnnouncement"/>
+  <EvaEvent id="ProbeSilentFactions" Priority="19">
+    <SideSound Sound="" Side="Allies"/>
+    <SideSound Sound="ProbeAnnouncement" Side="Japan"/>
+    <SideSound Sound="" Side="Soviet"/>
+  </EvaEvent>
+  <EvaEvent id="ProbeAllSilent">
+    <SideSound Side="Allies" Sound=""/>
+  </EvaEvent>
+</AssetDeclaration>

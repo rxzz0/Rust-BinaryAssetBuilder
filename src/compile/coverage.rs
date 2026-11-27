@@ -1487,6 +1487,11 @@ mod tests {
     }
 
     #[test]
+    fn eva_empty_side_sounds_match_ea_batch() {
+        assert_ea_fixture("eva-empty-side-sound", 3);
+    }
+
+    #[test]
     fn particle_template_matches_ea_batches() {
         assert_ea_fixture("particle-template", 3);
         assert_ea_fixture("particle-emission", 9);
