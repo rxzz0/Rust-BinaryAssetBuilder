@@ -129,11 +129,13 @@ const MODULES: &[(&str, &[&str])] = &[
             "PrematureDischargeSpecialPower",
             "RadarBehavior",
             "FireWeaponUpdate",
+            "DamageFieldUpdate",
             "PlayerPowerManager",
             "GiveProductionBonusSpecialPower",
             "PlayerUpgradeSpecialPower",
             "StoreTemplateIDBehavior",
             "BezierProjectile",
+            "MissileUpdate",
             "LineSegmentDamageUpdate",
             "LinearDamageUpdate",
             "LifetimeUpdate",
@@ -1085,6 +1087,11 @@ mod tests {
     #[test]
     fn projectile_effect_variants_match_ea_batch() {
         assert_ea_fixture("projectile-effect-variants", 7);
+    }
+
+    #[test]
+    fn missile_damage_variants_match_ea_batch() {
+        assert_ea_fixture("missile-damage-variants", 7);
     }
 
     #[test]

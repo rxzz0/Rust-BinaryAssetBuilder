@@ -1,12 +1,23 @@
 use super::super::binary::BinaryData;
 use super::super::global_ui::enum_value;
-use super::super::tokenized::Table;
+use super::super::tokenized::{Entry, Table, Target};
 use super::super::{AssetReference, finite_number, percentage, sage_time, validate_attributes};
+use super::behaviors_basic::{base, module_base};
+use super::draws::boolean;
 use crate::compile::{has_content, invalid};
 use roxmltree::Node;
 use std::{io, sync::OnceLock};
 
 const KIND: u32 = 0x0bbf_2a39;
+const MISSILE: u32 = 0x9184_0787;
+const MISSILE_FIELDS: &[(&str, u32, usize, &str)] = &[
+    ("FuelLifetime", 0x9986_69e8, 0xf4, "time"),
+    ("IgnitionDelay", 0x9986_69e8, 0xf8, "time"),
+    ("DistanceToTravelBeforeTurning", 0x6458_64f3, 0xfc, "real"),
+    ("DistanceToTargetBeforeDiving", 0x6458_64f3, 0x100, "real"),
+    ("IgnitionFX", 0x0d1c_8e83, 0x104, "fx"),
+    ("DetonateOnNoFuel", 0x77e3_f4f7, 0x108, "bool"),
+];
 const FIELDS: &[(&str, u32, usize, &str)] = &[
     ("Flags", 0xc526_ba4c, 0x8, "flags"),
     ("Type", 0xa11a_f410, 0xc, "type"),
@@ -66,19 +77,26 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
     let path = data.path;
+    let missile = node.tag_name().name() == "MissileUpdate";
+    let (kind, size, derived) = if missile {
+        (MISSILE, 0x10c, MISSILE_FIELDS)
+    } else {
+        (KIND, 0xf4, &[][..])
+    };
+    let all_fields = || FIELDS.iter().chain(derived);
     let allowed: Vec<_> = ["id"]
         .into_iter()
-        .chain(FIELDS.iter().map(|&(name, ..)| name))
+        .chain(all_fields().map(|&(name, ..)| name))
         .collect();
     validate_attributes(node, &allowed, path)?;
     if has_content(node) {
         return Err(invalid(path, "unexpected BezierProjectile content"));
     }
-    let start = data.allocate(pointer, 0xf4)?;
-    let parent = super::behaviors_basic::module_base(node, KIND, start, data, true)?;
+    let start = data.allocate(pointer, size)?;
+    let parent = module_base(node, kind, start, data, true)?;
     for attr in node.attributes() {
         let Some(&(_, _, offset, storage @ ("fx" | "weapon"))) =
-            FIELDS.iter().find(|&&(name, ..)| name == attr.name())
+            all_fields().find(|&&(name, ..)| name == attr.name())
         else {
             continue;
         };
@@ -91,7 +109,7 @@ pub(super) fn encode(
             super::passive_area::reference(attr.value(), kind, path, references, reference_types)?;
         data.word(start + offset, value);
     }
-    for &(name, _, offset, storage) in FIELDS {
+    for &(name, _, offset, storage) in all_fields() {
         let offset = start + offset;
         let mut value = node
             .attribute(name)
@@ -104,6 +122,10 @@ pub(super) fn encode(
             .trim();
         let word = match storage {
             "fx" | "weapon" => continue,
+            "bool" => {
+                data.payload[offset] = boolean(node, name, false, path)?;
+                continue;
+            }
             "flags" => {
                 static FLAGS: OnceLock<Vec<String>> = OnceLock::new();
                 let flags = FLAGS.get_or_init(|| {
@@ -161,12 +183,21 @@ pub(super) fn encode(
         };
         data.word(offset, word);
     }
-    let entries = FIELDS
-        .iter()
-        .map(|&(name, kind, offset, _)| (name, kind, offset))
-        .collect::<Vec<_>>();
-    let fields = std::iter::once(parent)
-        .chain(super::draws::fields(start, &entries))
-        .collect();
-    Ok((KIND, Table::record(fields)))
+    let entries =
+        std::iter::once(parent)
+            .chain(FIELDS.iter().map(|&(name, tag, offset, _)| {
+                Entry::named(name, tag, Target::Data(start + offset))
+            }))
+            .collect();
+    let mut table = Table::record(entries);
+    if missile {
+        table = Table::record(
+            std::iter::once(base(KIND, table))
+                .chain(derived.iter().map(|&(name, tag, offset, _)| {
+                    Entry::named(name, tag, Target::Data(start + offset))
+                }))
+                .collect(),
+        );
+    }
+    Ok((kind, table))
 }

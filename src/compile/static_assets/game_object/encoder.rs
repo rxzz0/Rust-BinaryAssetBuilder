@@ -299,6 +299,7 @@ pub(in crate::compile::static_assets) fn compile(
                 let early_fields: &[u32] = match module.tag_name().name() {
                     "SpecialDisguiseUpdate" => &[0x100],
                     "MoneyGainAttachUpdate" => &[0x158],
+                    "DamageFieldUpdate" => &[0x28],
                     "DominateEnemySpecialPower" => &[super::dominate_enemy::FILTER_POINTER as u32],
                     "BeamSpecialAbilityUpdate" => &[0xf8, 0x108],
                     "RadarFreezeSpecialPower" | "RadarSpySpecialPower" => &[0x1c8],
@@ -526,7 +527,7 @@ pub(in crate::compile::static_assets) fn compile(
                 return (start, offset);
             }
         }
-        // Some abilities emit derived pointers before inherited pointers.
+        // Some modules emit derived pointers before inherited pointers.
         let index = early_module_fields.partition_point(|&(start, _)| start <= pointer);
         if index > 0 {
             let (start, offsets) = early_module_fields[index - 1];

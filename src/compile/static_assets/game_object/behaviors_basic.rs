@@ -2218,11 +2218,18 @@ pub(super) fn encode(
         return super::squeeze_fling::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
-    if node.has_tag_name((SAGE_NS, "BezierProjectile")) {
+    if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(node.tag_name().name(), "BezierProjectile" | "MissileUpdate")
+    {
         return super::bezier_projectile::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
-    if node.has_tag_name((SAGE_NS, "FireWeaponUpdate")) {
+    if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(
+            node.tag_name().name(),
+            "FireWeaponUpdate" | "DamageFieldUpdate"
+        )
+    {
         return fire_weapon_update(node, pointer, data, references, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "PlayerPowerManager")) {
@@ -3013,25 +3020,61 @@ fn fire_weapon_update(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
     const KIND: u32 = 0xb28c_3d52;
+    const DAMAGE: u32 = 0xf3b8_02d5;
     let path = data.path;
-    validate_attributes(
-        node,
-        &["id", "FireInterval", "AliveOnly", "ActiveWhenDisabled"],
-        path,
-    )?;
+    let damage = node.tag_name().name() == "DamageFieldUpdate";
+    let mut allowed = vec!["id", "FireInterval", "AliveOnly", "ActiveWhenDisabled"];
+    if damage {
+        allowed.extend(["Radius", "RequiredUpgrade"]);
+    }
+    validate_attributes(node, &allowed, path)?;
     let mut nuggets = Vec::new();
     let mut status = None;
+    let mut filter = None;
     for child in significant_children(node) {
-        if child.has_tag_name((SAGE_NS, "FireWeaponNugget")) && status.is_none() {
+        if child.has_tag_name((SAGE_NS, "FireWeaponNugget")) && status.is_none() && filter.is_none()
+        {
             nuggets.push(child);
-        } else if child.has_tag_name((SAGE_NS, "ObjectStatusValidation")) && status.is_none() {
+        } else if child.has_tag_name((SAGE_NS, "ObjectStatusValidation"))
+            && status.is_none()
+            && filter.is_none()
+        {
             status = Some(child);
+        } else if damage && child.has_tag_name((SAGE_NS, "ObjectFilter")) && filter.is_none() {
+            filter = Some(child);
         } else {
-            return Err(invalid(path, "unsupported FireWeaponUpdate child"));
+            return Err(invalid(
+                path,
+                format!("unsupported {} child", node.tag_name().name()),
+            ));
         }
     }
-    let start = data.allocate(pointer, 0x20)?;
-    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    let (kind, size) = if damage { (DAMAGE, 0x2c) } else { (KIND, 0x20) };
+    let start = data.allocate(pointer, size)?;
+    let mut entries = vec![module_base(node, kind, start, data, true)?];
+    let mut filter_reference_types = Vec::new();
+    let filter = match filter {
+        Some(child) => Target::Table(super::parking::encode_filter(
+            child,
+            start + 0x28,
+            data,
+            &mut filter_reference_types,
+        )?),
+        None => Target::Null,
+    };
+    if damage {
+        let radius =
+            super::super::sage_int(node.attribute("Radius").unwrap_or("0"), "Radius", path)?;
+        data.word(start + 0x20, radius);
+        let upgrade = super::passive_area::reference(
+            node.attribute("RequiredUpgrade").unwrap_or(""),
+            "UpgradeTemplate",
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + 0x24, upgrade);
+    }
     data.word(
         start + 8,
         sage_time(
@@ -3130,7 +3173,23 @@ fn fire_weapon_update(
         None => Target::Null,
     };
     entries.push(Entry::named("ObjectStatusValidation", 0x3e8f_938c, status));
-    Ok((KIND, Table::record(entries)))
+    // The filter is laid out first, but its reference types are hashed after the nugget types.
+    reference_types.extend(filter_reference_types);
+    let table = Table::record(entries);
+    if damage {
+        let mut entries = vec![base(KIND, table)];
+        entries.extend(fields(
+            start,
+            &[
+                ("Radius", 0x23e6_50b8, 0x20),
+                ("RequiredUpgrade", 0x4aba_1f29, 0x24),
+            ],
+        ));
+        entries.push(Entry::named("ObjectFilter", 0xe46e_a3b2, filter));
+        Ok((kind, Table::record(entries)))
+    } else {
+        Ok((kind, table))
+    }
 }
 
 fn fire_weapon_when_dead(

@@ -1,0 +1,25 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="ProbeDamageWeapon"/>
+  <WeaponTemplate id="ProbeMissileWeapon"/>
+  <FXList id="ProbeIgnition"><NuggetList/></FXList>
+  <FXList id="ProbeGroundHit"><NuggetList/></FXList>
+  <UpgradeTemplate id="ProbeDamageUpgrade" Type="OBJECT"/>
+  <GameObject id="MissileDamageDefaults">
+    <Behaviors>
+      <MissileUpdate id="Missile"/>
+      <DamageFieldUpdate id="Damage"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="MissileDamageCustom">
+    <Behaviors>
+      <MissileUpdate id="Missile" GroundHitWeapon="ProbeMissileWeapon" IgnitionFX="ProbeIgnition" GroundHitFX="ProbeGroundHit" FuelLifetime="4.25s" IgnitionDelay="0.25s" DistanceToTravelBeforeTurning="17.25" DistanceToTargetBeforeDiving="55.5" DetonateOnNoFuel="true" FirstHeight="12.5" Type="TORPEDO" Flags="DIE_ON_IMPACT"/>
+      <DamageFieldUpdate id="Damage" Radius="60" RequiredUpgrade="ProbeDamageUpgrade" FireInterval="2.5s" AliveOnly="true">
+        <FireWeaponNugget WeaponName="ProbeDamageWeapon" FireDelay="0.25s" OneShot="true"><Offset x="1.5" y="-2.5" z="3.5"/></FireWeaponNugget>
+        <ObjectStatusValidation RequiredStatus="CAN_ATTACK" ForbiddenStatus="SOLD"/>
+        <ObjectFilter Rule="ANY" Relationship="ENEMIES" Include="VEHICLE"><IncludeThing>MissileDamageDefaults</IncludeThing></ObjectFilter>
+      </DamageFieldUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
