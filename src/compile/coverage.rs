@@ -279,6 +279,9 @@ const MODULES: &[(&str, &[&str])] = &[
             "TeleportToCasterSpecialPower",
             "TiberiumThiefSpecialAbilityUpdate",
             "GiveUpgradeUpdate",
+            "CloneStoredObjectsSpecialPowerUpdate",
+            "DelayedWeaponFireSpecialAbilityUpdate",
+            "RadarScanMapSpecialAbilityUpdate",
             "OCLMonitorSpecialAbilityUpdate",
             "SwitchLocomotorsSpecialAbilityUpdate",
             "RestrictSpecialPowerBehavior",
@@ -1092,6 +1095,11 @@ mod tests {
     #[test]
     fn missile_damage_variants_match_ea_batch() {
         assert_ea_fixture("missile-damage-variants", 7);
+    }
+
+    #[test]
+    fn clone_radar_ability_variants_match_ea_batch() {
+        assert_ea_fixture("clone-radar-ability-variants", 6);
     }
 
     #[test]

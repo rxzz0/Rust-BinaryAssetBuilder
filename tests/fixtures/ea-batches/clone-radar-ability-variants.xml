@@ -1,0 +1,26 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="ProbeDelayedAbilityWeapon"/>
+  <AttributeModifier id="ProbeCloneModifier"/>
+  <FXList id="ProbeCloneTrigger"><NuggetList/></FXList>
+  <FXList id="ProbeCloneTarget"><NuggetList/></FXList>
+  <GameObject id="CloneRadarAbilityDefaults">
+    <Behaviors>
+      <CloneStoredObjectsSpecialPowerUpdate id="Clone"/>
+      <DelayedWeaponFireSpecialAbilityUpdate id="Delayed"/>
+      <RadarScanMapSpecialAbilityUpdate id="Radar"><IntersectionFlagsFilter/></RadarScanMapSpecialAbilityUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="CloneRadarAbilityCustom">
+    <Behaviors>
+      <CloneStoredObjectsSpecialPowerUpdate id="Clone" TargetFX="ProbeCloneTarget" TriggerAttributeModifierOnClones="ProbeCloneModifier" TriggerFX="ProbeCloneTrigger" MinDestinationRadius="12.5" MaxDestinationRadius="85.25" ClonedObjectLifetime="4.5s"/>
+      <DelayedWeaponFireSpecialAbilityUpdate id="Delayed" SpecialWeapon="ProbeDelayedAbilityWeapon" FireDelay="1.25s" BusyForDuration="2.5s" NeedLivingTargets="true"/>
+      <RadarScanMapSpecialAbilityUpdate id="Radar">
+        <CustomAnimAndDuration AnimState="MOVING" Frames="12" Trigger="3"/>
+        <IntersectionFlagsFilter ObjectStatus="SOLD" ModelCondition="MOVING" KindOf="INFANTRY VEHICLE" UseLocalPlayerFilter="false"/>
+        <IntersectionFlagsFilter ObjectStatus="CAN_ATTACK" ModelCondition="FROZEN" KindOf="STRUCTURE"/>
+      </RadarScanMapSpecialAbilityUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

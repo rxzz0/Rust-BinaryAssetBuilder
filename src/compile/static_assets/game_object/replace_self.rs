@@ -27,6 +27,25 @@ const TIBERIUM_THIEF: u32 = 0xf456_8855;
 const GIVE_UPGRADE: u32 = 0x2de3_4173;
 const OCL_MONITOR: u32 = 0xc80e_586b;
 const SWITCH_LOCOMOTORS: u32 = 0x14e0_31a2;
+const CLONE_STORED: u32 = 0xcdef_277d;
+const DELAYED_WEAPON: u32 = 0x368f_2215;
+const RADAR_SCAN: u32 = 0xda2f_4ee5;
+const CLONE_STORED_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("MinDestinationRadius", 0x6458_64f3, 0xf0, "real", "0"),
+    ("MaxDestinationRadius", 0x6458_64f3, 0xf4, "real", "0"),
+    (
+        "TriggerAttributeModifierOnClones",
+        0x09dd_cff3,
+        0xf8,
+        "ref",
+        "AttributeModifier",
+    ),
+    ("TriggerFX", 0x0d1c_8e83, 0xfc, "ref", "FXList"),
+    ("TargetFX", 0x0d1c_8e83, 0x100, "ref", "FXList"),
+    ("ClonedObjectLifetime", 0x9986_69e8, 0x104, "time", "0s"),
+];
+const DELAYED_WEAPON_FIELDS: &[(&str, u32, usize, &str, &str)] =
+    &[("FireDelay", 0x9986_69e8, 0x110, "time", "0s")];
 const GIVE_UPGRADE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
     ("GiveUpgradeEffect", 0x0d1c_8e83, 0xf0, "ref", "FXList"),
     ("SpawnOutFX", 0x0d1c_8e83, 0xf4, "ref", "FXList"),
@@ -301,6 +320,9 @@ pub(super) fn encode(
     const ACTIVATE_MODULE: u32 = 0xcd33_bcee;
     let (kind, size, variant) = match node.tag_name().name() {
         "WeaponFireSpecialAbilityUpdate" => (WEAPON, 0x110, WEAPON_FIELDS),
+        "DelayedWeaponFireSpecialAbilityUpdate" => (DELAYED_WEAPON, 0x114, WEAPON_FIELDS),
+        "CloneStoredObjectsSpecialPowerUpdate" => (CLONE_STORED, 0x108, CLONE_STORED_FIELDS),
+        "RadarScanMapSpecialAbilityUpdate" => (RADAR_SCAN, 0xf8, &[][..]),
         "ToggleStatusSpecialAbilityUpdate" => (TOGGLE, 0xfc, TOGGLE_FIELDS),
         "ActivateModuleSpecialAbilityUpdate" => (ACTIVATE_MODULE, 0xf8, &[][..]),
         "SpecialAbilityUpdate" => (ABILITY, 0xf0, &[][..]),
@@ -343,7 +365,12 @@ pub(super) fn encode(
             ));
         }
     };
-    let all_fields = FIELDS.iter().chain(variant);
+    let extension = if kind == DELAYED_WEAPON {
+        DELAYED_WEAPON_FIELDS
+    } else {
+        &[]
+    };
+    let all_fields = FIELDS.iter().chain(variant).chain(extension);
     let path = data.path;
     let allowed: Vec<_> = std::iter::once("id")
         .chain(all_fields.clone().map(|&(name, ..)| name))
@@ -356,6 +383,9 @@ pub(super) fn encode(
     let mut children = significant_children(node).peekable();
     let animation_node =
         children.next_if(|child| child.has_tag_name((SAGE_NS, "CustomAnimAndDuration")));
+    let radar_filters = (kind == RADAR_SCAN)
+        .then(|| radar_scan_filters(children.by_ref(), start + 0xf0, data))
+        .transpose()?;
     let ejection = if kind == eject_passengers::KIND {
         let offset =
             children.next_if(|child| child.has_tag_name((SAGE_NS, eject_passengers::BONE_OFFSET)));
@@ -402,7 +432,7 @@ pub(super) fn encode(
         .transpose()?;
     // Beam allocates its derived status list and string before inherited data.
     let ordered_fields = if kind == beam_special_ability::KIND {
-        variant.iter().chain(FIELDS)
+        variant.iter().chain(FIELDS).chain(extension)
     } else {
         all_fields
     };
@@ -494,9 +524,22 @@ pub(super) fn encode(
         return Ok((kind, Table::record(ability)));
     }
     let mut entries = vec![base(ABILITY, Table::record(ability))];
+    if kind == DELAYED_WEAPON {
+        let extension = derived.split_off(WEAPON_FIELDS.len());
+        entries.extend(derived);
+        entries = vec![base(WEAPON, Table::record(entries))];
+        entries.extend(extension);
+        if children.next().is_some() {
+            return Err(invalid(
+                path,
+                "unexpected DelayedWeaponFireSpecialAbilityUpdate child",
+            ));
+        }
+        return Ok((kind, Table::record(entries)));
+    }
     entries.extend(derived);
     entries.extend(ejection);
-    if let Some(derived_child) = disguise.or(dominate).or(assemble) {
+    if let Some(derived_child) = disguise.or(dominate).or(assemble).or(radar_filters) {
         entries.push(derived_child);
         return Ok((kind, Table::record(entries)));
     }
@@ -544,6 +587,7 @@ pub(super) fn encode(
         WEAPON
             | CAPTURE
             | RECONSTITUTE
+            | CLONE_STORED
             | OBJECT_STATUS
             | TELEPORT
             | TIBERIUM_THIEF
@@ -575,6 +619,59 @@ pub(super) fn encode(
         Target::Table(replacements),
     ));
     Ok((kind, Table::record(entries)))
+}
+
+fn radar_scan_filters<'a, 'input: 'a>(
+    children: impl Iterator<Item = Node<'a, 'input>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Entry> {
+    const NAME: &str = "IntersectionFlagsFilter";
+    const STRIDE: usize = 0x80;
+    const FIELDS: &[(&str, u32, usize)] = &[
+        ("ObjectStatus", 0xa7bd_811e, 0),
+        ("ModelCondition", 0x67db_bfc9, 0x1c),
+        ("KindOf", 0x9afc_9193, 0x58),
+        ("UseLocalPlayerFilter", 0x77e3_f4f7, 0x7c),
+    ];
+    let filters: Vec<_> = children.collect();
+    let path = data.path;
+    if filters.is_empty() {
+        return Err(invalid(path, format!("expected {NAME}")));
+    }
+    let first = data.list(count, filters.len(), STRIDE)?;
+    let mut items = Vec::with_capacity(filters.len());
+    for (index, filter) in filters.into_iter().enumerate() {
+        if !filter.has_tag_name((SAGE_NS, NAME)) || has_content(filter) {
+            return Err(invalid(path, format!("unexpected {NAME} content")));
+        }
+        validate_attributes(
+            filter,
+            &[
+                "ObjectStatus",
+                "ModelCondition",
+                "KindOf",
+                "UseLocalPlayerFilter",
+            ],
+            path,
+        )?;
+        let start = first + index * STRIDE;
+        write_status_flags(filter.attribute("ObjectStatus").unwrap_or(""), start, data)?;
+        write_model_conditions(
+            filter.attribute("ModelCondition").unwrap_or(""),
+            start + 0x1c,
+            data,
+        )?;
+        super::fields::write_kind_of(filter.attribute("KindOf").unwrap_or(""), start + 0x58, data)?;
+        data.payload[start + 0x7c] = boolean(filter, "UseLocalPlayerFilter", true, path)?;
+        let fields = super::draws::fields(start, FIELDS).collect();
+        items.push((0, Target::Table(Table::record(fields))));
+    }
+    Ok(Entry::named(
+        NAME,
+        0x6949_a978,
+        Target::Table(Table::array(count, items)),
+    ))
 }
 
 fn assembly_templates<'a, 'input: 'a>(
