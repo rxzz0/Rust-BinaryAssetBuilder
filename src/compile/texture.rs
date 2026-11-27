@@ -6,6 +6,8 @@ use super::{
 use roxmltree::Node;
 use std::{io, path::Path};
 
+pub(super) const TEXTURE_COMPILER_VERSION: u32 = 0x106a;
+
 impl Compiler<'_> {
     pub(super) fn compile_texture(
         &self,
@@ -58,9 +60,9 @@ impl Compiler<'_> {
             bytes = compile_tga(&bytes, mipmaps, resizing, format)
                 .map_err(|error| invalid(&input, error))?;
         }
-        // EA preserves the DDS bytes even when the XML requests another format.
-        prepare_dds(&bytes, mipmaps, resizing).map_err(|error| invalid(&input, error))?;
-        let instance_hash = hash_xml(node, type_hash ^ 4, path)?
+        // EA applies conversion settings to source images and passes through prebuilt DDS data.
+        validate_dds(&bytes).map_err(|error| invalid(&input, error))?;
+        let instance_hash = hash_xml(node, type_hash ^ TEXTURE_COMPILER_VERSION, path)?
             ^ memory_stream_hash(file_hash.to_le_bytes().to_vec());
         let size =
             u32::try_from(bytes.len()).map_err(|_| invalid(&input, "DDS sidecar is too large"))?;
@@ -125,7 +127,7 @@ impl Compiler<'_> {
     }
 }
 
-pub(super) fn prepare_dds(bytes: &[u8], mipmaps: bool, resizing: bool) -> Result<(), &'static str> {
+pub(super) fn validate_dds(bytes: &[u8]) -> Result<(), &'static str> {
     let (header, pixels) = bytes
         .split_first_chunk::<128>()
         .ok_or("truncated DDS header")?;
@@ -138,12 +140,9 @@ pub(super) fn prepare_dds(bytes: &[u8], mipmaps: bool, resizing: bool) -> Result
     if width == 0 || height == 0 || width > 16384 || height > 16384 {
         return Err("invalid DDS dimensions");
     }
-    if resizing && (!width.is_power_of_two() || !height.is_power_of_two()) {
-        return Err("DDS resizing is unsupported");
-    }
     let levels = word(7).max(1);
     let full_mips = u32::BITS - width.max(height).leading_zeros();
-    if levels > full_mips || mipmaps && levels != full_mips {
+    if levels > full_mips {
         return Err("unsupported DDS mipmap layout");
     }
     let level_size = |w: u32, h: u32| -> Result<usize, &'static str> {
@@ -413,7 +412,7 @@ mod tests {
         tga.extend([0, 0, 255, 127].repeat(16));
 
         let dxt1 = compile_tga(&tga, true, true, "DXT1").unwrap();
-        prepare_dds(&dxt1, true, true).unwrap();
+        validate_dds(&dxt1).unwrap();
         assert_eq!(&dxt1[84..88], b"DXT1");
         assert_eq!(dxt1[28], 3);
         assert_eq!(dxt1.len(), 128 + 3 * 8);
@@ -422,7 +421,7 @@ mod tests {
         }
 
         let rgba = compile_tga(&tga, false, false, "A8R8G8B8").unwrap();
-        prepare_dds(&rgba, false, false).unwrap();
+        validate_dds(&rgba).unwrap();
         assert_eq!(rgba.len(), 128 + 16 * 4);
         assert_eq!(&rgba[128..132], &[0, 0, 255, 127]);
     }

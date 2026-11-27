@@ -242,6 +242,10 @@ fn embedded_dds_texture_matches_ea_payload_and_relocations() {
     let manifest = Manifest::parse(&stream.manifest).unwrap();
     assert_eq!(manifest.assets.len(), 1);
     assert_eq!(manifest.assets[0].type_hash, 0x9f5f_f8da);
+    assert_eq!(
+        manifest.assets[0].instance_hash.to_le_bytes(),
+        oracle[12..16]
+    );
     let split = oracle.len() - 8;
     assert_eq!(&stream.files.bin[4..], &oracle[32..split]);
     assert_eq!(&stream.files.relo[4..], &oracle[split..]);
@@ -273,10 +277,49 @@ fn on_demand_texture_sidecar_matches_ea_dds() {
         let CustomData::Bytes(data) = custom else {
             panic!("expected DDS sidecar")
         };
-        assert_eq!(&data[..12], &oracle[..12]);
-        assert_eq!(&data[16..], &oracle[16..]);
+        assert_eq!(data.as_slice(), oracle);
         assert_eq!(&data[12..16], &asset.instance_hash.to_le_bytes());
     }
+}
+
+#[test]
+fn static_prebuilt_dds_preserves_partial_mipmaps_and_dimensions() {
+    let root = scratch_root();
+    let input = root.join("probe.xml");
+    let texture = root.join("partial.dds");
+    // A 12x8 DXT3 DDS with only the 12x8 and 6x4 levels.
+    let mut header = [0u32; 32];
+    header[0] = u32::from_le_bytes(*b"DDS ");
+    header[1] = 124;
+    header[2] = 0x000a_1007;
+    header[3..8].copy_from_slice(&[8, 12, 96, 0, 2]);
+    header[19] = 32;
+    header[20] = 4;
+    header[21] = u32::from_le_bytes(*b"DXT3");
+    header[27] = 0x0040_1008;
+    let mut dds: Vec<_> = header.into_iter().flat_map(u32::to_le_bytes).collect();
+    dds.extend(0..128);
+    fs::write(&texture, &dds).unwrap();
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Texture id="Embedded" File="partial.dds"/>
+            <OnDemandTexture id="Demand" File="partial.dds" GenerateMipMaps="true" AllowAutomaticResize="true" OutputFormat="DXT5"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+
+    let stream = compile_static(&input, &root, &root).unwrap();
+    assert!(stream.files.bin.ends_with(&dds));
+    let [(_, CustomData::Bytes(sidecar))] = stream.custom_data.as_slice() else {
+        panic!("expected a single DDS sidecar")
+    };
+    assert_eq!(&sidecar[40..sidecar.len() - 8], &dds);
+
+    fs::write(texture, &dds[..dds.len() - 1]).unwrap();
+    let error = compile_static(&input, &root, &root).err().unwrap();
+    assert!(error.to_string().contains("truncated DDS pixel data"));
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

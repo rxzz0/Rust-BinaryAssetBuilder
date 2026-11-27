@@ -1394,13 +1394,17 @@ impl Compiler<'_> {
 
         let input = self.resolve(path, file)?;
         let bytes = read_with_context(&input, fs::read)?;
-        let processing_hash = if texture { 0x9f5f_e8b0 } else { type_hash ^ 4 };
+        let processing_hash = type_hash
+            ^ if texture {
+                texture::TEXTURE_COMPILER_VERSION
+            } else {
+                4
+            };
         let instance_hash = hash_asset(node, processing_hash, &bytes, path)?;
         let bytes = if texture {
             if bytes.starts_with(b"DDS ") {
                 // EA embeds supplied DDS data unchanged for either resize setting.
-                texture::prepare_dds(&bytes, false, false)
-                    .map_err(|error| invalid(&input, error))?;
+                texture::validate_dds(&bytes).map_err(|error| invalid(&input, error))?;
                 bytes
             } else {
                 texture::tga_to_dds(&bytes).map_err(|error| invalid(&input, error))?
