@@ -2107,6 +2107,47 @@ fn compiles_credits_with_ansi_strings_and_empty_lines() {
 }
 
 #[test]
+fn music_track_inheritance_matches_ea_stream() {
+    let root = scratch_root();
+    let xml = root.join("music-track-inheritance.xml");
+    let schema_dir = root.join("Schemas/xsd");
+    fs::create_dir_all(&schema_dir).unwrap();
+    fs::write(
+        schema_dir.join("CnC3Types.xsd"),
+        r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:complexType name="MusicTrack"><xs:sequence>
+            <xs:element name="VolumeSliderMultiplier" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence></xs:complexType>
+        </xs:schema>"#,
+    )
+    .unwrap();
+    fs::write(
+        &xml,
+        include_bytes!("fixtures/music-track-inheritance/music-track-inheritance.xml"),
+    )
+    .unwrap();
+
+    let stream = compile_static(&xml, &root, &root).unwrap();
+    assert_eq!(
+        stream.manifest,
+        include_bytes!("fixtures/music-track-inheritance/music-track-inheritance.manifest"),
+    );
+    assert_eq!(
+        stream.files.bin,
+        include_bytes!("fixtures/music-track-inheritance/music-track-inheritance.bin"),
+    );
+    assert_eq!(
+        stream.files.relo,
+        include_bytes!("fixtures/music-track-inheritance/music-track-inheritance.relo"),
+    );
+    assert_eq!(
+        stream.files.imp,
+        include_bytes!("fixtures/music-track-inheritance/music-track-inheritance.imp"),
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn audio_event_overridable_inherits_and_matches_uprising_map_payload() {
     let root = scratch_root();
     let xml = root.join("map.xml");

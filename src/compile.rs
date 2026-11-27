@@ -982,6 +982,7 @@ impl Compiler<'_> {
             | "AmbientStream"
             | "AudioEvent"
             | "AudioEventOverridable"
+            | "MusicTrack"
             | "LogicCommandSet"
             | "LogicCommand"
             | "ObjectFilterAsset"
