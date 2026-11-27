@@ -955,9 +955,14 @@ fn model_state(
         node,
         &[
             "ParseCondStateType",
+            "Name",
             "ConditionsYes",
             "Skeleton",
+            "PortraitImage",
+            "ButtonImage",
+            "OverrideTooltip",
             "RetainSubObjects",
+            "id",
         ],
         data.path,
     )?;
@@ -977,14 +982,31 @@ fn model_state(
     if let Some(value) = node.attribute("ConditionsYes") {
         write_model_conditions(value, start + 0xc, data)?;
     }
-    if let Some(skeleton) = node.attribute("Skeleton") {
-        data.string(start + 0x48, skeleton)?;
+    for (name, offset) in [
+        ("Name", 0x04),
+        ("Skeleton", 0x48),
+        ("OverrideTooltip", 0x58),
+        ("id", 0x60),
+    ] {
+        if let Some(value) = node.attribute(name) {
+            data.string(start + offset, value)?;
+        }
+    }
+    for (name, offset) in [("PortraitImage", 0x50), ("ButtonImage", 0x54)] {
+        if let Some(value) = node.attribute(name).filter(|value| !value.is_empty()) {
+            let reference = asset_reference(value, "PackedTextureImage", data.path)?;
+            references.push(reference.into());
+            reference_types.push(reference.type_id);
+            data.word(start + offset, references.len() as u32);
+        }
     }
     let mut weapon_bones: [Vec<_>; 4] = std::array::from_fn(|_| Vec::new());
     let mut models = Vec::new();
     let mut material = None;
     let mut textures = Vec::new();
     let mut particles = Vec::new();
+    let mut fx_events = Vec::new();
+    let mut sub_objects = Vec::new();
     let mut turrets = Vec::new();
     let mut shadow = None;
     for child in significant_children(node) {
@@ -1002,6 +1024,10 @@ fn model_state(
             weapon_bones[index].push(child);
         } else if child.has_tag_name((SAGE_NS, "ParticleSysBone")) {
             particles.push(child);
+        } else if child.has_tag_name((SAGE_NS, "FXEvent")) {
+            fx_events.push(child);
+        } else if child.has_tag_name((SAGE_NS, "SubObject")) {
+            sub_objects.push(child);
         } else if child.has_tag_name((SAGE_NS, "ShadowInfo")) && shadow.is_none() {
             shadow = Some(child);
         } else if child.has_tag_name((SAGE_NS, "Turret")) {
@@ -1069,6 +1095,13 @@ fn model_state(
         references,
         reference_types,
     )?;
+    let fx = super::animation::encode_fx_events(
+        fx_events,
+        start + 0xa4,
+        data,
+        references,
+        reference_types,
+    )?;
     let shadow = match shadow {
         Some(node) => Target::Table(super::shadow::encode(
             node,
@@ -1110,16 +1143,49 @@ fn model_state(
             0x98c5_3fe6,
             Target::Table(particle_table),
         ),
-        array("FXEvent", 0x7599_1ad3, start + 0xa4),
+        Entry::named("FXEvent", 0x7599_1ad3, Target::Table(fx)),
         Entry::named("ShadowInfo", 0x82fe_7e88, shadow),
         Entry::named(
             "Turret",
             0xf309_5903,
             Target::Table(encode_turrets(turrets, start + 0xb0, data)?),
         ),
-        array("SubObject", 0x03a2_8c40, start + 0xb8),
+        Entry::named(
+            "SubObject",
+            0x03a2_8c40,
+            Target::Table(encode_state_sub_objects(sub_objects, start + 0xb8, data)?),
+        ),
     ]);
     Ok(Table::record(entries))
+}
+
+fn encode_state_sub_objects(
+    nodes: Vec<Node<'_, '_>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Table> {
+    let start = data.list(count, nodes.len(), 4)?;
+    let mut items = Vec::with_capacity(nodes.len());
+    for (index, node) in nodes.into_iter().enumerate() {
+        validate_attributes(node, &[], data.path)?;
+        if node.children().any(|child| child.is_element()) {
+            return Err(invalid(
+                data.path,
+                "SubObject cannot contain child elements",
+            ));
+        }
+        let value: String = node
+            .children()
+            .filter_map(|child| child.is_text().then(|| child.text()).flatten())
+            .collect();
+        if value.is_empty() {
+            return Err(invalid(data.path, "SubObject is missing its identifier"));
+        }
+        let offset = start + index * 4;
+        data.word(offset, hash_name(&value));
+        items.push((0, Target::Data(offset)));
+    }
+    Ok(Table::array(count, items))
 }
 
 fn encode_turrets(
@@ -1229,10 +1295,6 @@ pub(super) fn fields<'a>(
     fields
         .iter()
         .map(move |&(name, kind, offset)| Entry::named(name, kind, Target::Data(start + offset)))
-}
-
-pub(super) fn array(name: &str, kind: u32, count: usize) -> Entry {
-    Entry::named(name, kind, Target::Table(Table::array(count, [])))
 }
 
 pub(super) fn boolean(

@@ -351,8 +351,10 @@ pub fn sdk_coverage(schema_root: &Path, mut out: impl Write) -> io::Result<()> {
                 }
                 for field in draw.children {
                     let coverage = match field.name.as_str() {
-                        "ModelConditionState" | "AnimationState" => "partial",
-                        "AttachModel" | "EmbedPortal" => "encoded",
+                        "ModelConditionState"
+                        | "AnimationState"
+                        | "AttachModel"
+                        | "EmbedPortal" => "encoded",
                         _ => "missing",
                     };
                     writeln!(out, "DrawChild\t{}\t{}\t{coverage}", field.name, field.kind)?;
@@ -1024,6 +1026,11 @@ mod tests {
     #[test]
     fn animation_fx_events_match_ea_batch() {
         assert_ea_fixture("animation-fx-events", 1);
+    }
+
+    #[test]
+    fn scripted_model_states_match_ea_batch() {
+        assert_ea_fixture("scripted-model-states", 2);
     }
 
     #[test]

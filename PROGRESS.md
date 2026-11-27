@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 481: Completed ScriptedModelDraw model condition state encoding for metadata, image references, FX events and subobjects, and added animation state Lua events. Both EA fixture GameObjects matched byte for byte. Formatting, all 393 tests, Clippy and the Windows x64 release build passed. Installed the release in the working SDK and verified its SHA-256 and fixture output. Coverage lists 47 missing behaviors. Next: ObjectStatusSpecialAbilityUpdate, TeleportToCasterSpecialPower and TiberiumThiefSpecialAbilityUpdate.
 - Checkpoint 480: Added native CaptureAndGiveCommandSetSpecialPower, CombineSpecialPower, InvisibilitySpecialPower and TemporaryOwnerSpecialPower. All three EA fixture assets matched byte for byte. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: scripted draw states.
 - Checkpoint 479: Added native ActivateSpecialPowerOnCreate, OCLUpdate and InitiateRepairDie. All six EA fixture assets matched byte for byte. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: four SpecialPower variants.
 - Checkpoint 478: Added native DistributedMoney, FindCoverBehavior and GatherSlavesUpdate with their shared Create and Update layouts. All four EA fixture assets matched byte for byte. Rust tests, Clippy and release checks passed.
