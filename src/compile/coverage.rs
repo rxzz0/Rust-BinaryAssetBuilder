@@ -240,6 +240,8 @@ const MODULES: &[(&str, &[&str])] = &[
             "CombineSpecialPower",
             "InvisibilitySpecialPower",
             "TemporaryOwnerSpecialPower",
+            "GrantUpgradeAreaOfEffectSpecialPower",
+            "SpecialPowerDispatchSpecialPower",
             "FindCoverBehavior",
             "GatherSlavesUpdate",
             "CostModifierUpgrade",
@@ -1107,6 +1109,11 @@ mod tests {
     #[test]
     fn grant_ability_variants_match_ea_batch() {
         assert_ea_fixture("grant-ability-variants", 5);
+    }
+
+    #[test]
+    fn upgrade_dispatch_variants_match_ea_batch() {
+        assert_ea_fixture("upgrade-dispatch-variants", 9);
     }
 
     #[test]

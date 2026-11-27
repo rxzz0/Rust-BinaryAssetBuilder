@@ -7,7 +7,8 @@ use super::super::{
 use super::behaviors_basic::{base, inherited};
 use super::draws::{boolean, fields, model_condition_index};
 use super::special_power_variants::{
-    encode_initiate_sound, string_list, variant_fields, variant_filter, variant_layout,
+    AREA_UPGRADE, encode_initiate_sound, encode_variant_list, string_list, variant_fields,
+    variant_filter, variant_layout, variant_list,
 };
 use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::Node;
@@ -166,13 +167,34 @@ pub(super) fn encode(
     data.word(start, kind);
     data.word(start + 4, hash_name(required(node, "id", path)?));
     // EA allocates derived lists, masks, and filters before variable-length base fields.
+    let mut filter_reference_types = Vec::new();
     let derived_entries = if variant.is_some() {
-        Some(variant_fields(node, start, derived, data, reference_types)?)
+        let variant_reference_types = if kind == AREA_UPGRADE {
+            &mut filter_reference_types
+        } else {
+            &mut *reference_types
+        };
+        Some(variant_fields(
+            node,
+            start,
+            derived,
+            data,
+            variant_reference_types,
+        )?)
     } else {
         (kind == MOVEMENT_POWER)
             .then(|| movement_fields(node, start, data))
             .transpose()?
     };
+    let derived_list = variant_list(kind)
+        .map(|(name, offset)| {
+            let count = start + offset;
+            let length = significant_children(node)
+                .filter(|child| child.has_tag_name((SAGE_NS, name)))
+                .count();
+            Ok::<_, io::Error>((count, data.list(count, length, 4)?))
+        })
+        .transpose()?;
     let scalar_fields = if derived_entries.is_some() {
         &[]
     } else {
@@ -405,7 +427,8 @@ pub(super) fn encode(
     if let Some((name, _)) = variant_filter(node.tag_name().name()) {
         children.next_if(|child| child.has_tag_name((SAGE_NS, name)));
     }
-    if !matches!(kind, OCL_POWER | PLAYER_UPGRADE | ACTIVATE_MODULE)
+    if derived_list.is_none()
+        && !matches!(kind, OCL_POWER | PLAYER_UPGRADE | ACTIVATE_MODULE)
         && let Some(child) = children.next()
     {
         return Err(invalid(
@@ -424,6 +447,20 @@ pub(super) fn encode(
         entries.extend(derived_entries);
     } else {
         entries.extend(fields(start, derived));
+    }
+    if let Some((count, first)) = derived_list {
+        // The derived filter is laid out early, but its reference types follow inherited fields.
+        reference_types.extend(filter_reference_types);
+        entries.push(encode_variant_list(
+            children,
+            kind,
+            count,
+            first,
+            data,
+            references,
+            reference_types,
+        )?);
+        return Ok((kind, Table::record(entries)));
     }
     if kind == PLAYER_UPGRADE {
         let mut upgrades = Vec::new();

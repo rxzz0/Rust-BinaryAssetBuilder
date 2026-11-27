@@ -19,6 +19,8 @@ const INVISIBILITY_TEMPLATE: u32 = 0x914c_a765;
 const STATUS: u32 = 0xa7bd_811e;
 const OBJECT_FILTER: u32 = 0xe46e_a3b2;
 const UPDATE: u32 = 0xb9b2_a9b3;
+pub(super) const AREA_UPGRADE: u32 = 0xb956_a21a;
+pub(super) const DISPATCH: u32 = 0xd877_ba74;
 
 type Field = (&'static str, u32, usize);
 
@@ -39,6 +41,12 @@ pub(super) fn variant_layout(name: &str) -> Option<(u32, usize, &'static [Field]
             ],
         ),
         "TemporaryOwnerSpecialPower" => (0xc662_deb4, 0x1e0, &[("SlaveStatus", STATUS, 0x1c4)]),
+        "GrantUpgradeAreaOfEffectSpecialPower" => (AREA_UPGRADE, 0x1d4, &[("Radius", REAL, 0x1c4)]),
+        "SpecialPowerDispatchSpecialPower" => (
+            DISPATCH,
+            0x1d0,
+            &[("RequireAllPowersToFunction", BOOL, 0x1cc)],
+        ),
         "RadarFreezeSpecialPower" => (
             0x52ee_caed,
             0x1d0,
@@ -77,6 +85,7 @@ pub(super) fn variant_filter(name: &str) -> Option<(&'static str, usize)> {
     match name {
         "CombineSpecialPower" => Some(("CombineWithObjectFilter", 0x1c4)),
         "InvisibilitySpecialPower" => Some(("ObjectFilter", 0x1d0)),
+        "GrantUpgradeAreaOfEffectSpecialPower" => Some(("AcceptObjectFilter", 0x1c8)),
         _ => None,
     }
 }
@@ -135,6 +144,76 @@ pub(super) fn variant_fields(
         entries.push(Entry::named(name, OBJECT_FILTER, target));
     }
     Ok(entries)
+}
+
+pub(super) fn variant_list(kind: u32) -> Option<(&'static str, usize)> {
+    match kind {
+        AREA_UPGRADE => Some(("UpgradeTemplate", 0x1cc)),
+        DISPATCH => Some(("SpecialPower", 0x1c4)),
+        _ => None,
+    }
+}
+
+pub(super) fn encode_variant_list<'a, 'input: 'a>(
+    children: impl Iterator<Item = Node<'a, 'input>>,
+    kind: u32,
+    count: usize,
+    first: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Entry> {
+    let path = data.path;
+    let dispatch = kind == DISPATCH;
+    let (name, tag, reference_kind) = if dispatch {
+        ("SpecialPower", 0xf8ce_7463, "SpecialPowerTemplate")
+    } else {
+        ("UpgradeTemplate", 0x4aba_1f29, "UpgradeTemplate")
+    };
+    let mut items = Vec::new();
+    for (index, child) in children.enumerate() {
+        if !child.has_tag_name((SAGE_NS, name)) {
+            return Err(invalid(path, format!("expected {name}")));
+        }
+        let value = if dispatch {
+            validate_attributes(child, &["SpecialPowerTemplate"], path)?;
+            if has_content(child) {
+                return Err(invalid(path, "unexpected SpecialPower content"));
+            }
+            child.attribute("SpecialPowerTemplate").unwrap_or("")
+        } else {
+            validate_attributes(child, &[], path)?;
+            super::super::text_value(child, path)?
+        };
+        let offset = first + index * 4;
+        let ordinal = super::passive_area::reference(
+            value,
+            reference_kind,
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(offset, ordinal);
+        let target = Target::Data(offset);
+        let target = if dispatch {
+            Target::Table(Table::record(vec![Entry::named(
+                "SpecialPowerTemplate",
+                0xaee8_3888,
+                target,
+            )]))
+        } else {
+            target
+        };
+        items.push((0, target));
+    }
+    if dispatch && items.is_empty() {
+        return Err(invalid(path, "expected SpecialPower"));
+    }
+    Ok(Entry::named(
+        name,
+        tag,
+        Target::Table(Table::array(count, items)),
+    ))
 }
 
 pub(super) fn string_list(

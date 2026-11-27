@@ -1,0 +1,32 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <SpecialPowerTemplate id="ProbeUpgradePower" TargetType="NONE"/>
+  <SpecialPowerTemplate id="ProbeDispatchPower" TargetType="NONE"/>
+  <SpecialPowerTemplate id="ProbeDispatchedPower" TargetType="NONE"/>
+  <UpgradeTemplate id="ProbeFirstAreaUpgrade" Type="OBJECT"/>
+  <UpgradeTemplate id="ProbeSecondAreaUpgrade" Type="OBJECT"/>
+  <AudioEvent id="ProbeDispatchSound"/>
+  <ObjectFilterAsset id="GenericSpecialPowerObjectFilter"><Filter/></ObjectFilterAsset>
+  <GameObject id="UpgradeDispatchDefaults">
+    <Behaviors>
+      <GrantUpgradeAreaOfEffectSpecialPower id="Grant" SpecialPowerTemplate="ProbeUpgradePower"/>
+      <SpecialPowerDispatchSpecialPower id="Dispatch" SpecialPowerTemplate="ProbeDispatchPower"><SpecialPower/></SpecialPowerDispatchSpecialPower>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="UpgradeDispatchCustom">
+    <Behaviors>
+      <GrantUpgradeAreaOfEffectSpecialPower id="Grant" SpecialPowerTemplate="ProbeUpgradePower" Radius="74.5">
+        <InitiateSound Sound="ProbeDispatchSound"/>
+        <AcceptObjectFilter Rule="ANY" Relationship="ALLIES" Include="INFANTRY"><IncludeThing>UpgradeDispatchDefaults</IncludeThing></AcceptObjectFilter>
+        <UpgradeTemplate>ProbeSecondAreaUpgrade</UpgradeTemplate>
+        <UpgradeTemplate>ProbeFirstAreaUpgrade</UpgradeTemplate>
+      </GrantUpgradeAreaOfEffectSpecialPower>
+      <SpecialPowerDispatchSpecialPower id="Dispatch" SpecialPowerTemplate="ProbeDispatchPower" RequireAllPowersToFunction="true">
+        <InitiateSound Sound="ProbeDispatchSound"/>
+        <SpecialPower SpecialPowerTemplate="ProbeDispatchedPower"/>
+        <SpecialPower SpecialPowerTemplate="ProbeUpgradePower"/>
+      </SpecialPowerDispatchSpecialPower>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
