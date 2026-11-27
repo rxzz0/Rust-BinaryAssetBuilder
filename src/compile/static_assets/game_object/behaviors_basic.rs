@@ -1725,6 +1725,28 @@ pub(super) fn encode(
         return super::death_variants::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
+    let resource = match node.tag_name().name() {
+        "TerrainResource" => Some(super::resource_variants::encode_terrain(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )),
+        "TiberiumCrystal" => Some(super::resource_variants::encode_crystal(
+            node, pointer, data,
+        )),
+        "TiberiumField" => Some(super::resource_variants::encode_field(
+            node,
+            pointer,
+            data,
+            reference_types,
+        )),
+        _ => None,
+    };
+    if let Some(encoded) = resource {
+        return encoded.map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "SpecialPowerUpdate")) {
         return super::special_power_variants::encode_update(
             node,

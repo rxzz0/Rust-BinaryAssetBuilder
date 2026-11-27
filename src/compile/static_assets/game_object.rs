@@ -76,6 +76,7 @@ mod production;
 mod recall;
 mod repair;
 mod replace_self;
+mod resource_variants;
 mod schema;
 mod secondary_damage;
 mod secondary_listener;
