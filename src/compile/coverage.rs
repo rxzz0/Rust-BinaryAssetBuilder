@@ -279,6 +279,9 @@ const MODULES: &[(&str, &[&str])] = &[
             "GiveUpgradeUpdate",
             "OCLMonitorSpecialAbilityUpdate",
             "SwitchLocomotorsSpecialAbilityUpdate",
+            "RestrictSpecialPowerBehavior",
+            "AreaRestrictSpecialPowerBehavior",
+            "SpecialPowerAssistResponseBehavior",
             "SpecialDisguiseUpdate",
             "SpiderHoleUpdate",
             "StoreCurrentStateUpdate",
@@ -1063,6 +1066,11 @@ mod tests {
     #[test]
     fn ability_monitor_variants_match_ea_batch() {
         assert_ea_fixture("ability-monitor-variants", 5);
+    }
+
+    #[test]
+    fn power_response_variants_match_ea_batch() {
+        assert_ea_fixture("power-response-variants", 3);
     }
 
     #[test]

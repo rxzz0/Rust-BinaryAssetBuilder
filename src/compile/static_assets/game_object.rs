@@ -73,6 +73,7 @@ pub(super) use parking::encode_inline_filter as encode_inline_object_filter;
 mod death_variants;
 mod passive_area;
 mod physics;
+mod power_response;
 mod production;
 mod recall;
 mod repair;

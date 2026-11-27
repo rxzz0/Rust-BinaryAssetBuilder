@@ -1468,6 +1468,12 @@ pub(super) fn encode(
         "DockUpdate" | "SupplyCenterDockUpdate" | "SupplyWarehouseDockUpdate" => {
             return super::dock::encode(node, pointer, data, reference_types).map(Some);
         }
+        "RestrictSpecialPowerBehavior"
+        | "AreaRestrictSpecialPowerBehavior"
+        | "SpecialPowerAssistResponseBehavior" => {
+            return super::power_response::encode(node, pointer, data, references, reference_types)
+                .map(Some);
+        }
         "DeletionUpdate" => return deletion_update(node, pointer, data).map(Some),
         "CaptureAndGiveUpgradeBehavior" => {
             return super::capture_upgrade::encode(
