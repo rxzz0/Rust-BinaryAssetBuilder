@@ -593,7 +593,7 @@ fn ocl_children<'a, 'input: 'a>(
     ])
 }
 
-fn empty_filter(start: usize) -> Table {
+pub(super) fn empty_filter(start: usize) -> Table {
     filter_table(start, [Vec::new(), Vec::new()])
 }
 

@@ -1880,6 +1880,20 @@ pub(super) fn encode(
     if node.has_tag_name((SAGE_NS, "SelectiveVisibilityBehavior")) {
         return super::selective_visibility::encode(node, pointer, data).map(Some);
     }
+    if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(
+            node.tag_name().name(),
+            "AttributeModifierNaval"
+                | "CombinedInfoModule"
+                | "ExperienceLevelCreate"
+                | "InheritUpgradeCreate"
+                | "RandomModelCondition"
+                | "SupplyCenterCreate"
+        )
+    {
+        return super::create_variants::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "GrantUpgradeCreate")) {
         return super::grant_upgrade_create::encode(
             node,

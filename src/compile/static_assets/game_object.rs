@@ -13,6 +13,7 @@ pub(super) mod children;
 mod client_behaviors;
 mod client_updates;
 mod create_object_die;
+mod create_variants;
 mod draws;
 mod dynamics;
 mod eject_passengers;
