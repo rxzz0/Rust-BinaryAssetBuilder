@@ -93,6 +93,8 @@ const MODULES: &[(&str, &[&str])] = &[
             "PassiveAreaEffectBehavior",
             "AttachUpdate",
             "BoobyTrapUpdate",
+            "Damage",
+            "DamageStateList",
             "QueueDockBehavior",
             "AssistedPlacementBehavior",
             "AssistedPlacementInfoBehavior",
@@ -593,6 +595,11 @@ mod tests {
     #[test]
     fn damage_and_stealth_variants_match_ea_batch() {
         assert_ea_fixture("damage-stealth-variants", 10);
+    }
+
+    #[test]
+    fn damage_states_match_ea_batch() {
+        assert_ea_fixture("damage-states", 2);
     }
 
     #[test]
