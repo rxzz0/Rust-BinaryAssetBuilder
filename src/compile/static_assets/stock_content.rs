@@ -294,6 +294,18 @@ fn write_ui_layout(
         "SellFactionCursorSet" => &["Faction"],
         "HUDElementHotKeyMapping" => &["ElementId", "HotKeySlot"],
         "UIQuickChatMessage" => &["MessageText"],
+        "CommandButtonFactionSettings" => &["Faction"],
+        "StanceButtonSettings" => &["Stance"],
+        "UIDecalCloud" => &[
+            "BuildTexture",
+            "DefenseTexture",
+            "SpecialPowerRestrictionTexture",
+        ],
+        "UIDecalGrid" => &["WallTexture"],
+        "DecalSettings" => &["ValidTexture", "InvalidTexture"],
+        "UIWorldBuilderDecalGrid" => &["Texture"],
+        "RadarSpecialIcon" => &["Image"],
+        "JoypadBuildButtonFactionSettings" => &["Faction", "LockedButtonStateData"],
         "BuildQueueTypeSettings" => &["QueueType"],
         "UIMouseTacticalQuickChatDisplay" => &["CloseKey"],
         "QuickChatMenuItem" | "QuickChatCloseItem" => &["Title"],
@@ -448,7 +460,15 @@ fn write_ui_layout(
             } else if let Some(value) = field.default {
                 write_ui_value(field.codec, value, offset, data, result)?;
             } else if (is_asset
-                || matches!(name, "SellFactionCursorSet" | "BuildQueueTypeSettings"))
+                || matches!(
+                    name,
+                    "SellFactionCursorSet"
+                        | "BuildQueueTypeSettings"
+                        | "CommandButtonFactionSettings"
+                        | "DecalSettings"
+                        | "RadarSpecialIcon"
+                        | "StanceButtonSettings"
+                ))
                 && matches!(field.codec, UiCodec::Inline(_))
             {
                 return Err(invalid(
@@ -861,6 +881,154 @@ fn ui_layout(name: &str) -> Option<UiLayout> {
                     Inline("QuickChatCloseItem")
                 ),
             ],
+        ),
+        "UIMouseTacticalExitContainerButton" => (
+            20,
+            &[
+                ui_field!("HelpTitleFormat", 4, true, None, Text),
+                ui_field!("HelpDescription", 12, true, None, Text),
+            ],
+        ),
+        "StanceButtonSettings" => (
+            36,
+            &[
+                ui_field!(
+                    "Stance",
+                    0,
+                    true,
+                    None,
+                    Enum(&["GUARD", "AGGRESSIVE", "HOLD_POSITION", "HOLD_FIRE"])
+                ),
+                ui_field!(
+                    "MouseOverHelp",
+                    4,
+                    false,
+                    None,
+                    Inline("InGameUISimpleHelpTemplate")
+                ),
+            ],
+        ),
+        "UIMouseTacticalSetStanceButton" => (
+            12,
+            &[ui_field!(
+                "StanceSettings",
+                4,
+                false,
+                None,
+                Repeated(36, &Inline("StanceButtonSettings"))
+            )],
+        ),
+        "CommandButtonFactionSettings" => (
+            12,
+            &[
+                ui_field!("Faction", 0, true, None, Faction),
+                ui_field!("LockedImage", 4, true, None, Strong("PackedTextureImage")),
+                ui_field!("ImageTintColor", 8, false, None, Inline("Color3")),
+            ],
+        ),
+        "UICommandButton" => (
+            12,
+            &[ui_field!(
+                "FactionSettings",
+                4,
+                false,
+                None,
+                Repeated(12, &Inline("CommandButtonFactionSettings"))
+            )],
+        ),
+        "UIDecalCloud" => (
+            16,
+            &[
+                ui_field!("BuildTexture", 4, true, None, Strong("Texture")),
+                ui_field!("DefenseTexture", 8, true, None, Strong("Texture")),
+                ui_field!(
+                    "SpecialPowerRestrictionTexture",
+                    12,
+                    true,
+                    None,
+                    Strong("Texture")
+                ),
+            ],
+        ),
+        "DecalSettings" => (
+            20,
+            &[
+                ui_field!("ValidTexture", 0, true, None, Strong("Texture")),
+                ui_field!("InvalidTexture", 4, true, None, Strong("Texture")),
+                ui_field!("Opacity", 8, true, Some("1.0"), Real),
+                ui_field!("LegalColor", 12, false, None, Inline("Color3")),
+                ui_field!("InvalidColor", 16, false, None, Inline("Color3")),
+            ],
+        ),
+        "UIDecalGrid" => (
+            56,
+            &[
+                ui_field!("WallTexture", 4, true, None, Strong("Texture")),
+                ui_field!("WallOpacity", 8, true, Some("1.0"), Real),
+                ui_field!("WallDecalColor", 12, false, None, Inline("Color3")),
+                ui_field!("PrimarySettings", 16, false, None, Inline("DecalSettings")),
+                ui_field!(
+                    "SecondarySettings",
+                    36,
+                    false,
+                    None,
+                    Inline("DecalSettings")
+                ),
+            ],
+        ),
+        "UIWorldBuilderDecalGrid" => (
+            16,
+            &[
+                ui_field!("Texture", 4, true, None, Strong("Texture")),
+                ui_field!("Opacity", 8, true, Some("1.0"), Real),
+                ui_field!("Color", 12, false, None, Inline("Color3")),
+            ],
+        ),
+        "RadarSpecialIcon" => (
+            124,
+            &[
+                ui_field!("Image", 0, true, None, Strong("PackedTextureImage")),
+                ui_field!("ImageOffset", 4, false, None, Inline("Vector2")),
+                ui_field!("ObjectFilter", 12, false, None, Inline("ObjectFilter")),
+            ],
+        ),
+        "UIRadarObjectsLayer" => (
+            24,
+            &[
+                ui_field!("MinUnitDotSize", 4, true, Some("3"), Unsigned),
+                ui_field!("MinStructureDotSize", 8, true, Some("5"), Unsigned),
+                ui_field!("NeutralColor", 12, false, None, Inline("Color4")),
+                ui_field!(
+                    "SpecialIcon",
+                    16,
+                    false,
+                    None,
+                    Repeated(124, &Inline("RadarSpecialIcon"))
+                ),
+            ],
+        ),
+        "JoypadBuildButtonFactionSettings" => (
+            8,
+            &[
+                ui_field!("Faction", 0, true, None, Faction),
+                ui_field!(
+                    "LockedButtonStateData",
+                    4,
+                    true,
+                    None,
+                    Strong("ButtonSingleStateData")
+                ),
+            ],
+        ),
+        "UIJoypadCommandBarButtonBuild" => (
+            12,
+            &[ui_field!(
+                "FactionSettings",
+                4,
+                false,
+                None,
+                Repeated(8, &Inline("JoypadBuildButtonFactionSettings"))
+            )],
         ),
         "UICoopTinting" => (
             28,
