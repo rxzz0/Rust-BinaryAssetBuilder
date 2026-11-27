@@ -86,11 +86,7 @@ pub(super) fn encode(
         let start = encoder
             .data
             .allocate(pointers + index * 4, if is_animation { 20 } else { 16 })?;
-        encoder.data.word(start, kind);
-        encoder.data.word(
-            start + 4,
-            hash_name(required(node, "id", encoder.data.path)?),
-        );
+        encode_module_header(node, kind, start, encoder.data)?;
         let mut range = Target::Null;
         let count = start + if is_animation { 12 } else { 8 };
         if is_animation && let Some(value) = node.attribute("MaxUpdateRangeCap") {
@@ -130,6 +126,19 @@ pub(super) fn encode(
         items.push(client_variant(kind, Table::record(fields)));
     }
     Ok(Target::Table(Table::array(count, items)))
+}
+
+fn encode_module_header(
+    node: Node<'_, '_>,
+    kind: u32,
+    start: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<()> {
+    data.word(start, kind);
+    if node.attribute("id").is_some() {
+        data.word(start + 4, hash_name(required(node, "id", data.path)?));
+    }
+    Ok(())
 }
 
 fn client_variant(kind: u32, fields: Table) -> (u32, Target) {
@@ -233,9 +242,7 @@ impl AudioEncoder<'_, '_> {
             }
         }
         let start = self.data.allocate(pointer, 28)?;
-        self.data.word(start, RANDOM_SELECTOR);
-        self.data
-            .word(start + 4, hash_name(required(node, "id", path)?));
+        encode_module_header(node, RANDOM_SELECTOR, start, self.data)?;
         let chance =
             super::super::percentage(node.attribute("Chance").unwrap_or("50"), "Chance", path)?;
         self.data.word(start + 8, chance.to_bits());
@@ -849,6 +856,32 @@ mod tests {
             include_bytes!("../../../../tests/fixtures/game-object-client-behaviors.imp"),
             include_bytes!("../../../../tests/fixtures/game-object-client-behaviors.manifest"),
         );
+    }
+
+    #[test]
+    fn unnamed_client_behaviors_use_eas_zero_id() {
+        let document = Document::parse(
+            r#"<GameObject xmlns="uri:ea.com:eala:asset" id="Anonymous">
+                <Body><ActiveBody id="ModuleTag_Body" MaxHealth="75"/></Body>
+                <ClientBehaviors>
+                    <ModelConditionEvaEventSelectorClientBehavior>
+                        <Override RequiredFlags="DISGUISED">
+                            <EvaEventArray><EvaEntry EvaEvent="" EvaType="enemyObjectSighted"/></EvaEventArray>
+                        </Override>
+                    </ModelConditionEvaEventSelectorClientBehavior>
+                    <ModelConditionAudioLoopClientBehavior>
+                        <ModelConditionSound Sound="ALL_Spy_VoiceDieYurikoFall" RequiredFlags="IMPENDING_DOOM"/>
+                    </ModelConditionAudioLoopClientBehavior>
+                </ClientBehaviors>
+            </GameObject>"#,
+        )
+        .unwrap();
+        let asset = compile_asset(document.root_element(), Path::new("mod.xml"), "").unwrap();
+        assert_eq!(asset.instance_hash, 0xc156_5e38);
+        for (offset, kind) in [(0xc24, EVA_SELECTOR), (0xcc0, LOOP)] {
+            assert_eq!(&asset.payload[offset..offset + 4], &kind.to_le_bytes());
+            assert_eq!(&asset.payload[offset + 4..offset + 8], &[0; 4]);
+        }
     }
 
     #[test]
