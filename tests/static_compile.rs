@@ -304,6 +304,7 @@ fn static_prebuilt_dds_preserves_partial_mipmaps_and_dimensions() {
         &input,
         r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
             <Texture id="Embedded" File="partial.dds"/>
+            <OnDemandTexture id="Cube" File="partial.dds" Type="CubeTexture"/>
             <OnDemandTexture id="Demand" File="partial.dds" GenerateMipMaps="true" AllowAutomaticResize="true" OutputFormat="DXT5"/>
         </AssetDeclaration>"#,
     )
@@ -311,10 +312,24 @@ fn static_prebuilt_dds_preserves_partial_mipmaps_and_dimensions() {
 
     let stream = compile_static(&input, &root, &root).unwrap();
     assert!(stream.files.bin.ends_with(&dds));
-    let [(_, CustomData::Bytes(sidecar))] = stream.custom_data.as_slice() else {
-        panic!("expected a single DDS sidecar")
-    };
-    assert_eq!(&sidecar[40..sidecar.len() - 8], &dds);
+    assert_eq!(stream.custom_data.len(), 2);
+    for (_, custom) in &stream.custom_data {
+        let CustomData::Bytes(sidecar) = custom else {
+            panic!("expected a DDS sidecar")
+        };
+        assert_eq!(&sidecar[40..sidecar.len() - 8], &dds);
+    }
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let mut offset = 4;
+    for asset in manifest.assets {
+        if asset.name == b"OnDemandTexture:Cube" {
+            assert_eq!(
+                &stream.files.bin[offset..offset + 8],
+                &[0, 0, 0, 0, 2, 0, 0, 0]
+            );
+        }
+        offset += asset.chunk_sizes.instance as usize;
+    }
 
     fs::write(texture, &dds[..dds.len() - 1]).unwrap();
     let error = compile_static(&input, &root, &root).err().unwrap();
