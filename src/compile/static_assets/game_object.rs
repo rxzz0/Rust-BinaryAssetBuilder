@@ -103,6 +103,7 @@ pub(super) mod special_power;
 mod squeeze_fling;
 mod strafe_area_target_chooser;
 mod stream_draw;
+mod structure_variants;
 mod structures;
 mod sub_structure_storage;
 mod subobjects;

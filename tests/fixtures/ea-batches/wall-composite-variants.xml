@@ -1,0 +1,26 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="ProbeMineWeapon"/>
+  <FXList id="ProbeMineFX"><NuggetList/></FXList>
+  <GameObject id="ProbeCompositeTarget"><Body><ImmortalBody id="Body" MaxHealth="1"/></Body></GameObject>
+  <GameObject id="WallCompositeDefaults">
+    <Behaviors>
+      <CompositeStructureInfoModule id="Composite" ThingTemplate="ProbeCompositeTarget" Count="0" BuildableDistance="0"/>
+      <WallHubBehavior id="Wall"/>
+      <MinefieldBehavior id="Mine"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="WallCompositeCustom">
+    <Behaviors>
+      <CompositeStructureInfoModule id="Composite" ThingTemplate="ProbeCompositeTarget" Count="3" BuildableDistance="125.5">
+        <ConnectionShadowInfo Type="DECAL" SizeX="23.5" SizeY="11.5" OffsetX="-1.25" OpacityFadeInTime="0.5s" UseHouseColor="true"/>
+      </CompositeStructureInfoModule>
+      <WallHubBehavior id="Wall" ElevatedSegmentTemplateId="WallCompositeCustom" HubCapTemplateId="WallCompositeDefaults" DefaultSegmentTemplateId="WallCompositeCustom" MaxBuildoutDistance="225.5" BuilderRadius="30.25" Options="5" StaggeredBuildFactor="-2">
+        <SegmentPattern>WallCompositeDefaults</SegmentPattern>
+        <SegmentPattern>WallCompositeCustom</SegmentPattern>
+      </WallHubBehavior>
+      <MinefieldBehavior id="Mine" DetonationFX="ProbeMineFX" DetonationWeapon="ProbeMineWeapon" DetonatedBy="ENEMIES NEUTRAL" NumVirtualMines="11" RepeatDetonateMoveThresh="17.25"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

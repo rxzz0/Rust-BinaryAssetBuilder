@@ -161,19 +161,7 @@ pub(in crate::compile::static_assets) fn encode_inline_filter(
         &["NONE", "EVIL", "GOOD"],
         path,
     )?;
-    let mut relationships = 0;
-    for value in node
-        .attribute("Relationship")
-        .unwrap_or("")
-        .split_ascii_whitespace()
-    {
-        relationships |= 1
-            << enum_value(
-                value,
-                &["ALLIES", "ENEMIES", "NEUTRAL", "SAME_PLAYER"],
-                path,
-            )?;
-    }
+    let relationships = relationship_mask(node.attribute("Relationship").unwrap_or(""), path)?;
     data.word(start + 4, rule);
     data.word(start + 8, relationships);
     data.word(start + 12, alignment);
@@ -234,6 +222,13 @@ pub(in crate::compile::static_assets) fn encode_inline_filter(
         return Err(invalid(path, "unexpected ObjectFilter child"));
     }
     Ok(Table::record(entries))
+}
+
+pub(super) fn relationship_mask(value: &str, path: &std::path::Path) -> io::Result<u32> {
+    value.split_ascii_whitespace().try_fold(0, |mask, name| {
+        enum_value(name, &["ALLIES", "ENEMIES", "NEUTRAL", "SAME_PLAYER"], path)
+            .map(|index| mask | (1 << index))
+    })
 }
 
 #[cfg(test)]

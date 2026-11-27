@@ -2230,6 +2230,15 @@ pub(super) fn encode(
             .map(Some);
     }
     if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(
+            node.tag_name().name(),
+            "CompositeStructureInfoModule" | "WallHubBehavior" | "MinefieldBehavior"
+        )
+    {
+        return super::structure_variants::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    if node.tag_name().namespace() == Some(SAGE_NS)
         && matches!(node.tag_name().name(), "BezierProjectile" | "MissileUpdate")
     {
         return super::bezier_projectile::encode(node, pointer, data, references, reference_types)

@@ -137,6 +137,9 @@ const MODULES: &[(&str, &[&str])] = &[
             "BezierProjectile",
             "MissileUpdate",
             "AutoAbility",
+            "CompositeStructureInfoModule",
+            "WallHubBehavior",
+            "MinefieldBehavior",
             "LineSegmentDamageUpdate",
             "LinearDamageUpdate",
             "LifetimeUpdate",
@@ -1135,6 +1138,11 @@ mod tests {
     #[test]
     fn clearance_rotor_variants_match_ea_batch() {
         assert_ea_fixture("clearance-rotor-variants", 5);
+    }
+
+    #[test]
+    fn wall_composite_variants_match_ea_batch() {
+        assert_ea_fixture("wall-composite-variants", 5);
     }
 
     #[test]
