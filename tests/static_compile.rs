@@ -1670,6 +1670,37 @@ fn sdk_global_compiles_multiplayer_colors_with_the_sdk_layout() {
 }
 
 #[test]
+fn path_music_event_uses_ea_zero_handle_for_missing_header_or_id() {
+    let root = scratch_root();
+    let xml = root.join("pathmusic-missing-header.xml");
+    fs::write(root.join("present.h"), b"#define PATH_EVENT_Other 0x19\r\n").unwrap();
+    for (id, header, instance_hash) in [
+        ("ProbeMissing", "missing.h", 0x9cfe_6efd),
+        ("ProbePresent", "present.h", 0x6fe6_1ffe),
+    ] {
+        fs::write(
+            &xml,
+            format!(
+                r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+                    <PathMusicEvent id="{id}" PathfinderEventHeader="{header}"/>
+                </AssetDeclaration>"#
+            ),
+        )
+        .unwrap();
+        let output = compile_static(&xml, &root, &root).unwrap();
+        let manifest = Manifest::parse(&output.manifest).unwrap();
+        assert_eq!(manifest.assets[0].instance_hash, instance_hash);
+        assert_eq!(
+            &output.files.bin[4..],
+            &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0]
+        );
+        assert_eq!(output.files.relo.len(), 4);
+        assert_eq!(output.files.imp.len(), 4);
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_global_publishes_inherited_music_events_and_track_data() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data/AdditionalMaps");
