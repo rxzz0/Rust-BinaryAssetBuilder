@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 479: Added native ActivateSpecialPowerOnCreate, OCLUpdate and InitiateRepairDie. All six EA fixture assets matched byte for byte. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: four SpecialPower variants.
 - Checkpoint 478: Added native DistributedMoney, FindCoverBehavior and GatherSlavesUpdate with their shared Create and Update layouts. All four EA fixture assets matched byte for byte. Rust tests, Clippy and release checks passed.
 - Checkpoint 477: Added native TerrainResource, TiberiumCrystal and TiberiumField with the EA update layout, packed radar color, resource references and sibling-first filter relocations. All three EA assets matched byte for byte. Rust tests, Clippy and release checks passed.
 - Checkpoint 476: Added native KeepObjectDie, UpgradeDie and RefundDie with the shared DieMuxData layout, upgrade references, refund filters and EA relocation order. Three EA fixture assets matched byte for byte. Rust tests, Clippy and release checks passed.

@@ -1,0 +1,27 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <SpecialPowerTemplate id="ActivateFixturePowerA" TargetType="NONE" />
+  <SpecialPowerTemplate id="ActivateFixturePowerB" TargetType="NONE" />
+  <ObjectCreationList id="UpdateFixtureOCL" />
+  <FXList id="UpdateFixtureFX"><NuggetList /></FXList>
+  <GameObject id="UpdateVariantDefaults">
+    <Behaviors>
+      <ActivateSpecialPowerOnCreate id="Activate"><SpecialPowerTemplate>ActivateFixturePowerA</SpecialPowerTemplate></ActivateSpecialPowerOnCreate>
+      <OCLUpdate id="OCL" />
+      <InitiateRepairDie id="Repair" />
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="UpdateVariantCustom">
+    <Behaviors>
+      <ActivateSpecialPowerOnCreate id="Activate">
+        <SpecialPowerTemplate>ActivateFixturePowerA</SpecialPowerTemplate>
+        <SpecialPowerTemplate>ActivateFixturePowerB</SpecialPowerTemplate>
+      </ActivateSpecialPowerOnCreate>
+      <OCLUpdate id="OCL" OCL="UpdateFixtureOCL" MinDelay="250" MaxDelay="1500" Amount="3" CreateAtEdge="true" />
+      <InitiateRepairDie id="Repair" DelayTime="1.25s" MasterDeadDieFX="UpdateFixtureFX" Options="REPAIR_INSTANT" InstantRepairModelCondition="DAMAGED" InstantRepairAnimDuration="2.75s">
+        <Die DeathTypes="NORMAL" VeterancyLevels="VETERAN ELITE" ExemptStatus="SOLD" />
+      </InitiateRepairDie>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

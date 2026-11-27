@@ -1770,6 +1770,19 @@ pub(super) fn encode(
         )
         .map(Some);
     }
+    if matches!(
+        node.tag_name().name(),
+        "ActivateSpecialPowerOnCreate" | "OCLUpdate" | "InitiateRepairDie"
+    ) {
+        return super::small_update_variants::encode(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
     if super::recall::base_layout_variant(node.tag_name().name()).is_some()
         || super::special_power_variants::radar_layout(node.tag_name().name()).is_some()
         || matches!(
