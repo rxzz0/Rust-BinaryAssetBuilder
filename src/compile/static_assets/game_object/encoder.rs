@@ -299,6 +299,7 @@ pub(in crate::compile::static_assets) fn compile(
                 let early_fields: &[u32] = match module.tag_name().name() {
                     "SpecialDisguiseUpdate" => &[0x100],
                     "MoneyGainAttachUpdate" => &[0x158],
+                    "BoobyTrapUpdate" => &[0x18c],
                     "DamageFieldUpdate" => &[0x28],
                     "RadarScanMapSpecialAbilityUpdate" => &[0xf4],
                     "LevelGrantSpecialPower" => &[0xfc],

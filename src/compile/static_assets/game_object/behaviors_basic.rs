@@ -1750,6 +1750,16 @@ pub(super) fn encode(
             ]),
         )));
     }
+    if node.has_tag_name((SAGE_NS, "FireWeaponWhenDamaged")) {
+        return super::upgrade_variants::encode_fire_when_damaged(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "FireWeaponWhenDead")) {
         return fire_weapon_when_dead(node, pointer, data, references, reference_types).map(Some);
     }
@@ -1964,6 +1974,7 @@ pub(super) fn encode(
             "AttachUpdate"
                 | "LeechTargetingAttachUpdate"
                 | "MoneyGainAttachUpdate"
+                | "BoobyTrapUpdate"
                 | "StealUnitUpdate"
         )
     {
@@ -2074,6 +2085,16 @@ pub(super) fn encode(
     }
     if node.has_tag_name((SAGE_NS, "SetLocomotorSpeedUpdate")) {
         return super::set_locomotor_speed::encode(node, pointer, data, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "InvisibilityUpdate")) {
+        return super::invisibility_broadcast::encode_self(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
     }
     if node.has_tag_name((SAGE_NS, "InvisibilityBroadcastUpdate")) {
         return super::invisibility_broadcast::encode(

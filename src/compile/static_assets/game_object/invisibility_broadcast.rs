@@ -11,6 +11,84 @@ use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::Node;
 use std::io;
 
+pub(super) fn encode_self(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x3563_4018;
+    const FIELDS: &[(&str, u32, usize)] = &[
+        ("InvisibilityTemplate", 0x914c_a765, 8),
+        ("UpdatePeriod", 0x9986_69e8, 0xc),
+        ("RequiredNearbyObjectRange", 0x6458_64f3, 0x10),
+    ];
+    const VOICES: &[(&str, usize)] = &[
+        ("NamedVoiceNameToUseAsVoiceMoveToStealthyArea", 0x14),
+        (
+            "NamedVoiceNameToUseAsVoiceEnterStateMoveToStealthyArea",
+            0x18,
+        ),
+    ];
+    const FILTER: &str = "RequiresNearbyObjectFilter";
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(FIELDS.iter().map(|&(name, ..)| name))
+        .chain(VOICES.iter().map(|&(name, _)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let mut children = significant_children(node);
+    let filter = children
+        .next()
+        .filter(|child| child.has_tag_name((SAGE_NS, FILTER)))
+        .ok_or_else(|| {
+            invalid(
+                path,
+                "InvisibilityUpdate requires RequiresNearbyObjectFilter",
+            )
+        })?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected InvisibilityUpdate child"));
+    }
+    let start = data.allocate(pointer, 0x8c)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    let template = super::passive_area::reference(
+        required(node, "InvisibilityTemplate", path)?,
+        "InvisibilityTemplate",
+        path,
+        references,
+        reference_types,
+    )?;
+    let period = sage_time(
+        node.attribute("UpdatePeriod").unwrap_or("1s"),
+        "UpdatePeriod",
+        path,
+    )?;
+    let range = finite_number(
+        node.attribute("RequiredNearbyObjectRange").unwrap_or("0"),
+        "RequiredNearbyObjectRange",
+        path,
+    )?;
+    data.word(start + 8, template);
+    data.word(start + 0xc, period.to_bits());
+    data.word(start + 0x10, range.to_bits());
+    entries.extend(fields(start, FIELDS));
+    for &(name, relative) in VOICES {
+        let target = if let Some(value) = node.attribute(name) {
+            let offset = data.allocate(start + relative, 4)?;
+            data.word(offset, super::super::fast_hash(value.as_bytes()));
+            Target::Data(offset)
+        } else {
+            Target::Null
+        };
+        entries.push(Entry::named(name, 0x58be_c727, target));
+    }
+    let filter = super::parking::encode_inline_filter(filter, start + 0x1c, data, reference_types)?;
+    entries.push(Entry::named(FILTER, 0xe46e_a3b2, Target::Table(filter)));
+    Ok((KIND, Table::record(entries)))
+}
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,

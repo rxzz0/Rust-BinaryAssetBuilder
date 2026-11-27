@@ -92,6 +92,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "SlavedUpdate",
             "PassiveAreaEffectBehavior",
             "AttachUpdate",
+            "BoobyTrapUpdate",
             "QueueDockBehavior",
             "AssistedPlacementBehavior",
             "AssistedPlacementInfoBehavior",
@@ -156,6 +157,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "EngineerContain",
             "FXListBehavior",
             "FireWeaponWhenDead",
+            "FireWeaponWhenDamaged",
             "FireWeaponCollide",
             "MonitorConditionUpdate",
             "OreMinerBehavior",
@@ -257,6 +259,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "HitReactionBehavior",
             "InvalidTargetsDeathUpdate",
             "InvisibilityBroadcastUpdate",
+            "InvisibilityUpdate",
             "LaserScatterUpdate",
             "LeechTargetingAttachUpdate",
             "LoseHealthUpdate",
@@ -585,6 +588,11 @@ mod tests {
     #[test]
     fn scripted_draw_mixed_fields_match_ea_batch() {
         assert_ea_fixture("scripted-draw-mixed", 1);
+    }
+
+    #[test]
+    fn damage_and_stealth_variants_match_ea_batch() {
+        assert_ea_fixture("damage-stealth-variants", 10);
     }
 
     #[test]

@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WeaponTemplate id="ProbeWeapon1"/>
+  <WeaponTemplate id="ProbeWeapon2"/>
+  <UpgradeTemplate id="ProbeUpgrade" Type="OBJECT"/>
+  <InvisibilityTemplate id="ProbeStealth"/>
+  <GameObject id="ProbeBoobyDefault"><Behaviors><BoobyTrapUpdate id="ModuleTag_Booby"/></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body></GameObject>
+  <GameObject id="ProbeBooby"><Behaviors><BoobyTrapUpdate id="ModuleTag_Booby" FireWeaponConditionsOnParent="IS_ATTACKING" PreventEnteringSetStatusOnParent="IS_AIMING_WEAPON" AllowTriggerOnAllies="true" SpecialWeapon="ProbeWeapon1"><PreventEnteringFilter Rule="ANY" Include="INFANTRY"/></BoobyTrapUpdate></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body></GameObject>
+  <GameObject id="ProbeDamageDefault"><Behaviors><FireWeaponWhenDamaged id="ModuleTag_Fire"/></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body></GameObject>
+  <GameObject id="ProbeDamage"><Behaviors><FireWeaponWhenDamaged id="ModuleTag_Fire" InitiallyActive="true" DamageTypes="17" DamageAmount="16.5" ReactionWeaponPristine="ProbeWeapon1" ReactionWeaponDamaged="ProbeWeapon2" ReactionWeaponReallyDamaged="ProbeWeapon1" ReactionWeaponRubble="ProbeWeapon2" ContinuousWeaponPristine="ProbeWeapon2" ContinuousWeaponDamaged="ProbeWeapon1" ContinuousWeaponReallyDamaged="ProbeWeapon2" ContinuousWeaponRubble="ProbeWeapon1"><TriggeredBy>ProbeUpgrade</TriggeredBy></FireWeaponWhenDamaged></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body></GameObject>
+  <GameObject id="ProbeInvisibilityDefault"><Behaviors><InvisibilityUpdate id="ModuleTag_Stealth" InvisibilityTemplate="ProbeStealth"><RequiresNearbyObjectFilter/></InvisibilityUpdate></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body></GameObject>
+  <GameObject id="ProbeInvisibility"><Behaviors><InvisibilityUpdate id="ModuleTag_Stealth" InvisibilityTemplate="ProbeStealth" UpdatePeriod="2s" RequiredNearbyObjectRange="24.5" NamedVoiceNameToUseAsVoiceMoveToStealthyArea="ProbeMove" NamedVoiceNameToUseAsVoiceEnterStateMoveToStealthyArea="ProbeEnter"><RequiresNearbyObjectFilter Rule="ANY" Include="VEHICLE"><IncludeThing>ProbeBooby</IncludeThing></RequiresNearbyObjectFilter></InvisibilityUpdate></Behaviors><Body><ActiveBody id="ModuleTag_Body" MaxHealth="100"/></Body></GameObject>
+</AssetDeclaration>
