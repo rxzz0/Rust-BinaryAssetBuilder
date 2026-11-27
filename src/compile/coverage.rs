@@ -276,6 +276,9 @@ const MODULES: &[(&str, &[&str])] = &[
             "ObjectStatusSpecialAbilityUpdate",
             "TeleportToCasterSpecialPower",
             "TiberiumThiefSpecialAbilityUpdate",
+            "GiveUpgradeUpdate",
+            "OCLMonitorSpecialAbilityUpdate",
+            "SwitchLocomotorsSpecialAbilityUpdate",
             "SpecialDisguiseUpdate",
             "SpiderHoleUpdate",
             "StoreCurrentStateUpdate",
@@ -1055,6 +1058,11 @@ mod tests {
     #[test]
     fn dock_variants_match_ea_batch() {
         assert_ea_fixture("dock-variants", 2);
+    }
+
+    #[test]
+    fn ability_monitor_variants_match_ea_batch() {
+        assert_ea_fixture("ability-monitor-variants", 5);
     }
 
     #[test]

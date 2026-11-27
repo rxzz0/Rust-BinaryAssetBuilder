@@ -24,6 +24,30 @@ const ASSEMBLE: u32 = 0x7737_ac69;
 const OBJECT_STATUS: u32 = 0x079b_6ead;
 const TELEPORT: u32 = 0x9383_3563;
 const TIBERIUM_THIEF: u32 = 0xf456_8855;
+const GIVE_UPGRADE: u32 = 0x2de3_4173;
+const OCL_MONITOR: u32 = 0xc80e_586b;
+const SWITCH_LOCOMOTORS: u32 = 0x14e0_31a2;
+const GIVE_UPGRADE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("GiveUpgradeEffect", 0x0d1c_8e83, 0xf0, "ref", "FXList"),
+    ("SpawnOutFX", 0x0d1c_8e83, 0xf4, "ref", "FXList"),
+    ("FadeOutSpeed", 0x6458_64f3, 0xf8, "real", "0.025"),
+    ("DeliverUpgrade", 0x77e3_f4f7, 0xfc, "bool", "false"),
+];
+const SWITCH_LOCOMOTOR_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("UseUpgradedLocomotor", 0x77e3_f4f7, 0x100, "bool", "false"),
+    ("TriggersLanding", 0x77e3_f4f7, 0x101, "bool", "false"),
+    ("TriggersFlight", 0x77e3_f4f7, 0x102, "bool", "false"),
+    ("BusyForDuration", 0x9986_69e8, 0xf0, "time", "0s"),
+    ("LandingRange", 0x6458_64f3, 0xf4, "real", "0"),
+    (
+        "HordeMembersSpecialPowerTemplate",
+        0xaee8_3888,
+        0xf8,
+        "ref",
+        "SpecialPowerTemplate",
+    ),
+    ("LocomotorToSet", 0x845d_12b2, 0xfc, "locomotor", "NORMAL"),
+];
 const OBJECT_STATUS_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
     ("Status1", 0xa7bd_811e, 0xf0, "status", ""),
     ("Status2", 0xa7bd_811e, 0x10c, "status", ""),
@@ -283,6 +307,11 @@ pub(super) fn encode(
         "ObjectStatusSpecialAbilityUpdate" => (OBJECT_STATUS, 0x128, OBJECT_STATUS_FIELDS),
         "TeleportToCasterSpecialPower" => (TELEPORT, 0x110, TELEPORT_FIELDS),
         "TiberiumThiefSpecialAbilityUpdate" => (TIBERIUM_THIEF, 0x158, TIBERIUM_THIEF_FIELDS),
+        "GiveUpgradeUpdate" => (GIVE_UPGRADE, 0x100, GIVE_UPGRADE_FIELDS),
+        "OCLMonitorSpecialAbilityUpdate" => (OCL_MONITOR, 0xf0, &[][..]),
+        "SwitchLocomotorsSpecialAbilityUpdate" => {
+            (SWITCH_LOCOMOTORS, 0x104, SWITCH_LOCOMOTOR_FIELDS)
+        }
         "AssembleStructureSpecialAbilityUpdate" => (ASSEMBLE, 0x104, ASSEMBLE_FIELDS),
         "BeamSpecialAbilityUpdate" => (
             beam_special_ability::KIND,
@@ -320,6 +349,9 @@ pub(super) fn encode(
         .chain(all_fields.clone().map(|&(name, ..)| name))
         .collect();
     validate_attributes(node, &allowed, path)?;
+    if kind == SWITCH_LOCOMOTORS {
+        required(node, "UseUpgradedLocomotor", path)?;
+    }
     let start = data.allocate(pointer, size)?;
     let mut children = significant_children(node).peekable();
     let animation_node =
@@ -416,6 +448,7 @@ pub(super) fn encode(
                     "conditions" => flags(value, &["MOUNTED", "WEAPON_TOGGLE", "MOVING"], path)?,
                     "disabled" => flags(value, super::production::DISABLED, path)?,
                     "slot" => super::behaviors_basic::weapon_slot(value, path)?,
+                    "locomotor" => super::ai_update::locomotor_condition(value, name, path)?,
                     "model" if value.is_empty() => 0,
                     "model" if value == "INVALID" => u32::MAX,
                     "model" => model_condition_index(value, path)? as u32,
@@ -514,6 +547,9 @@ pub(super) fn encode(
             | OBJECT_STATUS
             | TELEPORT
             | TIBERIUM_THIEF
+            | GIVE_UPGRADE
+            | OCL_MONITOR
+            | SWITCH_LOCOMOTORS
             | eject_passengers::KIND
             | beam_special_ability::KIND
     ) {
