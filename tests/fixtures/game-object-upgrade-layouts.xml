@@ -1,0 +1,20 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="UpgradeLayoutDefaults">
+    <Behaviors><CostModifierUpgrade id="ModuleTag_Cost" /><ReplaceSelfUpgrade id="ModuleTag_Replace" /></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="UpgradeLayoutCustom">
+    <Behaviors>
+      <CostModifierUpgrade id="ModuleTag_Cost" Percentages="25% 0.5 150%" UILabel="Fixture_Discount" IsUpgradeDiscountUpgrade="true" StartsActive="true" Slaughter="true">
+        <TriggeredBy>UpgradeBase</TriggeredBy>
+        <ObjectFilter Rule="ANY" Include="INFANTRY"><IncludeThing>FixtureUnit</IncludeThing></ObjectFilter>
+        <ApplyToUpgrade>UpgradeA</ApplyToUpgrade><ApplyToUpgrade>UpgradeB</ApplyToUpgrade>
+      </CostModifierUpgrade>
+      <ReplaceSelfUpgrade id="ModuleTag_Replace" NewObjectUnpackTime="2.5s" Options="COPY_TARGET_OBJECT COPY_UPGRADES CHECK_BUILD_ASSISTANT">
+        <TriggeredBy>UpgradeBase</TriggeredBy>
+        <ReplacementTemplate>FixtureUnit</ReplacementTemplate><ReplacementTemplate>SecondUnit</ReplacementTemplate>
+      </ReplaceSelfUpgrade>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

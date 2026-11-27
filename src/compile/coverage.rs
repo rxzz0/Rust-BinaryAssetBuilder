@@ -210,6 +210,8 @@ const MODULES: &[(&str, &[&str])] = &[
             "LocomotorSetUpgrade",
             "MaxHealthUpgrade",
             "UnpauseSpecialPowerUpgrade",
+            "CostModifierUpgrade",
+            "ReplaceSelfUpgrade",
             "GrantUpgradeCreate",
             "HealCrateCollide",
             "HordeContain",

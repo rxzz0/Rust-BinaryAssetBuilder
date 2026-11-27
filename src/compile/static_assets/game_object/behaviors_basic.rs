@@ -1916,6 +1916,8 @@ pub(super) fn encode(
                 | "LocomotorSetUpgrade"
                 | "MaxHealthUpgrade"
                 | "UnpauseSpecialPowerUpgrade"
+                | "CostModifierUpgrade"
+                | "ReplaceSelfUpgrade"
         )
     {
         return super::upgrade_variants::encode(node, pointer, data, references, reference_types)

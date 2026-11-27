@@ -1,13 +1,13 @@
 use super::super::binary::BinaryData;
-use super::super::tokenized::Table;
+use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
-    AssetReference, finite_number, sage_uint, significant_children, validate_attributes,
+    AssetReference, finite_number, sage_time, sage_uint, significant_children, validate_attributes,
 };
 use super::behaviors_basic::{base, upgrade_fields};
 use super::draws::{boolean, fields};
 use super::passive_area::reference;
-use super::spawn::UPGRADE;
-use crate::compile::{invalid, required};
+use super::spawn::{UPGRADE, id_list, weak_reference};
+use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::Node;
 use std::io;
 
@@ -28,6 +28,9 @@ pub(super) fn encode(
 
     let path = data.path;
     let name = node.tag_name().name();
+    if matches!(name, "CostModifierUpgrade" | "ReplaceSelfUpgrade") {
+        return encode_with_lists(node, pointer, data, reference_types);
+    }
     let (kind, size, extra): (u32, usize, &[(&str, u32, usize)]) = match name {
         "Upgrade" => (BASE, 0x24, &[]),
         "DelayedUpgrade" => (DELAYED, 0x28, &[("DelayTime", 0x7631_77a4, 0x24)]),
@@ -121,4 +124,151 @@ pub(super) fn encode(
         entries.extend(fields(start, extra));
         Ok((kind, Table::record(entries)))
     }
+}
+
+fn encode_with_lists(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const COST: u32 = 0xcdc0_eff7;
+    const REPLACE: u32 = 0x53fb_a9b5;
+    const UPGRADE_KIND: u32 = 0xae60_ae98;
+    const COST_ATTRIBUTES: &[&str] = &[
+        "Percentages",
+        "IsUpgradeDiscountUpgrade",
+        "StartsActive",
+        "Slaughter",
+        "UILabel",
+    ];
+    const REPLACE_ATTRIBUTES: &[&str] = &["NewObjectUnpackTime", "Options"];
+
+    let name = node.tag_name().name();
+    let (kind, size, attributes) = if name == "CostModifierUpgrade" {
+        (COST, 0x44, COST_ATTRIBUTES)
+    } else {
+        (REPLACE, 0x34, REPLACE_ATTRIBUTES)
+    };
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(UPGRADE.iter().map(|&(name, _, _)| name))
+        .chain(attributes.iter().copied())
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let start = data.allocate(pointer, size)?;
+
+    // EA allocates the derived data first, even though inherited elements come first in XML.
+    let inherited_count = significant_children(node)
+        .take_while(|child| {
+            matches!(
+                child.tag_name().name(),
+                "CustomAnimAndDuration" | "TriggeredBy" | "ConflictsWith"
+            )
+        })
+        .count();
+    let references_start = reference_types.len();
+    let mut children = significant_children(node).skip(inherited_count).peekable();
+    let mut entries = if kind == COST {
+        let percentages: Vec<_> = node
+            .attribute("Percentages")
+            .unwrap_or("")
+            .split_ascii_whitespace()
+            .map(|raw| finite_number(raw.strip_suffix('%').unwrap_or(raw), "Percentages", path))
+            .collect::<io::Result<_>>()?;
+        let count = start + 0x24;
+        let values = data.list(count, percentages.len(), 4)?;
+        let items = percentages.into_iter().enumerate().map(|(index, value)| {
+            let offset = values + index * 4;
+            data.word(offset, value.to_bits());
+            (0, Target::Data(offset))
+        });
+        let percentages = Target::Table(Table::array(count, items));
+        let booleans = [
+            ("IsUpgradeDiscountUpgrade", 0x77e3_f4f7, 0x40),
+            ("StartsActive", 0x77e3_f4f7, 0x41),
+            ("Slaughter", 0x77e3_f4f7, 0x42),
+        ];
+        for (field, _, offset) in booleans {
+            data.payload[start + offset] = boolean(node, field, false, path)?;
+        }
+        if let Some(label) = node.attribute("UILabel") {
+            data.string(start + 0x2c, label)?;
+        }
+        let filter = match children.next_if(|child| child.has_tag_name((SAGE_NS, "ObjectFilter"))) {
+            Some(filter) => Target::Table(super::parking::encode_filter(
+                filter,
+                start + 0x34,
+                data,
+                reference_types,
+            )?),
+            None => Target::Null,
+        };
+        let mut entries = vec![Entry::named("Percentages", 0xa539_3e27, percentages)];
+        entries.extend(fields(start, &booleans));
+        entries.extend([
+            Entry::named("UILabel", 0x1a29_33aa, Target::Data(start + 0x2c)),
+            Entry::named("ObjectFilter", 0xe46e_a3b2, filter),
+        ]);
+        entries
+    } else {
+        const OPTIONS: &[&str] = &[
+            "COPY_TARGET_OBJECT",
+            "IGNORE_TERRAIN_RESTRICTIONS",
+            "COPY_UPGRADES",
+            "DISABLE_DURING_UNPACK",
+            "CHECK_BUILD_ASSISTANT",
+        ];
+        let time = node.attribute("NewObjectUnpackTime").unwrap_or("0s");
+        data.word(
+            start + 0x24,
+            sage_time(time, "NewObjectUnpackTime", path)?.to_bits(),
+        );
+        let options = node
+            .attribute("Options")
+            .unwrap_or("DISABLE_DURING_UNPACK")
+            .split_ascii_whitespace()
+            .try_fold(0, |bits, option| {
+                super::super::global_ui::enum_value(option, OPTIONS, path)
+                    .map(|index| bits | 1 << index)
+            })?;
+        data.word(start + 0x28, options);
+        fields(
+            start,
+            &[
+                ("NewObjectUnpackTime", 0x9986_69e8, 0x24),
+                ("Options", 0xd070_8290, 0x28),
+            ],
+        )
+        .collect()
+    };
+
+    let (field, token, offset, asset_type) = if kind == COST {
+        ("ApplyToUpgrade", 0x26fa_cfc7, 0x38, "UpgradeTemplate")
+    } else {
+        ("ReplacementTemplate", 0x148e_d75d, 0x2c, "GameObject")
+    };
+    let mut ids = Vec::new();
+    while let Some(child) = children.next_if(|child| child.has_tag_name((SAGE_NS, field))) {
+        ids.push(weak_reference(child, asset_type, data, reference_types)?);
+    }
+    let targets = id_list(data, start + offset, ids)?;
+    entries.push(Entry::named(field, token, Target::Table(targets)));
+    let derived_references = reference_types.len() - references_start;
+    let mut inherited_children = significant_children(node).take(inherited_count).peekable();
+    let inherited = upgrade_fields(
+        node,
+        kind,
+        start,
+        data,
+        reference_types,
+        &mut inherited_children,
+    )?;
+    if children.next().is_some() || inherited_children.next().is_some() {
+        return Err(invalid(path, format!("unexpected {name} child")));
+    }
+    // Reference types are hashed in schema order, independent of allocation order.
+    reference_types[references_start..].rotate_left(derived_references);
+    entries.insert(0, base(UPGRADE_KIND, inherited));
+    Ok((kind, Table::record(entries)))
 }
