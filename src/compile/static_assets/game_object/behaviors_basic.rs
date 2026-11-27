@@ -2278,6 +2278,8 @@ pub(super) fn encode(
             | "CloneStoredObjectsSpecialPowerUpdate"
             | "DelayedWeaponFireSpecialAbilityUpdate"
             | "RadarScanMapSpecialAbilityUpdate"
+            | "LevelGrantSpecialPower"
+            | "GiveOrRestoreUpgradeSpecialPower"
             | "OCLMonitorSpecialAbilityUpdate"
             | "SwitchLocomotorsSpecialAbilityUpdate"
             | "BeamSpecialAbilityUpdate"

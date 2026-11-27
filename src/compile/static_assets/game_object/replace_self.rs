@@ -30,6 +30,17 @@ const SWITCH_LOCOMOTORS: u32 = 0x14e0_31a2;
 const CLONE_STORED: u32 = 0xcdef_277d;
 const DELAYED_WEAPON: u32 = 0x368f_2215;
 const RADAR_SCAN: u32 = 0xda2f_4ee5;
+const LEVEL_GRANT: u32 = 0x90f0_5519;
+const GIVE_OR_RESTORE: u32 = 0x0453_e648;
+const LEVEL_GRANT_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("Experience", 0x23e6_50b8, 0xf0, "int", "0"),
+    ("RadiusEffect", 0x6458_64f3, 0xf4, "real", "0"),
+    ("LevelFX", 0x0d1c_8e83, 0xf8, "ref", "FXList"),
+];
+const GIVE_OR_RESTORE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("CommandButton", 0x1a29_33aa, 0xf0, "string", ""),
+    ("UpgradeToGive", 0x4aba_1f29, 0xf8, "ref", "UpgradeTemplate"),
+];
 const CLONE_STORED_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
     ("MinDestinationRadius", 0x6458_64f3, 0xf0, "real", "0"),
     ("MaxDestinationRadius", 0x6458_64f3, 0xf4, "real", "0"),
@@ -323,6 +334,8 @@ pub(super) fn encode(
         "DelayedWeaponFireSpecialAbilityUpdate" => (DELAYED_WEAPON, 0x114, WEAPON_FIELDS),
         "CloneStoredObjectsSpecialPowerUpdate" => (CLONE_STORED, 0x108, CLONE_STORED_FIELDS),
         "RadarScanMapSpecialAbilityUpdate" => (RADAR_SCAN, 0xf8, &[][..]),
+        "LevelGrantSpecialPower" => (LEVEL_GRANT, 0x100, LEVEL_GRANT_FIELDS),
+        "GiveOrRestoreUpgradeSpecialPower" => (GIVE_OR_RESTORE, 0xfc, GIVE_OR_RESTORE_FIELDS),
         "ToggleStatusSpecialAbilityUpdate" => (TOGGLE, 0xfc, TOGGLE_FIELDS),
         "ActivateModuleSpecialAbilityUpdate" => (ACTIVATE_MODULE, 0xf8, &[][..]),
         "SpecialAbilityUpdate" => (ABILITY, 0xf0, &[][..]),
@@ -430,8 +443,28 @@ pub(super) fn encode(
     let assemble = (kind == ASSEMBLE)
         .then(|| assembly_templates(children.by_ref(), start + 0xf8, data, reference_types))
         .transpose()?;
-    // Beam allocates its derived status list and string before inherited data.
-    let ordered_fields = if kind == beam_special_ability::KIND {
+    let acceptance = (kind == LEVEL_GRANT)
+        .then(|| {
+            const NAME: &str = "AcceptanceFilter";
+            let filter = children.next_if(|child| child.has_tag_name((SAGE_NS, NAME)));
+            if children.next().is_some() {
+                return Err(invalid(path, "unexpected LevelGrantSpecialPower child"));
+            }
+            let target = if let Some(filter) = filter {
+                Target::Table(super::parking::encode_filter(
+                    filter,
+                    start + 0xfc,
+                    data,
+                    reference_types,
+                )?)
+            } else {
+                Target::Null
+            };
+            Ok(Entry::named(NAME, 0xe46e_a3b2, target))
+        })
+        .transpose()?;
+    // These variants allocate their own pointer fields before inherited data.
+    let ordered_fields = if matches!(kind, beam_special_ability::KIND | GIVE_OR_RESTORE) {
         variant.iter().chain(FIELDS).chain(extension)
     } else {
         all_fields
@@ -539,7 +572,12 @@ pub(super) fn encode(
     }
     entries.extend(derived);
     entries.extend(ejection);
-    if let Some(derived_child) = disguise.or(dominate).or(assemble).or(radar_filters) {
+    if let Some(derived_child) = disguise
+        .or(dominate)
+        .or(assemble)
+        .or(radar_filters)
+        .or(acceptance)
+    {
         entries.push(derived_child);
         return Ok((kind, Table::record(entries)));
     }
@@ -588,6 +626,7 @@ pub(super) fn encode(
             | CAPTURE
             | RECONSTITUTE
             | CLONE_STORED
+            | GIVE_OR_RESTORE
             | OBJECT_STATUS
             | TELEPORT
             | TIBERIUM_THIEF

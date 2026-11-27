@@ -282,6 +282,8 @@ const MODULES: &[(&str, &[&str])] = &[
             "CloneStoredObjectsSpecialPowerUpdate",
             "DelayedWeaponFireSpecialAbilityUpdate",
             "RadarScanMapSpecialAbilityUpdate",
+            "LevelGrantSpecialPower",
+            "GiveOrRestoreUpgradeSpecialPower",
             "OCLMonitorSpecialAbilityUpdate",
             "SwitchLocomotorsSpecialAbilityUpdate",
             "RestrictSpecialPowerBehavior",
@@ -1100,6 +1102,11 @@ mod tests {
     #[test]
     fn clone_radar_ability_variants_match_ea_batch() {
         assert_ea_fixture("clone-radar-ability-variants", 6);
+    }
+
+    #[test]
+    fn grant_ability_variants_match_ea_batch() {
+        assert_ea_fixture("grant-ability-variants", 5);
     }
 
     #[test]

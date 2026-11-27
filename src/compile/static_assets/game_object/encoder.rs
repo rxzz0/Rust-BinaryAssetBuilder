@@ -301,6 +301,8 @@ pub(in crate::compile::static_assets) fn compile(
                     "MoneyGainAttachUpdate" => &[0x158],
                     "DamageFieldUpdate" => &[0x28],
                     "RadarScanMapSpecialAbilityUpdate" => &[0xf4],
+                    "LevelGrantSpecialPower" => &[0xfc],
+                    "GiveOrRestoreUpgradeSpecialPower" => &[0xf4],
                     "DominateEnemySpecialPower" => &[super::dominate_enemy::FILTER_POINTER as u32],
                     "BeamSpecialAbilityUpdate" => &[0xf8, 0x108],
                     "RadarFreezeSpecialPower" | "RadarSpySpecialPower" => &[0x1c8],
