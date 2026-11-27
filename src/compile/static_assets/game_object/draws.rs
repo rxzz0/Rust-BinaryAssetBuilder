@@ -12,6 +12,7 @@ use std::sync::OnceLock;
 
 const SCRIPTED_MODEL_DRAW: u32 = 0x4ecf_2a4b;
 const TRUCK_DRAW: u32 = 0xa44c_2999;
+const SPOTLIGHT_DRAW: u32 = 0x42d7_103d;
 const TANK_DRAW: u32 = 0x8a81_1d3e;
 const MODEL_STATE: u32 = 0x953c_f093;
 const STRING: u32 = 0x1a29_33aa;
@@ -90,7 +91,8 @@ pub(super) fn encode(
     for (index, node) in modules.into_iter().enumerate() {
         let pointer = pointers + index * 4;
         let (kind, module) = match node.tag_name().name() {
-            name @ ("ScriptedModelDraw" | "TruckDraw" | "TankDraw" | "DynamicsDraw")
+            name @ ("ScriptedModelDraw" | "TruckDraw" | "TankDraw" | "DynamicsDraw"
+            | "SpotlightDraw")
                 if node.has_tag_name((SAGE_NS, name)) =>
             {
                 (
@@ -443,6 +445,7 @@ fn scripted_layout(name: &str) -> (u32, usize) {
     match name {
         "TruckDraw" => (TRUCK_DRAW, 0x18c),
         "TankDraw" => (TANK_DRAW, 0xe4),
+        "SpotlightDraw" => (SPOTLIGHT_DRAW, 0xe0),
         "DynamicsDraw" => (dynamics::DRAW_KIND, dynamics::DRAW_SIZE),
         _ => (SCRIPTED_MODEL_DRAW, 0xd8),
     }
@@ -500,6 +503,8 @@ fn scripted_model(
     let truck = kind == TRUCK_DRAW;
     let tank = kind == TANK_DRAW;
     let dynamics = kind == dynamics::DRAW_KIND;
+    let spotlight = kind == SPOTLIGHT_DRAW;
+    let spotlight_fields = ["RefreshTime", "SweepTime"];
     let allowed: Vec<_> = [
         "id",
         "ExtraPublicBone",
@@ -511,6 +516,7 @@ fn scripted_model(
         "WadingParticleSys",
     ]
     .into_iter()
+    .chain(spotlight_fields.into_iter().filter(|_| spotlight))
     .chain(SCRIPTED_FLAGS.iter().map(|&(name, _, _)| name))
     .chain(
         SCRIPTED_STRINGS
@@ -775,7 +781,17 @@ fn scripted_model(
         array("EmbedPortal", 0xafc5_e3e3, start + 0xbc),
     ]);
     let table = Table::record(entries);
-    if let Some((mut entries, particle_offset)) = derived {
+    if spotlight {
+        let mut fields = vec![super::behaviors_basic::base(SCRIPTED_MODEL_DRAW, table)];
+        for (index, name) in spotlight_fields.into_iter().enumerate() {
+            let offset = start + 0xd8 + index * 4;
+            let value =
+                super::super::sage_time(node.attribute(name).unwrap_or("1s"), name, data.path)?;
+            data.word(offset, value.to_bits());
+            fields.push(Entry::named(name, 0x9986_69e8, Target::Data(offset)));
+        }
+        Ok(Table::record(fields))
+    } else if let Some((mut entries, particle_offset)) = derived {
         if !dynamics {
             let particles = if let Some((particles, offset)) = tread_particles.zip(particle_offset)
             {

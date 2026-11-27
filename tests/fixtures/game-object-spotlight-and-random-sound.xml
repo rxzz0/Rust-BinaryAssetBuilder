@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <GameObject id="DefaultSpotlight"><Draws><SpotlightDraw id="ModuleTag_Draw" /></Draws><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+    <GameObject id="CustomSpotlight"><Draws><SpotlightDraw id="ModuleTag_Draw" RefreshTime="2s" SweepTime="4s" OkToChangeModelColor="true" /></Draws><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body></GameObject>
+    <GameObject id="DefaultRandomSound"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body><ClientBehaviors><RandomSoundSelectorClientBehavior id="ModuleTag_Sound" /></ClientBehaviors></GameObject>
+    <GameObject id="CustomRandomSound"><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body><ClientBehaviors><RandomSoundSelectorClientBehavior id="ModuleTag_Sound" Chance="75" VoicePriorityOverride="123" RerollOnEveryFrame="true"><AudioArrayVoice><NamedEntry Name="Generic" EvaEvent="TestEva" /></AudioArrayVoice><AudioArraySound><AudioEntry AudioType="soundMoveLoop" Sound="TestSound" /></AudioArraySound></RandomSoundSelectorClientBehavior></ClientBehaviors></GameObject>
+</AssetDeclaration>
+

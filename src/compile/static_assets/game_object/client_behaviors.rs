@@ -15,6 +15,7 @@ const ANIMATION_SOUND: u32 = 0x27ef_791d;
 const LOOP: u32 = 0x5a3e_dbf4;
 const SELECTOR: u32 = 0x327c_fb76;
 const UPGRADE_SELECTOR: u32 = 0xf911_5aa9;
+const RANDOM_SELECTOR: u32 = 0xb4a8_b1f4;
 const EVA_SELECTOR: u32 = 0x61c8_c467;
 const SOUND: u32 = 0x63d7_b468;
 const INT: u32 = 0x23e6_50b8;
@@ -36,6 +37,11 @@ pub(super) fn encode(
     let pointers = encoder.data.list(count, modules.len(), 4)?;
     let mut items = Vec::with_capacity(modules.len());
     for (index, node) in modules.into_iter().enumerate() {
+        if node.has_tag_name((SAGE_NS, "RandomSoundSelectorClientBehavior")) {
+            let fields = encoder.random_selector(node, pointers + index * 4)?;
+            items.push(client_variant(RANDOM_SELECTOR, fields));
+            continue;
+        }
         let (kind, name, tag, size) = match node.tag_name().name() {
             "AnimationSoundClientBehavior" => (ANIMATION_SOUND, "Sound", 0xeb6c_6024, 0x18),
             "ModelConditionAudioLoopClientBehavior" => {
@@ -116,29 +122,33 @@ pub(super) fn encode(
                 }),
             ));
         }
-        let module = Table::record(vec![
-            Entry::new(0x19b0_42a0, INT, Target::Data(start)),
-            Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
-        ]);
-        let mut fields = vec![base(
-            0x7b8c_5772,
-            Table::record(vec![base(0xd75d_93a2, module)]),
-        )];
+        let mut fields = vec![client_base(start)];
         if is_animation {
             fields.push(Entry::named("MaxUpdateRangeCap", 0xbc2f_1cbf, range));
         }
         fields.push(list(name, tag, count, entries));
-        let fields = Table::record(fields);
-        items.push((
-            0,
-            Target::Table(Table::sequence(vec![Entry::new(
-                2,
-                kind,
-                Target::Table(fields),
-            )])),
-        ));
+        items.push(client_variant(kind, Table::record(fields)));
     }
     Ok(Target::Table(Table::array(count, items)))
+}
+
+fn client_variant(kind: u32, fields: Table) -> (u32, Target) {
+    (
+        0,
+        Target::Table(Table::sequence(vec![Entry::new(
+            2,
+            kind,
+            Target::Table(fields),
+        )])),
+    )
+}
+
+fn client_base(start: usize) -> Entry {
+    let module = Table::record(vec![
+        Entry::new(0x19b0_42a0, INT, Target::Data(start)),
+        Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
+    ]);
+    base(0x7b8c_5772, Table::record(vec![base(0xd75d_93a2, module)]))
 }
 
 struct AudioEncoder<'a, 'path> {
@@ -190,6 +200,67 @@ pub(in crate::compile::static_assets) fn encode_inline_voice(
 }
 
 impl AudioEncoder<'_, '_> {
+    fn random_selector(&mut self, node: Node<'_, '_>, pointer: usize) -> io::Result<Table> {
+        let path = self.data.path;
+        validate_attributes(
+            node,
+            &[
+                "id",
+                "Chance",
+                "VoicePriorityOverride",
+                "RerollOnEveryFrame",
+            ],
+            path,
+        )?;
+        let mut voice = None;
+        let mut sound = None;
+        for child in significant_children(node) {
+            let slot = match child.tag_name().name() {
+                "AudioArrayVoice" if child.has_tag_name((SAGE_NS, "AudioArrayVoice")) => &mut voice,
+                "AudioArraySound" if child.has_tag_name((SAGE_NS, "AudioArraySound")) => &mut sound,
+                _ => {
+                    return Err(invalid(
+                        path,
+                        "unexpected RandomSoundSelectorClientBehavior child",
+                    ));
+                }
+            };
+            if slot.replace(child).is_some() {
+                return Err(invalid(
+                    path,
+                    "duplicate RandomSoundSelectorClientBehavior audio array",
+                ));
+            }
+        }
+        let start = self.data.allocate(pointer, 28)?;
+        self.data.word(start, RANDOM_SELECTOR);
+        self.data
+            .word(start + 4, hash_name(required(node, "id", path)?));
+        let chance =
+            super::super::percentage(node.attribute("Chance").unwrap_or("50"), "Chance", path)?;
+        self.data.word(start + 8, chance.to_bits());
+        let priority = if let Some(value) = node.attribute("VoicePriorityOverride") {
+            let value = sage_int(value, "VoicePriorityOverride", path)?;
+            let offset = self.data.allocate(start + 12, 4)?;
+            self.data.word(offset, value as u32);
+            Target::Data(offset)
+        } else {
+            Target::Null
+        };
+        self.data.payload[start + 24] =
+            super::draws::boolean(node, "RerollOnEveryFrame", false, path)?;
+        let voice = self.audio_array(voice, start + 16, true)?;
+        let sound = self.audio_array(sound, start + 20, false)?;
+        Ok(Table::record(vec![
+            client_base(start),
+            field("Chance", 0x6458_64f3, start + 8),
+            Entry::named("VoicePriorityOverride", INT, priority),
+            field("RerollOnEveryFrame", 0x77e3_f4f7, start + 24),
+            Entry::named("AudioArrayVoice", 0x09d1_8241, voice),
+            Entry::named("AudioArraySound", 0x5986_7d0b, sound),
+        ]))
+    }
+
     fn animation_sound(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
         let path = self.data.path;
         validate_attributes(
