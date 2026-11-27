@@ -230,6 +230,9 @@ const MODULES: &[(&str, &[&str])] = &[
             "EMPUpdate",
             "DestructibleEnvironmentUpdate",
             "BeamTargetBehavior",
+            "DockUpdate",
+            "SupplyCenterDockUpdate",
+            "SupplyWarehouseDockUpdate",
             "InitiateRepairDie",
             "CaptureAndGiveCommandSetSpecialPower",
             "CombineSpecialPower",
@@ -1047,6 +1050,11 @@ mod tests {
     #[test]
     fn update_effect_variants_match_ea_batch() {
         assert_ea_fixture("update-effect-variants", 2);
+    }
+
+    #[test]
+    fn dock_variants_match_ea_batch() {
+        assert_ea_fixture("dock-variants", 2);
     }
 
     #[test]

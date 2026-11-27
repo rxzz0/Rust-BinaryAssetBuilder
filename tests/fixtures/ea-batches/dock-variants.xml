@@ -1,0 +1,20 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DockDefaults">
+    <Behaviors>
+      <DockUpdate id="Dock"/>
+      <SupplyCenterDockUpdate id="Center"/>
+      <SupplyWarehouseDockUpdate id="Warehouse"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="DockCustom">
+    <Behaviors>
+      <DockUpdate id="Dock" NumberApproachPositions="3" AllowsPassthrough="true" GoToRallyPointAfterDock="true" ShouldDockInReverse="true" MinDockTime="1.25s" ObjectsInLineWeight="2.5s">
+        <ForVoiceRetreatThisIsASafeHarborToObjectFilter Rule="ANY" Include="INFANTRY"/>
+      </DockUpdate>
+      <SupplyCenterDockUpdate id="Center" NumberApproachPositions="7" ValueMultiplier="2.75" DistributedDeposit="true"/>
+      <SupplyWarehouseDockUpdate id="Warehouse" StartingBoxes="42" DeleteWhenEmpty="true"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
