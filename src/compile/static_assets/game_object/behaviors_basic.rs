@@ -1348,6 +1348,8 @@ fn scalar_behavior(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
     const CAPTURE: u32 = 0xf8c4_aa6b;
+    const UNIFIED_CONTROL: u32 = 0xbd7d_7cde;
+    const UNIFIED_SHROUD: u32 = 0x8b6d_f249;
     const POWER: u32 = 0xf46e_b384;
     const STORE: u32 = 0x2eb6_c99c;
     const GROWTH: u32 = 0xae3a_906c;
@@ -1357,16 +1359,15 @@ fn scalar_behavior(
     const TIME: u32 = 0x9986_69e8;
     const POWER_TYPE: u32 = 0xe0ed_8382;
     const REAL: u32 = 0x6458_64f3;
+    const CAPTURE_FIELDS: &[(&str, u32, usize, &str)] = &[
+        ("GrantMoney", UINT, 8, "0"),
+        ("GrantMoneyOneTime", BOOL, 16, "false"),
+        ("SlavedCaptureObject", GAME_OBJECT_WEAK, 12, ""),
+    ];
     let (kind, size, layout): (_, _, &[(_, _, _, _)]) = match node.tag_name().name() {
-        "CaptureBehavior" => (
-            CAPTURE,
-            20,
-            &[
-                ("GrantMoney", UINT, 8, "0"),
-                ("GrantMoneyOneTime", BOOL, 16, "false"),
-                ("SlavedCaptureObject", GAME_OBJECT_WEAK, 12, ""),
-            ],
-        ),
+        "CaptureBehavior" => (CAPTURE, 20, CAPTURE_FIELDS),
+        "UnifiedControlBehavior" => (UNIFIED_CONTROL, 24, CAPTURE_FIELDS),
+        "UnifiedShroudRevealBehavior" => (UNIFIED_SHROUD, 24, CAPTURE_FIELDS),
         "PowerUpdate" => (
             POWER,
             24,
@@ -1389,8 +1390,10 @@ fn scalar_behavior(
         _ => return Ok(None),
     };
     let path = data.path;
+    let unified = matches!(kind, UNIFIED_CONTROL | UNIFIED_SHROUD);
     let names: Vec<_> = std::iter::once("id")
         .chain(layout.iter().map(|&(name, _, _, _)| name))
+        .chain(unified.then_some("UnificationType"))
         .collect();
     validate_attributes(node, &names, path)?;
     let start = data.allocate(pointer, size)?;
@@ -1438,7 +1441,23 @@ fn scalar_behavior(
         }
         entries.push(Entry::named(name, field_kind, Target::Data(field)));
     }
-    Ok(Some((kind, Table::record(entries))))
+    let mut table = Table::record(entries);
+    if unified {
+        let unification = super::super::global_ui::enum_value(
+            node.attribute("UnificationType").unwrap_or("SAME_PLAYER"),
+            &["SAME_PLAYER", "ALLIED_PLAYERS"],
+            path,
+        )?;
+        data.word(start + 20, unification);
+        table = Table::record(vec![
+            base(CAPTURE, table),
+            Entry::named("UnificationType", 0x19b6_94b8, Target::Data(start + 20)),
+        ]);
+        if kind == UNIFIED_SHROUD {
+            table = Table::record(vec![base(UNIFIED_CONTROL, table)]);
+        }
+    }
+    Ok(Some((kind, table)))
 }
 
 pub(super) fn encode(

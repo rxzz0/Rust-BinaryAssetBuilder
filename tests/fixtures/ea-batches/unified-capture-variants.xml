@@ -1,0 +1,16 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="UnifiedCaptureDefaults">
+    <Behaviors>
+      <UnifiedControlBehavior id="Control"/>
+      <UnifiedShroudRevealBehavior id="Shroud"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="UnifiedCaptureCustom">
+    <Behaviors>
+      <UnifiedControlBehavior id="Control" GrantMoney="37" GrantMoneyOneTime="true" SlavedCaptureObject="UnifiedCaptureDefaults" UnificationType="ALLIED_PLAYERS"/>
+      <UnifiedShroudRevealBehavior id="Shroud" GrantMoney="65" SlavedCaptureObject="UnifiedCaptureDefaults" UnificationType="ALLIED_PLAYERS"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

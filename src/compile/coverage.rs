@@ -282,6 +282,8 @@ const MODULES: &[(&str, &[&str])] = &[
             "RestrictSpecialPowerBehavior",
             "AreaRestrictSpecialPowerBehavior",
             "SpecialPowerAssistResponseBehavior",
+            "UnifiedControlBehavior",
+            "UnifiedShroudRevealBehavior",
             "SpecialDisguiseUpdate",
             "SpiderHoleUpdate",
             "StoreCurrentStateUpdate",
@@ -1071,6 +1073,11 @@ mod tests {
     #[test]
     fn power_response_variants_match_ea_batch() {
         assert_ea_fixture("power-response-variants", 3);
+    }
+
+    #[test]
+    fn unified_capture_variants_match_ea_batch() {
+        assert_ea_fixture("unified-capture-variants", 2);
     }
 
     #[test]
