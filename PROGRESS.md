@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 469: Added LargeGroupAudioMap with model and status masks, thresholds, hashed sound keys, and ducking references. Both EA fixtures matched. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: SDK pipeline test assets and create behavior variants.
 - Checkpoint 468: Added LeechTargetingAttachUpdate and StealUnitUpdate through the shared AttachUpdate layout. Matched all four EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: LargeGroupAudioMap and the remaining behavior modules.
 - Checkpoint 467: Added SpotlightDraw through the shared scripted draw layout and RandomSoundSelectorClientBehavior with voice and sound arrays. All draw and client behavior declarations now have native encoders. Matched all four EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: LeechTargetingAttachUpdate and StealUnitUpdate.
 - Checkpoint 466: Added TerrainAssetCollection, ArmyDefinition, and CrowdResponse, including inline voice audio and its import offsets. Matched all six EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: SpotlightDraw and RandomSoundSelectorClientBehavior.

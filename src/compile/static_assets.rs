@@ -249,6 +249,7 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "IntelDB" => (0x2cc4_1189, 84, stock_content::ui_display),
         "TerrainAssetCollection" => (0x143c_c65f, 84, stock_content::ui_display),
         "ArmyDefinition" => (0x0cb4_7a77, 84, stock_content::ui_display),
+        "LargeGroupAudioMap" => (0x3e50_2246, 84, stock_content::ui_display),
         "CrowdResponse" => (0x07bc_a38c, 84, stock_content::ui_display),
         "MissionHotSpotSettings" => (0xfed7_6cc8, 84, stock_content::ui_display),
         "ScorchMarkSettings" => (0x698d_0dfa, 84, stock_content::ui_display),

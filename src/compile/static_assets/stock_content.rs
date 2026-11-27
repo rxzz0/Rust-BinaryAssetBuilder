@@ -119,12 +119,16 @@ enum UiCodec {
     Text,
     Boolean,
     Byte,
+    UnsignedShort,
     Unsigned,
     Signed,
     Real,
     Time,
     Velocity,
     Hash,
+    Poid,
+    ModelConditionPointer,
+    ObjectStatusPointer,
     KindOf,
     Percentage,
     Faction,
@@ -215,7 +219,7 @@ pub(super) fn ui_display(node: Node<'_, '_>, path: &Path) -> io::Result<Marshale
     ) {
         data.relocations.sort_unstable();
     }
-    if name == "CrowdResponse" {
+    if matches!(name, "CrowdResponse" | "LargeGroupAudioMap") {
         result.imports.sort_unstable();
     }
     Ok(data.finish(result))
@@ -403,6 +407,9 @@ fn write_ui_layout(
         "UIQuickChatMessage" => &["MessageText"],
         "MiscEvaBeaconSettings" => &["BeaconType"],
         "IntelDBEntry" => &["CategoryId", "EntryId"],
+        "LargeGroupAudioMap" => &["StartThreshold", "StopThreshold"],
+        "SoundKeyPair" => &["Sound"],
+        "AudioDuckInfo" => &["AudioMap", "SoundRef", "VolumeMultiplier"],
         "TerrainAssetRecord" => &["id", "Texture", "Class"],
         "SiegeEvaEvent" => &["Seconds", "EvaEvent"],
         "TechUpgradeBindingInfo" => &["TechDependency", "UpgradeToGrant"],
@@ -569,10 +576,13 @@ fn write_ui_layout(
                     ));
                 }
                 if children.is_empty()
-                    && matches!(
+                    && (matches!(
                         field.name,
                         "Binding" | "Scorch" | "IntelDBEntry" | "Threshold"
-                    )
+                    ) || matches!(
+                        (name, field.name),
+                        ("LargeGroupAudioMap", "Sound") | ("SoundKeyPair", "Key")
+                    ))
                 {
                     return Err(invalid(
                         data.path,
@@ -673,6 +683,11 @@ fn write_ui_value(
         UiCodec::Byte => {
             data.payload[offset] = value.trim().parse().map_err(|_| parse_error())?;
         }
+        UiCodec::UnsignedShort => {
+            let value = super::sage_uint(value, "unsigned short", data.path)?;
+            let value = u16::try_from(value).map_err(|_| parse_error())?;
+            data.payload[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+        }
         UiCodec::Unsigned => data.word(
             offset,
             super::sage_uint(value, "UI unsigned integer", data.path)?,
@@ -693,6 +708,15 @@ fn write_ui_value(
         UiCodec::Hash => {
             let bytes = crate::compile::windows_1252(value).ok_or_else(parse_error)?;
             data.word(offset, crate::hash::asset_string_hash(&bytes));
+        }
+        UiCodec::Poid => data.word(offset, super::hash_name(value)),
+        UiCodec::ModelConditionPointer => {
+            let start = data.allocate(offset, 0x3c)?;
+            super::game_object::write_model_conditions(value, start, data)?;
+        }
+        UiCodec::ObjectStatusPointer => {
+            let start = data.allocate(offset, 0x1c)?;
+            super::game_object::write_status_flags(value, start, data)?;
         }
         UiCodec::Percentage => data.word(
             offset,
@@ -1260,6 +1284,75 @@ fn ui_layout(name: &str) -> Option<UiLayout> {
                     None,
                     Repeated(4, &Weak("GameObject"))
                 ),
+            ],
+        ),
+        "LargeGroupAudioMap" => (
+            48,
+            &[
+                ui_field!(
+                    "RequiredModelConditionFlags",
+                    4,
+                    true,
+                    None,
+                    ModelConditionPointer
+                ),
+                ui_field!(
+                    "ExcludedModelConditionFlags",
+                    8,
+                    true,
+                    None,
+                    ModelConditionPointer
+                ),
+                ui_field!(
+                    "RequiredObjectStatusBits",
+                    12,
+                    true,
+                    None,
+                    ObjectStatusPointer
+                ),
+                ui_field!(
+                    "ExcludedObjectStatusBits",
+                    16,
+                    true,
+                    None,
+                    ObjectStatusPointer
+                ),
+                ui_field!("Size", 20, true, Some("1000"), Unsigned),
+                ui_field!("HandOffModeTime", 24, true, Some("1s"), Time),
+                ui_field!("MaximumAudioSpeed", 28, true, Some("100"), Velocity),
+                ui_field!(
+                    "Sound",
+                    32,
+                    false,
+                    None,
+                    Repeated(24, &Inline("SoundKeyPair"))
+                ),
+                ui_field!("StartThreshold", 40, true, None, UnsignedShort),
+                ui_field!("StopThreshold", 42, true, None, UnsignedShort),
+                ui_field!("IgnoreStealthedUnits", 44, true, Some("true"), Boolean),
+            ],
+        ),
+        "SoundKeyPair" => (
+            24,
+            &[
+                ui_field!("Name", 0, true, None, Poid),
+                ui_field!("Sound", 4, true, None, Strong("BaseAudioEventInfo")),
+                ui_field!("Key", 8, false, None, Repeated(4, &Hash)),
+                ui_field!(
+                    "Duck",
+                    16,
+                    false,
+                    None,
+                    Repeated(12, &Inline("AudioDuckInfo"))
+                ),
+            ],
+        ),
+        "AudioDuckInfo" => (
+            12,
+            &[
+                ui_field!("AudioMap", 0, true, None, Strong("LargeGroupAudioMap")),
+                ui_field!("SoundRef", 4, true, None, Poid),
+                ui_field!("VolumeMultiplier", 8, true, None, Percentage),
             ],
         ),
         "AudioArrayVoice" => (24, &[]),
