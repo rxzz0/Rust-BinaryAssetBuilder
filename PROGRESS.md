@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 465: Added MiscAudio and MiscEvaEvents with field lists from the bundled schemas, and IntelDB with its shared string layout. Matched five EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: terrain collections, army definitions, and crowd responses.
 - Checkpoint 464: Added MissionHotSpotSettings, ScorchMarkSettings, W3DDeviceSettings, SiegeEvaEvent, and PlayerTechUpgradeBinding. Matched nine EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: miscellaneous audio and intel database.
 - Checkpoint 463: Added eight UI encoders for faction button settings, tactical exit and stance buttons, decals, and radar icons. All stock UI declarations in the coverage inventory now have encoders. Matched 14 EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: standalone stock settings and technology bindings.
 - Checkpoint 462: Added both build queue tab types and nested quick-chat menus with faction groups, weak message references and optional menu destinations. Matched all nine EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release. The previous release also passed separate SampleMod and Surge native static compile smoke checks.

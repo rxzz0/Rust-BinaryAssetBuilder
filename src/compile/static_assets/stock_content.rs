@@ -4,6 +4,7 @@ use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
 use std::path::Path;
+use std::sync::OnceLock;
 
 pub(super) fn engaging_content(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     let names = ["TitleId", "DescId", "ImageId"];
@@ -214,6 +215,104 @@ pub(super) fn ui_display(node: Node<'_, '_>, path: &Path) -> io::Result<Marshale
     Ok(data.finish(result))
 }
 
+pub(super) fn misc_reference_settings(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    const XML_SCHEMA: &str = "http://www.w3.org/2001/XMLSchema";
+    static AUDIO_FIELDS: OnceLock<Vec<(String, bool)>> = OnceLock::new();
+    static EVA_FIELDS: OnceLock<Vec<(String, bool)>> = OnceLock::new();
+
+    let name = node.tag_name().name();
+    let (fields, schema, reference_type, has_beacons) = if name == "MiscAudio" {
+        (
+            &AUDIO_FIELDS,
+            include_str!("../../../schemas/ra3/xsd/Includes/MiscAudio.xsd"),
+            "BaseAudioEventInfo",
+            false,
+        )
+    } else {
+        (
+            &EVA_FIELDS,
+            include_str!("../../../schemas/ra3/xsd/Includes/MiscEvaEvents.xsd"),
+            "EvaEvent",
+            true,
+        )
+    };
+    // EA stores these fixed reference tables in schema declaration order.
+    let fields = fields.get_or_init(|| {
+        let document = roxmltree::Document::parse(schema).expect("bundled reference schema");
+        document
+            .descendants()
+            .find(|node| {
+                node.has_tag_name((XML_SCHEMA, "complexType"))
+                    && node.attribute("name") == Some(name)
+            })
+            .and_then(|node| {
+                node.descendants()
+                    .find(|node| node.has_tag_name((XML_SCHEMA, "extension")))
+            })
+            .expect("bundled reference settings type")
+            .children()
+            .filter(|node| node.has_tag_name((XML_SCHEMA, "attribute")))
+            .map(|node| {
+                (
+                    node.attribute("name")
+                        .expect("bundled reference settings field name")
+                        .to_owned(),
+                    node.attribute("use") == Some("required"),
+                )
+            })
+            .collect()
+    });
+    let list_offset = 4 + fields.len() * 4;
+    let mut data = BinaryData {
+        payload: vec![0; list_offset + usize::from(has_beacons) * 8],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(fields.iter().map(|(name, _)| name.as_str()))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    for (name, mandatory) in fields {
+        if *mandatory {
+            required(node, name, path)?;
+        }
+    }
+    for attribute in node.attributes() {
+        if attribute.namespace().is_none()
+            && let Some(index) = fields.iter().position(|(name, _)| name == attribute.name())
+        {
+            write_ui_value(
+                UiCodec::Strong(reference_type),
+                attribute.value(),
+                4 + index * 4,
+                &mut data,
+                &mut result,
+            )?;
+        }
+    }
+    let children: Vec<_> = significant_children(node).collect();
+    if children
+        .iter()
+        .any(|child| !has_beacons || !child.has_tag_name((SAGE_NS, "AIBeaconTypeSettings")))
+    {
+        return Err(invalid(path, format!("unexpected {name} child")));
+    }
+    if !children.is_empty() {
+        let offset = data.list(list_offset, children.len(), 8)?;
+        for (index, child) in children.into_iter().enumerate() {
+            write_ui_child(
+                UiCodec::Inline("MiscEvaBeaconSettings"),
+                child,
+                offset + index * 8,
+                &mut data,
+                &mut result,
+            )?;
+        }
+    }
+    Ok(data.finish(result))
+}
+
 pub(super) fn ui_config_list(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     validate_attributes(node, &["id"], path)?;
     let mut data = BinaryData {
@@ -296,6 +395,8 @@ fn write_ui_layout(
         "SellFactionCursorSet" => &["Faction"],
         "HUDElementHotKeyMapping" => &["ElementId", "HotKeySlot"],
         "UIQuickChatMessage" => &["MessageText"],
+        "MiscEvaBeaconSettings" => &["BeaconType"],
+        "IntelDBEntry" => &["CategoryId", "EntryId"],
         "SiegeEvaEvent" => &["Seconds", "EvaEvent"],
         "TechUpgradeBindingInfo" => &["TechDependency", "UpgradeToGrant"],
         "CommandButtonFactionSettings" => &["Faction"],
@@ -450,7 +551,9 @@ fn write_ui_layout(
                         format!("{name} has an invalid menu item count"),
                     ));
                 }
-                if children.is_empty() && matches!(field.name, "Binding" | "Scorch") {
+                if children.is_empty()
+                    && matches!(field.name, "Binding" | "Scorch" | "IntelDBEntry")
+                {
                     return Err(invalid(
                         data.path,
                         format!("{name} requires {}", field.name),
@@ -1192,6 +1295,37 @@ fn ui_layout(name: &str) -> Option<UiLayout> {
                 false,
                 None,
                 Repeated(8, &Inline("TechUpgradeBindingInfo"))
+            )],
+        ),
+        "MiscEvaBeaconSettings" => (
+            8,
+            &[
+                ui_field!(
+                    "BeaconType",
+                    0,
+                    true,
+                    None,
+                    EnumWithInvalid(&["Invalid", "Assault", "HoldPosition", "HoldObject"])
+                ),
+                ui_field!("PlacedEvent", 4, true, None, Strong("EvaEvent")),
+            ],
+        ),
+        "IntelDBEntry" => (
+            24,
+            &[
+                ui_field!("CategoryId", 0, true, None, Text),
+                ui_field!("EntryId", 8, true, None, Text),
+                ui_field!("TextureId", 16, true, None, Text),
+            ],
+        ),
+        "IntelDB" => (
+            12,
+            &[ui_field!(
+                "IntelDBEntry",
+                4,
+                false,
+                None,
+                Repeated(24, &Inline("IntelDBEntry"))
             )],
         ),
         "UICoopTinting" => (
