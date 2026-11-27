@@ -80,6 +80,7 @@ mod resource_variants;
 mod schema;
 mod secondary_damage;
 mod secondary_listener;
+mod small_behavior_variants;
 mod special_power_variants;
 pub(super) use shadow::encode_settings_shadow;
 mod aim_weapon;

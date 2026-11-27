@@ -1747,6 +1747,19 @@ pub(super) fn encode(
     if let Some(encoded) = resource {
         return encoded.map(Some);
     }
+    if matches!(
+        node.tag_name().name(),
+        "DistributedMoney" | "FindCoverBehavior" | "GatherSlavesUpdate"
+    ) {
+        return super::small_behavior_variants::encode(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
     if node.has_tag_name((SAGE_NS, "SpecialPowerUpdate")) {
         return super::special_power_variants::encode_update(
             node,

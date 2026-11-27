@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 478: Added native DistributedMoney, FindCoverBehavior and GatherSlavesUpdate with their shared Create and Update layouts. All four EA fixture assets matched byte for byte. Rust tests, Clippy and release checks passed.
 - Checkpoint 477: Added native TerrainResource, TiberiumCrystal and TiberiumField with the EA update layout, packed radar color, resource references and sibling-first filter relocations. All three EA assets matched byte for byte. Rust tests, Clippy and release checks passed.
 - Checkpoint 476: Added native KeepObjectDie, UpgradeDie and RefundDie with the shared DieMuxData layout, upgrade references, refund filters and EA relocation order. Three EA fixture assets matched byte for byte. Rust tests, Clippy and release checks passed.
 - Checkpoint 475: Added native RadarFreezeSpecialPower, RadarJamSpecialPower, RadarSpySpecialPower, RadarHackSpecialPower and SpecialPowerUpdate, including the shared inherited InitiateSound. Three EA fixture assets matched byte for byte. Corrected coverage reporting for three already-implemented behaviors. Rust tests, Clippy and the release build passed.
