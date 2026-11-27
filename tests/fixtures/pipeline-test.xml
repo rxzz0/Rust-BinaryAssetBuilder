@@ -1,0 +1,24 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <TestTexture id="TestPixels" CustomData="pipeline-probe.dat">
+    <File>pipeline-probe.dat</File>
+    <File>pipeline-probe.dat</File>
+  </TestTexture>
+  <TestTexture id="TestPixelsNoBlob" CustomData="pipeline-probe.dat" />
+  <TestTextureCollection id="TestCollection">
+    <Texture>TestPixels</Texture>
+    <Texture>TestPixelsNoBlob</Texture>
+  </TestTextureCollection>
+  <TestTextureCollection id="TestCollectionEmpty" />
+  <TestGameObject id="TestPipelineObject">
+    <DisplayName>pipeline:test</DisplayName>
+    <DisplayName>pipeline:alternate</DisplayName>
+    <Modules>
+      <TestModuleB id="ModuleTag_B" />
+      <TestModuleA id="ModuleTag_A" />
+      <TestModuleA />
+    </Modules>
+    <TextureCollection>TestCollection</TextureCollection>
+    <TextureCollection>TestCollectionEmpty</TextureCollection>
+  </TestGameObject>
+  <TestGameObject id="TestPipelineObjectEmpty" />
+</AssetDeclaration>

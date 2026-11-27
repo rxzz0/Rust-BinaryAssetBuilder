@@ -1,5 +1,6 @@
 # Rust BinaryAssetBuilder progress
 
+- Checkpoint 471: Added TestTexture, TestTextureCollection and TestGameObject with file checksums, aligned blobs, typed references, and nested module lists. Matched all six EA fixture assets. Native static smoke, all 392 tests, and Clippy passed. Installed and verified the SDK release. Next: ScriptedModelDraw attachments and embedded portals.
 - Checkpoint 470: Added AttributeModifierNaval, CombinedInfoModule, ExperienceLevelCreate, InheritUpgradeCreate, RandomModelCondition and SupplyCenterCreate through the shared CreateModuleData layout. Both EA fixtures matched. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: SDK test pipeline assets.
 - Checkpoint 469: Added LargeGroupAudioMap with model and status masks, thresholds, hashed sound keys, and ducking references. Both EA fixtures matched. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: SDK pipeline test assets and create behavior variants.
 - Checkpoint 468: Added LeechTargetingAttachUpdate and StealUnitUpdate through the shared AttachUpdate layout. Matched all four EA fixture assets. All 392 tests and Clippy passed. Installed and verified the SDK release. Next: LargeGroupAudioMap and the remaining behavior modules.

@@ -978,6 +978,7 @@ impl Compiler<'_> {
                 self.compile_inherited_ai(node, path, source)
             }
             "GameObject"
+            | "TestGameObject"
             | "AmbientStream"
             | "AudioEvent"
             | "AudioEventOverridable"
@@ -1056,7 +1057,9 @@ impl Compiler<'_> {
         path: &Path,
         source: &str,
     ) -> io::Result<CompiledAsset> {
-        let mut asset = static_assets::compile_asset(node, path, source)?;
+        let mut asset = static_assets::compile_asset_with_resolver(node, path, source, |value| {
+            self.resolve(path, value)
+        })?;
         if self.reference_mode == ReferenceMode::Map
             && let Some(schema) = &self.game_object_schema
         {

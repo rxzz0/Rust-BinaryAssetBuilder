@@ -50,6 +50,7 @@ pub(super) mod music_conditions;
 mod object_creation;
 mod order_display;
 mod particle_system;
+mod pipeline_test;
 mod player_power_button;
 mod player_template;
 mod road;
@@ -249,6 +250,8 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "IntelDB" => (0x2cc4_1189, 84, stock_content::ui_display),
         "TerrainAssetCollection" => (0x143c_c65f, 84, stock_content::ui_display),
         "ArmyDefinition" => (0x0cb4_7a77, 84, stock_content::ui_display),
+        "TestTextureCollection" => (0xabd9_65d2, 84, pipeline_test::texture_collection),
+        "TestGameObject" => (0x9608_e01c, 84, pipeline_test::game_object),
         "LargeGroupAudioMap" => (0x3e50_2246, 84, stock_content::ui_display),
         "CrowdResponse" => (0x07bc_a38c, 84, stock_content::ui_display),
         "MissionHotSpotSettings" => (0xfed7_6cc8, 84, stock_content::ui_display),
@@ -330,6 +333,7 @@ pub(super) fn has_encoder(type_name: &str) -> bool {
                 | "OnDemandTexture"
                 | "Texture"
                 | "TerrainTextureAtlas"
+                | "TestTexture"
         )
 }
 
@@ -337,6 +341,17 @@ pub(super) fn compile_asset(
     node: Node<'_, '_>,
     path: &Path,
     source: &str,
+) -> io::Result<CompiledAsset> {
+    compile_asset_with_resolver(node, path, source, |value| {
+        pipeline_test::resolve_local(path, value)
+    })
+}
+
+pub(super) fn compile_asset_with_resolver(
+    node: Node<'_, '_>,
+    path: &Path,
+    source: &str,
+    resolve: impl Fn(&str) -> io::Result<std::path::PathBuf>,
 ) -> io::Result<CompiledAsset> {
     let type_name = node.tag_name().name();
     let (id, asset_id) = declaration_id(node, path)?;
@@ -346,9 +361,14 @@ pub(super) fn compile_asset(
             format!("unsupported inheritance {type_name}:{id} from {base}"),
         ));
     }
-    let (type_hash, sort_order, marshal) = encoder(type_name)
-        .ok_or_else(|| invalid(path, format!("unsupported static asset type {type_name}")))?;
-    let data = marshal(node, path)?;
+    let (type_hash, sort_order, data, file_hashes) = if type_name == "TestTexture" {
+        let (data, hashes) = pipeline_test::texture_with_resolver(node, path, resolve)?;
+        (0x106b_a1eb, 84, data, hashes)
+    } else {
+        let (type_hash, sort_order, marshal) = encoder(type_name)
+            .ok_or_else(|| invalid(path, format!("unsupported static asset type {type_name}")))?;
+        (type_hash, sort_order, marshal(node, path)?, Vec::new())
+    };
     let processing_hash = if type_name == "W3DAnimation" {
         0xd650_5ce9
     } else if type_name == "W3DMesh" {
@@ -360,8 +380,10 @@ pub(super) fn compile_asset(
         type_hash ^ 4
     };
     let mut instance_hash = hash_xml(node, processing_hash, path)?;
-    if !data.reference_types.is_empty() {
-        instance_hash ^= memory_stream_hash(encode_words(data.reference_types));
+    if !file_hashes.is_empty() || !data.reference_types.is_empty() {
+        instance_hash ^= memory_stream_hash(encode_words(
+            file_hashes.into_iter().chain(data.reference_types),
+        ));
     }
     Ok(CompiledAsset {
         id: asset_id,
