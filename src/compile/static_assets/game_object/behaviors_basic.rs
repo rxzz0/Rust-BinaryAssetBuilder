@@ -1839,7 +1839,10 @@ pub(super) fn encode(
     if node.tag_name().namespace() == Some(SAGE_NS)
         && matches!(
             node.tag_name().name(),
-            "AttachUpdate" | "MoneyGainAttachUpdate"
+            "AttachUpdate"
+                | "LeechTargetingAttachUpdate"
+                | "MoneyGainAttachUpdate"
+                | "StealUnitUpdate"
         )
     {
         return super::attach::encode(node, pointer, data, references, reference_types).map(Some);
