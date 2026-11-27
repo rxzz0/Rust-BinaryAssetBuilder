@@ -2221,6 +2221,9 @@ pub(super) fn encode(
     if matches!(
         node.tag_name().name(),
         "SpecialAbilityUpdate"
+            | "ObjectStatusSpecialAbilityUpdate"
+            | "TeleportToCasterSpecialPower"
+            | "TiberiumThiefSpecialAbilityUpdate"
             | "BeamSpecialAbilityUpdate"
             | "AssembleStructureSpecialAbilityUpdate"
             | "ReplaceSelfSpecialAbility"

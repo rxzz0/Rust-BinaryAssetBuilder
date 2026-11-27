@@ -267,6 +267,9 @@ const MODULES: &[(&str, &[&str])] = &[
             "ShipSlowDeath",
             "SpawnCrateUpdate",
             "SpecialAbilityUpdate",
+            "ObjectStatusSpecialAbilityUpdate",
+            "TeleportToCasterSpecialPower",
+            "TiberiumThiefSpecialAbilityUpdate",
             "SpecialDisguiseUpdate",
             "SpiderHoleUpdate",
             "StoreCurrentStateUpdate",
@@ -1031,6 +1034,11 @@ mod tests {
     #[test]
     fn scripted_model_states_match_ea_batch() {
         assert_ea_fixture("scripted-model-states", 2);
+    }
+
+    #[test]
+    fn special_ability_variants_match_ea_batch() {
+        assert_ea_fixture("special-ability-variants", 3);
     }
 
     #[test]

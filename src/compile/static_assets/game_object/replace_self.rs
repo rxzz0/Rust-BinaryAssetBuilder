@@ -5,7 +5,7 @@ use super::super::{
     validate_attributes,
 };
 use super::behaviors_basic::{base, module_base};
-use super::draws::{boolean, model_condition_index};
+use super::draws::{boolean, model_condition_index, write_model_conditions};
 use super::secondary_damage::{STATUS_BYTES, write_status_flags};
 use super::spawn::{id_list, weak_reference};
 use super::tech_upgrade::encode_anim;
@@ -21,6 +21,44 @@ const CAPTURE: u32 = 0x3139_98b5;
 const WEAPON: u32 = 0x1e45_a393;
 const RECONSTITUTE: u32 = 0x3f9b_9ef1;
 const ASSEMBLE: u32 = 0x7737_ac69;
+const OBJECT_STATUS: u32 = 0x079b_6ead;
+const TELEPORT: u32 = 0x9383_3563;
+const TIBERIUM_THIEF: u32 = 0xf456_8855;
+const OBJECT_STATUS_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("Status1", 0xa7bd_811e, 0xf0, "status", ""),
+    ("Status2", 0xa7bd_811e, 0x10c, "status", ""),
+];
+const TELEPORT_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("Radius", 0x6458_64f3, 0xf0, "real", "0"),
+    ("MinDestinationRadius", 0x6458_64f3, 0xf4, "real", "0"),
+    ("MaxDestinationRadius", 0x6458_64f3, 0xf8, "real", "0"),
+    ("MaxRangeFromCasterSP", 0x6458_64f3, 0xfc, "real", "0"),
+    ("MaxRangeFromCasterMP", 0x6458_64f3, 0x100, "real", "0"),
+    ("TriggerFX", 0x0d1c_8e83, 0x104, "ref", "FXList"),
+    ("TargetFX", 0x0d1c_8e83, 0x108, "ref", "FXList"),
+    ("RequireStoredObjects", 0x77e3_f4f7, 0x10c, "bool", "false"),
+    (
+        "KillObjectsIfPlacedInBadSpot",
+        0x77e3_f4f7,
+        0x10d,
+        "bool",
+        "false",
+    ),
+];
+const TIBERIUM_THIEF_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("TiberiumStolenPerUpdate", 0x23e6_50b8, 0xf0, "int", "1"),
+    ("DelayBetweenThefts", 0x9986_69e8, 0xf4, "time", "0s"),
+    ("TiberiumCapacity", 0x23e6_50b8, 0xf8, "int", "1"),
+    ("ObjectStatusWhenNotEmpty", 0xa7bd_811e, 0xfc, "status", ""),
+    (
+        "ModelConditionWhenNotEmpty",
+        0x67db_bfc9,
+        0x118,
+        "model_flags",
+        "",
+    ),
+    ("PlayWeaponPreFireFX", 0x77e3_f4f7, 0x154, "bool", "false"),
+];
 const ASSEMBLE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
     ("NewObjectAssemblyTime", 0x9986_69e8, 0xf0, "time", "0s"),
     ("BusyDuringAssembly", 0x77e3_f4f7, 0x100, "bool", "false"),
@@ -242,6 +280,9 @@ pub(super) fn encode(
         "ToggleStatusSpecialAbilityUpdate" => (TOGGLE, 0xfc, TOGGLE_FIELDS),
         "ActivateModuleSpecialAbilityUpdate" => (ACTIVATE_MODULE, 0xf8, &[][..]),
         "SpecialAbilityUpdate" => (ABILITY, 0xf0, &[][..]),
+        "ObjectStatusSpecialAbilityUpdate" => (OBJECT_STATUS, 0x128, OBJECT_STATUS_FIELDS),
+        "TeleportToCasterSpecialPower" => (TELEPORT, 0x110, TELEPORT_FIELDS),
+        "TiberiumThiefSpecialAbilityUpdate" => (TIBERIUM_THIEF, 0x158, TIBERIUM_THIEF_FIELDS),
         "AssembleStructureSpecialAbilityUpdate" => (ASSEMBLE, 0x104, ASSEMBLE_FIELDS),
         "BeamSpecialAbilityUpdate" => (
             beam_special_ability::KIND,
@@ -346,6 +387,7 @@ pub(super) fn encode(
             }
             "bool" => data.payload[offset] = boolean(node, name, default == "true", path)?,
             "status" => write_status_flags(value, offset, data)?,
+            "model_flags" => write_model_conditions(value, offset, data)?,
             "optional_status" => {
                 target = match node.attribute(name) {
                     Some(value) => {
@@ -466,7 +508,14 @@ pub(super) fn encode(
     }
     if matches!(
         kind,
-        WEAPON | CAPTURE | RECONSTITUTE | eject_passengers::KIND | beam_special_ability::KIND
+        WEAPON
+            | CAPTURE
+            | RECONSTITUTE
+            | OBJECT_STATUS
+            | TELEPORT
+            | TIBERIUM_THIEF
+            | eject_passengers::KIND
+            | beam_special_ability::KIND
     ) {
         if children.next().is_some() {
             return Err(invalid(
