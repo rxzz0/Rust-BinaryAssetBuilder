@@ -188,7 +188,21 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             data.references.push(id.into());
             ordinal = data.references.len() as u32;
         }
-        let mut sound = 0;
+        let mut secondary = 0;
+        if name == "PersonalityMap" {
+            for attr in item.attributes() {
+                let (target, slot) = match attr.name() {
+                    "Side" => ("PlayerTemplate", &mut ordinal),
+                    "Personality" => ("AIPersonalityDefinition", &mut secondary),
+                    _ => continue,
+                };
+                let value = required(item, attr.name(), path)?;
+                let id = asset_reference(reference_name(value), target, path)?;
+                data.reference_types.push(id.type_id);
+                data.references.push(id.into());
+                *slot = data.references.len() as u32;
+            }
+        }
         if name == "FeedbackEntry" {
             for attr in item.attributes() {
                 if attr.value().trim().is_empty() {
@@ -202,7 +216,7 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
                         ordinal = data.references.len() as u32;
                     }
                     "Sound" => {
-                        sound = super::game_object::audio_reference(
+                        secondary = super::game_object::audio_reference(
                             attr.value(),
                             path,
                             &mut data.references,
@@ -223,7 +237,7 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
         if name == FILTER {
             data.reference_types.extend(filter_reference_types(item));
         }
-        children[index].push((item, [ordinal, sound], data.reference_types.len()));
+        children[index].push((item, [ordinal, secondary], data.reference_types.len()));
     }
 
     let mut nested_types = Vec::new();
@@ -267,7 +281,6 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
     binary.relocations.sort_unstable();
     binary.relocations.push(u32::MAX);
     if !data.imports.is_empty() {
-        data.imports.sort_unstable();
         data.imports.push(u32::MAX);
     }
     data.relocations = binary.relocations;
@@ -281,8 +294,9 @@ pub(super) const IN_TROUBLE: &str = "InTroubleSkirmishFeedbackControl";
 const ALL_DIFFICULTIES: &str = "EASY MEDIUM HARD BRUTAL";
 
 // Schema order also determines the allocation order of the trailing data.
-pub(super) const CHILDREN: [(&str, usize, usize); 16] = [
+pub(super) const CHILDREN: [(&str, usize, usize); 17] = [
     ("Side", 236, 4),
+    ("PersonalityMap", 244, 8),
     ("UnitCap", 252, 8),
     ("ResourceMultiplierCheat", 300, 8),
     ("StrategicDirectiveFeedback", 308, 12),
@@ -323,7 +337,7 @@ fn write_item(
     node: Node<'_, '_>,
     name: &str,
     offset: usize,
-    [ordinal, sound]: [u32; 2],
+    [ordinal, secondary]: [u32; 2],
     binary: &mut BinaryData<'_>,
     data: &mut Marshaled,
 ) -> io::Result<()> {
@@ -339,6 +353,19 @@ fn write_item(
         "Side" => {
             binary.word(offset, ordinal);
             data.imports.push(offset as u32);
+        }
+        "PersonalityMap" => {
+            validate_attributes(node, &["Side", "Personality"], path)?;
+            required(node, "Side", path)?;
+            required(node, "Personality", path)?;
+            binary.word(offset, ordinal);
+            binary.word(offset + 4, secondary);
+            let offsets = [offset as u32, offset as u32 + 4];
+            data.imports.extend(if ordinal < secondary {
+                offsets
+            } else {
+                [offsets[1], offsets[0]]
+            });
         }
         "UnitCap" => {
             validate_attributes(node, &["Cap", "Difficulty"], path)?;
@@ -487,7 +514,7 @@ fn write_item(
                 offset,
                 fast_hash(required(node, "FeedbackKey", path)?.as_bytes()),
             );
-            for (index, ordinal) in [(4, ordinal), (8, sound)] {
+            for (index, ordinal) in [(4, ordinal), (8, secondary)] {
                 if ordinal != 0 {
                     binary.word(offset + index, ordinal);
                     data.imports.push((offset + index) as u32);

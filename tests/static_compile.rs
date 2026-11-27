@@ -2138,6 +2138,36 @@ fn compiles_credits_with_ansi_strings_and_empty_lines() {
 }
 
 #[test]
+fn xml_hash_matches_ea_at_exact_block_boundaries() {
+    let root = scratch_root();
+    let xml = root.join("xml-hash-block-boundary.xml");
+    const DECLARATION: &str = r#"<?xml version="1.0" encoding="Windows-1252"?>"#;
+    const NAMESPACE: &str = r#" xmlns="uri:ea.com:eala:asset""#;
+    for (length, expected) in [
+        (511, 0x6f22_a507),
+        (512, 0x8fbb_6ad4),
+        (513, 0xca65_304a),
+        (1024, 0x4bd9_3af3),
+        (2048, 0xa4d9_dd5f),
+        (4096, 0x916f_b2ad),
+    ] {
+        let prefix = format!(r#"<EvaEvent id="Probe{length}"><!--"#);
+        let suffix = "--></EvaEvent>";
+        let padding =
+            "p".repeat(length - DECLARATION.len() - NAMESPACE.len() - prefix.len() - suffix.len());
+        fs::write(
+            &xml,
+            format!("<AssetDeclaration{NAMESPACE}>{prefix}{padding}{suffix}</AssetDeclaration>"),
+        )
+        .unwrap();
+        let output = compile_static(&xml, &root, &root).unwrap();
+        let manifest = Manifest::parse(&output.manifest).unwrap();
+        assert_eq!(manifest.assets[0].instance_hash, expected, "{length} bytes");
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn music_track_inheritance_matches_ea_stream() {
     let root = scratch_root();
     let xml = root.join("music-track-inheritance.xml");

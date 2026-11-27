@@ -1811,15 +1811,7 @@ fn hash_xml(node: Node<'_, '_>, processing_hash: u32, path: &Path) -> io::Result
     let xml = windows_1252(&xml)
         .ok_or_else(|| invalid(path, "asset XML contains characters outside Windows-1252"))?;
     let seed = fast_hash_with_seed(processing_hash, b"11");
-    // The legacy HashingWriter omits its last block when the length is an exact multiple.
-    let hashed_len = if xml.len().is_multiple_of(512) {
-        xml.len() - 512
-    } else {
-        xml.len()
-    };
-    Ok(xml[..hashed_len]
-        .chunks(512)
-        .fold(seed, fast_hash_with_seed))
+    Ok(xml.chunks(512).fold(seed, fast_hash_with_seed))
 }
 
 fn windows_1252(text: &str) -> Option<Cow<'_, [u8]>> {

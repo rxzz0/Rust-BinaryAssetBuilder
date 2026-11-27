@@ -1492,6 +1492,11 @@ mod tests {
     }
 
     #[test]
+    fn ai_personality_map_matches_ea_batch() {
+        assert_ea_fixture("ai-personality-map", 1);
+    }
+
+    #[test]
     fn video_event_fades_match_ea_batch() {
         assert_ea_fixture("video-event-fades", 2);
     }
