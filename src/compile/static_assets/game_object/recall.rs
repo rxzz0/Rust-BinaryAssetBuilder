@@ -92,6 +92,13 @@ const MOVEMENT_FIELDS: &[(&str, u32, usize)] = &[
 ];
 
 const OCL_POWER: u32 = 0x8999_c6a4;
+const CREATE_AND_ENTER: u32 = 0x38c4_96d8;
+const FX_OFFSET: &str = "FXOffset";
+const BASE_FILTERS: [(&str, usize); 3] = [
+    ("AttributeModifierAffects", 0x60),
+    ("RequirementsFilterMP", 0xd0),
+    ("RequirementsFilterStrategic", 0x140),
+];
 const OCL_FIELDS: &[(&str, u32, usize)] = &[
     ("OCL", 0x42e4_e9d1, 0x1c4),
     ("CreateLocation", 0xe5c0_9280, 0x1c8),
@@ -145,6 +152,7 @@ pub(super) fn encode(
     let variant = variant_layout(name);
     let (kind, size, derived) = match name {
         "OCLSpecialPower" => (OCL_POWER, 0x1f4, OCL_FIELDS),
+        "CreateAndEnterObjectSpecialPower" => (CREATE_AND_ENTER, 0x1f8, OCL_FIELDS),
         "StoreObjectsSpecialPower" => (0xa74a_234c, 0x1d4, STORE_FIELDS),
         "TeleportStoredObjectsSpecialPower" => (0x318d_c4d6, 0x1d0, TELEPORT_FIELDS),
         "RecallUnitsSpecialPower" => (KIND, 0x1cc, RECALL_FIELDS),
@@ -234,7 +242,7 @@ pub(super) fn encode(
             _ => {}
         }
     }
-    if kind == OCL_POWER {
+    if matches!(kind, OCL_POWER | CREATE_AND_ENTER) {
         if let Some(value) = node.attribute("CreateLocation") {
             static LOCATIONS: OnceLock<Vec<String>> = OnceLock::new();
             let locations = LOCATIONS.get_or_init(|| {
@@ -376,6 +384,40 @@ pub(super) fn encode(
         data.word(start + offset, word);
     }
 
+    let mut ocl_references = Vec::new();
+    let mut ocl_reference_types = Vec::new();
+    let (ocl, fx_offset) = if matches!(kind, OCL_POWER | CREATE_AND_ENTER) {
+        let offset = if kind == CREATE_AND_ENTER {
+            let child =
+                significant_children(node).find(|child| child.has_tag_name((SAGE_NS, FX_OFFSET)));
+            Some(super::behaviors_basic::optional_vector(
+                child,
+                start + 0x1f4,
+                data,
+            )?)
+        } else {
+            None
+        };
+        let mut derived_children = significant_children(node)
+            .skip_while(is_power_base_child)
+            .peekable();
+        let ocl = ocl_children(
+            &mut derived_children,
+            start,
+            data,
+            &mut ocl_references,
+            &mut ocl_reference_types,
+        )?;
+        if kind == CREATE_AND_ENTER {
+            derived_children.next_if(|child| child.has_tag_name((SAGE_NS, FX_OFFSET)));
+        }
+        if derived_children.next().is_some() {
+            return Err(invalid(path, format!("unexpected {name} child")));
+        }
+        (Some(ocl), offset)
+    } else {
+        (None, None)
+    };
     let mut strings = Some(string_list(
         node.attribute("RequirementsFilterMPSkirmish").unwrap_or(""),
         start + 0x20,
@@ -395,11 +437,7 @@ pub(super) fn encode(
         Entry::named(name, kind, target)
     }));
     let mut children = significant_children(node).peekable();
-    for (name, offset) in [
-        ("AttributeModifierAffects", 0x60),
-        ("RequirementsFilterMP", 0xd0),
-        ("RequirementsFilterStrategic", 0x140),
-    ] {
+    for (name, offset) in BASE_FILTERS {
         power.push(Entry::named(
             name,
             0xe46e_a3b2,
@@ -427,8 +465,12 @@ pub(super) fn encode(
     if let Some((name, _)) = variant_filter(node.tag_name().name()) {
         children.next_if(|child| child.has_tag_name((SAGE_NS, name)));
     }
+    if ocl.is_some() && children.peek().is_some_and(is_power_base_child) {
+        return Err(invalid(path, format!("unexpected {name} child")));
+    }
     if derived_list.is_none()
-        && !matches!(kind, OCL_POWER | PLAYER_UPGRADE | ACTIVATE_MODULE)
+        && ocl.is_none()
+        && !matches!(kind, PLAYER_UPGRADE | ACTIVATE_MODULE)
         && let Some(child) = children.next()
     {
         return Err(invalid(
@@ -490,14 +532,21 @@ pub(super) fn encode(
         )?);
         return Ok((kind, Table::record(entries)));
     }
-    if kind == OCL_POWER {
-        entries.extend(ocl_children(
-            &mut children,
-            start,
-            data,
-            references,
-            reference_types,
-        )?);
+    if let Some((ocl_entries, reference_offsets)) = ocl {
+        // EA lays out OCL lists before inherited children and orders their references after them.
+        let ordinal_start = references.len();
+        for (index, offset) in reference_offsets.into_iter().enumerate() {
+            data.word(offset, (ordinal_start + index + 1) as u32);
+        }
+        references.extend(ocl_references);
+        reference_types.extend(ocl_reference_types);
+        entries.extend(ocl_entries);
+    }
+    if let Some(offset) = fx_offset {
+        entries = vec![
+            base(OCL_POWER, Table::record(entries)),
+            Entry::named(FX_OFFSET, 0x2936_8077, offset),
+        ];
     }
     Ok((kind, Table::record(entries)))
 }
@@ -547,13 +596,20 @@ fn movement_fields(
     Ok(entries)
 }
 
+fn is_power_base_child(child: &Node<'_, '_>) -> bool {
+    child.has_tag_name((SAGE_NS, "InitiateSound"))
+        || BASE_FILTERS
+            .iter()
+            .any(|&(name, _)| child.has_tag_name((SAGE_NS, name)))
+}
+
 fn ocl_children<'a, 'input: 'a>(
     children: &mut std::iter::Peekable<impl Iterator<Item = Node<'a, 'input>>>,
     start: usize,
     data: &mut BinaryData<'_>,
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
-) -> io::Result<[Entry; 3]> {
+) -> io::Result<([Entry; 3], Vec<usize>)> {
     let path = data.path;
     let mut pairs = Vec::new();
     while let Some(child) = children.next_if(|node| node.has_tag_name((SAGE_NS, "UpgradeOCL"))) {
@@ -571,12 +627,15 @@ fn ocl_children<'a, 'input: 'a>(
     }
     let pair_count = start + 0x1dc;
     let first = data.list(pair_count, pairs.len(), 4)?;
+    let mut reference_offsets = Vec::new();
     let pair_items: Vec<_> = pairs
         .into_iter()
         .enumerate()
         .map(|(index, ordinal)| {
             let offset = first + index * 4;
-            data.word(offset, ordinal);
+            if ordinal != 0 {
+                reference_offsets.push(offset);
+            }
             (
                 0,
                 Target::Table(Table::record(vec![Entry::named(
@@ -600,10 +659,8 @@ fn ocl_children<'a, 'input: 'a>(
         Target::Null
     };
     let mut upgrades = Vec::new();
-    for child in children {
-        if !child.has_tag_name((SAGE_NS, "Upgrade"))
-            || child.children().any(|node| node.is_element())
-        {
+    while let Some(child) = children.next_if(|node| node.has_tag_name((SAGE_NS, "Upgrade"))) {
+        if child.children().any(|node| node.is_element()) {
             return Err(invalid(path, "unexpected OCLSpecialPower child"));
         }
         validate_attributes(child, &[], path)?;
@@ -627,23 +684,28 @@ fn ocl_children<'a, 'input: 'a>(
         .enumerate()
         .map(|(index, ordinal)| {
             let offset = first + index * 4;
-            data.word(offset, ordinal);
+            if ordinal != 0 {
+                reference_offsets.push(offset);
+            }
             (0, Target::Data(offset))
         })
         .collect();
-    Ok([
-        Entry::named(
-            "UpgradeOCL",
-            0xa8b8_56f2,
-            Target::Table(Table::array(pair_count, pair_items)),
-        ),
-        Entry::named(name, 0xe46e_a3b2, filter),
-        Entry::named(
-            "Upgrade",
-            0x4aba_1f29,
-            Target::Table(Table::array(upgrade_count, upgrade_items)),
-        ),
-    ])
+    Ok((
+        [
+            Entry::named(
+                "UpgradeOCL",
+                0xa8b8_56f2,
+                Target::Table(Table::array(pair_count, pair_items)),
+            ),
+            Entry::named(name, 0xe46e_a3b2, filter),
+            Entry::named(
+                "Upgrade",
+                0x4aba_1f29,
+                Target::Table(Table::array(upgrade_count, upgrade_items)),
+            ),
+        ],
+        reference_offsets,
+    ))
 }
 
 pub(super) fn empty_filter(start: usize) -> Table {

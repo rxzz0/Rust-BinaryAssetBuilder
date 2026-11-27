@@ -32,6 +32,21 @@ const DELAYED_WEAPON: u32 = 0x368f_2215;
 const RADAR_SCAN: u32 = 0xda2f_4ee5;
 const LEVEL_GRANT: u32 = 0x90f0_5519;
 const GIVE_OR_RESTORE: u32 = 0x0453_e648;
+const TELEPORT_ABILITY: u32 = 0x4e46_3b86;
+const TELEPORT_ABILITY_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("BusyDuration", 0x9986_69e8, 0xf0, "time", "0s"),
+    (
+        "DestinationWeapon",
+        0xd046_dd22,
+        0xf4,
+        "ref",
+        "WeaponTemplate",
+    ),
+    ("SourceWeapon", 0xd046_dd22, 0xf8, "ref", "WeaponTemplate"),
+    ("MaxDistance", 0x6458_64f3, 0xfc, "real", "0"),
+    ("HeightToTeleportTo", 0x6458_64f3, 0x100, "real", "0"),
+    ("FadeInTime", 0x9986_69e8, 0x104, "time", "0s"),
+];
 const LEVEL_GRANT_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
     ("Experience", 0x23e6_50b8, 0xf0, "int", "0"),
     ("RadiusEffect", 0x6458_64f3, 0xf4, "real", "0"),
@@ -336,6 +351,7 @@ pub(super) fn encode(
         "RadarScanMapSpecialAbilityUpdate" => (RADAR_SCAN, 0xf8, &[][..]),
         "LevelGrantSpecialPower" => (LEVEL_GRANT, 0x100, LEVEL_GRANT_FIELDS),
         "GiveOrRestoreUpgradeSpecialPower" => (GIVE_OR_RESTORE, 0xfc, GIVE_OR_RESTORE_FIELDS),
+        "TeleportSpecialAbilityUpdate" => (TELEPORT_ABILITY, 0x108, TELEPORT_ABILITY_FIELDS),
         "ToggleStatusSpecialAbilityUpdate" => (TOGGLE, 0xfc, TOGGLE_FIELDS),
         "ActivateModuleSpecialAbilityUpdate" => (ACTIVATE_MODULE, 0xf8, &[][..]),
         "SpecialAbilityUpdate" => (ABILITY, 0xf0, &[][..]),
@@ -627,6 +643,7 @@ pub(super) fn encode(
             | RECONSTITUTE
             | CLONE_STORED
             | GIVE_OR_RESTORE
+            | TELEPORT_ABILITY
             | OBJECT_STATUS
             | TELEPORT
             | TIBERIUM_THIEF

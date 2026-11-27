@@ -1,0 +1,29 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <ObjectFilterAsset id="GenericSpecialPowerObjectFilter"><Filter/></ObjectFilterAsset>
+  <SpecialPowerTemplate id="ProbeEnterPower" TargetType="NONE"/>
+  <WeaponTemplate id="ProbeTeleportSource"/>
+  <WeaponTemplate id="ProbeTeleportDestination"/>
+  <ObjectCreationList id="ProbeEnterOCL"/>
+  <ObjectCreationList id="ProbeEnterUpgradeOCL"/>
+  <UpgradeTemplate id="ProbeEnterUpgrade" Type="OBJECT"/>
+  <AudioEvent id="ProbeEnterSound"/>
+  <GameObject id="EnterTeleportDefaults">
+    <Behaviors>
+      <CreateAndEnterObjectSpecialPower id="Enter" SpecialPowerTemplate="ProbeEnterPower"/>
+      <TeleportSpecialAbilityUpdate id="Teleport"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="EnterTeleportCustom">
+    <Behaviors>
+      <CreateAndEnterObjectSpecialPower id="Enter" OCL="ProbeEnterOCL" SpecialPowerTemplate="ProbeEnterPower" CreateLocation="CREATE_AT_LOCATION" NumberToSpawn="4" RegisterObjectsWithSpecialAbilityUpdate="true">
+        <InitiateSound Sound="ProbeEnterSound"/>
+        <UpgradeOCL OCL="ProbeEnterUpgradeOCL"/>
+        <Upgrade>ProbeEnterUpgrade</Upgrade>
+        <FXOffset x="1.25" y="-2.75" z="6.5"/>
+      </CreateAndEnterObjectSpecialPower>
+      <TeleportSpecialAbilityUpdate id="Teleport" SourceWeapon="ProbeTeleportSource" DestinationWeapon="ProbeTeleportDestination" BusyDuration="2.5s" MaxDistance="150.25" HeightToTeleportTo="5.5" FadeInTime="1.5s"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

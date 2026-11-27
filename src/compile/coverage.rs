@@ -242,6 +242,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "TemporaryOwnerSpecialPower",
             "GrantUpgradeAreaOfEffectSpecialPower",
             "SpecialPowerDispatchSpecialPower",
+            "CreateAndEnterObjectSpecialPower",
             "FindCoverBehavior",
             "GatherSlavesUpdate",
             "CostModifierUpgrade",
@@ -286,6 +287,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "RadarScanMapSpecialAbilityUpdate",
             "LevelGrantSpecialPower",
             "GiveOrRestoreUpgradeSpecialPower",
+            "TeleportSpecialAbilityUpdate",
             "OCLMonitorSpecialAbilityUpdate",
             "SwitchLocomotorsSpecialAbilityUpdate",
             "RestrictSpecialPowerBehavior",
@@ -1114,6 +1116,11 @@ mod tests {
     #[test]
     fn upgrade_dispatch_variants_match_ea_batch() {
         assert_ea_fixture("upgrade-dispatch-variants", 9);
+    }
+
+    #[test]
+    fn enter_teleport_variants_match_ea_batch() {
+        assert_ea_fixture("enter-teleport-variants", 10);
     }
 
     #[test]

@@ -305,6 +305,8 @@ pub(in crate::compile::static_assets) fn compile(
                     "GiveOrRestoreUpgradeSpecialPower" => &[0xf4],
                     "GrantUpgradeAreaOfEffectSpecialPower" => &[0x1c8, 0x1d0],
                     "SpecialPowerDispatchSpecialPower" => &[0x1c8],
+                    "OCLSpecialPower" => &[0x1e0, 0x1e4, 0x1ec],
+                    "CreateAndEnterObjectSpecialPower" => &[0x1f4, 0x1e0, 0x1e4, 0x1ec],
                     "DominateEnemySpecialPower" => &[super::dominate_enemy::FILTER_POINTER as u32],
                     "BeamSpecialAbilityUpdate" => &[0xf8, 0x108],
                     "RadarFreezeSpecialPower" | "RadarSpySpecialPower" => &[0x1c8],
@@ -537,8 +539,8 @@ pub(in crate::compile::static_assets) fn compile(
         if index > 0 {
             let (start, offsets) = early_module_fields[index - 1];
             let offset = pointer - start;
-            if offsets.contains(&offset) {
-                return (start, offset);
+            if let Some(rank) = offsets.iter().position(|&field| field == offset) {
+                return (start, rank as u32);
             }
         }
         // EA emits the inherited status pointers after the two upgrade lists.
