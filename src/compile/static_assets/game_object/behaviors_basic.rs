@@ -2219,6 +2219,10 @@ pub(super) fn encode(
         return super::squeeze_fling::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "AutoAbility")) {
+        return super::auto_ability::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
     if node.tag_name().namespace() == Some(SAGE_NS)
         && matches!(node.tag_name().name(), "BezierProjectile" | "MissileUpdate")
     {
@@ -2282,6 +2286,7 @@ pub(super) fn encode(
             | "LevelGrantSpecialPower"
             | "GiveOrRestoreUpgradeSpecialPower"
             | "TeleportSpecialAbilityUpdate"
+            | "ReplaceObjectUpdate"
             | "OCLMonitorSpecialAbilityUpdate"
             | "SwitchLocomotorsSpecialAbilityUpdate"
             | "BeamSpecialAbilityUpdate"

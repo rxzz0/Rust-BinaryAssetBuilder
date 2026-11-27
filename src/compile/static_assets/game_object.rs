@@ -6,6 +6,7 @@ mod attack_assist;
 mod auto_deposit;
 mod behaviors_basic;
 pub(super) use behaviors_basic::optional_vector;
+mod auto_ability;
 mod bezier_projectile;
 mod building_destruction;
 mod capture_upgrade;

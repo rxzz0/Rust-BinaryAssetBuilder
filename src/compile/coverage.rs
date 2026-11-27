@@ -136,6 +136,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "StoreTemplateIDBehavior",
             "BezierProjectile",
             "MissileUpdate",
+            "AutoAbility",
             "LineSegmentDamageUpdate",
             "LinearDamageUpdate",
             "LifetimeUpdate",
@@ -288,6 +289,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "LevelGrantSpecialPower",
             "GiveOrRestoreUpgradeSpecialPower",
             "TeleportSpecialAbilityUpdate",
+            "ReplaceObjectUpdate",
             "OCLMonitorSpecialAbilityUpdate",
             "SwitchLocomotorsSpecialAbilityUpdate",
             "RestrictSpecialPowerBehavior",
@@ -1121,6 +1123,11 @@ mod tests {
     #[test]
     fn enter_teleport_variants_match_ea_batch() {
         assert_ea_fixture("enter-teleport-variants", 10);
+    }
+
+    #[test]
+    fn replace_auto_variants_match_ea_batch() {
+        assert_ea_fixture("replace-auto-variants", 4);
     }
 
     #[test]

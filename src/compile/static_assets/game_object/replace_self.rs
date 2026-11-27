@@ -33,6 +33,12 @@ const RADAR_SCAN: u32 = 0xda2f_4ee5;
 const LEVEL_GRANT: u32 = 0x90f0_5519;
 const GIVE_OR_RESTORE: u32 = 0x0453_e648;
 const TELEPORT_ABILITY: u32 = 0x4e46_3b86;
+const REPLACE_OBJECT: u32 = 0x55f9_e6ed;
+const REPLACE_OBJECT_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("ReplaceRadius", 0x6458_64f3, 0xf0, "real", "0"),
+    ("ReplaceFX", 0x0d1c_8e83, 0xf4, "ref", "FXList"),
+    ("Scatter", 0x77e3_f4f7, 0x100, "bool", "false"),
+];
 const TELEPORT_ABILITY_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
     ("BusyDuration", 0x9986_69e8, 0xf0, "time", "0s"),
     (
@@ -352,6 +358,7 @@ pub(super) fn encode(
         "LevelGrantSpecialPower" => (LEVEL_GRANT, 0x100, LEVEL_GRANT_FIELDS),
         "GiveOrRestoreUpgradeSpecialPower" => (GIVE_OR_RESTORE, 0xfc, GIVE_OR_RESTORE_FIELDS),
         "TeleportSpecialAbilityUpdate" => (TELEPORT_ABILITY, 0x108, TELEPORT_ABILITY_FIELDS),
+        "ReplaceObjectUpdate" => (REPLACE_OBJECT, 0x104, REPLACE_OBJECT_FIELDS),
         "ToggleStatusSpecialAbilityUpdate" => (TOGGLE, 0xfc, TOGGLE_FIELDS),
         "ActivateModuleSpecialAbilityUpdate" => (ACTIVATE_MODULE, 0xf8, &[][..]),
         "SpecialAbilityUpdate" => (ABILITY, 0xf0, &[][..]),
@@ -458,6 +465,9 @@ pub(super) fn encode(
         .transpose()?;
     let assemble = (kind == ASSEMBLE)
         .then(|| assembly_templates(children.by_ref(), start + 0xf8, data, reference_types))
+        .transpose()?;
+    let replacement_nuggets = (kind == REPLACE_OBJECT)
+        .then(|| replacement_nuggets(children.by_ref(), start + 0xf8, data, reference_types))
         .transpose()?;
     let acceptance = (kind == LEVEL_GRANT)
         .then(|| {
@@ -593,6 +603,7 @@ pub(super) fn encode(
         .or(assemble)
         .or(radar_filters)
         .or(acceptance)
+        .or(replacement_nuggets)
     {
         entries.push(derived_child);
         return Ok((kind, Table::record(entries)));
@@ -726,6 +737,70 @@ fn radar_scan_filters<'a, 'input: 'a>(
     Ok(Entry::named(
         NAME,
         0x6949_a978,
+        Target::Table(Table::array(count, items)),
+    ))
+}
+
+fn replacement_nuggets<'a, 'input: 'a>(
+    children: impl Iterator<Item = Node<'a, 'input>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Entry> {
+    const NAME: &str = "ReplaceObjectNugget";
+    let nuggets: Vec<_> = children.collect();
+    let path = data.path;
+    if nuggets.len() > 128 {
+        return Err(invalid(
+            path,
+            format!("ReplaceObjectUpdate allows up to 128 {NAME} elements"),
+        ));
+    }
+    let first = data.list(count, nuggets.len(), 12)?;
+    let mut items = Vec::with_capacity(nuggets.len());
+    for (index, nugget) in nuggets.into_iter().enumerate() {
+        if !nugget.has_tag_name((SAGE_NS, NAME)) {
+            return Err(invalid(path, format!("expected {NAME}")));
+        }
+        validate_attributes(nugget, &[], path)?;
+        let start = first + index * 12;
+        let mut children = significant_children(nugget).peekable();
+        let filter = if let Some(child) =
+            children.next_if(|child| child.has_tag_name((SAGE_NS, "TargetObjectFilter")))
+        {
+            Target::Table(super::parking::encode_filter(
+                child,
+                start,
+                data,
+                reference_types,
+            )?)
+        } else {
+            Target::Null
+        };
+        let ids = children
+            .map(|child| {
+                if !child.has_tag_name((SAGE_NS, "ReplacementObject")) {
+                    return Err(invalid(path, "expected ReplacementObject"));
+                }
+                weak_reference(child, "GameObject", data, reference_types)
+            })
+            .collect::<io::Result<Vec<_>>>()?;
+        let replacements = id_list(data, start + 4, ids)?;
+        items.push((
+            0,
+            Target::Table(Table::record(vec![
+                Entry::named("TargetObjectFilter", 0xe46e_a3b2, filter),
+                Entry::named(
+                    "ReplacementObject",
+                    0x148e_d75d,
+                    Target::Table(replacements),
+                ),
+            ])),
+        ));
+    }
+    Ok(Entry::named(
+        NAME,
+        0xafe0_3e73,
         Target::Table(Table::array(count, items)),
     ))
 }

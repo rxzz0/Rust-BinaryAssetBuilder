@@ -1,0 +1,29 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <FXList id="ProbeReplaceFX"><NuggetList/></FXList>
+  <SpecialPowerTemplate id="ProbeAutoAbility" TargetType="NONE"/>
+  <GameObject id="ReplaceAutoDefaults">
+    <Behaviors>
+      <AutoAbility id="Auto"/>
+      <ReplaceObjectUpdate id="Replace"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="ReplaceAutoCustom">
+    <Behaviors>
+      <AutoAbility id="Auto" SpecialAbilityName="ProbeAutoAbility" MaxScanRange="135.5" MinScanRange="30.25" Radius="18.75" IdleSeconds="2.5s" ForbiddenStatus="SOLD CAN_ATTACK" StartsActive="true" AllowSelf="true">
+        <Queries/>
+        <Queries EMax="3" Value="-4"><ObjectFilter Rule="ANY" Relationship="ENEMIES"><IncludeThing>ReplaceAutoDefaults</IncludeThing></ObjectFilter></Queries>
+      </AutoAbility>
+      <ReplaceObjectUpdate id="Replace" ReplaceFX="ProbeReplaceFX" ReplaceRadius="22.5" Scatter="true">
+        <CustomAnimAndDuration AnimState="MOVING" Frames="12"/>
+        <ReplaceObjectNugget>
+          <TargetObjectFilter Rule="ANY" Include="INFANTRY"><IncludeThing>ReplaceAutoDefaults</IncludeThing></TargetObjectFilter>
+          <ReplacementObject>ReplaceAutoCustom</ReplacementObject>
+          <ReplacementObject>ReplaceAutoDefaults</ReplacementObject>
+        </ReplaceObjectNugget>
+        <ReplaceObjectNugget><ReplacementObject>ReplaceAutoDefaults</ReplacementObject></ReplaceObjectNugget>
+      </ReplaceObjectUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
