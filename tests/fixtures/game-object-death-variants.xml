@@ -1,0 +1,26 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UpgradeTemplate id="DeathVariantUpgrade" Type="OBJECT" />
+  <GameObject id="DeathVariantDefaults">
+    <Behaviors>
+      <KeepObjectDie id="Keep"><DieMuxData /></KeepObjectDie>
+      <UpgradeDie id="Upgrade"><DieMuxData /></UpgradeDie>
+      <RefundDie id="Refund"><DieMuxData /></RefundDie>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="DeathVariantCustom">
+    <Behaviors>
+      <KeepObjectDie id="Keep" CollapsingTime="2.5s" StayOnRadar="true">
+        <DieMuxData DeathTypes="NORMAL" />
+      </KeepObjectDie>
+      <UpgradeDie id="Upgrade" UpgradeId="DeathVariantUpgrade">
+        <DieMuxData RequiredStatus="SOLD" />
+      </UpgradeDie>
+      <RefundDie id="Refund" UpgradeRequired="DeathVariantUpgrade" BuildingRequired="FixtureBuilding SecondBuilding" RefundPercent="75%">
+        <DieMuxData VeterancyLevels="VETERAN ELITE" ExemptStatus="SOLD" DeathTypes="NORMAL" />
+        <ObjectFilter Rule="ANY" Include="INFANTRY"><IncludeThing>FixtureUnit</IncludeThing></ObjectFilter>
+      </RefundDie>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

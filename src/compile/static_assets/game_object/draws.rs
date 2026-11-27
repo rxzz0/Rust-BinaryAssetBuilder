@@ -12,6 +12,7 @@ use std::sync::OnceLock;
 
 const SCRIPTED_MODEL_DRAW: u32 = 0x4ecf_2a4b;
 const TRUCK_DRAW: u32 = 0xa44c_2999;
+const SPOTLIGHT_DRAW: u32 = 0x42d7_103d;
 const TANK_DRAW: u32 = 0x8a81_1d3e;
 const MODEL_STATE: u32 = 0x953c_f093;
 const STRING: u32 = 0x1a29_33aa;
@@ -38,6 +39,27 @@ pub(in crate::compile) const SCRIPTED_FLAGS: &[(&str, usize, bool)] = &[
     ("InvertStealthOpacity", 0xd4, false),
     ("HighDetailOnly", 0xd5, false),
 ];
+
+pub(in crate::compile) fn scripted_attributes() -> impl Iterator<Item = &'static str> {
+    [
+        "id",
+        "ExtraPublicBone",
+        "DependencySharedModelFlags",
+        "BirthFadeTime",
+        "MinLODRequired",
+        "ProjectileBoneFeedbackEnabledSlots",
+        "TrackMarks",
+        "WadingParticleSys",
+    ]
+    .into_iter()
+    .chain(SCRIPTED_FLAGS.iter().map(|&(name, _, _)| name))
+    .chain(
+        SCRIPTED_STRINGS
+            .into_iter()
+            .chain(SCRIPTED_REALS)
+            .map(|(name, _)| name),
+    )
+}
 
 fn scripted_flag(name: &'static str) -> (&'static str, u32, usize) {
     let &(_, offset, _) = SCRIPTED_FLAGS
@@ -90,7 +112,8 @@ pub(super) fn encode(
     for (index, node) in modules.into_iter().enumerate() {
         let pointer = pointers + index * 4;
         let (kind, module) = match node.tag_name().name() {
-            name @ ("ScriptedModelDraw" | "TruckDraw" | "TankDraw" | "DynamicsDraw")
+            name @ ("ScriptedModelDraw" | "TruckDraw" | "TankDraw" | "DynamicsDraw"
+            | "SpotlightDraw")
                 if node.has_tag_name((SAGE_NS, name)) =>
             {
                 (
@@ -443,6 +466,7 @@ fn scripted_layout(name: &str) -> (u32, usize) {
     match name {
         "TruckDraw" => (TRUCK_DRAW, 0x18c),
         "TankDraw" => (TANK_DRAW, 0xe4),
+        "SpotlightDraw" => (SPOTLIGHT_DRAW, 0xe0),
         "DynamicsDraw" => (dynamics::DRAW_KIND, dynamics::DRAW_SIZE),
         _ => (SCRIPTED_MODEL_DRAW, 0xd8),
     }
@@ -500,40 +524,28 @@ fn scripted_model(
     let truck = kind == TRUCK_DRAW;
     let tank = kind == TANK_DRAW;
     let dynamics = kind == dynamics::DRAW_KIND;
-    let allowed: Vec<_> = [
-        "id",
-        "ExtraPublicBone",
-        "DependencySharedModelFlags",
-        "BirthFadeTime",
-        "MinLODRequired",
-        "ProjectileBoneFeedbackEnabledSlots",
-        "TrackMarks",
-        "WadingParticleSys",
-    ]
-    .into_iter()
-    .chain(SCRIPTED_FLAGS.iter().map(|&(name, _, _)| name))
-    .chain(
-        SCRIPTED_STRINGS
-            .into_iter()
-            .chain(SCRIPTED_REALS)
-            .map(|(name, _)| name),
-    )
-    .chain(
-        TRUCK_FIELDS
-            .iter()
-            .filter(|_| truck)
-            .map(|&(name, _, _, _)| name),
-    )
-    .chain(
-        dynamics
-            .then_some(dynamics::DRAW_ATTRIBUTES)
-            .into_iter()
-            .flatten(),
-    )
-    .collect();
+    let spotlight = kind == SPOTLIGHT_DRAW;
+    let spotlight_fields = ["RefreshTime", "SweepTime"];
+    let allowed: Vec<_> = scripted_attributes()
+        .chain(spotlight_fields.into_iter().filter(|_| spotlight))
+        .chain(
+            TRUCK_FIELDS
+                .iter()
+                .filter(|_| truck)
+                .map(|&(name, _, _, _)| name),
+        )
+        .chain(
+            dynamics
+                .then_some(dynamics::DRAW_ATTRIBUTES)
+                .into_iter()
+                .flatten(),
+        )
+        .collect();
     validate_attributes(node, &allowed, data.path)?;
     let mut states = Vec::new();
     let mut animations = Vec::new();
+    let mut attachments = Vec::new();
+    let mut portals = Vec::new();
     let mut tread_particles = None;
     let mut tread_maps = Vec::new();
     let mut articulation_bones = Vec::new();
@@ -544,6 +556,10 @@ fn scripted_model(
             states.push(child);
         } else if child.has_tag_name((SAGE_NS, "AnimationState")) {
             animations.push(child);
+        } else if child.has_tag_name((SAGE_NS, "AttachModel")) {
+            attachments.push(child);
+        } else if child.has_tag_name((SAGE_NS, "EmbedPortal")) {
+            portals.push(child);
         } else if (truck || tank)
             && child.has_tag_name((SAGE_NS, "TreadTerrainParticles"))
             && tread_particles.is_none()
@@ -701,6 +717,8 @@ fn scripted_model(
     }
     let animation_table =
         super::animation::encode(animations, start + 0xac, data, references, reference_types)?;
+    let attachments = attach_models(attachments, start + 0xb4, data)?;
+    let portals = embed_portals(portals, start + 0xbc, data)?;
 
     let module = Table::record(vec![
         Entry::new(0x19b0_42a0, 0x23e6_50b8, Target::Data(start)),
@@ -771,11 +789,21 @@ fn scripted_model(
             0x99b3_42c4,
             Target::Table(animation_table),
         ),
-        array("AttachModel", 0xb4e5_23bf, start + 0xb4),
-        array("EmbedPortal", 0xafc5_e3e3, start + 0xbc),
+        Entry::named("AttachModel", 0xb4e5_23bf, Target::Table(attachments)),
+        Entry::named("EmbedPortal", 0xafc5_e3e3, Target::Table(portals)),
     ]);
     let table = Table::record(entries);
-    if let Some((mut entries, particle_offset)) = derived {
+    if spotlight {
+        let mut fields = vec![super::behaviors_basic::base(SCRIPTED_MODEL_DRAW, table)];
+        for (index, name) in spotlight_fields.into_iter().enumerate() {
+            let offset = start + 0xd8 + index * 4;
+            let value =
+                super::super::sage_time(node.attribute(name).unwrap_or("1s"), name, data.path)?;
+            data.word(offset, value.to_bits());
+            fields.push(Entry::named(name, 0x9986_69e8, Target::Data(offset)));
+        }
+        Ok(Table::record(fields))
+    } else if let Some((mut entries, particle_offset)) = derived {
         if !dynamics {
             let particles = if let Some((particles, offset)) = tread_particles.zip(particle_offset)
             {
@@ -811,6 +839,110 @@ const WEAPON_BONE_LISTS: [(&str, usize); 4] = [
     ("WeaponLaunchBone", 0x94),
 ];
 
+fn attach_models(
+    nodes: Vec<Node<'_, '_>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Table> {
+    const ITEM_SIZE: usize = 0x50;
+    let start = data.list(count, nodes.len(), ITEM_SIZE)?;
+    let mut items = Vec::with_capacity(nodes.len());
+    for (index, node) in nodes.into_iter().enumerate() {
+        validate_attributes(node, &["FlagMask", "Bone"], data.path)?;
+        let mut children = significant_children(node);
+        let model = required_element(&mut children, "Model", data.path)?;
+        if children.next().is_some() || has_content(model) {
+            return Err(invalid(data.path, "unexpected AttachModel content"));
+        }
+        validate_attributes(model, &["Object", "Probability"], data.path)?;
+
+        let offset = start + index * ITEM_SIZE;
+        if let Some(value) = node.attribute("FlagMask") {
+            write_model_conditions(value, offset, data)?;
+        }
+        if let Some(value) = node.attribute("Bone") {
+            data.string(offset + 0x3c, value)?;
+        }
+        if let Some(value) = model.attribute("Object") {
+            data.string(offset + 0x44, value)?;
+        }
+        let probability = super::super::sage_int(
+            model.attribute("Probability").unwrap_or("-1"),
+            "Probability",
+            data.path,
+        )?;
+        data.word(offset + 0x4c, probability);
+
+        let model_fields = Table::record(
+            fields(
+                offset,
+                &[
+                    ("Object", 0x805d_25f4, 0x44),
+                    ("Probability", 0x23e6_50b8, 0x4c),
+                ],
+            )
+            .collect(),
+        );
+        let mut entries: Vec<_> = fields(
+            offset,
+            &[("FlagMask", 0x67db_bfc9, 0), ("Bone", STRING, 0x3c)],
+        )
+        .collect();
+        entries.push(Entry::named(
+            "Model",
+            0x85e3_17bd,
+            Target::Table(model_fields),
+        ));
+        items.push((0, Target::Table(Table::record(entries))));
+    }
+    Ok(Table::array(count, items))
+}
+
+fn embed_portals(
+    nodes: Vec<Node<'_, '_>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Table> {
+    const PORTAL_TYPES: &[&str] = &[
+        "NORMAL",
+        "PORTAL",
+        "WALK_PORTAL",
+        "CLIMB_PORTAL",
+        "PRE_CLIMB_PORTAL",
+        "BEACON",
+        "SPLINE_CATMULL_ROM",
+        "FAKE_PATHFIND_PORTAL",
+        "MINESHAFT_PORTAL",
+    ];
+    const ITEM_SIZE: usize = 0x0c;
+    let start = data.list(count, nodes.len(), ITEM_SIZE)?;
+    let mut items = Vec::with_capacity(nodes.len());
+    for (index, node) in nodes.into_iter().enumerate() {
+        validate_attributes(node, &["PortalType", "BonePrefix"], data.path)?;
+        if has_content(node) {
+            return Err(invalid(data.path, "unexpected EmbedPortal content"));
+        }
+
+        let offset = start + index * ITEM_SIZE;
+        if let Some(value) = node.attribute("PortalType") {
+            let portal_type = PORTAL_TYPES
+                .iter()
+                .position(|&variant| variant == value.trim())
+                .ok_or_else(|| invalid(data.path, format!("invalid PortalType {value:?}")))?;
+            data.word(offset, portal_type as u32);
+        }
+        if let Some(value) = node.attribute("BonePrefix") {
+            data.string(offset + 4, value)?;
+        }
+        let entries = fields(
+            offset,
+            &[("PortalType", 0x7459_48b5, 0), ("BonePrefix", STRING, 4)],
+        );
+        items.push((0, Target::Table(Table::record(entries.collect()))));
+    }
+    Ok(Table::array(count, items))
+}
+
 fn model_state(
     node: Node<'_, '_>,
     start: usize,
@@ -823,9 +955,14 @@ fn model_state(
         node,
         &[
             "ParseCondStateType",
+            "Name",
             "ConditionsYes",
             "Skeleton",
+            "PortraitImage",
+            "ButtonImage",
+            "OverrideTooltip",
             "RetainSubObjects",
+            "id",
         ],
         data.path,
     )?;
@@ -845,14 +982,31 @@ fn model_state(
     if let Some(value) = node.attribute("ConditionsYes") {
         write_model_conditions(value, start + 0xc, data)?;
     }
-    if let Some(skeleton) = node.attribute("Skeleton") {
-        data.string(start + 0x48, skeleton)?;
+    for (name, offset) in [
+        ("Name", 0x04),
+        ("Skeleton", 0x48),
+        ("OverrideTooltip", 0x58),
+        ("id", 0x60),
+    ] {
+        if let Some(value) = node.attribute(name) {
+            data.string(start + offset, value)?;
+        }
+    }
+    for (name, offset) in [("PortraitImage", 0x50), ("ButtonImage", 0x54)] {
+        if let Some(value) = node.attribute(name).filter(|value| !value.is_empty()) {
+            let reference = asset_reference(value, "PackedTextureImage", data.path)?;
+            references.push(reference.into());
+            reference_types.push(reference.type_id);
+            data.word(start + offset, references.len() as u32);
+        }
     }
     let mut weapon_bones: [Vec<_>; 4] = std::array::from_fn(|_| Vec::new());
     let mut models = Vec::new();
     let mut material = None;
     let mut textures = Vec::new();
     let mut particles = Vec::new();
+    let mut fx_events = Vec::new();
+    let mut sub_objects = Vec::new();
     let mut turrets = Vec::new();
     let mut shadow = None;
     for child in significant_children(node) {
@@ -870,6 +1024,10 @@ fn model_state(
             weapon_bones[index].push(child);
         } else if child.has_tag_name((SAGE_NS, "ParticleSysBone")) {
             particles.push(child);
+        } else if child.has_tag_name((SAGE_NS, "FXEvent")) {
+            fx_events.push(child);
+        } else if child.has_tag_name((SAGE_NS, "SubObject")) {
+            sub_objects.push(child);
         } else if child.has_tag_name((SAGE_NS, "ShadowInfo")) && shadow.is_none() {
             shadow = Some(child);
         } else if child.has_tag_name((SAGE_NS, "Turret")) {
@@ -937,6 +1095,13 @@ fn model_state(
         references,
         reference_types,
     )?;
+    let fx = super::animation::encode_fx_events(
+        fx_events,
+        start + 0xa4,
+        data,
+        references,
+        reference_types,
+    )?;
     let shadow = match shadow {
         Some(node) => Target::Table(super::shadow::encode(
             node,
@@ -978,16 +1143,49 @@ fn model_state(
             0x98c5_3fe6,
             Target::Table(particle_table),
         ),
-        array("FXEvent", 0x7599_1ad3, start + 0xa4),
+        Entry::named("FXEvent", 0x7599_1ad3, Target::Table(fx)),
         Entry::named("ShadowInfo", 0x82fe_7e88, shadow),
         Entry::named(
             "Turret",
             0xf309_5903,
             Target::Table(encode_turrets(turrets, start + 0xb0, data)?),
         ),
-        array("SubObject", 0x03a2_8c40, start + 0xb8),
+        Entry::named(
+            "SubObject",
+            0x03a2_8c40,
+            Target::Table(encode_state_sub_objects(sub_objects, start + 0xb8, data)?),
+        ),
     ]);
     Ok(Table::record(entries))
+}
+
+fn encode_state_sub_objects(
+    nodes: Vec<Node<'_, '_>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Table> {
+    let start = data.list(count, nodes.len(), 4)?;
+    let mut items = Vec::with_capacity(nodes.len());
+    for (index, node) in nodes.into_iter().enumerate() {
+        validate_attributes(node, &[], data.path)?;
+        if node.children().any(|child| child.is_element()) {
+            return Err(invalid(
+                data.path,
+                "SubObject cannot contain child elements",
+            ));
+        }
+        let value: String = node
+            .children()
+            .filter_map(|child| child.is_text().then(|| child.text()).flatten())
+            .collect();
+        if value.is_empty() {
+            return Err(invalid(data.path, "SubObject is missing its identifier"));
+        }
+        let offset = start + index * 4;
+        data.word(offset, hash_name(&value));
+        items.push((0, Target::Data(offset)));
+    }
+    Ok(Table::array(count, items))
 }
 
 fn encode_turrets(
@@ -1097,10 +1295,6 @@ pub(super) fn fields<'a>(
     fields
         .iter()
         .map(move |&(name, kind, offset)| Entry::named(name, kind, Target::Data(start + offset)))
-}
-
-pub(super) fn array(name: &str, kind: u32, count: usize) -> Entry {
-    Entry::named(name, kind, Target::Table(Table::array(count, [])))
 }
 
 pub(super) fn boolean(

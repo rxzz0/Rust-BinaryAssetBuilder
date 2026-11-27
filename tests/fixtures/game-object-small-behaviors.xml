@@ -1,0 +1,20 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AttributeModifier id="CoverModifier" />
+  <GameObject id="GatherSlave"><Body><ImmortalBody id="Body" MaxHealth="1" /></Body></GameObject>
+  <GameObject id="SmallBehaviorDefaults">
+    <Behaviors>
+      <DistributedMoney id="Money" />
+      <FindCoverBehavior id="Cover" AttributeModifierInCover="CoverModifier" CoverScanRange="0" />
+      <GatherSlavesUpdate id="Gather" />
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="SmallBehaviorCustom">
+    <Behaviors>
+      <DistributedMoney id="Money" Capacity="27" OnDieSpawnPercentage="75%" RedistributeMoneyOnDeathType="NORMAL" />
+      <FindCoverBehavior id="Cover" AttributeModifierInCover="CoverModifier" CoverScanRange="180.5" />
+      <GatherSlavesUpdate id="Gather" SlaveTemplate="GatherSlave" Radius="125.25" Amount="7" />
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

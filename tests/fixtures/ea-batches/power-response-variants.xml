@@ -1,0 +1,22 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <SpecialPowerTemplate id="ResponseProbePower" TargetType="NONE"/>
+  <GameObject id="PowerResponseDefaults">
+    <Behaviors>
+      <RestrictSpecialPowerBehavior id="Restrict"><DependentObjectRadius>0</DependentObjectRadius></RestrictSpecialPowerBehavior>
+      <AreaRestrictSpecialPowerBehavior id="Area"/>
+      <SpecialPowerAssistResponseBehavior id="Assist"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="PowerResponseCustom">
+    <Behaviors>
+      <RestrictSpecialPowerBehavior id="Restrict" RestrictionType="2" DependentObject="PowerResponseDefaults" ConsiderSpecialPowerRadius="false">
+        <DependentObjectRadius>5.5</DependentObjectRadius>
+        <DependentObjectRadius>12.25</DependentObjectRadius>
+      </RestrictSpecialPowerBehavior>
+      <AreaRestrictSpecialPowerBehavior id="Area" RestrictionType="1" AreaName="ProbeArea"/>
+      <SpecialPowerAssistResponseBehavior id="Assist" SpecialPowerTemplate="ResponseProbePower" ObjectStatus="UNATTACKABLE"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

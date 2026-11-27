@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="InactiveProbe"><Body><InactiveBody id="ModuleTag_Body" /></Body></GameObject>
+  <GameObject id="ShieldDefault"><Behaviors><ShieldBodyUpdate id="ModuleTag_Shield" /></Behaviors><Body><ShieldBody id="ModuleTag_Body" MaxHealth="2000" /></Body></GameObject>
+  <GameObject id="ShieldExplicit"><Body><ShieldBody id="ModuleTag_Body" MaxHealth="2000" ShieldTakeDamageFX="ProbeFX" ShieldArmor="ProbeArmor" ShieldRechargeEndFX="ProbeFX" ShieldEnabledFX="ProbeFX" ShieldDepleteFX="ProbeFX" ShieldAmount="150" ShieldRechargeIdleTime="5s" ShieldActiveModelCondition="DAMAGED" /></Body></GameObject>
+  <FXList id="ProbeFX"><NuggetList /></FXList>
+  <ArmorTemplate id="ProbeArmor" />
+</AssetDeclaration>

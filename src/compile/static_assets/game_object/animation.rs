@@ -4,7 +4,7 @@ use super::super::{
     AssetReference, asset_reference, finite_number, sage_time, significant_children,
     validate_attributes,
 };
-use super::draws::{array, boolean, fields, write_model_conditions};
+use super::draws::{boolean, fields, write_model_conditions};
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
@@ -48,6 +48,21 @@ pub(super) fn encode_particles(
         reference_types,
     }
     .particles(nodes, count)
+}
+
+pub(super) fn encode_fx_events(
+    nodes: Vec<Node<'_, '_>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Table> {
+    AnimationEncoder {
+        data,
+        references,
+        reference_types,
+    }
+    .fx_events(nodes, count)
 }
 
 struct AnimationEncoder<'a, 'path> {
@@ -132,6 +147,7 @@ impl AnimationEncoder<'_, '_> {
         let mut animations = Vec::new();
         let mut particles = Vec::new();
         let mut fx_events = Vec::new();
+        let mut lua_events = Vec::new();
         let mut script = None;
         for child in significant_children(node) {
             if child.has_tag_name((SAGE_NS, "Animation")) {
@@ -140,6 +156,8 @@ impl AnimationEncoder<'_, '_> {
                 particles.push(child);
             } else if child.has_tag_name((SAGE_NS, "FXEvent")) {
                 fx_events.push(child);
+            } else if child.has_tag_name((SAGE_NS, "LuaEvent")) {
+                lua_events.push(child);
             } else if child.has_tag_name((SAGE_NS, "Script")) && script.is_none() {
                 script = Some(child);
             } else {
@@ -177,6 +195,7 @@ impl AnimationEncoder<'_, '_> {
             Target::Null
         };
         let fx = self.fx_events(fx_events, start + 0x70)?;
+        let lua = self.lua_events(lua_events, start + 0x78)?;
         let particle_table = self.particles(particles, start + 0x80)?;
         let mut entries: Vec<_> = fields(start, FIELDS).collect();
         entries.extend([
@@ -187,7 +206,7 @@ impl AnimationEncoder<'_, '_> {
             ),
             Entry::named("Script", 0x1847_c490, script),
             Entry::named("FXEvent", 0x7599_1ad3, Target::Table(fx)),
-            array("LuaEvent", 0xda05_eb72, start + 0x78),
+            Entry::named("LuaEvent", 0xda05_eb72, Target::Table(lua)),
             Entry::named(
                 "ParticleSysBone",
                 0x98c5_3fe6,
@@ -223,6 +242,42 @@ impl AnimationEncoder<'_, '_> {
             if let Some(bone) = node.attribute("Bone") {
                 self.data.string(start + 0x10, bone)?;
             }
+            items.push((
+                0,
+                Target::Table(Table::record(fields(start, FIELDS).collect())),
+            ));
+        }
+        Ok(Table::array(count, items))
+    }
+
+    fn lua_events(&mut self, events: Vec<Node<'_, '_>>, count: usize) -> io::Result<Table> {
+        const FIELDS: &[(&str, u32, usize)] = &[
+            ("Frame", INT, 0),
+            ("Data", STRING, 4),
+            ("Trigger", 0xc155_8278, 12),
+        ];
+        let path = self.data.path;
+        let first = self.data.list(count, events.len(), 16)?;
+        let mut items = Vec::with_capacity(events.len());
+        for (index, node) in events.into_iter().enumerate() {
+            check_attributes(node, FIELDS, path)?;
+            if has_content(node) {
+                return Err(invalid(path, "LuaEvent cannot contain content"));
+            }
+            let start = first + index * 16;
+            self.integer(node, "Frame", "0", start)?;
+            self.string(node, "Data", start + 4)?;
+            let trigger = enum_value(
+                node.attribute("Trigger").unwrap_or("TRIGGER_ONFRAME"),
+                &[
+                    "TRIGGER_ONFRAME",
+                    "TRIGGER_ONSTATEENTER",
+                    "TRIGGER_ONSTATELEAVE",
+                ],
+                "LuaEvent Trigger",
+                path,
+            )?;
+            self.data.word(start + 12, trigger);
             items.push((
                 0,
                 Target::Table(Table::record(fields(start, FIELDS).collect())),

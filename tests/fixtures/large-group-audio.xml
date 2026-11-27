@@ -1,0 +1,9 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <LargeGroupAudioMap id="DefaultCrowd" StartThreshold="8" StopThreshold="4">
+    <Sound Sound="CrowdSelect"><Key>Run</Key></Sound>
+  </LargeGroupAudioMap>
+  <LargeGroupAudioMap id="CustomCrowd" StartThreshold="21" StopThreshold="11" Size="187" HandOffModeTime="2s" MaximumAudioSpeed="37" IgnoreStealthedUnits="false" RequiredModelConditionFlags="SOLD" ExcludedModelConditionFlags="MOVING" RequiredObjectStatusBits="SOLD" ExcludedObjectStatusBits="UNDER_CONSTRUCTION">
+    <Sound Name="Runner" Sound="CrowdSelect"><Key>run</Key><Key>Walk</Key><Duck AudioMap="DefaultCrowd" SoundRef="Runner" VolumeMultiplier="35%" /></Sound>
+    <Sound Name="Walker" Sound="CrowdOk"><Key>Idle</Key><Duck AudioMap="CustomCrowd" SoundRef="Walker" VolumeMultiplier="75%" /></Sound>
+  </LargeGroupAudioMap>
+</AssetDeclaration>

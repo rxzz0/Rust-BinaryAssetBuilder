@@ -4,6 +4,7 @@ use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
 use std::path::Path;
+use std::sync::OnceLock;
 
 pub(super) fn engaging_content(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     let names = ["TitleId", "DescId", "ImageId"];
@@ -117,14 +118,24 @@ pub(super) fn tutorial_map_data(node: Node<'_, '_>, path: &Path) -> io::Result<M
 enum UiCodec {
     Text,
     Boolean,
+    Byte,
+    UnsignedShort,
     Unsigned,
     Signed,
     Real,
+    Time,
+    Velocity,
     Hash,
+    Poid,
+    ModelConditionPointer,
+    ObjectStatusPointer,
     KindOf,
     Percentage,
     Faction,
     Enum(&'static [&'static str]),
+    EnumWithInvalid(&'static [&'static str]),
+    EnumPointer(&'static [&'static str]),
+    EnumValue(&'static [(&'static str, u32)]),
     Weak(&'static str),
     WeakPointer(&'static str),
     Strong(&'static str),
@@ -157,6 +168,159 @@ macro_rules! ui_field {
             codec: $codec,
         }
     };
+}
+
+pub(super) fn simple_button_type_hash(name: &str) -> Option<u32> {
+    Some(match name.strip_prefix("UIMouseTactical")? {
+        "AttackMoveButton" => 0x5656_3ed8,
+        "CoOpAIButtonsAssaultButton" => 0xe640_a7f2,
+        "CoOpAIButtonsHelpButton" => 0xbc5a_9f70,
+        "CoOpAIButtonsHoldObjectButton" => 0x3432_f9f7,
+        "CoOpAIButtonsHoldPositionButton" => 0x7390_ffc7,
+        "CoOpAIButtonsNormalButton" => 0x11f9_6319,
+        "DeactivateMissionHotSpotsButton" => 0xeaa8_3cd0,
+        "FastForwardButton" => 0xba95_a6f2,
+        "ForceAttackButton" => 0x089a_2d65,
+        "ForceAttackMoveButton" => 0xf9dd_687d,
+        "ForceMoveButton" => 0x99e2_501f,
+        "OpenAdvancedCommandsButton" => 0x8d93_4671,
+        "PauseButton" => 0x3c06_fac3,
+        "PlanningModeButton" => 0xee0d_a44f,
+        "ReverseMoveButton" => 0x6f0d_7455,
+        "SelectionRefinementTab" => 0xf154_81f9,
+        "SellModeButton" => 0xb2d8_1257,
+        "StopButton" => 0xe76f_f3ab,
+        "ThreatMeter" => 0x1c30_f868,
+        "ToggleRepairModeButton" => 0x8752_45f7,
+        "UnitIntroButton" => 0xf0b7_2ba3,
+        "WaypointModeButton" => 0xad5f_905f,
+        _ => return None,
+    })
+}
+
+pub(super) fn ui_display(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    let name = node.tag_name().name();
+    let layout_name = if simple_button_type_hash(name).is_some() {
+        "UIMouseSimpleFixedButton"
+    } else {
+        name
+    };
+    let layout = require_ui_layout(layout_name, path)?;
+    let mut data = BinaryData {
+        payload: vec![0; layout.size],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    write_ui_layout(node, name, layout, 0, &mut data, &mut result)?;
+    if matches!(
+        name,
+        "UIMouseVoiceChat" | "UIMouseTacticalQuickChatDisplay" | "CrowdResponse"
+    ) {
+        data.relocations.sort_unstable();
+    }
+    if matches!(name, "CrowdResponse" | "LargeGroupAudioMap") {
+        result.imports.sort_unstable();
+    }
+    Ok(data.finish(result))
+}
+
+pub(super) fn misc_reference_settings(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    const XML_SCHEMA: &str = "http://www.w3.org/2001/XMLSchema";
+    static AUDIO_FIELDS: OnceLock<Vec<(String, bool)>> = OnceLock::new();
+    static EVA_FIELDS: OnceLock<Vec<(String, bool)>> = OnceLock::new();
+
+    let name = node.tag_name().name();
+    let (fields, schema, reference_type, has_beacons) = if name == "MiscAudio" {
+        (
+            &AUDIO_FIELDS,
+            include_str!("../../../schemas/ra3/xsd/Includes/MiscAudio.xsd"),
+            "BaseAudioEventInfo",
+            false,
+        )
+    } else {
+        (
+            &EVA_FIELDS,
+            include_str!("../../../schemas/ra3/xsd/Includes/MiscEvaEvents.xsd"),
+            "EvaEvent",
+            true,
+        )
+    };
+    // EA stores these fixed reference tables in schema declaration order.
+    let fields = fields.get_or_init(|| {
+        let document = roxmltree::Document::parse(schema).expect("bundled reference schema");
+        document
+            .descendants()
+            .find(|node| {
+                node.has_tag_name((XML_SCHEMA, "complexType"))
+                    && node.attribute("name") == Some(name)
+            })
+            .and_then(|node| {
+                node.descendants()
+                    .find(|node| node.has_tag_name((XML_SCHEMA, "extension")))
+            })
+            .expect("bundled reference settings type")
+            .children()
+            .filter(|node| node.has_tag_name((XML_SCHEMA, "attribute")))
+            .map(|node| {
+                (
+                    node.attribute("name")
+                        .expect("bundled reference settings field name")
+                        .to_owned(),
+                    node.attribute("use") == Some("required"),
+                )
+            })
+            .collect()
+    });
+    let list_offset = 4 + fields.len() * 4;
+    let mut data = BinaryData {
+        payload: vec![0; list_offset + usize::from(has_beacons) * 8],
+        relocations: Vec::new(),
+        path,
+    };
+    let mut result = Marshaled::default();
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(fields.iter().map(|(name, _)| name.as_str()))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    for (name, mandatory) in fields {
+        if *mandatory {
+            required(node, name, path)?;
+        }
+    }
+    for attribute in node.attributes() {
+        if attribute.namespace().is_none()
+            && let Some(index) = fields.iter().position(|(name, _)| name == attribute.name())
+        {
+            write_ui_value(
+                UiCodec::Strong(reference_type),
+                attribute.value(),
+                4 + index * 4,
+                &mut data,
+                &mut result,
+            )?;
+        }
+    }
+    let children: Vec<_> = significant_children(node).collect();
+    if children
+        .iter()
+        .any(|child| !has_beacons || !child.has_tag_name((SAGE_NS, "AIBeaconTypeSettings")))
+    {
+        return Err(invalid(path, format!("unexpected {name} child")));
+    }
+    if !children.is_empty() {
+        let offset = data.list(list_offset, children.len(), 8)?;
+        for (index, child) in children.into_iter().enumerate() {
+            write_ui_child(
+                UiCodec::Inline("MiscEvaBeaconSettings"),
+                child,
+                offset + index * 8,
+                &mut data,
+                &mut result,
+            )?;
+        }
+    }
+    Ok(data.finish(result))
 }
 
 pub(super) fn ui_config_list(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
@@ -218,7 +382,7 @@ pub(super) fn ui_config_list(node: Node<'_, '_>, path: &Path) -> io::Result<Mars
 }
 
 fn require_ui_layout(name: &str, path: &Path) -> io::Result<UiLayout> {
-    ui_layout(name).ok_or_else(|| invalid(path, format!("unsupported UIConfigList type {name}")))
+    ui_layout(name).ok_or_else(|| invalid(path, format!("unsupported UI layout {name}")))
 }
 
 fn write_ui_layout(
@@ -229,7 +393,65 @@ fn write_ui_layout(
     data: &mut BinaryData<'_>,
     result: &mut Marshaled,
 ) -> io::Result<()> {
+    let is_asset = offset == 0;
+    let required_attributes: &[&str] = match name {
+        "UIMouseTacticalCommandCommunicateWithAllies" => &[
+            "PlaceUnattachedBeaconCursor",
+            "PlaceAttachedBeaconCursor",
+            "PingRadarCursor",
+        ],
+        "InfiltratorEffectSettings" => &["Effect"],
+        "AIBeaconSettings" => &["Type"],
+        "SellFactionCursorSet" => &["Faction"],
+        "HUDElementHotKeyMapping" => &["ElementId", "HotKeySlot"],
+        "UIQuickChatMessage" => &["MessageText"],
+        "MiscEvaBeaconSettings" => &["BeaconType"],
+        "IntelDBEntry" => &["CategoryId", "EntryId"],
+        "LargeGroupAudioMap" => &["StartThreshold", "StopThreshold"],
+        "SoundKeyPair" => &["Sound"],
+        "AudioDuckInfo" => &["AudioMap", "SoundRef", "VolumeMultiplier"],
+        "TerrainAssetRecord" => &["id", "Texture", "Class"],
+        "SiegeEvaEvent" => &["Seconds", "EvaEvent"],
+        "TechUpgradeBindingInfo" => &["TechDependency", "UpgradeToGrant"],
+        "CommandButtonFactionSettings" => &["Faction"],
+        "StanceButtonSettings" => &["Stance"],
+        "UIDecalCloud" => &[
+            "BuildTexture",
+            "DefenseTexture",
+            "SpecialPowerRestrictionTexture",
+        ],
+        "UIDecalGrid" => &["WallTexture"],
+        "DecalSettings" => &["ValidTexture", "InvalidTexture"],
+        "UIWorldBuilderDecalGrid" => &["Texture"],
+        "RadarSpecialIcon" => &["Image"],
+        "JoypadBuildButtonFactionSettings" => &["Faction", "LockedButtonStateData"],
+        "BuildQueueTypeSettings" => &["QueueType"],
+        "UIMouseTacticalQuickChatDisplay" => &["CloseKey"],
+        "QuickChatMenuItem" | "QuickChatCloseItem" => &["Title"],
+        "QuickChatMessageReference" => &["MessageRef"],
+        _ => &[],
+    };
+    for attribute in required_attributes {
+        required(node, attribute, data.path)?;
+    }
     match name {
+        "JoypadCommandBarTemplateButtonSlot" => {
+            required(node, "Ordinal", data.path)?;
+            required(node, "Button", data.path)?;
+        }
+        "InGameUISimpleHelpTemplate" => {
+            required(node, "Title", data.path)?;
+        }
+        "AudioArrayVoice" => {
+            return super::game_object::encode_inline_voice(
+                node,
+                offset,
+                data,
+                &mut result.references,
+                &mut result.reference_types,
+                &mut result.imports,
+            );
+        }
         "ObjectFilter" => {
             return super::game_object::encode_inline_object_filter(
                 node,
@@ -239,8 +461,13 @@ fn write_ui_layout(
             )
             .map(|_| ());
         }
-        "Color4" => {
-            data.word(offset, super::color4(node, data.path)?);
+        "Color3" | "Color4" => {
+            let color = if name == "Color3" {
+                super::color(node, &["B", "G", "R"], 255, data.path)?
+            } else {
+                super::color4(node, data.path)?
+            };
+            data.word(offset, color);
             return Ok(());
         }
         "Vector2" | "RGBColor" => {
@@ -262,6 +489,9 @@ fn write_ui_layout(
 
     for attribute in node.attributes() {
         if attribute.namespace() == Some(crate::compile::XML_NS) && attribute.name() == "base" {
+            continue;
+        }
+        if is_asset && attribute.namespace().is_none() && attribute.name() == "id" {
             continue;
         }
         if attribute.namespace().is_none()
@@ -330,6 +560,35 @@ fn write_ui_layout(
                 .filter(|child| child.has_tag_name(field.name))
                 .collect();
             if let UiCodec::Repeated(stride, codec) = field.codec {
+                if name == "UIMouseTacticalGroupSelection" && children.len() > 10 {
+                    return Err(invalid(
+                        data.path,
+                        "UIMouseTacticalGroupSelection accepts at most ten groups",
+                    ));
+                }
+                if field.name == "MenuItem"
+                    && ((name == "UIMouseTacticalQuickChatDisplay" && children.is_empty())
+                        || children.len() > 9)
+                {
+                    return Err(invalid(
+                        data.path,
+                        format!("{name} has an invalid menu item count"),
+                    ));
+                }
+                if children.is_empty()
+                    && (matches!(
+                        field.name,
+                        "Binding" | "Scorch" | "IntelDBEntry" | "Threshold"
+                    ) || matches!(
+                        (name, field.name),
+                        ("LargeGroupAudioMap", "Sound") | ("SoundKeyPair", "Key")
+                    ))
+                {
+                    return Err(invalid(
+                        data.path,
+                        format!("{name} requires {}", field.name),
+                    ));
+                }
                 let start = data.list(offset, children.len(), stride)?;
                 for (index, child) in children.into_iter().enumerate() {
                     write_ui_child(*codec, child, start + index * stride, data, result)?;
@@ -343,6 +602,23 @@ fn write_ui_layout(
                 ));
             } else if let Some(value) = field.default {
                 write_ui_value(field.codec, value, offset, data, result)?;
+            } else if (is_asset
+                || matches!(
+                    name,
+                    "SellFactionCursorSet"
+                        | "BuildQueueTypeSettings"
+                        | "CommandButtonFactionSettings"
+                        | "DecalSettings"
+                        | "RadarSpecialIcon"
+                        | "StanceButtonSettings"
+                        | "CrowdThreshold"
+                ))
+                && matches!(field.codec, UiCodec::Inline(_))
+            {
+                return Err(invalid(
+                    data.path,
+                    format!("{name} requires {}", field.name),
+                ));
             }
         }
     }
@@ -388,7 +664,7 @@ fn write_ui_value(
 ) -> io::Result<()> {
     use super::asset_reference;
 
-    let parse_error = || invalid(data.path, format!("invalid UIConfigList value {value:?}"));
+    let parse_error = || invalid(data.path, format!("invalid UI value {value:?}"));
     match codec {
         UiCodec::Text => {
             if value.contains(r"\=") {
@@ -404,6 +680,14 @@ fn write_ui_value(
                 _ => return Err(parse_error()),
             };
         }
+        UiCodec::Byte => {
+            data.payload[offset] = value.trim().parse().map_err(|_| parse_error())?;
+        }
+        UiCodec::UnsignedShort => {
+            let value = super::sage_uint(value, "unsigned short", data.path)?;
+            let value = u16::try_from(value).map_err(|_| parse_error())?;
+            data.payload[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+        }
         UiCodec::Unsigned => data.word(
             offset,
             super::sage_uint(value, "UI unsigned integer", data.path)?,
@@ -413,9 +697,26 @@ fn write_ui_value(
             offset,
             super::finite_number(value, "UI real number", data.path)?.to_bits(),
         ),
+        UiCodec::Time => data.word(
+            offset,
+            super::sage_time(value, "UI time", data.path)?.to_bits(),
+        ),
+        UiCodec::Velocity => data.word(
+            offset,
+            (super::finite_number(value, "UI velocity", data.path)? * 0.2).to_bits(),
+        ),
         UiCodec::Hash => {
             let bytes = crate::compile::windows_1252(value).ok_or_else(parse_error)?;
             data.word(offset, crate::hash::asset_string_hash(&bytes));
+        }
+        UiCodec::Poid => data.word(offset, super::hash_name(value)),
+        UiCodec::ModelConditionPointer => {
+            let start = data.allocate(offset, 0x3c)?;
+            super::game_object::write_model_conditions(value, start, data)?;
+        }
+        UiCodec::ObjectStatusPointer => {
+            let start = data.allocate(offset, 0x1c)?;
+            super::game_object::write_status_flags(value, start, data)?;
         }
         UiCodec::Percentage => data.word(
             offset,
@@ -428,12 +729,27 @@ fn write_ui_value(
                 .ok_or_else(parse_error)?;
             data.word(offset, (index as u32).wrapping_sub(1));
         }
-        UiCodec::Enum(variants) => {
+        UiCodec::Enum(variants)
+        | UiCodec::EnumWithInvalid(variants)
+        | UiCodec::EnumPointer(variants) => {
             let index = variants
                 .iter()
                 .position(|&variant| variant == value.trim())
                 .ok_or_else(parse_error)?;
-            data.word(offset, index as u32);
+            let bias = u32::from(matches!(codec, UiCodec::EnumWithInvalid(_)));
+            let value = (index as u32).wrapping_sub(bias);
+            if matches!(codec, UiCodec::EnumPointer(_)) {
+                data.optional_word(offset, value)?;
+            } else {
+                data.word(offset, value);
+            }
+        }
+        UiCodec::EnumValue(variants) => {
+            let (_, value) = variants
+                .iter()
+                .find(|&&(variant, _)| variant == value.trim())
+                .ok_or_else(parse_error)?;
+            data.word(offset, *value);
         }
         UiCodec::KindOf => {
             for (index, word) in super::global_ui::kind_of_flags(value, data.path)?
@@ -576,9 +892,1076 @@ const POSTGAMESTATTYPE: [&str; 17] = [
     "CommanderPowersUsed",
 ];
 const UICONFIGTYPE: [&str; 4] = ["INGAME", "SHELL", "BOOTUP", "LOADSCREEN"];
+const MOUSE_HUD_FIXED_ELEMENT_IDS: [&str; 36] = [
+    "Invalid",
+    "EnergyMeter",
+    "Resources",
+    "SellButton",
+    "RepairButton",
+    "PauseButton",
+    "Radar",
+    "SelectionRefinementTab",
+    "MainStructuresTab",
+    "OtherStructuresTab",
+    "InfantryTab",
+    "VehicleTab",
+    "AircraftTab",
+    "WatercraftTab",
+    "AttackMoveButton",
+    "ForceAttackButton",
+    "ForceMoveButton",
+    "ReverseMoveButton",
+    "ForceAttackMoveButton",
+    "StopButton",
+    "PlanningModeButton",
+    "WaypointModeButton",
+    "AggressiveStanceButton",
+    "GuardStanceButton",
+    "HoldFireStanceButton",
+    "HoldGroundStanceButton",
+    "OpenAdvancedCommandsButton",
+    "ThreatMeter",
+    "OpenPlayerTechStoreButton",
+    "CoOpAINormalOrderButton",
+    "CoOpAIAssaultOrderButton",
+    "CoOpAIHoldObjectOrderButton",
+    "CoOpAIHoldPositionOrderButton",
+    "DeactivateHotSpotButton",
+    "UnitIntroButton",
+    "CoOpAIOrderPanel",
+];
+const TERRAIN_CLASSES: [&str; 11] = [
+    "UNSPECIFIED",
+    "Misc",
+    "Dirt",
+    "Cliff",
+    "Grass",
+    "Rock",
+    "Road",
+    "Mud",
+    "Sand",
+    "Shrub",
+    "Snow",
+];
 fn ui_layout(name: &str) -> Option<UiLayout> {
     use UiCodec::*;
     let (size, fields): (_, &[_]) = match name {
+        "UIMouseTacticalBuildQueueTab" | "UIMouseTacticalBuildQueueTypeTab" => (
+            12,
+            &[ui_field!(
+                "QueueTypeSettings",
+                4,
+                false,
+                None,
+                Repeated(36, &Inline("BuildQueueTypeSettings"))
+            )],
+        ),
+        "BuildQueueTypeSettings" => (
+            36,
+            &[
+                ui_field!(
+                    "QueueType",
+                    0,
+                    true,
+                    None,
+                    EnumWithInvalid(&[
+                        "INVALID",
+                        "MAIN_STRUCTURE",
+                        "OTHER_STRUCTURE",
+                        "INFANTRY",
+                        "VEHICLE",
+                        "AIRCRAFT",
+                        "UPGRADE",
+                        "WATERCRAFT"
+                    ])
+                ),
+                ui_field!(
+                    "MouseOverHelp",
+                    4,
+                    false,
+                    None,
+                    Inline("InGameUISimpleHelpTemplate")
+                ),
+            ],
+        ),
+        "QuickChatMessageReference" => (
+            4,
+            &[ui_field!(
+                "MessageRef",
+                0,
+                true,
+                None,
+                Weak("UIQuickChatMessage")
+            )],
+        ),
+        "QuickChatMessageGroup" => (
+            12,
+            &[
+                ui_field!("Faction", 0, true, Some("Neutral"), Faction),
+                ui_field!(
+                    "ChatMessage",
+                    4,
+                    false,
+                    None,
+                    Repeated(4, &Inline("QuickChatMessageReference"))
+                ),
+            ],
+        ),
+        "QuickChatCloseItem" => (8, &[ui_field!("Title", 0, true, None, Text)]),
+        "QuickChatMenuItem" => (
+            32,
+            &[
+                ui_field!("Title", 0, true, None, Text),
+                ui_field!(
+                    "ChatDestination",
+                    8,
+                    true,
+                    None,
+                    EnumPointer(&["Allies", "Everyone"])
+                ),
+                ui_field!(
+                    "ChatMessageGroup",
+                    12,
+                    false,
+                    None,
+                    Repeated(12, &Inline("QuickChatMessageGroup"))
+                ),
+                ui_field!(
+                    "MenuItem",
+                    20,
+                    false,
+                    None,
+                    Repeated(32, &Inline("QuickChatMenuItem"))
+                ),
+                ui_field!(
+                    "CloseMenuItem",
+                    28,
+                    false,
+                    None,
+                    Pointer("QuickChatCloseItem")
+                ),
+            ],
+        ),
+        "UIMouseTacticalQuickChatDisplay" => (
+            28,
+            &[
+                ui_field!("CloseKey", 4, true, None, Strong("HotKeySlot")),
+                ui_field!("DelayDuration", 8, true, Some("0s"), Time),
+                ui_field!(
+                    "MenuItem",
+                    12,
+                    false,
+                    None,
+                    Repeated(32, &Inline("QuickChatMenuItem"))
+                ),
+                ui_field!(
+                    "CloseMenuItem",
+                    20,
+                    false,
+                    None,
+                    Inline("QuickChatCloseItem")
+                ),
+            ],
+        ),
+        "UIMouseTacticalExitContainerButton" => (
+            20,
+            &[
+                ui_field!("HelpTitleFormat", 4, true, None, Text),
+                ui_field!("HelpDescription", 12, true, None, Text),
+            ],
+        ),
+        "StanceButtonSettings" => (
+            36,
+            &[
+                ui_field!(
+                    "Stance",
+                    0,
+                    true,
+                    None,
+                    Enum(&["GUARD", "AGGRESSIVE", "HOLD_POSITION", "HOLD_FIRE"])
+                ),
+                ui_field!(
+                    "MouseOverHelp",
+                    4,
+                    false,
+                    None,
+                    Inline("InGameUISimpleHelpTemplate")
+                ),
+            ],
+        ),
+        "UIMouseTacticalSetStanceButton" => (
+            12,
+            &[ui_field!(
+                "StanceSettings",
+                4,
+                false,
+                None,
+                Repeated(36, &Inline("StanceButtonSettings"))
+            )],
+        ),
+        "CommandButtonFactionSettings" => (
+            12,
+            &[
+                ui_field!("Faction", 0, true, None, Faction),
+                ui_field!("LockedImage", 4, true, None, Strong("PackedTextureImage")),
+                ui_field!("ImageTintColor", 8, false, None, Inline("Color3")),
+            ],
+        ),
+        "UICommandButton" => (
+            12,
+            &[ui_field!(
+                "FactionSettings",
+                4,
+                false,
+                None,
+                Repeated(12, &Inline("CommandButtonFactionSettings"))
+            )],
+        ),
+        "UIDecalCloud" => (
+            16,
+            &[
+                ui_field!("BuildTexture", 4, true, None, Strong("Texture")),
+                ui_field!("DefenseTexture", 8, true, None, Strong("Texture")),
+                ui_field!(
+                    "SpecialPowerRestrictionTexture",
+                    12,
+                    true,
+                    None,
+                    Strong("Texture")
+                ),
+            ],
+        ),
+        "DecalSettings" => (
+            20,
+            &[
+                ui_field!("ValidTexture", 0, true, None, Strong("Texture")),
+                ui_field!("InvalidTexture", 4, true, None, Strong("Texture")),
+                ui_field!("Opacity", 8, true, Some("1.0"), Real),
+                ui_field!("LegalColor", 12, false, None, Inline("Color3")),
+                ui_field!("InvalidColor", 16, false, None, Inline("Color3")),
+            ],
+        ),
+        "UIDecalGrid" => (
+            56,
+            &[
+                ui_field!("WallTexture", 4, true, None, Strong("Texture")),
+                ui_field!("WallOpacity", 8, true, Some("1.0"), Real),
+                ui_field!("WallDecalColor", 12, false, None, Inline("Color3")),
+                ui_field!("PrimarySettings", 16, false, None, Inline("DecalSettings")),
+                ui_field!(
+                    "SecondarySettings",
+                    36,
+                    false,
+                    None,
+                    Inline("DecalSettings")
+                ),
+            ],
+        ),
+        "UIWorldBuilderDecalGrid" => (
+            16,
+            &[
+                ui_field!("Texture", 4, true, None, Strong("Texture")),
+                ui_field!("Opacity", 8, true, Some("1.0"), Real),
+                ui_field!("Color", 12, false, None, Inline("Color3")),
+            ],
+        ),
+        "RadarSpecialIcon" => (
+            124,
+            &[
+                ui_field!("Image", 0, true, None, Strong("PackedTextureImage")),
+                ui_field!("ImageOffset", 4, false, None, Inline("Vector2")),
+                ui_field!("ObjectFilter", 12, false, None, Inline("ObjectFilter")),
+            ],
+        ),
+        "UIRadarObjectsLayer" => (
+            24,
+            &[
+                ui_field!("MinUnitDotSize", 4, true, Some("3"), Unsigned),
+                ui_field!("MinStructureDotSize", 8, true, Some("5"), Unsigned),
+                ui_field!("NeutralColor", 12, false, None, Inline("Color4")),
+                ui_field!(
+                    "SpecialIcon",
+                    16,
+                    false,
+                    None,
+                    Repeated(124, &Inline("RadarSpecialIcon"))
+                ),
+            ],
+        ),
+        "JoypadBuildButtonFactionSettings" => (
+            8,
+            &[
+                ui_field!("Faction", 0, true, None, Faction),
+                ui_field!(
+                    "LockedButtonStateData",
+                    4,
+                    true,
+                    None,
+                    Strong("ButtonSingleStateData")
+                ),
+            ],
+        ),
+        "UIJoypadCommandBarButtonBuild" => (
+            12,
+            &[ui_field!(
+                "FactionSettings",
+                4,
+                false,
+                None,
+                Repeated(8, &Inline("JoypadBuildButtonFactionSettings"))
+            )],
+        ),
+        "MissionHotSpotSettings" => (
+            16,
+            &[
+                ui_field!("WaypointMarker", 4, true, None, Strong("GameObject")),
+                ui_field!(
+                    "DecalTemplate",
+                    8,
+                    false,
+                    None,
+                    Inline("RadiusDecalTemplate")
+                ),
+            ],
+        ),
+        "TerrainAssetRecord" => (
+            36,
+            &[
+                ui_field!("id", 0, true, None, Text),
+                ui_field!("Texture", 8, true, None, Text),
+                ui_field!("BumpTexture", 16, true, None, Text),
+                ui_field!("Class", 24, true, None, Enum(&TERRAIN_CLASSES)),
+                ui_field!("WBFolder", 28, true, None, Text),
+            ],
+        ),
+        "TerrainAssetCollection" => (
+            12,
+            &[ui_field!(
+                "TerrainAsset",
+                4,
+                false,
+                None,
+                Repeated(36, &Inline("TerrainAssetRecord"))
+            )],
+        ),
+        "ArmyDefinition" => (
+            64,
+            &[
+                ui_field!("Side", 4, true, None, Text),
+                ui_field!("MCVTemplate", 12, true, None, Weak("GameObject")),
+                ui_field!("GathererTemplate", 16, true, None, Weak("GameObject")),
+                ui_field!("ExpanderTemplate", 20, true, None, Weak("GameObject")),
+                ui_field!("EnergyProducer", 24, true, None, Weak("GameObject")),
+                ui_field!(
+                    "PrimaryResourceNodeCollector",
+                    28,
+                    true,
+                    None,
+                    Weak("GameObject")
+                ),
+                ui_field!(
+                    "PrimaryResourceThingToBuild",
+                    32,
+                    true,
+                    None,
+                    Weak("GameObject")
+                ),
+                ui_field!(
+                    "SecondaryResourceNodeCollector",
+                    36,
+                    true,
+                    None,
+                    Weak("GameObject")
+                ),
+                ui_field!("VehicleRepairFacility", 40, true, None, Weak("GameObject")),
+                ui_field!("NavalRepairFacility", 44, true, None, Weak("GameObject")),
+                ui_field!("AircraftRepairFacility", 48, true, None, Weak("GameObject")),
+                ui_field!("WallPiece", 52, true, None, Weak("GameObject")),
+                ui_field!(
+                    "TechStructure",
+                    56,
+                    false,
+                    None,
+                    Repeated(4, &Weak("GameObject"))
+                ),
+            ],
+        ),
+        "LargeGroupAudioMap" => (
+            48,
+            &[
+                ui_field!(
+                    "RequiredModelConditionFlags",
+                    4,
+                    true,
+                    None,
+                    ModelConditionPointer
+                ),
+                ui_field!(
+                    "ExcludedModelConditionFlags",
+                    8,
+                    true,
+                    None,
+                    ModelConditionPointer
+                ),
+                ui_field!(
+                    "RequiredObjectStatusBits",
+                    12,
+                    true,
+                    None,
+                    ObjectStatusPointer
+                ),
+                ui_field!(
+                    "ExcludedObjectStatusBits",
+                    16,
+                    true,
+                    None,
+                    ObjectStatusPointer
+                ),
+                ui_field!("Size", 20, true, Some("1000"), Unsigned),
+                ui_field!("HandOffModeTime", 24, true, Some("1s"), Time),
+                ui_field!("MaximumAudioSpeed", 28, true, Some("100"), Velocity),
+                ui_field!(
+                    "Sound",
+                    32,
+                    false,
+                    None,
+                    Repeated(24, &Inline("SoundKeyPair"))
+                ),
+                ui_field!("StartThreshold", 40, true, None, UnsignedShort),
+                ui_field!("StopThreshold", 42, true, None, UnsignedShort),
+                ui_field!("IgnoreStealthedUnits", 44, true, Some("true"), Boolean),
+            ],
+        ),
+        "SoundKeyPair" => (
+            24,
+            &[
+                ui_field!("Name", 0, true, None, Poid),
+                ui_field!("Sound", 4, true, None, Strong("BaseAudioEventInfo")),
+                ui_field!("Key", 8, false, None, Repeated(4, &Hash)),
+                ui_field!(
+                    "Duck",
+                    16,
+                    false,
+                    None,
+                    Repeated(12, &Inline("AudioDuckInfo"))
+                ),
+            ],
+        ),
+        "AudioDuckInfo" => (
+            12,
+            &[
+                ui_field!("AudioMap", 0, true, None, Strong("LargeGroupAudioMap")),
+                ui_field!("SoundRef", 4, true, None, Poid),
+                ui_field!("VolumeMultiplier", 8, true, None, Percentage),
+            ],
+        ),
+        "AudioArrayVoice" => (24, &[]),
+        "CrowdThreshold" => (
+            28,
+            &[
+                ui_field!("NumUnits", 0, true, Some("0"), Signed),
+                ui_field!("AudioArrayVoice", 4, false, None, Inline("AudioArrayVoice")),
+            ],
+        ),
+        "CrowdResponse" => (
+            16,
+            &[
+                ui_field!("Weight", 4, true, Some("100"), Signed),
+                ui_field!(
+                    "Threshold",
+                    8,
+                    false,
+                    None,
+                    Repeated(28, &Inline("CrowdThreshold"))
+                ),
+            ],
+        ),
+        "ScorchMarkSetting" => (
+            12,
+            &[
+                ui_field!("TerrainClass", 0, true, None, Enum(&TERRAIN_CLASSES)),
+                ui_field!(
+                    "Scorch",
+                    4,
+                    false,
+                    None,
+                    Repeated(
+                        4,
+                        &EnumWithInvalid(&[
+                            "RANDOM",
+                            "SCORCH_1",
+                            "SCORCH_2",
+                            "SCORCH_3",
+                            "SCORCH_4",
+                            "SCORCH_5",
+                            "SCORCH_6",
+                            "SCORCH_7",
+                            "SCORCH_8",
+                            "SCORCH_9",
+                            "SCORCH_10",
+                            "SCORCH_11",
+                            "SCORCH_12",
+                            "SCORCH_13",
+                            "SCORCH_14",
+                            "SCORCH_15",
+                            "SCORCH_16",
+                            "TERRAIN_MAPPED",
+                        ])
+                    )
+                ),
+            ],
+        ),
+        "ScorchMarkSettings" => (
+            12,
+            &[ui_field!(
+                "ScorchMarkSetting",
+                4,
+                false,
+                None,
+                Repeated(12, &Inline("ScorchMarkSetting"))
+            )],
+        ),
+        "W3DDeviceSettings" => (
+            168,
+            &[
+                ui_field!("MaxTerrainTracks", 4, true, Some("100"), Signed),
+                ui_field!(
+                    "OpacityOfSimpleMergeDecals",
+                    8,
+                    true,
+                    Some("35%"),
+                    Percentage
+                ),
+                ui_field!("OccludedColorLuminanceScale", 12, true, Some("0.5"), Real),
+                ui_field!("MaxRoadSegments", 16, true, Some("4000"), Signed),
+                ui_field!("MaxRoadVertex", 20, true, Some("5000"), Signed),
+                ui_field!("MaxRoadIndex", 24, true, Some("10000"), Signed),
+                ui_field!(
+                    "DefaultShroudStatus",
+                    28,
+                    true,
+                    Some("FOGGED"),
+                    EnumValue(&[("FOGGED", 0), ("CLEAR", 1), ("SHROUDED", 3)])
+                ),
+                ui_field!("ShroudColor", 32, false, None, Inline("RGBColor")),
+                ui_field!(
+                    "TreeFadeObjectFilter",
+                    44,
+                    false,
+                    None,
+                    Inline("ObjectFilter")
+                ),
+                ui_field!("StandardPublicBone", 156, false, None, Repeated(8, &Text)),
+                ui_field!("UseSimpleHordeDecals", 164, true, Some("false"), Boolean),
+                ui_field!("FogAlpha", 165, true, Some("63"), Byte),
+                ui_field!("ShroudAlpha", 166, true, Some("0"), Byte),
+                ui_field!("ClearAlpha", 167, true, Some("255"), Byte),
+            ],
+        ),
+        "SiegeEvaEvent" => (
+            16,
+            &[
+                ui_field!("Seconds", 4, true, None, Time),
+                ui_field!("EvaEvent", 8, true, None, Strong("EvaEvent")),
+                ui_field!(
+                    "EventType",
+                    12,
+                    true,
+                    Some("ALL"),
+                    Enum(&["SIEGE", "GENERIC", "ALL"])
+                ),
+            ],
+        ),
+        "TechUpgradeBindingInfo" => (
+            8,
+            &[
+                ui_field!("TechDependency", 0, true, None, Strong("PlayerTech")),
+                ui_field!("UpgradeToGrant", 4, true, None, Strong("UpgradeTemplate")),
+            ],
+        ),
+        "PlayerTechUpgradeBinding" => (
+            12,
+            &[ui_field!(
+                "Binding",
+                4,
+                false,
+                None,
+                Repeated(8, &Inline("TechUpgradeBindingInfo"))
+            )],
+        ),
+        "MiscEvaBeaconSettings" => (
+            8,
+            &[
+                ui_field!(
+                    "BeaconType",
+                    0,
+                    true,
+                    None,
+                    EnumWithInvalid(&["Invalid", "Assault", "HoldPosition", "HoldObject"])
+                ),
+                ui_field!("PlacedEvent", 4, true, None, Strong("EvaEvent")),
+            ],
+        ),
+        "IntelDBEntry" => (
+            24,
+            &[
+                ui_field!("CategoryId", 0, true, None, Text),
+                ui_field!("EntryId", 8, true, None, Text),
+                ui_field!("TextureId", 16, true, None, Text),
+            ],
+        ),
+        "IntelDB" => (
+            12,
+            &[ui_field!(
+                "IntelDBEntry",
+                4,
+                false,
+                None,
+                Repeated(24, &Inline("IntelDBEntry"))
+            )],
+        ),
+        "UICoopTinting" => (
+            28,
+            &[
+                ui_field!("FadeInFrames", 4, true, Some("3"), Signed),
+                ui_field!("FadeOutFrames", 8, true, Some("3"), Signed),
+                ui_field!("SustainFrames", 12, true, Some("10"), Signed),
+                ui_field!("TintFrequency", 16, true, Some("1.0"), Real),
+                ui_field!("TintAmplitude", 20, true, Some("1.0"), Real),
+                ui_field!("TintColor", 24, false, None, Inline("Color3")),
+            ],
+        ),
+        "UIMouseDragSelectionFeedback" => (
+            20,
+            &[
+                ui_field!("BoxEdgeWidth", 4, true, Some("2"), Real),
+                ui_field!("LassoWidth", 8, true, Some("2"), Real),
+                ui_field!("BoxColor", 12, false, None, Inline("Color4")),
+                ui_field!("LassoColor", 16, false, None, Inline("Color4")),
+            ],
+        ),
+        "HUDElementHotKeyMapping" => (
+            8,
+            &[
+                ui_field!(
+                    "ElementId",
+                    0,
+                    true,
+                    None,
+                    EnumWithInvalid(&MOUSE_HUD_FIXED_ELEMENT_IDS)
+                ),
+                ui_field!("HotKeySlot", 4, true, None, Strong("HotKeySlot")),
+            ],
+        ),
+        "UIMouseHUDElementHotKeyGate" => (
+            12,
+            &[ui_field!(
+                "ElementHotKeyMapping",
+                4,
+                false,
+                None,
+                Repeated(8, &Inline("HUDElementHotKeyMapping"))
+            )],
+        ),
+        "UIMouseTacticalPlayerTechStoreButton" => (
+            40,
+            &[
+                ui_field!(
+                    "TechPointAwardedSound",
+                    36,
+                    true,
+                    None,
+                    StrongPointer("BaseAudioEventInfo")
+                ),
+                ui_field!(
+                    "MouseOverHelp",
+                    4,
+                    false,
+                    None,
+                    Inline("InGameUISimpleHelpTemplate")
+                ),
+            ],
+        ),
+        "UIMouseVoiceChat" => (
+            20,
+            &[
+                ui_field!("ToggleModeHotKeySlot", 4, true, None, Strong("HotKeySlot")),
+                ui_field!("TalkHotKeySlot", 8, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "ModeButtonHelp",
+                    12,
+                    false,
+                    None,
+                    Pointer("InGameUISimpleHelpTemplate")
+                ),
+                ui_field!(
+                    "TalkButtonHelp",
+                    16,
+                    false,
+                    None,
+                    Pointer("InGameUISimpleHelpTemplate")
+                ),
+            ],
+        ),
+        "UIQuickChatMessage" => (
+            16,
+            &[
+                ui_field!("MessageText", 4, true, None, Text),
+                ui_field!("Sound", 12, true, None, Strong("BaseAudioEventInfo")),
+            ],
+        ),
+        "UIMouseTacticalCommandCommunicateWithAllies" => (
+            20,
+            &[
+                ui_field!(
+                    "PlaceUnattachedBeaconCursor",
+                    4,
+                    true,
+                    None,
+                    Strong("MouseCursor")
+                ),
+                ui_field!(
+                    "PlaceAttachedBeaconCursor",
+                    8,
+                    true,
+                    None,
+                    Strong("MouseCursor")
+                ),
+                ui_field!("PingRadarCursor", 12, true, None, Strong("MouseCursor")),
+                ui_field!(
+                    "BeaconAttachableObjectFilter",
+                    16,
+                    false,
+                    None,
+                    Pointer("ObjectFilter")
+                ),
+            ],
+        ),
+        "InfiltratorEffectSettings" => (
+            8,
+            &[
+                ui_field!(
+                    "Effect",
+                    0,
+                    true,
+                    None,
+                    EnumWithInvalid(&[
+                        "INVALID",
+                        "RADAR_FREEZE",
+                        "DISABLE",
+                        "STEAL_MONEY",
+                        "VISION",
+                        "ENERGY",
+                        "RESET",
+                        "VISION_UNITS",
+                        "PARALYZE",
+                        "KILL",
+                    ])
+                ),
+                ui_field!("Cursor", 4, true, None, Strong("MouseCursor")),
+            ],
+        ),
+        "UIMouseTacticalCommandEnter" => (
+            20,
+            &[
+                ui_field!("DefaultCursor", 4, true, None, Strong("MouseCursor")),
+                ui_field!("ContestCursor", 8, true, None, Strong("MouseCursor")),
+                ui_field!(
+                    "InfiltratorEffectTypeSettings",
+                    12,
+                    false,
+                    None,
+                    Repeated(8, &Inline("InfiltratorEffectSettings"))
+                ),
+            ],
+        ),
+        "AIBeaconSettings" => (
+            20,
+            &[
+                ui_field!(
+                    "Type",
+                    0,
+                    true,
+                    None,
+                    EnumWithInvalid(&["Invalid", "Assault", "HoldPosition", "HoldObject"])
+                ),
+                ui_field!(
+                    "PlaceUnattachedCursor",
+                    4,
+                    true,
+                    None,
+                    Strong("MouseCursor")
+                ),
+                ui_field!("PlaceAttachedCursor", 8, true, None, Strong("MouseCursor")),
+                ui_field!(
+                    "AttachableObjectFilter",
+                    12,
+                    false,
+                    None,
+                    Pointer("ObjectFilter")
+                ),
+                ui_field!("CanTargetObjects", 16, true, Some("true"), Boolean),
+                ui_field!("CanTargetPosition", 17, true, Some("true"), Boolean),
+            ],
+        ),
+        "UIMouseTacticalCommandPlaceAIBeacon" => (
+            12,
+            &[ui_field!(
+                "BeaconTypeSettings",
+                4,
+                false,
+                None,
+                Repeated(20, &Inline("AIBeaconSettings"))
+            )],
+        ),
+        "UIMouseTacticalCommandSelect" => (
+            16,
+            &[
+                ui_field!("Cursor", 4, true, None, Strong("MouseCursor")),
+                ui_field!(
+                    "TakeUnitsFromAllyHotKeySlot",
+                    8,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!(
+                    "GiveUnitsToAllyHotKeySlot",
+                    12,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+            ],
+        ),
+        "SellCursorSet" => (
+            8,
+            &[
+                ui_field!("ValidTarget", 0, true, None, Strong("MouseCursor")),
+                ui_field!("InvalidTarget", 4, true, None, Strong("MouseCursor")),
+            ],
+        ),
+        "SellFactionCursorSet" => (
+            12,
+            &[
+                ui_field!("Faction", 0, true, None, Faction),
+                ui_field!("Cursors", 4, false, None, Inline("SellCursorSet")),
+            ],
+        ),
+        "UIMouseTacticalCommandSell" => (
+            20,
+            &[
+                ui_field!("DefaultCursors", 4, false, None, Inline("SellCursorSet")),
+                ui_field!(
+                    "FactionCursors",
+                    12,
+                    false,
+                    None,
+                    Repeated(12, &Inline("SellFactionCursorSet"))
+                ),
+            ],
+        ),
+        "UIMouseTacticalGroupSelectionGroup" => (
+            16,
+            &[
+                ui_field!("CreateHotKeySlot", 0, true, None, Strong("HotKeySlot")),
+                ui_field!("AddToHotKeySlot", 4, true, None, Strong("HotKeySlot")),
+                ui_field!("SelectHotKeySlot", 8, true, None, Strong("HotKeySlot")),
+                ui_field!("ViewHotKeySlot", 12, true, None, Strong("HotKeySlot")),
+            ],
+        ),
+        "UIMouseTacticalGroupSelection" => (
+            12,
+            &[ui_field!(
+                "Group",
+                4,
+                false,
+                None,
+                Repeated(16, &Inline("UIMouseTacticalGroupSelectionGroup"))
+            )],
+        ),
+        "UIMouseTacticalLookAtViewBookmark" => (
+            8,
+            &[
+                ui_field!("GoToHotKeySlot", 0, true, None, Strong("HotKeySlot")),
+                ui_field!("SaveHotKeySlot", 4, true, None, Strong("HotKeySlot")),
+            ],
+        ),
+        "UIMouseTacticalLookAt" => (
+            60,
+            &[
+                ui_field!("ScrollCursor", 4, true, None, Strong("MouseCursor")),
+                ui_field!("ScrollLeftHotKeySlot", 8, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "ScrollRightHotKeySlot",
+                    12,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!("ScrollUpHotKeySlot", 16, true, None, Strong("HotKeySlot")),
+                ui_field!("ScrollDownHotKeySlot", 20, true, None, Strong("HotKeySlot")),
+                ui_field!("RotateLeftHotKeySlot", 24, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "RotateRightHotKeySlot",
+                    28,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!("ZoomInHotKeySlot", 32, true, None, Strong("HotKeySlot")),
+                ui_field!("ZoomOutHotKeySlot", 36, true, None, Strong("HotKeySlot")),
+                ui_field!("KeyScrollFactor", 40, true, Some("100%"), Percentage),
+                ui_field!("MouseDragScrollFactor", 44, true, Some("100%"), Percentage),
+                ui_field!("MouseEdgeScrollFactor", 48, true, Some("100%"), Percentage),
+                ui_field!(
+                    "ViewBookmark",
+                    52,
+                    false,
+                    None,
+                    Repeated(8, &Inline("UIMouseTacticalLookAtViewBookmark"))
+                ),
+            ],
+        ),
+        "UIMouseTacticalMiscHotKeysStanceSettings" => (
+            8,
+            &[
+                ui_field!(
+                    "Stance",
+                    0,
+                    true,
+                    None,
+                    Enum(&["GUARD", "AGGRESSIVE", "HOLD_POSITION", "HOLD_FIRE"])
+                ),
+                ui_field!("Slot", 4, true, None, Strong("HotKeySlot")),
+            ],
+        ),
+        "UIMouseTacticalMiscHotKeys" => (
+            200,
+            &[
+                ui_field!("AllCheer", 4, true, None, Strong("HotKeySlot")),
+                ui_field!("AttackMove", 8, true, None, Strong("HotKeySlot")),
+                ui_field!("CameraReset", 12, true, None, Strong("HotKeySlot")),
+                ui_field!("ChatWithAllies", 16, true, None, Strong("HotKeySlot")),
+                ui_field!("ChatWithBuddies", 20, true, None, Strong("HotKeySlot")),
+                ui_field!("ChatWithEveryone", 24, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "CommunicateWithAlliesMode",
+                    28,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!("CreateFormation", 32, true, None, Strong("HotKeySlot")),
+                ui_field!("CycleHarvesters", 36, true, None, Strong("HotKeySlot")),
+                ui_field!("DeleteBeacon", 40, true, None, Strong("HotKeySlot")),
+                ui_field!("ForceAttack", 44, true, None, Strong("HotKeySlot")),
+                ui_field!("ForceAttackMove", 48, true, None, Strong("HotKeySlot")),
+                ui_field!("ForceMove", 52, true, None, Strong("HotKeySlot")),
+                ui_field!("GoToNextBuildQueue", 56, true, None, Strong("HotKeySlot")),
+                ui_field!("GoToPriorBuildQueue", 60, true, None, Strong("HotKeySlot")),
+                ui_field!("GoToNextSubGroup", 64, true, None, Strong("HotKeySlot")),
+                ui_field!("GoToPriorSubGroup", 68, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenAdvancedCommands", 72, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenLoadGameScreen", 76, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenMessenger", 80, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenPauseScreen", 84, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenPlayerTechStore", 88, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenSaveGameScreen", 92, true, None, Strong("HotKeySlot")),
+                ui_field!("OpenStatusScreen", 96, true, None, Strong("HotKeySlot")),
+                ui_field!("PlaceRallyPoint", 100, true, None, Strong("HotKeySlot")),
+                ui_field!("PlanningMode", 104, true, None, Strong("HotKeySlot")),
+                ui_field!("PreferSelection", 108, true, None, Strong("HotKeySlot")),
+                ui_field!("QuickChatMenu", 112, true, None, Strong("HotKeySlot")),
+                ui_field!("ReverseMove", 116, true, None, Strong("HotKeySlot")),
+                ui_field!("Scatter", 120, true, None, Strong("HotKeySlot")),
+                ui_field!("SelectAll", 124, true, None, Strong("HotKeySlot")),
+                ui_field!("SelectMatchingUnits", 128, true, None, Strong("HotKeySlot")),
+                ui_field!("SellMode", 132, true, None, Strong("HotKeySlot")),
+                ui_field!("ShowAllHealthBars", 136, true, None, Strong("HotKeySlot")),
+                ui_field!("Stop", 140, true, None, Strong("HotKeySlot")),
+                ui_field!("TelestratorErase", 144, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "TelestratorNextColor",
+                    148,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!(
+                    "TelestratorNextLineWidth",
+                    152,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!(
+                    "TelestratorPriorColor",
+                    156,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!("TelestratorToggle", 160, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "ToggleFastForwardMode",
+                    164,
+                    true,
+                    None,
+                    Strong("HotKeySlot")
+                ),
+                ui_field!("ToggleHUD", 168, true, None, Strong("HotKeySlot")),
+                ui_field!("TogglePowerMode", 172, true, None, Strong("HotKeySlot")),
+                ui_field!("ToggleRepairMode", 176, true, None, Strong("HotKeySlot")),
+                ui_field!("ViewHomeBase", 180, true, None, Strong("HotKeySlot")),
+                ui_field!("ViewLastEvaEvent", 184, true, None, Strong("HotKeySlot")),
+                ui_field!("WaypointMode", 188, true, None, Strong("HotKeySlot")),
+                ui_field!(
+                    "StanceSettings",
+                    192,
+                    false,
+                    None,
+                    Repeated(8, &Inline("UIMouseTacticalMiscHotKeysStanceSettings"))
+                ),
+            ],
+        ),
+        "UIMouseTacticalPlayerPowerHotKeys" => (
+            12,
+            &[ui_field!(
+                "Slot",
+                4,
+                false,
+                None,
+                Repeated(4, &Strong("HotKeySlot"))
+            )],
+        ),
+        "UIMouseTacticalRadarTelestrator" => (
+            12,
+            &[
+                ui_field!("StrokeSustainDuration", 4, true, Some("10s"), Time),
+                ui_field!("StrokeFadeDuration", 8, true, Some("2s"), Time),
+            ],
+        ),
+        "UIMouseTacticalTelestrator" => (
+            8,
+            &[ui_field!(
+                "DrawCursor",
+                4,
+                true,
+                None,
+                Strong("MouseCursor")
+            )],
+        ),
+        "UIMouseTacticalSelectionDetailsButtonHotKeys" => (
+            12,
+            &[ui_field!(
+                "UnitAbilitySlot",
+                4,
+                false,
+                None,
+                Repeated(4, &Strong("HotKeySlot"))
+            )],
+        ),
         "AIDifficultySetting" => (
             12,
             &[
@@ -648,6 +2031,176 @@ fn ui_layout(name: &str) -> Option<UiLayout> {
                 ui_field!("VisionCamZoom", 48, true, Some("1"), Signed),
                 ui_field!("ScrollSpeedMin", 52, true, Some("0.2"), Real),
                 ui_field!("ScrollSpeedMax", 56, true, Some("2.0"), Real),
+            ],
+        ),
+        "JoypadCommandBarTemplate" => (
+            24,
+            &[
+                ui_field!(
+                    "HomeButton",
+                    4,
+                    true,
+                    None,
+                    Strong("JoypadCommandBarButtonTemplate")
+                ),
+                ui_field!(
+                    "Slot",
+                    8,
+                    false,
+                    None,
+                    Repeated(8, &Inline("JoypadCommandBarTemplateButtonSlot"))
+                ),
+                ui_field!(
+                    "GeneralButton",
+                    16,
+                    false,
+                    None,
+                    Repeated(4, &Strong("JoypadCommandBarButtonTemplate"))
+                ),
+            ],
+        ),
+        "JoypadCommandBarTemplateButtonSlot" => (
+            8,
+            &[
+                ui_field!("Ordinal", 0, true, None, Unsigned),
+                ui_field!(
+                    "Button",
+                    4,
+                    true,
+                    None,
+                    Strong("JoypadCommandBarButtonTemplate")
+                ),
+            ],
+        ),
+        "UIJoypadCommandBarControlGroups"
+        | "UIJoypadCommandBarHomogenousGroup"
+        | "UIJoypadCommandBarMixedGroup"
+        | "UIJoypadCommandBarPlayerPowers"
+        | "UIJoypadCommandBarStances"
+        | "UIJoypadCommandBarTopMenu" => (
+            8,
+            &[ui_field!(
+                "Template",
+                4,
+                true,
+                None,
+                Strong("JoypadCommandBarTemplate")
+            )],
+        ),
+        "UIJoypadCommandBarCoopCommunicator" => (
+            8,
+            &[ui_field!(
+                "AICoopTemplate",
+                4,
+                true,
+                None,
+                Strong("JoypadCommandBarTemplate")
+            )],
+        ),
+        "UIJoypadCommandBarSingleUnit" => (
+            20,
+            &[
+                ui_field!(
+                    "UnitTemplate",
+                    4,
+                    true,
+                    None,
+                    Strong("JoypadCommandBarTemplate")
+                ),
+                ui_field!(
+                    "ProductionStructureTemplate",
+                    8,
+                    true,
+                    None,
+                    Strong("JoypadCommandBarTemplate")
+                ),
+                ui_field!(
+                    "NonProductionStructureTemplate",
+                    12,
+                    true,
+                    None,
+                    Strong("JoypadCommandBarTemplate")
+                ),
+                ui_field!(
+                    "HotSpotTemplate",
+                    16,
+                    true,
+                    None,
+                    Strong("JoypadCommandBarTemplate")
+                ),
+            ],
+        ),
+        "UIMouseSimpleFixedButton" => (
+            36,
+            &[ui_field!(
+                "MouseOverHelp",
+                4,
+                false,
+                None,
+                Inline("InGameUISimpleHelpTemplate")
+            )],
+        ),
+        "InGameUISimpleHelpTemplate" => (
+            32,
+            &[
+                ui_field!("Title", 0, true, None, Text),
+                ui_field!("Description", 8, true, None, Text),
+                ui_field!("TypeDescription", 16, true, None, Text),
+                ui_field!("Instructions", 24, true, None, Text),
+            ],
+        ),
+        "HeaderTemplate" => (20, &[ui_field!("Font", 4, false, None, Inline("FontDesc"))]),
+        "UIFloatingTextDisplay" => (
+            32,
+            &[
+                ui_field!("TimeOut", 4, true, Some("333ms"), Time),
+                ui_field!("MoveUpSpeed", 8, true, Some("1.0"), Velocity),
+                ui_field!("MoveVanishRate", 12, true, Some("0.1"), Velocity),
+                ui_field!("Font", 16, false, None, Inline("FontDesc")),
+            ],
+        ),
+        "UISubtitleDisplay" => (
+            36,
+            &[
+                ui_field!("HoldTime", 4, true, Some("20s"), Time),
+                ui_field!("LineCount", 8, true, Some("8"), Signed),
+                ui_field!("Font", 12, false, None, Inline("FontDesc")),
+                ui_field!("PanelColor", 28, false, None, Inline("Color4")),
+                ui_field!("TextColor", 32, false, None, Inline("Color3")),
+            ],
+        ),
+        "Color3" => (4, &[]),
+        "UIMessageDisplay" => (
+            32,
+            &[
+                ui_field!("Delay", 4, true, Some("5s"), Time),
+                ui_field!("Color1", 8, false, None, Inline("Color3")),
+                ui_field!("Color2", 12, false, None, Inline("Color3")),
+                ui_field!("Font", 16, false, None, Inline("FontDesc")),
+            ],
+        ),
+        "UITimerDisplay" => (
+            64,
+            &[
+                ui_field!("FlashDuration", 4, true, Some("1s"), Time),
+                ui_field!("Position", 8, false, None, Inline("Vector2")),
+                ui_field!("FlashColor", 16, false, None, Inline("Color3")),
+                ui_field!("NormalFont", 20, false, None, Inline("FontDesc")),
+                ui_field!("NormalColor", 36, false, None, Inline("Color3")),
+                ui_field!("ReadyFont", 40, false, None, Inline("FontDesc")),
+                ui_field!("ReadyColor", 56, false, None, Inline("Color3")),
+                ui_field!("Centered", 60, true, Some("false"), Boolean),
+            ],
+        ),
+        "UIMilitaryCaptionDisplay" => (
+            56,
+            &[
+                ui_field!("Delay", 4, true, Some("750ms"), Time),
+                ui_field!("Color", 8, false, None, Inline("Color3")),
+                ui_field!("Position", 12, false, None, Inline("Vector2")),
+                ui_field!("TitleFont", 20, false, None, Inline("FontDesc")),
+                ui_field!("Font", 36, false, None, Inline("FontDesc")),
+                ui_field!("Centered", 52, true, Some("false"), Boolean),
             ],
         ),
         "FontDesc" => (

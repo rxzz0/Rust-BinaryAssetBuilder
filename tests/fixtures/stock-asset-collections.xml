@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <WaterTextureList id="WaterProbe" Type="SPARKLE"><Texture>ART:RiverA.dds</Texture><Texture>ART:RiverB.dds</Texture></WaterTextureList>
+  <DLContent id="DLCEmpty" PackageNumber="3" />
+  <DLContent id="DLCProbe" PackageNumber="12"><License LicenseMask="27"><Asset>TestObject</Asset><Asset>OtherObject</Asset></License><Patch Name="TestPatch" PatchNumber="8" /></DLContent>
+  <AssetReportTable id="ReportEmpty" />
+  <AssetReportTable id="ReportProbe"><AssetReport Id="Probe" Type="GameObject" AssetSize="1024"><Reference Id="TestFX" Type="FXList" /><Reference Id="Chime" Type="AudioEvent" /></AssetReport><AssetReport Id="Foo" Type="Texture" AssetSize="64" /></AssetReportTable>
+</AssetDeclaration>

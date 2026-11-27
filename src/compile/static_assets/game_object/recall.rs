@@ -6,6 +6,10 @@ use super::super::{
 };
 use super::behaviors_basic::{base, inherited};
 use super::draws::{boolean, fields, model_condition_index};
+use super::special_power_variants::{
+    AREA_UPGRADE, encode_initiate_sound, encode_variant_list, string_list, variant_fields,
+    variant_filter, variant_layout, variant_list,
+};
 use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::Node;
 use std::io;
@@ -88,6 +92,13 @@ const MOVEMENT_FIELDS: &[(&str, u32, usize)] = &[
 ];
 
 const OCL_POWER: u32 = 0x8999_c6a4;
+const CREATE_AND_ENTER: u32 = 0x38c4_96d8;
+const FX_OFFSET: &str = "FXOffset";
+const BASE_FILTERS: [(&str, usize); 3] = [
+    ("AttributeModifierAffects", 0x60),
+    ("RequirementsFilterMP", 0xd0),
+    ("RequirementsFilterStrategic", 0x140),
+];
 const OCL_FIELDS: &[(&str, u32, usize)] = &[
     ("OCL", 0x42e4_e9d1, 0x1c4),
     ("CreateLocation", 0xe5c0_9280, 0x1c8),
@@ -98,6 +109,26 @@ const OCL_FIELDS: &[(&str, u32, usize)] = &[
     ("RegisterObjectsWithSpecialAbilityUpdate", BOOL, 0x1f0),
 ];
 
+const SPECIAL_POWER: u32 = 0xcefe_1113;
+
+pub(super) fn base_layout_variant(name: &str) -> Option<u32> {
+    Some(match name {
+        "SpecialPower" => SPECIAL_POWER,
+        "ReturnToDockSpecialPower" => 0x07fe_a222,
+        "ReturnToProducerSpecialPower" => 0x2800_4ab1,
+        "AssignSlavesTargetObjectSpecialPower" => 0x9daf_d38c,
+        "AttackTargetSpecialPower" => 0x239d_954f,
+        "PrematureDischargeSpecialPower" => 0x8e22_e8c8,
+        "HordeDispatchSpecialPower" => 0x90a9_315b,
+        "MoveToPositionAndEvacuateSpecialPower" => 0xac7e_2a4a,
+        "MoveToPositionAndReplaceSelfSpecialPower" => 0xd679_1f61,
+        "RepairSpecialPower" => 0x39b8_25ff,
+        "SpecialPowerTimerRefreshSpecialPower" => 0x5420_3fa0,
+        "UncombineSpecialPower" => 0x7c29_8d04,
+        _ => return None,
+    })
+}
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,
@@ -106,7 +137,6 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
     let path = data.path;
-    const SPECIAL_POWER: u32 = 0xcefe_1113;
     const PRODUCTION_BONUS: u32 = 0x8ed3_3e53;
     const ACTIVATE_MODULE: u32 = 0x4856_3167;
     const PLAYER_UPGRADE: u32 = 0x005b_408e;
@@ -118,21 +148,21 @@ pub(super) fn encode(
         ("HarvesterBonus", REAL, 0x1d4),
         ("HarvesterBonusAllies", REAL, 0x1d8),
     ];
-    let (kind, size, derived) = match node.tag_name().name() {
+    let name = node.tag_name().name();
+    let variant = variant_layout(name);
+    let (kind, size, derived) = match name {
         "OCLSpecialPower" => (OCL_POWER, 0x1f4, OCL_FIELDS),
+        "CreateAndEnterObjectSpecialPower" => (CREATE_AND_ENTER, 0x1f8, OCL_FIELDS),
         "StoreObjectsSpecialPower" => (0xa74a_234c, 0x1d4, STORE_FIELDS),
         "TeleportStoredObjectsSpecialPower" => (0x318d_c4d6, 0x1d0, TELEPORT_FIELDS),
         "RecallUnitsSpecialPower" => (KIND, 0x1cc, RECALL_FIELDS),
         "MovementSpecialPower" => (MOVEMENT_POWER, 0x1e8, MOVEMENT_FIELDS),
-        "ReturnToDockSpecialPower" => (0x07fe_a222, 0x1c4, &[][..]),
-        "ReturnToProducerSpecialPower" => (0x2800_4ab1, 0x1c4, &[][..]),
-        "AssignSlavesTargetObjectSpecialPower" => (0x9daf_d38c, 0x1c4, &[][..]),
-        "AttackTargetSpecialPower" => (0x239d_954f, 0x1c4, &[][..]),
-        "PrematureDischargeSpecialPower" => (0x8e22_e8c8, 0x1c4, &[][..]),
         "GiveProductionBonusSpecialPower" => (PRODUCTION_BONUS, 0x1dc, BONUS_FIELDS),
         "ActivateModuleSpecialPower" => (ACTIVATE_MODULE, 0x1cc, &[][..]),
         "PlayerUpgradeSpecialPower" => (PLAYER_UPGRADE, 0x1cc, &[][..]),
-        _ => (SPECIAL_POWER, 0x1c4, &[][..]),
+        _ => variant
+            .or_else(|| base_layout_variant(name).map(|kind| (kind, 0x1c4, &[][..])))
+            .ok_or_else(|| invalid(path, format!("unsupported special power module {name}")))?,
     };
     let allowed: Vec<_> = POWER_FIELDS
         .iter()
@@ -144,11 +174,40 @@ pub(super) fn encode(
     let start = data.allocate(pointer, size)?;
     data.word(start, kind);
     data.word(start + 4, hash_name(required(node, "id", path)?));
-    // EA allocates the derived masks before variable-length base filters.
-    let movement = (kind == MOVEMENT_POWER)
-        .then(|| movement_fields(node, start, data))
+    // EA allocates derived lists, masks, and filters before variable-length base fields.
+    let mut filter_reference_types = Vec::new();
+    let derived_entries = if variant.is_some() {
+        let variant_reference_types = if kind == AREA_UPGRADE {
+            &mut filter_reference_types
+        } else {
+            &mut *reference_types
+        };
+        Some(variant_fields(
+            node,
+            start,
+            derived,
+            data,
+            variant_reference_types,
+        )?)
+    } else {
+        (kind == MOVEMENT_POWER)
+            .then(|| movement_fields(node, start, data))
+            .transpose()?
+    };
+    let derived_list = variant_list(kind)
+        .map(|(name, offset)| {
+            let count = start + offset;
+            let length = significant_children(node)
+                .filter(|child| child.has_tag_name((SAGE_NS, name)))
+                .count();
+            Ok::<_, io::Error>((count, data.list(count, length, 4)?))
+        })
         .transpose()?;
-    let scalar_fields = if movement.is_some() { &[] } else { derived };
+    let scalar_fields = if derived_entries.is_some() {
+        &[]
+    } else {
+        derived
+    };
     for &(name, field_type, offset) in POWER_FIELDS.iter().chain(scalar_fields) {
         match field_type {
             BOOL => {
@@ -183,7 +242,7 @@ pub(super) fn encode(
             _ => {}
         }
     }
-    if kind == OCL_POWER {
+    if matches!(kind, OCL_POWER | CREATE_AND_ENTER) {
         if let Some(value) = node.attribute("CreateLocation") {
             static LOCATIONS: OnceLock<Vec<String>> = OnceLock::new();
             let locations = LOCATIONS.get_or_init(|| {
@@ -277,6 +336,9 @@ pub(super) fn encode(
         );
     }
     required(node, TEMPLATE, path)?;
+    if name == "InvisibilitySpecialPower" {
+        required(node, "InvisibilityTemplate", path)?;
+    }
     for (name, value) in node.attributes().map(|a| (a.name(), a.value())).chain(
         (node.attribute(FILTER).is_none()).then_some((FILTER, "GenericSpecialPowerObjectFilter")),
     ) {
@@ -300,6 +362,8 @@ pub(super) fn encode(
                 ("ObjectCreationList", offset)
             }
             "TargetMarkerObjectRef" => ("GameObject", 0x1d0),
+            "CommandSet" => ("LogicCommandSet", 0x1c4),
+            "InvisibilityTemplate" => ("InvisibilityTemplate", 0x1c4),
             _ => continue,
         };
         if value.trim().is_empty() {
@@ -310,7 +374,7 @@ pub(super) fn encode(
         reference_types.push(id.type_id);
         let word = if matches!(
             name,
-            "OnTriggerRechargeSpecialPower" | "TargetMarkerObjectRef"
+            "OnTriggerRechargeSpecialPower" | "TargetMarkerObjectRef" | "CommandSet"
         ) {
             id.instance_id
         } else {
@@ -320,25 +384,50 @@ pub(super) fn encode(
         data.word(start + offset, word);
     }
 
-    let names: Vec<_> = node
-        .attribute("RequirementsFilterMPSkirmish")
-        .unwrap_or("")
-        .split_ascii_whitespace()
-        .collect();
-    let count = start + 0x20;
-    let first = data.list(count, names.len(), 8)?;
-    let mut strings = Vec::new();
-    for (index, name) in names.into_iter().enumerate() {
-        let offset = first + index * 8;
-        data.string(offset, name)?;
-        strings.push((0, Target::Data(offset)));
-    }
+    let mut ocl_references = Vec::new();
+    let mut ocl_reference_types = Vec::new();
+    let (ocl, fx_offset) = if matches!(kind, OCL_POWER | CREATE_AND_ENTER) {
+        let offset = if kind == CREATE_AND_ENTER {
+            let child =
+                significant_children(node).find(|child| child.has_tag_name((SAGE_NS, FX_OFFSET)));
+            Some(super::behaviors_basic::optional_vector(
+                child,
+                start + 0x1f4,
+                data,
+            )?)
+        } else {
+            None
+        };
+        let mut derived_children = significant_children(node)
+            .skip_while(is_power_base_child)
+            .peekable();
+        let ocl = ocl_children(
+            &mut derived_children,
+            start,
+            data,
+            &mut ocl_references,
+            &mut ocl_reference_types,
+        )?;
+        if kind == CREATE_AND_ENTER {
+            derived_children.next_if(|child| child.has_tag_name((SAGE_NS, FX_OFFSET)));
+        }
+        if derived_children.next().is_some() {
+            return Err(invalid(path, format!("unexpected {name} child")));
+        }
+        (Some(ocl), offset)
+    } else {
+        (None, None)
+    };
+    let mut strings = Some(string_list(
+        node.attribute("RequirementsFilterMPSkirmish").unwrap_or(""),
+        start + 0x20,
+        data,
+    )?);
     let module = Table::record(vec![
         Entry::new(0x19b0_42a0, INT, Target::Data(start)),
         Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
     ]);
     let mut power = vec![base(0xa50d_729a, inherited(0xd75d_93a2, module))];
-    let mut strings = Some(Table::array(count, strings));
     power.extend(POWER_FIELDS.iter().map(|&(name, kind, offset)| {
         let target = if name == "RequirementsFilterMPSkirmish" {
             Target::Table(strings.take().unwrap())
@@ -348,11 +437,7 @@ pub(super) fn encode(
         Entry::named(name, kind, target)
     }));
     let mut children = significant_children(node).peekable();
-    for (name, offset) in [
-        ("AttributeModifierAffects", 0x60),
-        ("RequirementsFilterMP", 0xd0),
-        ("RequirementsFilterStrategic", 0x140),
-    ] {
+    for (name, offset) in BASE_FILTERS {
         power.push(Entry::named(
             name,
             0xe46e_a3b2,
@@ -369,8 +454,23 @@ pub(super) fn encode(
             ),
         ));
     }
-    power.push(Entry::named("InitiateSound", 0x1ae6_b6b7, Target::Null));
-    if !matches!(kind, OCL_POWER | PLAYER_UPGRADE | ACTIVATE_MODULE)
+    let sound = if let Some(child) =
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "InitiateSound")))
+    {
+        encode_initiate_sound(child, start + 0x1b0, data, references, reference_types)?
+    } else {
+        Target::Null
+    };
+    power.push(Entry::named("InitiateSound", 0x1ae6_b6b7, sound));
+    if let Some((name, _)) = variant_filter(node.tag_name().name()) {
+        children.next_if(|child| child.has_tag_name((SAGE_NS, name)));
+    }
+    if ocl.is_some() && children.peek().is_some_and(is_power_base_child) {
+        return Err(invalid(path, format!("unexpected {name} child")));
+    }
+    if derived_list.is_none()
+        && ocl.is_none()
+        && !matches!(kind, PLAYER_UPGRADE | ACTIVATE_MODULE)
         && let Some(child) = children.next()
     {
         return Err(invalid(
@@ -385,10 +485,24 @@ pub(super) fn encode(
         return Ok((kind, Table::record(power)));
     }
     let mut entries = vec![base(SPECIAL_POWER, Table::record(power))];
-    if let Some(movement) = movement {
-        entries.extend(movement);
+    if let Some(derived_entries) = derived_entries {
+        entries.extend(derived_entries);
     } else {
         entries.extend(fields(start, derived));
+    }
+    if let Some((count, first)) = derived_list {
+        // The derived filter is laid out early, but its reference types follow inherited fields.
+        reference_types.extend(filter_reference_types);
+        entries.push(encode_variant_list(
+            children,
+            kind,
+            count,
+            first,
+            data,
+            references,
+            reference_types,
+        )?);
+        return Ok((kind, Table::record(entries)));
     }
     if kind == PLAYER_UPGRADE {
         let mut upgrades = Vec::new();
@@ -418,14 +532,21 @@ pub(super) fn encode(
         )?);
         return Ok((kind, Table::record(entries)));
     }
-    if kind == OCL_POWER {
-        entries.extend(ocl_children(
-            &mut children,
-            start,
-            data,
-            references,
-            reference_types,
-        )?);
+    if let Some((ocl_entries, reference_offsets)) = ocl {
+        // EA lays out OCL lists before inherited children and orders their references after them.
+        let ordinal_start = references.len();
+        for (index, offset) in reference_offsets.into_iter().enumerate() {
+            data.word(offset, (ordinal_start + index + 1) as u32);
+        }
+        references.extend(ocl_references);
+        reference_types.extend(ocl_reference_types);
+        entries.extend(ocl_entries);
+    }
+    if let Some(offset) = fx_offset {
+        entries = vec![
+            base(OCL_POWER, Table::record(entries)),
+            Entry::named(FX_OFFSET, 0x2936_8077, offset),
+        ];
     }
     Ok((kind, Table::record(entries)))
 }
@@ -475,13 +596,20 @@ fn movement_fields(
     Ok(entries)
 }
 
+fn is_power_base_child(child: &Node<'_, '_>) -> bool {
+    child.has_tag_name((SAGE_NS, "InitiateSound"))
+        || BASE_FILTERS
+            .iter()
+            .any(|&(name, _)| child.has_tag_name((SAGE_NS, name)))
+}
+
 fn ocl_children<'a, 'input: 'a>(
     children: &mut std::iter::Peekable<impl Iterator<Item = Node<'a, 'input>>>,
     start: usize,
     data: &mut BinaryData<'_>,
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
-) -> io::Result<[Entry; 3]> {
+) -> io::Result<([Entry; 3], Vec<usize>)> {
     let path = data.path;
     let mut pairs = Vec::new();
     while let Some(child) = children.next_if(|node| node.has_tag_name((SAGE_NS, "UpgradeOCL"))) {
@@ -499,12 +627,15 @@ fn ocl_children<'a, 'input: 'a>(
     }
     let pair_count = start + 0x1dc;
     let first = data.list(pair_count, pairs.len(), 4)?;
+    let mut reference_offsets = Vec::new();
     let pair_items: Vec<_> = pairs
         .into_iter()
         .enumerate()
         .map(|(index, ordinal)| {
             let offset = first + index * 4;
-            data.word(offset, ordinal);
+            if ordinal != 0 {
+                reference_offsets.push(offset);
+            }
             (
                 0,
                 Target::Table(Table::record(vec![Entry::named(
@@ -528,10 +659,8 @@ fn ocl_children<'a, 'input: 'a>(
         Target::Null
     };
     let mut upgrades = Vec::new();
-    for child in children {
-        if !child.has_tag_name((SAGE_NS, "Upgrade"))
-            || child.children().any(|node| node.is_element())
-        {
+    while let Some(child) = children.next_if(|node| node.has_tag_name((SAGE_NS, "Upgrade"))) {
+        if child.children().any(|node| node.is_element()) {
             return Err(invalid(path, "unexpected OCLSpecialPower child"));
         }
         validate_attributes(child, &[], path)?;
@@ -555,26 +684,31 @@ fn ocl_children<'a, 'input: 'a>(
         .enumerate()
         .map(|(index, ordinal)| {
             let offset = first + index * 4;
-            data.word(offset, ordinal);
+            if ordinal != 0 {
+                reference_offsets.push(offset);
+            }
             (0, Target::Data(offset))
         })
         .collect();
-    Ok([
-        Entry::named(
-            "UpgradeOCL",
-            0xa8b8_56f2,
-            Target::Table(Table::array(pair_count, pair_items)),
-        ),
-        Entry::named(name, 0xe46e_a3b2, filter),
-        Entry::named(
-            "Upgrade",
-            0x4aba_1f29,
-            Target::Table(Table::array(upgrade_count, upgrade_items)),
-        ),
-    ])
+    Ok((
+        [
+            Entry::named(
+                "UpgradeOCL",
+                0xa8b8_56f2,
+                Target::Table(Table::array(pair_count, pair_items)),
+            ),
+            Entry::named(name, 0xe46e_a3b2, filter),
+            Entry::named(
+                "Upgrade",
+                0x4aba_1f29,
+                Target::Table(Table::array(upgrade_count, upgrade_items)),
+            ),
+        ],
+        reference_offsets,
+    ))
 }
 
-fn empty_filter(start: usize) -> Table {
+pub(super) fn empty_filter(start: usize) -> Table {
     filter_table(start, [Vec::new(), Vec::new()])
 }
 

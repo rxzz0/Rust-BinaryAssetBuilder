@@ -1,0 +1,18 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DefaultLeech">
+    <Behaviors><LeechTargetingAttachUpdate id="ModuleTag_Attach" /></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="CustomLeech">
+    <Behaviors><LeechTargetingAttachUpdate id="ModuleTag_Attach" Range="32" CloseEnoughRange="16" InitialAttachDelay="2s"><ObjectFilter Rule="ANY" Include="INFANTRY" /></LeechTargetingAttachUpdate></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="DefaultSteal">
+    <Behaviors><StealUnitUpdate id="ModuleTag_Attach" /></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="CustomSteal">
+    <Behaviors><StealUnitUpdate id="ModuleTag_Attach" ParentStatus="SOLD" Flags="TELEPORT" ParentEnemyAttachmentEvaEvent="Attached"><ModifierToLeechFromParent>AttachModifier</ModifierToLeechFromParent></StealUnitUpdate></Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

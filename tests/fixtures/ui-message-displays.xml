@@ -1,0 +1,5 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UIMessageDisplay id="MessageProbe"><Color1 R="13" G="17" B="21" /><Color2 R="22" G="25" B="28" /><Font Name="Arial" Size="16" /></UIMessageDisplay>
+  <UITimerDisplay id="TimerProbe" Centered="true" FlashDuration="2s"><Position x="0.25" y="0.75" /><FlashColor R="3" G="4" B="5" /><NormalFont Name="Arial" Size="13" /><NormalColor R="7" G="8" B="9" /><ReadyFont Name="Verdana" Size="20" Bold="true" /><ReadyColor R="11" G="12" B="13" /></UITimerDisplay>
+  <UIMilitaryCaptionDisplay id="CaptionProbe"><Color R="1" G="4" B="9" /><Position x="0.30" y="0.60" /><TitleFont Name="Segoe UI" Size="24" Bold="true" /><Font Name="Tahoma" Size="18" /></UIMilitaryCaptionDisplay>
+</AssetDeclaration>

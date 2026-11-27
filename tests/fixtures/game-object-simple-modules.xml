@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="CollideProbe"><Behaviors><Collide id="ModuleTag_Test" /></Behaviors><Body><PropBody id="ModuleTag_Body" /></Body></GameObject>
+  <GameObject id="DamagerProbe"><Behaviors><Damager id="ModuleTag_Test" /></Behaviors><Body><PropBody id="ModuleTag_Body" /></Body></GameObject>
+  <GameObject id="DestroyProbe"><Behaviors><Destroy id="ModuleTag_Test" /></Behaviors><Body><PropBody id="ModuleTag_Body" /></Body></GameObject>
+  <GameObject id="FiringTrackerProbe"><Behaviors><FiringTracker id="ModuleTag_Test" /></Behaviors><Body><PropBody id="ModuleTag_Body" /></Body></GameObject>
+  <GameObject id="DeletionProbe"><Behaviors><DeletionUpdate id="ModuleTag_Test" MinFrames="15" MaxFrames="60" /></Behaviors><Body><PropBody id="ModuleTag_Body" /></Body></GameObject>
+  <GameObject id="DeletionDefault"><Behaviors><DeletionUpdate id="ModuleTag_Test" /></Behaviors><Body><PropBody id="ModuleTag_Body" /></Body></GameObject>
+  <GameObject id="GateProbe"><AI><AIGateUpdate id="ModuleTag_Test" TriggerWidthX="5.5" TriggerWidthY="8.25" /></AI><Body><PropBody id="ModuleTag_Body" /></Body></GameObject>
+  <GameObject id="ConstructionProbe"><AI><ConstructionYardAIUpdate id="ModuleTag_Test" /></AI><Body><PropBody id="ModuleTag_Body" /></Body></GameObject>
+</AssetDeclaration>

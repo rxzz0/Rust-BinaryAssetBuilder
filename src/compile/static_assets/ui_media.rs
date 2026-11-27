@@ -25,16 +25,68 @@ pub(super) fn cursor(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
 }
 
 pub(super) fn basic_cursors(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
-    const NAMES: &[&str] = &["id", "Normal", "Arrow", "Invalid", "EnterText"];
-    validate_leaf(node, NAMES, path)?;
+    cursor_references(node, &["Normal", "Arrow", "Invalid", "EnterText"], path)
+}
+
+pub(super) fn tactical_cursor_layout(type_name: &str) -> Option<(u32, &'static [&'static str])> {
+    Some(match type_name.strip_prefix("UIMouseTacticalCommand")? {
+        "Attack" => (
+            0x02bd_5240,
+            &[
+                "AttackObjectCursor",
+                "ForceAttackObjectCursor",
+                "ForceAttackGroundCursor",
+                "ExplosiveChargeCursor",
+                "ClearGarrisonCursor",
+                "DisguiseCursor",
+                "CallAirstrikeCursor",
+            ],
+        ),
+        "AttackMove" => (0xd265_7960, &["NormalCursor", "ForcedCursor"]),
+        "Dock" => (0xacdd_2f29, &["Cursor"]),
+        "ForceAttack" => (0xd046_99e4, &["ObjectCursor", "GroundCursor"]),
+        "ForceMove" => (0x07bf_94d3, &["Cursor"]),
+        "GetCrate" => (0x8e7a_0fa6, &["Cursor"]),
+        "Harvest" => (0x600a_25d0, &["Cursor"]),
+        "MineOre" => (0xb3dd_a9e2, &["Cursor"]),
+        "Misc" => (
+            0x05be_70d4,
+            &[
+                "CombineCursor",
+                "ChargeDefensesCursor",
+                "ConversionBeamCursor",
+            ],
+        ),
+        "Move" => (0xc0f9_04a1, &["ForwardCursor", "ReverseCursor"]),
+        "PlaceRallyPoint" => (0x417e_47cc, &["Cursor"]),
+        "PlaceWall" => (0x5bf6_293c, &["ValidPlacementCursor"]),
+        "ReverseMove" => (0xe7d4_dd88, &["Cursor"]),
+        "SetRallyPoint" => (0xce71_e899, &["Cursor"]),
+        "ToggleSelfRepair" => (0x295a_4872, &["ValidTargetCursor", "InvalidTargetCursor"]),
+        _ => return None,
+    })
+}
+
+pub(super) fn tactical_cursors(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    let name = node.tag_name().name();
+    let (_, fields) = tactical_cursor_layout(name)
+        .ok_or_else(|| invalid(path, format!("unsupported tactical cursor command {name}")))?;
+    cursor_references(node, fields, path)
+}
+
+fn cursor_references(node: Node<'_, '_>, fields: &[&str], path: &Path) -> io::Result<Marshaled> {
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(fields.iter().copied())
+        .collect();
+    validate_leaf(node, &allowed, path)?;
     let mut data = BinaryData {
-        payload: vec![0; 20],
+        payload: vec![0; 4 + fields.len() * 4],
         relocations: Vec::new(),
         path,
     };
     let mut result = Marshaled::default();
     for attribute in node.attributes() {
-        if let Some(index) = NAMES[1..].iter().position(|&name| name == attribute.name()) {
+        if let Some(index) = fields.iter().position(|&name| name == attribute.name()) {
             write_import(
                 attribute.value(),
                 "MouseCursor",

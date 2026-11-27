@@ -1,0 +1,21 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <FXList id="GiveProbeFX"><NuggetList/></FXList>
+  <FXList id="SpawnProbeFX"><NuggetList/></FXList>
+  <SpecialPowerTemplate id="SwitchProbePower" TargetType="NONE"/>
+  <GameObject id="AbilityMonitorDefaults">
+    <Behaviors>
+      <GiveUpgradeUpdate id="Give"/>
+      <OCLMonitorSpecialAbilityUpdate id="Monitor"/>
+      <SwitchLocomotorsSpecialAbilityUpdate id="Switch" UseUpgradedLocomotor="false"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="AbilityMonitorCustom">
+    <Behaviors>
+      <GiveUpgradeUpdate id="Give" SpawnOutFX="SpawnProbeFX" GiveUpgradeEffect="GiveProbeFX" DeliverUpgrade="true" FadeOutSpeed="0.125"/>
+      <OCLMonitorSpecialAbilityUpdate id="Monitor" EffectDuration="2.25s" EffectValue="4"/>
+      <SwitchLocomotorsSpecialAbilityUpdate id="Switch" UseUpgradedLocomotor="true" TriggersLanding="true" TriggersFlight="true" BusyForDuration="1.5s" LandingRange="80" HordeMembersSpecialPowerTemplate="SwitchProbePower" LocomotorToSet="NORMAL_UPGRADED"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

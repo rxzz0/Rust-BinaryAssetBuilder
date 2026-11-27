@@ -5,7 +5,7 @@ use super::super::{
     validate_attributes,
 };
 use super::behaviors_basic::{base, module_base};
-use super::draws::{boolean, model_condition_index};
+use super::draws::{boolean, model_condition_index, write_model_conditions};
 use super::secondary_damage::{STATUS_BYTES, write_status_flags};
 use super::spawn::{id_list, weak_reference};
 use super::tech_upgrade::encode_anim;
@@ -21,6 +21,119 @@ const CAPTURE: u32 = 0x3139_98b5;
 const WEAPON: u32 = 0x1e45_a393;
 const RECONSTITUTE: u32 = 0x3f9b_9ef1;
 const ASSEMBLE: u32 = 0x7737_ac69;
+const OBJECT_STATUS: u32 = 0x079b_6ead;
+const TELEPORT: u32 = 0x9383_3563;
+const TIBERIUM_THIEF: u32 = 0xf456_8855;
+const GIVE_UPGRADE: u32 = 0x2de3_4173;
+const OCL_MONITOR: u32 = 0xc80e_586b;
+const SWITCH_LOCOMOTORS: u32 = 0x14e0_31a2;
+const CLONE_STORED: u32 = 0xcdef_277d;
+const DELAYED_WEAPON: u32 = 0x368f_2215;
+const RADAR_SCAN: u32 = 0xda2f_4ee5;
+const LEVEL_GRANT: u32 = 0x90f0_5519;
+const GIVE_OR_RESTORE: u32 = 0x0453_e648;
+const TELEPORT_ABILITY: u32 = 0x4e46_3b86;
+const REPLACE_OBJECT: u32 = 0x55f9_e6ed;
+const REPLACE_OBJECT_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("ReplaceRadius", 0x6458_64f3, 0xf0, "real", "0"),
+    ("ReplaceFX", 0x0d1c_8e83, 0xf4, "ref", "FXList"),
+    ("Scatter", 0x77e3_f4f7, 0x100, "bool", "false"),
+];
+const TELEPORT_ABILITY_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("BusyDuration", 0x9986_69e8, 0xf0, "time", "0s"),
+    (
+        "DestinationWeapon",
+        0xd046_dd22,
+        0xf4,
+        "ref",
+        "WeaponTemplate",
+    ),
+    ("SourceWeapon", 0xd046_dd22, 0xf8, "ref", "WeaponTemplate"),
+    ("MaxDistance", 0x6458_64f3, 0xfc, "real", "0"),
+    ("HeightToTeleportTo", 0x6458_64f3, 0x100, "real", "0"),
+    ("FadeInTime", 0x9986_69e8, 0x104, "time", "0s"),
+];
+const LEVEL_GRANT_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("Experience", 0x23e6_50b8, 0xf0, "int", "0"),
+    ("RadiusEffect", 0x6458_64f3, 0xf4, "real", "0"),
+    ("LevelFX", 0x0d1c_8e83, 0xf8, "ref", "FXList"),
+];
+const GIVE_OR_RESTORE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("CommandButton", 0x1a29_33aa, 0xf0, "string", ""),
+    ("UpgradeToGive", 0x4aba_1f29, 0xf8, "ref", "UpgradeTemplate"),
+];
+const CLONE_STORED_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("MinDestinationRadius", 0x6458_64f3, 0xf0, "real", "0"),
+    ("MaxDestinationRadius", 0x6458_64f3, 0xf4, "real", "0"),
+    (
+        "TriggerAttributeModifierOnClones",
+        0x09dd_cff3,
+        0xf8,
+        "ref",
+        "AttributeModifier",
+    ),
+    ("TriggerFX", 0x0d1c_8e83, 0xfc, "ref", "FXList"),
+    ("TargetFX", 0x0d1c_8e83, 0x100, "ref", "FXList"),
+    ("ClonedObjectLifetime", 0x9986_69e8, 0x104, "time", "0s"),
+];
+const DELAYED_WEAPON_FIELDS: &[(&str, u32, usize, &str, &str)] =
+    &[("FireDelay", 0x9986_69e8, 0x110, "time", "0s")];
+const GIVE_UPGRADE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("GiveUpgradeEffect", 0x0d1c_8e83, 0xf0, "ref", "FXList"),
+    ("SpawnOutFX", 0x0d1c_8e83, 0xf4, "ref", "FXList"),
+    ("FadeOutSpeed", 0x6458_64f3, 0xf8, "real", "0.025"),
+    ("DeliverUpgrade", 0x77e3_f4f7, 0xfc, "bool", "false"),
+];
+const SWITCH_LOCOMOTOR_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("UseUpgradedLocomotor", 0x77e3_f4f7, 0x100, "bool", "false"),
+    ("TriggersLanding", 0x77e3_f4f7, 0x101, "bool", "false"),
+    ("TriggersFlight", 0x77e3_f4f7, 0x102, "bool", "false"),
+    ("BusyForDuration", 0x9986_69e8, 0xf0, "time", "0s"),
+    ("LandingRange", 0x6458_64f3, 0xf4, "real", "0"),
+    (
+        "HordeMembersSpecialPowerTemplate",
+        0xaee8_3888,
+        0xf8,
+        "ref",
+        "SpecialPowerTemplate",
+    ),
+    ("LocomotorToSet", 0x845d_12b2, 0xfc, "locomotor", "NORMAL"),
+];
+const OBJECT_STATUS_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("Status1", 0xa7bd_811e, 0xf0, "status", ""),
+    ("Status2", 0xa7bd_811e, 0x10c, "status", ""),
+];
+const TELEPORT_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("Radius", 0x6458_64f3, 0xf0, "real", "0"),
+    ("MinDestinationRadius", 0x6458_64f3, 0xf4, "real", "0"),
+    ("MaxDestinationRadius", 0x6458_64f3, 0xf8, "real", "0"),
+    ("MaxRangeFromCasterSP", 0x6458_64f3, 0xfc, "real", "0"),
+    ("MaxRangeFromCasterMP", 0x6458_64f3, 0x100, "real", "0"),
+    ("TriggerFX", 0x0d1c_8e83, 0x104, "ref", "FXList"),
+    ("TargetFX", 0x0d1c_8e83, 0x108, "ref", "FXList"),
+    ("RequireStoredObjects", 0x77e3_f4f7, 0x10c, "bool", "false"),
+    (
+        "KillObjectsIfPlacedInBadSpot",
+        0x77e3_f4f7,
+        0x10d,
+        "bool",
+        "false",
+    ),
+];
+const TIBERIUM_THIEF_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
+    ("TiberiumStolenPerUpdate", 0x23e6_50b8, 0xf0, "int", "1"),
+    ("DelayBetweenThefts", 0x9986_69e8, 0xf4, "time", "0s"),
+    ("TiberiumCapacity", 0x23e6_50b8, 0xf8, "int", "1"),
+    ("ObjectStatusWhenNotEmpty", 0xa7bd_811e, 0xfc, "status", ""),
+    (
+        "ModelConditionWhenNotEmpty",
+        0x67db_bfc9,
+        0x118,
+        "model_flags",
+        "",
+    ),
+    ("PlayWeaponPreFireFX", 0x77e3_f4f7, 0x154, "bool", "false"),
+];
 const ASSEMBLE_FIELDS: &[(&str, u32, usize, &str, &str)] = &[
     ("NewObjectAssemblyTime", 0x9986_69e8, 0xf0, "time", "0s"),
     ("BusyDuringAssembly", 0x77e3_f4f7, 0x100, "bool", "false"),
@@ -239,9 +352,24 @@ pub(super) fn encode(
     const ACTIVATE_MODULE: u32 = 0xcd33_bcee;
     let (kind, size, variant) = match node.tag_name().name() {
         "WeaponFireSpecialAbilityUpdate" => (WEAPON, 0x110, WEAPON_FIELDS),
+        "DelayedWeaponFireSpecialAbilityUpdate" => (DELAYED_WEAPON, 0x114, WEAPON_FIELDS),
+        "CloneStoredObjectsSpecialPowerUpdate" => (CLONE_STORED, 0x108, CLONE_STORED_FIELDS),
+        "RadarScanMapSpecialAbilityUpdate" => (RADAR_SCAN, 0xf8, &[][..]),
+        "LevelGrantSpecialPower" => (LEVEL_GRANT, 0x100, LEVEL_GRANT_FIELDS),
+        "GiveOrRestoreUpgradeSpecialPower" => (GIVE_OR_RESTORE, 0xfc, GIVE_OR_RESTORE_FIELDS),
+        "TeleportSpecialAbilityUpdate" => (TELEPORT_ABILITY, 0x108, TELEPORT_ABILITY_FIELDS),
+        "ReplaceObjectUpdate" => (REPLACE_OBJECT, 0x104, REPLACE_OBJECT_FIELDS),
         "ToggleStatusSpecialAbilityUpdate" => (TOGGLE, 0xfc, TOGGLE_FIELDS),
         "ActivateModuleSpecialAbilityUpdate" => (ACTIVATE_MODULE, 0xf8, &[][..]),
         "SpecialAbilityUpdate" => (ABILITY, 0xf0, &[][..]),
+        "ObjectStatusSpecialAbilityUpdate" => (OBJECT_STATUS, 0x128, OBJECT_STATUS_FIELDS),
+        "TeleportToCasterSpecialPower" => (TELEPORT, 0x110, TELEPORT_FIELDS),
+        "TiberiumThiefSpecialAbilityUpdate" => (TIBERIUM_THIEF, 0x158, TIBERIUM_THIEF_FIELDS),
+        "GiveUpgradeUpdate" => (GIVE_UPGRADE, 0x100, GIVE_UPGRADE_FIELDS),
+        "OCLMonitorSpecialAbilityUpdate" => (OCL_MONITOR, 0xf0, &[][..]),
+        "SwitchLocomotorsSpecialAbilityUpdate" => {
+            (SWITCH_LOCOMOTORS, 0x104, SWITCH_LOCOMOTOR_FIELDS)
+        }
         "AssembleStructureSpecialAbilityUpdate" => (ASSEMBLE, 0x104, ASSEMBLE_FIELDS),
         "BeamSpecialAbilityUpdate" => (
             beam_special_ability::KIND,
@@ -273,16 +401,27 @@ pub(super) fn encode(
             ));
         }
     };
-    let all_fields = FIELDS.iter().chain(variant);
+    let extension = if kind == DELAYED_WEAPON {
+        DELAYED_WEAPON_FIELDS
+    } else {
+        &[]
+    };
+    let all_fields = FIELDS.iter().chain(variant).chain(extension);
     let path = data.path;
     let allowed: Vec<_> = std::iter::once("id")
         .chain(all_fields.clone().map(|&(name, ..)| name))
         .collect();
     validate_attributes(node, &allowed, path)?;
+    if kind == SWITCH_LOCOMOTORS {
+        required(node, "UseUpgradedLocomotor", path)?;
+    }
     let start = data.allocate(pointer, size)?;
     let mut children = significant_children(node).peekable();
     let animation_node =
         children.next_if(|child| child.has_tag_name((SAGE_NS, "CustomAnimAndDuration")));
+    let radar_filters = (kind == RADAR_SCAN)
+        .then(|| radar_scan_filters(children.by_ref(), start + 0xf0, data))
+        .transpose()?;
     let ejection = if kind == eject_passengers::KIND {
         let offset =
             children.next_if(|child| child.has_tag_name((SAGE_NS, eject_passengers::BONE_OFFSET)));
@@ -327,9 +466,32 @@ pub(super) fn encode(
     let assemble = (kind == ASSEMBLE)
         .then(|| assembly_templates(children.by_ref(), start + 0xf8, data, reference_types))
         .transpose()?;
-    // Beam allocates its derived status list and string before inherited data.
-    let ordered_fields = if kind == beam_special_ability::KIND {
-        variant.iter().chain(FIELDS)
+    let replacement_nuggets = (kind == REPLACE_OBJECT)
+        .then(|| replacement_nuggets(children.by_ref(), start + 0xf8, data, reference_types))
+        .transpose()?;
+    let acceptance = (kind == LEVEL_GRANT)
+        .then(|| {
+            const NAME: &str = "AcceptanceFilter";
+            let filter = children.next_if(|child| child.has_tag_name((SAGE_NS, NAME)));
+            if children.next().is_some() {
+                return Err(invalid(path, "unexpected LevelGrantSpecialPower child"));
+            }
+            let target = if let Some(filter) = filter {
+                Target::Table(super::parking::encode_filter(
+                    filter,
+                    start + 0xfc,
+                    data,
+                    reference_types,
+                )?)
+            } else {
+                Target::Null
+            };
+            Ok(Entry::named(NAME, 0xe46e_a3b2, target))
+        })
+        .transpose()?;
+    // These variants allocate their own pointer fields before inherited data.
+    let ordered_fields = if matches!(kind, beam_special_ability::KIND | GIVE_OR_RESTORE) {
+        variant.iter().chain(FIELDS).chain(extension)
     } else {
         all_fields
     };
@@ -346,6 +508,7 @@ pub(super) fn encode(
             }
             "bool" => data.payload[offset] = boolean(node, name, default == "true", path)?,
             "status" => write_status_flags(value, offset, data)?,
+            "model_flags" => write_model_conditions(value, offset, data)?,
             "optional_status" => {
                 target = match node.attribute(name) {
                     Some(value) => {
@@ -374,6 +537,7 @@ pub(super) fn encode(
                     "conditions" => flags(value, &["MOUNTED", "WEAPON_TOGGLE", "MOVING"], path)?,
                     "disabled" => flags(value, super::production::DISABLED, path)?,
                     "slot" => super::behaviors_basic::weapon_slot(value, path)?,
+                    "locomotor" => super::ai_update::locomotor_condition(value, name, path)?,
                     "model" if value.is_empty() => 0,
                     "model" if value == "INVALID" => u32::MAX,
                     "model" => model_condition_index(value, path)? as u32,
@@ -419,9 +583,28 @@ pub(super) fn encode(
         return Ok((kind, Table::record(ability)));
     }
     let mut entries = vec![base(ABILITY, Table::record(ability))];
+    if kind == DELAYED_WEAPON {
+        let extension = derived.split_off(WEAPON_FIELDS.len());
+        entries.extend(derived);
+        entries = vec![base(WEAPON, Table::record(entries))];
+        entries.extend(extension);
+        if children.next().is_some() {
+            return Err(invalid(
+                path,
+                "unexpected DelayedWeaponFireSpecialAbilityUpdate child",
+            ));
+        }
+        return Ok((kind, Table::record(entries)));
+    }
     entries.extend(derived);
     entries.extend(ejection);
-    if let Some(derived_child) = disguise.or(dominate).or(assemble) {
+    if let Some(derived_child) = disguise
+        .or(dominate)
+        .or(assemble)
+        .or(radar_filters)
+        .or(acceptance)
+        .or(replacement_nuggets)
+    {
         entries.push(derived_child);
         return Ok((kind, Table::record(entries)));
     }
@@ -466,7 +649,20 @@ pub(super) fn encode(
     }
     if matches!(
         kind,
-        WEAPON | CAPTURE | RECONSTITUTE | eject_passengers::KIND | beam_special_ability::KIND
+        WEAPON
+            | CAPTURE
+            | RECONSTITUTE
+            | CLONE_STORED
+            | GIVE_OR_RESTORE
+            | TELEPORT_ABILITY
+            | OBJECT_STATUS
+            | TELEPORT
+            | TIBERIUM_THIEF
+            | GIVE_UPGRADE
+            | OCL_MONITOR
+            | SWITCH_LOCOMOTORS
+            | eject_passengers::KIND
+            | beam_special_ability::KIND
     ) {
         if children.next().is_some() {
             return Err(invalid(
@@ -490,6 +686,123 @@ pub(super) fn encode(
         Target::Table(replacements),
     ));
     Ok((kind, Table::record(entries)))
+}
+
+fn radar_scan_filters<'a, 'input: 'a>(
+    children: impl Iterator<Item = Node<'a, 'input>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Entry> {
+    const NAME: &str = "IntersectionFlagsFilter";
+    const STRIDE: usize = 0x80;
+    const FIELDS: &[(&str, u32, usize)] = &[
+        ("ObjectStatus", 0xa7bd_811e, 0),
+        ("ModelCondition", 0x67db_bfc9, 0x1c),
+        ("KindOf", 0x9afc_9193, 0x58),
+        ("UseLocalPlayerFilter", 0x77e3_f4f7, 0x7c),
+    ];
+    let filters: Vec<_> = children.collect();
+    let path = data.path;
+    if filters.is_empty() {
+        return Err(invalid(path, format!("expected {NAME}")));
+    }
+    let first = data.list(count, filters.len(), STRIDE)?;
+    let mut items = Vec::with_capacity(filters.len());
+    for (index, filter) in filters.into_iter().enumerate() {
+        if !filter.has_tag_name((SAGE_NS, NAME)) || has_content(filter) {
+            return Err(invalid(path, format!("unexpected {NAME} content")));
+        }
+        validate_attributes(
+            filter,
+            &[
+                "ObjectStatus",
+                "ModelCondition",
+                "KindOf",
+                "UseLocalPlayerFilter",
+            ],
+            path,
+        )?;
+        let start = first + index * STRIDE;
+        write_status_flags(filter.attribute("ObjectStatus").unwrap_or(""), start, data)?;
+        write_model_conditions(
+            filter.attribute("ModelCondition").unwrap_or(""),
+            start + 0x1c,
+            data,
+        )?;
+        super::fields::write_kind_of(filter.attribute("KindOf").unwrap_or(""), start + 0x58, data)?;
+        data.payload[start + 0x7c] = boolean(filter, "UseLocalPlayerFilter", true, path)?;
+        let fields = super::draws::fields(start, FIELDS).collect();
+        items.push((0, Target::Table(Table::record(fields))));
+    }
+    Ok(Entry::named(
+        NAME,
+        0x6949_a978,
+        Target::Table(Table::array(count, items)),
+    ))
+}
+
+fn replacement_nuggets<'a, 'input: 'a>(
+    children: impl Iterator<Item = Node<'a, 'input>>,
+    count: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Entry> {
+    const NAME: &str = "ReplaceObjectNugget";
+    let nuggets: Vec<_> = children.collect();
+    let path = data.path;
+    if nuggets.len() > 128 {
+        return Err(invalid(
+            path,
+            format!("ReplaceObjectUpdate allows up to 128 {NAME} elements"),
+        ));
+    }
+    let first = data.list(count, nuggets.len(), 12)?;
+    let mut items = Vec::with_capacity(nuggets.len());
+    for (index, nugget) in nuggets.into_iter().enumerate() {
+        if !nugget.has_tag_name((SAGE_NS, NAME)) {
+            return Err(invalid(path, format!("expected {NAME}")));
+        }
+        validate_attributes(nugget, &[], path)?;
+        let start = first + index * 12;
+        let mut children = significant_children(nugget).peekable();
+        let filter = if let Some(child) =
+            children.next_if(|child| child.has_tag_name((SAGE_NS, "TargetObjectFilter")))
+        {
+            Target::Table(super::parking::encode_filter(
+                child,
+                start,
+                data,
+                reference_types,
+            )?)
+        } else {
+            Target::Null
+        };
+        let ids = children
+            .map(|child| {
+                if !child.has_tag_name((SAGE_NS, "ReplacementObject")) {
+                    return Err(invalid(path, "expected ReplacementObject"));
+                }
+                weak_reference(child, "GameObject", data, reference_types)
+            })
+            .collect::<io::Result<Vec<_>>>()?;
+        let replacements = id_list(data, start + 4, ids)?;
+        items.push((
+            0,
+            Target::Table(Table::record(vec![
+                Entry::named("TargetObjectFilter", 0xe46e_a3b2, filter),
+                Entry::named(
+                    "ReplacementObject",
+                    0x148e_d75d,
+                    Target::Table(replacements),
+                ),
+            ])),
+        ));
+    }
+    Ok(Entry::named(
+        NAME,
+        0xafe0_3e73,
+        Target::Table(Table::array(count, items)),
+    ))
 }
 
 fn assembly_templates<'a, 'input: 'a>(

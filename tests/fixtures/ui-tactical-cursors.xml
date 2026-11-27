@@ -1,0 +1,21 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <MouseCursor id="CursorA" File="a.ani" />
+  <MouseCursor id="CursorB" File="b.ani" />
+  <MouseCursor id="CursorC" File="c.ani" />
+  <UIMouseTacticalCommandAttack id="UIMouseTacticalCommandAttackProbe" CallAirstrikeCursor="CursorG" DisguiseCursor="CursorF" ClearGarrisonCursor="CursorE" ExplosiveChargeCursor="CursorD" ForceAttackGroundCursor="CursorC" ForceAttackObjectCursor="CursorB" AttackObjectCursor="CursorA" />
+  <UIMouseTacticalCommandAttackMove id="UIMouseTacticalCommandAttackMoveProbe" ForcedCursor="CursorB" NormalCursor="CursorA" />
+  <UIMouseTacticalCommandAttackMove id="UIMouseTacticalCommandAttackMoveDefault" />
+  <UIMouseTacticalCommandDock id="UIMouseTacticalCommandDockProbe" Cursor="CursorA" />
+  <UIMouseTacticalCommandForceAttack id="UIMouseTacticalCommandForceAttackProbe" GroundCursor="CursorB" ObjectCursor="CursorA" />
+  <UIMouseTacticalCommandForceMove id="UIMouseTacticalCommandForceMoveProbe" Cursor="CursorA" />
+  <UIMouseTacticalCommandGetCrate id="UIMouseTacticalCommandGetCrateProbe" Cursor="CursorA" />
+  <UIMouseTacticalCommandHarvest id="UIMouseTacticalCommandHarvestProbe" Cursor="CursorA" />
+  <UIMouseTacticalCommandMineOre id="UIMouseTacticalCommandMineOreProbe" Cursor="CursorA" />
+  <UIMouseTacticalCommandMisc id="UIMouseTacticalCommandMiscProbe" ConversionBeamCursor="CursorC" ChargeDefensesCursor="CursorB" CombineCursor="CursorA" />
+  <UIMouseTacticalCommandMove id="UIMouseTacticalCommandMoveProbe" ReverseCursor="CursorB" ForwardCursor="CursorA" />
+  <UIMouseTacticalCommandPlaceRallyPoint id="UIMouseTacticalCommandPlaceRallyPointProbe" Cursor="CursorA" />
+  <UIMouseTacticalCommandPlaceWall id="UIMouseTacticalCommandPlaceWallProbe" ValidPlacementCursor="CursorA" />
+  <UIMouseTacticalCommandReverseMove id="UIMouseTacticalCommandReverseMoveProbe" Cursor="CursorA" />
+  <UIMouseTacticalCommandSetRallyPoint id="UIMouseTacticalCommandSetRallyPointProbe" Cursor="CursorA" />
+  <UIMouseTacticalCommandToggleSelfRepair id="UIMouseTacticalCommandToggleSelfRepairProbe" InvalidTargetCursor="CursorB" ValidTargetCursor="CursorA" />
+</AssetDeclaration>

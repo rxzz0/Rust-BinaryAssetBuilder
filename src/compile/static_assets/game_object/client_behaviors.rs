@@ -15,6 +15,7 @@ const ANIMATION_SOUND: u32 = 0x27ef_791d;
 const LOOP: u32 = 0x5a3e_dbf4;
 const SELECTOR: u32 = 0x327c_fb76;
 const UPGRADE_SELECTOR: u32 = 0xf911_5aa9;
+const RANDOM_SELECTOR: u32 = 0xb4a8_b1f4;
 const EVA_SELECTOR: u32 = 0x61c8_c467;
 const SOUND: u32 = 0x63d7_b468;
 const INT: u32 = 0x23e6_50b8;
@@ -29,12 +30,18 @@ pub(super) fn encode(
         data,
         references,
         reference_types,
+        imports: None,
     };
     let modules: Vec<_> = significant_children(group).collect();
     let count = encoder.data.allocate(0x1e4, 8)?;
     let pointers = encoder.data.list(count, modules.len(), 4)?;
     let mut items = Vec::with_capacity(modules.len());
     for (index, node) in modules.into_iter().enumerate() {
+        if node.has_tag_name((SAGE_NS, "RandomSoundSelectorClientBehavior")) {
+            let fields = encoder.random_selector(node, pointers + index * 4)?;
+            items.push(client_variant(RANDOM_SELECTOR, fields));
+            continue;
+        }
         let (kind, name, tag, size) = match node.tag_name().name() {
             "AnimationSoundClientBehavior" => (ANIMATION_SOUND, "Sound", 0xeb6c_6024, 0x18),
             "ModelConditionAudioLoopClientBehavior" => {
@@ -115,35 +122,40 @@ pub(super) fn encode(
                 }),
             ));
         }
-        let module = Table::record(vec![
-            Entry::new(0x19b0_42a0, INT, Target::Data(start)),
-            Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
-        ]);
-        let mut fields = vec![base(
-            0x7b8c_5772,
-            Table::record(vec![base(0xd75d_93a2, module)]),
-        )];
+        let mut fields = vec![client_base(start)];
         if is_animation {
             fields.push(Entry::named("MaxUpdateRangeCap", 0xbc2f_1cbf, range));
         }
         fields.push(list(name, tag, count, entries));
-        let fields = Table::record(fields);
-        items.push((
-            0,
-            Target::Table(Table::sequence(vec![Entry::new(
-                2,
-                kind,
-                Target::Table(fields),
-            )])),
-        ));
+        items.push(client_variant(kind, Table::record(fields)));
     }
     Ok(Target::Table(Table::array(count, items)))
+}
+
+fn client_variant(kind: u32, fields: Table) -> (u32, Target) {
+    (
+        0,
+        Target::Table(Table::sequence(vec![Entry::new(
+            2,
+            kind,
+            Target::Table(fields),
+        )])),
+    )
+}
+
+fn client_base(start: usize) -> Entry {
+    let module = Table::record(vec![
+        Entry::new(0x19b0_42a0, INT, Target::Data(start)),
+        Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
+    ]);
+    base(0x7b8c_5772, Table::record(vec![base(0xd75d_93a2, module)]))
 }
 
 struct AudioEncoder<'a, 'path> {
     data: &'a mut BinaryData<'path>,
     references: &'a mut Vec<AssetReference>,
     reference_types: &'a mut Vec<u32>,
+    imports: Option<&'a mut Vec<u32>>,
 }
 
 pub(super) fn encode_object_audio(
@@ -156,6 +168,7 @@ pub(super) fn encode_object_audio(
         data,
         references,
         reference_types,
+        imports: None,
     };
     match node.tag_name().name() {
         "AudioArrayVoice" => encoder.audio_array(Some(node), 0x208, true),
@@ -168,7 +181,86 @@ pub(super) fn encode_object_audio(
     }
 }
 
+pub(in crate::compile::static_assets) fn encode_inline_voice(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+    imports: &mut Vec<u32>,
+) -> io::Result<()> {
+    AudioEncoder {
+        data,
+        references,
+        reference_types,
+        imports: Some(imports),
+    }
+    .audio_array_fields(node, start, true)?;
+    Ok(())
+}
+
 impl AudioEncoder<'_, '_> {
+    fn random_selector(&mut self, node: Node<'_, '_>, pointer: usize) -> io::Result<Table> {
+        let path = self.data.path;
+        validate_attributes(
+            node,
+            &[
+                "id",
+                "Chance",
+                "VoicePriorityOverride",
+                "RerollOnEveryFrame",
+            ],
+            path,
+        )?;
+        let mut voice = None;
+        let mut sound = None;
+        for child in significant_children(node) {
+            let slot = match child.tag_name().name() {
+                "AudioArrayVoice" if child.has_tag_name((SAGE_NS, "AudioArrayVoice")) => &mut voice,
+                "AudioArraySound" if child.has_tag_name((SAGE_NS, "AudioArraySound")) => &mut sound,
+                _ => {
+                    return Err(invalid(
+                        path,
+                        "unexpected RandomSoundSelectorClientBehavior child",
+                    ));
+                }
+            };
+            if slot.replace(child).is_some() {
+                return Err(invalid(
+                    path,
+                    "duplicate RandomSoundSelectorClientBehavior audio array",
+                ));
+            }
+        }
+        let start = self.data.allocate(pointer, 28)?;
+        self.data.word(start, RANDOM_SELECTOR);
+        self.data
+            .word(start + 4, hash_name(required(node, "id", path)?));
+        let chance =
+            super::super::percentage(node.attribute("Chance").unwrap_or("50"), "Chance", path)?;
+        self.data.word(start + 8, chance.to_bits());
+        let priority = if let Some(value) = node.attribute("VoicePriorityOverride") {
+            let value = sage_int(value, "VoicePriorityOverride", path)?;
+            let offset = self.data.allocate(start + 12, 4)?;
+            self.data.word(offset, value as u32);
+            Target::Data(offset)
+        } else {
+            Target::Null
+        };
+        self.data.payload[start + 24] =
+            super::draws::boolean(node, "RerollOnEveryFrame", false, path)?;
+        let voice = self.audio_array(voice, start + 16, true)?;
+        let sound = self.audio_array(sound, start + 20, false)?;
+        Ok(Table::record(vec![
+            client_base(start),
+            field("Chance", 0x6458_64f3, start + 8),
+            Entry::named("VoicePriorityOverride", INT, priority),
+            field("RerollOnEveryFrame", 0x77e3_f4f7, start + 24),
+            Entry::named("AudioArrayVoice", 0x09d1_8241, voice),
+            Entry::named("AudioArraySound", 0x5986_7d0b, sound),
+        ]))
+    }
+
     fn animation_sound(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
         let path = self.data.path;
         validate_attributes(
@@ -377,6 +469,17 @@ impl AudioEncoder<'_, '_> {
         let Some(node) = node else {
             return Ok(Target::Null);
         };
+        let start = self.data.allocate(pointer, if voice { 24 } else { 8 })?;
+        self.audio_array_fields(node, start, voice)
+            .map(Target::Table)
+    }
+
+    fn audio_array_fields(
+        &mut self,
+        node: Node<'_, '_>,
+        start: usize,
+        voice: bool,
+    ) -> io::Result<Table> {
         validate_attributes(node, &[], self.data.path)?;
         let mut children = Vec::new();
         let mut object_specific = Vec::new();
@@ -399,7 +502,6 @@ impl AudioEncoder<'_, '_> {
                 ));
             }
         }
-        let start = self.data.allocate(pointer, if voice { 24 } else { 8 })?;
         let size = if voice { 12 } else { 8 };
         let first = self.data.list(start, children.len(), size)?;
         let mut items = Vec::with_capacity(children.len());
@@ -446,7 +548,7 @@ impl AudioEncoder<'_, '_> {
             }
             fields.push(list("NamedEntry", 0xf8ed_487b, start + 16, items));
         }
-        Ok(Target::Table(Table::record(fields)))
+        Ok(Table::record(fields))
     }
 
     fn voice_entry(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
@@ -508,7 +610,7 @@ impl AudioEncoder<'_, '_> {
     fn sound_or_eva(&mut self, node: Node<'_, '_>, start: usize) -> io::Result<Table> {
         let sound = self.optional_sound(node, start)?;
         let event = self.reference(node.attribute("EvaEvent").unwrap_or(""), "EvaEvent")?;
-        self.data.word(start + 4, event);
+        self.write_import(start + 4, event);
         Ok(Table::record(vec![
             sound,
             field("EvaEvent", 0xc4ec_43b1, start + 4),
@@ -538,12 +640,21 @@ impl AudioEncoder<'_, '_> {
         let target = if let Some(value) = node.attribute("Sound") {
             let ordinal = self.reference(value, "BaseAudioEventInfo")?;
             let offset = self.data.allocate(pointer, 4)?;
-            self.data.word(offset, ordinal);
+            self.write_import(offset, ordinal);
             Target::Data(offset)
         } else {
             Target::Null
         };
         Ok(Entry::named("Sound", SOUND, target))
+    }
+
+    fn write_import(&mut self, offset: usize, ordinal: u32) {
+        self.data.word(offset, ordinal);
+        if ordinal != 0
+            && let Some(imports) = &mut self.imports
+        {
+            imports.push(offset as u32);
+        }
     }
 
     fn reference(&mut self, value: &str, kind: &str) -> io::Result<u32> {

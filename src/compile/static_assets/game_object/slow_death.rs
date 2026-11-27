@@ -4,7 +4,7 @@ use super::super::{
     AssetReference, asset_reference, finite_number, percentage, sage_time, significant_children,
     validate_attributes,
 };
-use super::behaviors_basic::{base, encode_die_mux, inherited, module_base};
+use super::behaviors_basic::{base, encode_die_mux, module_base};
 use super::draws::{boolean, write_model_conditions};
 use super::secondary_damage::{STATUS_BYTES, write_status_flags};
 use crate::compile::{SAGE_NS, has_content, invalid};
@@ -13,12 +13,49 @@ use std::io;
 
 const SLOW_DEATH: u32 = 0x9876_9794;
 const SHIP_SLOW_DEATH: u32 = 0xecc6_823d;
+const CLEARANCE: u32 = 0x0ea2_6c39;
+const HELICOPTER: u32 = 0x006d_bebf;
 const REAL: u32 = 0x6458_64f3;
 const TIME: u32 = 0x9986_69e8;
 const ANGLE: u32 = 0x4e16_ea4d;
 const BOOL: u32 = 0x77e3_f4f7;
 const MODEL: u32 = 0x67db_bfc9;
 const STATUS: u32 = 0xa7bd_811e;
+const STRING: u32 = 0x1a29_33aa;
+const OCL: u32 = 0x42e4_e9d1;
+const FX: u32 = 0x0d1c_8e83;
+const RUBBLE: u32 = 0x148e_d75d;
+const AUDIO: u32 = 0x63d7_b468;
+const CLEARANCE_FIELDS: &[(&str, u32, usize, &str)] = &[
+    ("ClearanceMaxHeight", REAL, 0x74, "0"),
+    ("ClearanceMaxHeightFraction", REAL, 0x78, "0"),
+    ("ClearanceMinHeight", REAL, 0x7c, "0"),
+    ("ClearanceMinHeightFraction", REAL, 0x80, "0"),
+];
+const HELICOPTER_FIELDS: &[(&str, u32, usize, &str)] = &[
+    ("SpiralOrbitTurnRate", REAL, 0x74, "0"),
+    ("SpiralOrbitForwardSpeed", REAL, 0x78, "0"),
+    ("SpiralOrbitForwardSpeedDamping", REAL, 0x7c, "1"),
+    ("MinSelfSpin", REAL, 0x80, "0"),
+    ("MaxSelfSpin", REAL, 0x84, "0"),
+    ("SelfSpinUpdateDelay", TIME, 0x88, "0s"),
+    ("SelfSpinUpdateAmount", REAL, 0x8c, "0"),
+    ("FallHowFast", REAL, 0x90, "0"),
+    ("MinBladeFlyOffDelay", TIME, 0x94, "0s"),
+    ("MaxBladeFlyOffDelay", TIME, 0x98, "0s"),
+    ("BladeBone", STRING, 0x9c, ""),
+    ("OclEjectPilot", OCL, 0xa4, ""),
+    ("FxBlade", FX, 0xa8, ""),
+    ("OclBlade", OCL, 0xac, ""),
+    ("FxHitGround", FX, 0xb0, ""),
+    ("OclHitGround", OCL, 0xb4, ""),
+    ("FxFinalBlowUp", FX, 0xb8, ""),
+    ("OclFinalBlowUp", OCL, 0xbc, ""),
+    ("DelayFromGroundToFinalDeath", REAL, 0xc0, "0"),
+    ("FinalRubbleObject", RUBBLE, 0xc4, ""),
+    ("MaxBraking", REAL, 0xc8, "99999.9"),
+    ("DeathSound", AUDIO, 0xcc, ""),
+];
 
 const ATTRIBUTES: [(&str, u32, usize, &str); 19] = [
     ("SinkRate", 0x7a76_c60e, 0x08, "0"),
@@ -57,15 +94,41 @@ pub(super) fn encode(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
     let path = data.path;
+    let (kind, size, derived) = match node.tag_name().name() {
+        "ShipSlowDeath" => (SHIP_SLOW_DEATH, 0x74, &[][..]),
+        "ClearanceTestingSlowDeathBehavior" => (CLEARANCE, 0x8c, CLEARANCE_FIELDS),
+        "HelicopterSlowDeath" => (HELICOPTER, 0xd0, HELICOPTER_FIELDS),
+        _ => (SLOW_DEATH, 0x74, &[][..]),
+    };
     let mut names = vec!["id"];
     names.extend(ATTRIBUTES.map(|(name, _, _, _)| name));
+    names.extend(derived.iter().map(|&(name, ..)| name));
+    if kind == HELICOPTER {
+        names.push("BladeObjectName");
+    }
     validate_attributes(node, &names, path)?;
-    let start = data.allocate(pointer, 0x74)?;
-    let kind = if node.has_tag_name((SAGE_NS, "ShipSlowDeath")) {
-        SHIP_SLOW_DEATH
-    } else {
-        SLOW_DEATH
-    };
+    let start = data.allocate(pointer, size)?;
+    let mut derived_entries =
+        derived_fields(node, start, derived, data, references, reference_types)?;
+    let clearance_names = ["ClearanceGeometry", "ClearanceGeometryOffset"];
+    if kind == CLEARANCE {
+        let geometry_node = significant_children(node)
+            .find(|child| child.has_tag_name((SAGE_NS, clearance_names[0])));
+        let geometry = if let Some(child) = geometry_node {
+            Target::Table(super::clearance_geometry::encode(
+                child,
+                start + 0x84,
+                data,
+            )?)
+        } else {
+            Target::Null
+        };
+        let vector_node = significant_children(node)
+            .find(|child| child.has_tag_name((SAGE_NS, clearance_names[1])));
+        let vector = super::behaviors_basic::optional_vector(vector_node, start + 0x88, data)?;
+        derived_entries.push(Entry::named(clearance_names[0], 0xc6d5_ff62, geometry));
+        derived_entries.push(Entry::named(clearance_names[1], 0x2936_8077, vector));
+    }
     let mut entries = vec![module_base(node, kind, start, data, true)?];
     for (name, kind, relative, default) in ATTRIBUTES {
         let value = node.attribute(name).unwrap_or(default);
@@ -210,17 +273,90 @@ pub(super) fn encode(
     } else {
         Target::Null
     };
+    if kind == CLEARANCE {
+        for name in clearance_names {
+            children.next_if(|child| child.has_tag_name((SAGE_NS, name)));
+        }
+    }
     if children.next().is_some() {
         return Err(invalid(path, "unexpected SlowDeath child"));
     }
     entries.push(Entry::named("DieMuxData", 0x0084_001b, mux));
     let table = Table::record(entries);
-    let table = if kind == SHIP_SLOW_DEATH {
-        inherited(SLOW_DEATH, table)
+    let table = if kind != SLOW_DEATH {
+        let mut entries = vec![base(SLOW_DEATH, table)];
+        entries.extend(derived_entries);
+        Table::record(entries)
     } else {
         table
     };
     Ok((kind, table))
+}
+
+fn derived_fields(
+    node: Node<'_, '_>,
+    start: usize,
+    fields: &[(&str, u32, usize, &str)],
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Vec<Entry>> {
+    let path = data.path;
+    for attr in node.attributes() {
+        let Some(&(_, kind, offset, _)) = fields.iter().find(|&&(name, ..)| name == attr.name())
+        else {
+            continue;
+        };
+        let value = attr.value();
+        let word = match kind {
+            FX | OCL => super::passive_area::reference(
+                value,
+                if kind == FX {
+                    "FXList"
+                } else {
+                    "ObjectCreationList"
+                },
+                path,
+                references,
+                reference_types,
+            )?,
+            AUDIO => {
+                super::client_behaviors::audio_reference(value, path, references, reference_types)?
+            }
+            RUBBLE if !value.trim().is_empty() => {
+                let name = value.split_once('\\').map_or(value, |(name, _)| name);
+                let reference = asset_reference(name, "GameObject", path)?;
+                reference_types.push(reference.type_id);
+                reference.instance_id
+            }
+            _ => continue,
+        };
+        data.word(start + offset, word);
+    }
+    fields
+        .iter()
+        .map(|&(name, kind, offset, default)| {
+            let offset = start + offset;
+            let value = node.attribute(name);
+            match kind {
+                REAL => data.word(
+                    offset,
+                    finite_number(value.unwrap_or(default), name, path)?.to_bits(),
+                ),
+                TIME => data.word(
+                    offset,
+                    sage_time(value.unwrap_or(default), name, path)?.to_bits(),
+                ),
+                STRING => {
+                    if let Some(value) = value {
+                        data.string(offset, value)?;
+                    }
+                }
+                _ => {}
+            }
+            Ok(Entry::named(name, kind, Target::Data(offset)))
+        })
+        .collect()
 }
 
 pub(super) fn angle(value: &str, name: &str, data: &BinaryData<'_>) -> io::Result<f32> {

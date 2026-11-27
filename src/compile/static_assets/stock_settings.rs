@@ -47,6 +47,116 @@ fn leaf_text(node: Node<'_, '_>, path: &Path) -> io::Result<String> {
         .filter_map(|child| child.text())
         .collect())
 }
+pub(super) fn water_textures(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    validate_attributes(node, &["id", "Type"], path)?;
+    let kind = match required(node, "Type", path)?.trim() {
+        "FIRST" | "RIVER" => 0,
+        "BUMP" => 1,
+        "NORMAL" => 2,
+        "SKY" => 3,
+        "NOISE" => 4,
+        "SPARKLE" => 5,
+        other => return Err(invalid(path, format!("unknown water texture type {other}"))),
+    };
+    let textures = children(node, "Texture", path)?;
+    if textures.is_empty() {
+        return Err(invalid(path, "WaterTextureList requires a Texture"));
+    }
+    let mut data = binary(16, path);
+    data.word(4, kind);
+    let start = data.list(8, textures.len(), 8)?;
+    for (index, texture) in textures.into_iter().enumerate() {
+        data.string(start + index * 8, &leaf_text(texture, path)?)?;
+    }
+    Ok(data.finish(Marshaled::default()))
+}
+
+pub(super) fn asset_report(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    fn string_hash(node: Node<'_, '_>, field: &str, path: &Path) -> io::Result<u32> {
+        let value = required(node, field, path)?;
+        let bytes = crate::compile::windows_1252(value)
+            .ok_or_else(|| invalid(path, format!("invalid asset report {field}")))?;
+        Ok(crate::hash::asset_string_hash(&bytes))
+    }
+
+    validate_attributes(node, &["id"], path)?;
+    let reports = children(node, "AssetReport", path)?;
+    let mut data = binary(12, path);
+    let start = data.list(4, reports.len(), 20)?;
+    for (index, report) in reports.into_iter().enumerate() {
+        validate_attributes(report, &["Id", "Type", "AssetSize"], path)?;
+        let offset = start + index * 20;
+        data.word(offset, string_hash(report, "Id", path)?);
+        data.word(offset + 4, string_hash(report, "Type", path)?);
+        data.word(
+            offset + 8,
+            sage_uint(required(report, "AssetSize", path)?, "AssetSize", path)?,
+        );
+        let references = children(report, "Reference", path)?;
+        let entries = data.list(offset + 12, references.len(), 8)?;
+        for (index, reference) in references.into_iter().enumerate() {
+            validate_leaf(reference, &["Id", "Type"], path)?;
+            let entry = entries + index * 8;
+            data.word(entry, string_hash(reference, "Id", path)?);
+            data.word(entry + 4, string_hash(reference, "Type", path)?);
+        }
+    }
+    Ok(data.finish(Marshaled::default()))
+}
+
+pub(super) fn downloadable_content(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
+    fn byte(node: Node<'_, '_>, field: &str, path: &Path) -> io::Result<u8> {
+        required(node, field, path)?
+            .trim()
+            .parse()
+            .map_err(|_| invalid(path, format!("invalid DLContent {field}")))
+    }
+
+    validate_attributes(node, &["id", "PackageNumber"], path)?;
+    let mut licenses = Vec::new();
+    let mut patches = Vec::new();
+    for child in significant_children(node) {
+        match (child.tag_name().namespace(), child.tag_name().name()) {
+            (Some(SAGE_NS), "License") => licenses.push(child),
+            (Some(SAGE_NS), "Patch") => patches.push(child),
+            _ => return Err(invalid(path, "unexpected DLContent child")),
+        }
+    }
+
+    let mut data = binary(24, path);
+    let mut result = Marshaled::default();
+    data.payload[20] = byte(node, "PackageNumber", path)?;
+    let start = data.list(4, licenses.len(), 12)?;
+    for (index, license) in licenses.into_iter().enumerate() {
+        validate_attributes(license, &["LicenseMask"], path)?;
+        let offset = start + index * 12;
+        data.word(
+            offset,
+            sage_uint(required(license, "LicenseMask", path)?, "LicenseMask", path)?,
+        );
+        let assets = children(license, "Asset", path)?;
+        if assets.is_empty() {
+            return Err(invalid(path, "DLContent License requires an Asset"));
+        }
+        let entries = data.list(offset + 4, assets.len(), 4)?;
+        for (index, asset) in assets.into_iter().enumerate() {
+            let reference =
+                super::asset_reference(text_value(asset, path)?, "DLContentObject", path)?;
+            data.word(entries + index * 4, reference.instance_id);
+            result.reference_types.push(reference.type_id);
+        }
+    }
+    let start = data.list(12, patches.len(), 12)?;
+    for (index, patch) in patches.into_iter().enumerate() {
+        validate_leaf(patch, &["Name", "PatchNumber"], path)?;
+        let offset = start + index * 12;
+        data.string(offset, required(patch, "Name", path)?)?;
+        data.payload[offset + 8] = byte(patch, "PatchNumber", path)?;
+    }
+    data.relocations.sort_unstable();
+    Ok(data.finish(result))
+}
+
 pub(super) fn mesh(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     validate_attributes(node, &["id"], path)?;
     let rules = children(node, "Rule", path)?;

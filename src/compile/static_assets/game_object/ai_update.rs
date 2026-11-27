@@ -14,10 +14,49 @@ use std::sync::OnceLock;
 
 const AI_UPDATE: u32 = 0x08db_c00e;
 const HORDE_AI_UPDATE: u32 = 0x55d7_7703;
+const AI_GATE_UPDATE: u32 = 0x347c_ed1c;
+const CONSTRUCTION_YARD_AI_UPDATE: u32 = 0x00bd_afa3;
 const JET_AI_UPDATE: u32 = 0x4486_cf48;
 const TIME: u32 = 0x9986_69e8;
 const REAL: u32 = 0x6458_64f3;
 const BOOL: u32 = 0x77e3_f4f7;
+const DEPLOY_STYLE_AI_UPDATE: u32 = 0xee30_dfd4;
+const TRANSPORT_AI_UPDATE: u32 = 0xbe9c_d6fe;
+const WANDER_AI_UPDATE: u32 = 0xd813_af2a;
+const SUPPLY_TRUCK_AI_UPDATE: u32 = 0x9ab8_094d;
+const UINT: u32 = 0x7631_77a4;
+const MODEL_CONDITIONS: u32 = 0x67db_bfc9;
+const ATTRIBUTE_MODIFIER: u32 = 0x09dd_cff3;
+const DEPLOY_FIELDS: &[(&str, u32, usize)] = &[
+    ("UnpackTime", TIME, 0x4c),
+    ("PackTime", TIME, 0x50),
+    ("ResetTurretBeforePacking", BOOL, 0x58),
+    ("TurretsFunctionOnlyWhenDeployed", BOOL, 0x59),
+    ("TurretsMustCenterBeforePacking", BOOL, 0x5a),
+    ("MustDeployToAttack", BOOL, 0x5b),
+    ("DeployedAttributeModifierName", ATTRIBUTE_MODIFIER, 0x54),
+];
+const WANDER_FIELDS: &[(&str, u32, usize)] = &[
+    ("AttackAll", BOOL, 0x8c),
+    ("EntryCondition", MODEL_CONDITIONS, 0x4c),
+    ("Selectable", BOOL, 0x8d),
+    ("WanderDistance", UINT, 0x88),
+];
+const SUPPLY_TRUCK_FIELDS: &[(&str, u32, usize)] = &[
+    ("MaxBoxes", UINT, 0x4c),
+    ("SupplyCenterActionDelay", TIME, 0x50),
+    ("SupplyWarehouseActionDelay", TIME, 0x54),
+    ("SupplyWarehouseScanDistance", REAL, 0x58),
+    ("DepletedAnnounceDistance", REAL, 0x5c),
+    ("HarvestTrees", BOOL, 0x6c),
+    ("HarvestTiberium", BOOL, 0x6d),
+    ("HarvestActivationRange", REAL, 0x60),
+    ("HarvestPreparationTime", TIME, 0x64),
+    ("HarvestActionTime", TIME, 0x68),
+    ("HarvestsFromRearEnd", BOOL, 0x6e),
+    ("CanPathThroughUnitsWhileDocking", BOOL, 0x6f),
+    ("CanPathThroughUnitsWhileHarvesting", BOOL, 0x70),
+];
 const JET_FIELDS: &[(&str, u32, usize)] = &[
     ("OutOfAmmoDamagePerSecond", REAL, 0x4c),
     ("OutOfAmmoDamageDelay", TIME, 0x50),
@@ -47,8 +86,14 @@ pub(super) fn encode(
         let tag = node.tag_name();
         let kind = match (tag.namespace(), tag.name()) {
             (Some(SAGE_NS), "AIUpdate") => AI_UPDATE,
+            (Some(SAGE_NS), "AIGateUpdate") => AI_GATE_UPDATE,
+            (Some(SAGE_NS), "ConstructionYardAIUpdate") => CONSTRUCTION_YARD_AI_UPDATE,
             (Some(SAGE_NS), "HordeAIUpdate") => HORDE_AI_UPDATE,
             (Some(SAGE_NS), "JetAIUpdate") => JET_AI_UPDATE,
+            (Some(SAGE_NS), "DeployStyleAIUpdate") => DEPLOY_STYLE_AI_UPDATE,
+            (Some(SAGE_NS), "TransportAIUpdate") => TRANSPORT_AI_UPDATE,
+            (Some(SAGE_NS), "WanderAIUpdate") => WANDER_AI_UPDATE,
+            (Some(SAGE_NS), "SupplyTruckAIUpdate") => SUPPLY_TRUCK_AI_UPDATE,
             (Some(SAGE_NS), "AnimalAIUpdate") => animal_ai::KIND,
             _ => {
                 return Err(invalid(
@@ -57,14 +102,14 @@ pub(super) fn encode(
                 ));
             }
         };
-        let table = encode_update(
-            node,
-            kind,
-            pointers + index * 4,
-            data,
-            references,
-            reference_types,
-        )?;
+        let pointer = pointers + index * 4;
+        let table = match kind {
+            AI_GATE_UPDATE => encode_gate(node, pointer, data)?,
+            CONSTRUCTION_YARD_AI_UPDATE => {
+                super::behaviors_basic::fieldless_module(node, pointer, data, kind, true)?
+            }
+            _ => encode_update(node, kind, pointer, data, references, reference_types)?,
+        };
         items.push((
             0,
             Target::Table(Table::sequence(vec![Entry::new(
@@ -75,6 +120,27 @@ pub(super) fn encode(
         ));
     }
     Ok(Target::Table(Table::array(AI_LIST, items)))
+}
+
+fn encode_gate(node: Node<'_, '_>, pointer: usize, data: &mut BinaryData<'_>) -> io::Result<Table> {
+    super::super::fx_list::validate_leaf(
+        node,
+        &["id", "TriggerWidthX", "TriggerWidthY"],
+        data.path,
+    )?;
+    let start = data.allocate(pointer, 16)?;
+    let mut entries = vec![super::behaviors_basic::module_base(
+        node,
+        AI_GATE_UPDATE,
+        start,
+        data,
+        true,
+    )?];
+    for (name, offset) in [("TriggerWidthX", start + 8), ("TriggerWidthY", start + 12)] {
+        write_real(node, name, "0", offset, data)?;
+        entries.push(Entry::named(name, REAL, Target::Data(offset)));
+    }
+    Ok(Table::record(entries))
 }
 
 fn encode_update(
@@ -104,6 +170,9 @@ fn encode_update(
     ];
     let (size, derived_fields) = match kind {
         JET_AI_UPDATE => (0x64, JET_FIELDS),
+        DEPLOY_STYLE_AI_UPDATE => (0x5c, DEPLOY_FIELDS),
+        WANDER_AI_UPDATE => (0x90, WANDER_FIELDS),
+        SUPPLY_TRUCK_AI_UPDATE => (0x74, SUPPLY_TRUCK_FIELDS),
         animal_ai::KIND => (animal_ai::SIZE, animal_ai::FIELDS),
         _ => (0x4c, &[][..]),
     };
@@ -163,6 +232,57 @@ fn encode_update(
     write_bool(node, "FadeOnPortals", false, start + 0x49, data)?;
     if kind == JET_AI_UPDATE {
         encode_jet_fields(node, start, data, references, reference_types)?;
+    } else if kind != animal_ai::KIND {
+        for &(name, field_kind, offset) in derived_fields {
+            let field = start + offset;
+            match field_kind {
+                TIME => write_time(node, name, "0s", field, data)?,
+                REAL => {
+                    let default = if name == "DepletedAnnounceDistance" {
+                        "2000"
+                    } else {
+                        "0"
+                    };
+                    write_real(node, name, default, field, data)?;
+                }
+                BOOL => {
+                    let default = matches!(
+                        name,
+                        "CanPathThroughUnitsWhileDocking" | "CanPathThroughUnitsWhileHarvesting"
+                    );
+                    write_bool(node, name, default, field, data)?;
+                }
+                UINT => {
+                    let value = node
+                        .attribute(name)
+                        .unwrap_or("0")
+                        .trim()
+                        .parse::<u32>()
+                        .map_err(|_| invalid(data.path, format!("invalid {name}")))?;
+                    data.word(field, value);
+                }
+                MODEL_CONDITIONS => {
+                    super::draws::write_model_conditions(
+                        node.attribute(name).unwrap_or(""),
+                        field,
+                        data,
+                    )?;
+                }
+                ATTRIBUTE_MODIFIER => {
+                    if let Some(value) = node.attribute(name) {
+                        let index = super::passive_area::reference(
+                            value,
+                            "AttributeModifier",
+                            data.path,
+                            references,
+                            reference_types,
+                        )?;
+                        data.word(field, index);
+                    }
+                }
+                _ => unreachable!("unexpected derived AI field type"),
+            }
+        }
     }
 
     let points = node
@@ -216,14 +336,13 @@ fn encode_update(
     ));
     let table = Table::record(fields);
     match kind {
-        JET_AI_UPDATE => {
+        AI_UPDATE => Ok(table),
+        animal_ai::KIND => animal_ai::encode_fields(node, start, data, base(AI_UPDATE, table)),
+        _ => {
             let mut entries = vec![base(AI_UPDATE, table)];
-            entries.extend(super::draws::fields(start, JET_FIELDS));
+            entries.extend(super::draws::fields(start, derived_fields));
             Ok(Table::record(entries))
         }
-        HORDE_AI_UPDATE => Ok(Table::record(vec![base(AI_UPDATE, table)])),
-        animal_ai::KIND => animal_ai::encode_fields(node, start, data, base(AI_UPDATE, table)),
-        _ => Ok(table),
     }
 }
 

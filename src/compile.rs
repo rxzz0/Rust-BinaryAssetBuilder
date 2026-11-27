@@ -143,13 +143,18 @@ fn compile_with_source_references(
 ) -> io::Result<(CompiledStream, HashSet<AssetId>)> {
     let root = fs::canonicalize(data_root)?;
     let resolved_input = fs::canonicalize(input)?;
-    let redirected_apt = if reference_directory.is_none() && !resolved_input.starts_with(&root) {
-        redirected_apt_ui(input, data_root, &resolved_input)
-    } else {
-        None
+    let redirected_directory = match (reference_mode, reference_directory) {
+        (ReferenceMode::Implicit, _) => Some("AdditionalMaps"),
+        (_, None) => Some("AptUI"),
+        _ => None,
     };
+    let redirected_sdk = redirected_directory
+        .filter(|_| !resolved_input.starts_with(&root))
+        .and_then(|directory| {
+            redirected_sdk_directory(input, data_root, &resolved_input, directory)
+        });
     let mod_root =
-        sdk_relative_path(&resolved_input, &root, redirected_apt.as_ref()).and_then(|relative| {
+        sdk_relative_path(&resolved_input, &root, redirected_sdk.as_ref()).and_then(|relative| {
             let mut components = relative.iter();
             let mods = components.next()?;
             let name = components.next()?;
@@ -193,7 +198,7 @@ fn compile_with_source_references(
         audio_paths: paths("Audio", "Audio"),
         map_art_path: map_root.map(|map| map.join("Art")),
         root,
-        redirected_apt,
+        redirected_sdk,
         visited: HashSet::new(),
         active: HashSet::new(),
         ids: HashSet::new(),
@@ -246,12 +251,17 @@ fn compile_with_source_references(
     compiler.finish(worldbuilder)
 }
 
-struct RedirectedAptUi {
+struct RedirectedSdkDirectory {
     sdk_relative: PathBuf,
     physical: PathBuf,
 }
 
-fn redirected_apt_ui(input: &Path, data_root: &Path, resolved: &Path) -> Option<RedirectedAptUi> {
+fn redirected_sdk_directory(
+    input: &Path,
+    data_root: &Path,
+    resolved: &Path,
+    expected_directory: &str,
+) -> Option<RedirectedSdkDirectory> {
     let input = std::path::absolute(input).ok()?;
     let data_root = std::path::absolute(data_root).ok()?;
     let relative = input.strip_prefix(&data_root).ok()?;
@@ -262,33 +272,35 @@ fn redirected_apt_ui(input: &Path, data_root: &Path, resolved: &Path) -> Option<
         return None;
     }
     let mut parts = relative.iter();
-    let (mods, name, data, apt) = (parts.next()?, parts.next()?, parts.next()?, parts.next()?);
+    let (mods, name, data, directory) =
+        (parts.next()?, parts.next()?, parts.next()?, parts.next()?);
     if !mods.eq_ignore_ascii_case("Mods")
         || !data.eq_ignore_ascii_case("Data")
-        || !apt.eq_ignore_ascii_case("AptUI")
-        || parts.next().is_none()
+        || !directory.eq_ignore_ascii_case(expected_directory)
     {
         return None;
     }
-    let sdk_relative = PathBuf::from(mods).join(name).join(data).join(apt);
-    // A directory redirect is allowed for this mod's AptUI tree. Its XML and
-    // asset files must still resolve inside that tree or the canonical SDK.
+    let sdk_relative = PathBuf::from(mods).join(name).join(data).join(directory);
+    // Resolve the directory separately so a linked file inside it cannot
+    // extend the allowed tree to an unrelated location.
     let physical = fs::canonicalize(data_root.join(&sdk_relative)).ok()?;
-    resolved.starts_with(&physical).then_some(RedirectedAptUi {
-        sdk_relative,
-        physical,
-    })
+    resolved
+        .starts_with(&physical)
+        .then_some(RedirectedSdkDirectory {
+            sdk_relative,
+            physical,
+        })
 }
 
 fn sdk_relative_path<'a>(
     path: &'a Path,
     root: &Path,
-    redirected_apt: Option<&RedirectedAptUi>,
+    redirected_sdk: Option<&RedirectedSdkDirectory>,
 ) -> Option<Cow<'a, Path>> {
     if let Ok(relative) = path.strip_prefix(root) {
         return Some(Cow::Borrowed(relative));
     }
-    let redirected = redirected_apt?;
+    let redirected = redirected_sdk?;
     let relative = path.strip_prefix(&redirected.physical).ok()?;
     Some(Cow::Owned(redirected.sdk_relative.join(relative)))
 }
@@ -314,7 +326,7 @@ fn search_paths(
 struct Compiler<'a> {
     log: Option<BuildLog>,
     root: PathBuf,
-    redirected_apt: Option<RedirectedAptUi>,
+    redirected_sdk: Option<RedirectedSdkDirectory>,
     data_paths: Vec<PathBuf>,
     art_paths: Vec<PathBuf>,
     audio_paths: Vec<PathBuf>,
@@ -514,7 +526,7 @@ impl Compiler<'_> {
         let document_order = self.next_document_order;
         self.next_document_order += 1;
         self.active.insert(path.to_path_buf());
-        let relative = sdk_relative_path(path, &self.root, self.redirected_apt.as_ref())
+        let relative = sdk_relative_path(path, &self.root, self.redirected_sdk.as_ref())
             .ok_or_else(|| invalid(path, "XML lies outside the data root"))?;
         let relative = relative
             .to_str()
@@ -966,6 +978,7 @@ impl Compiler<'_> {
                 self.compile_inherited_ai(node, path, source)
             }
             "GameObject"
+            | "TestGameObject"
             | "AmbientStream"
             | "AudioEvent"
             | "AudioEventOverridable"
@@ -1044,7 +1057,9 @@ impl Compiler<'_> {
         path: &Path,
         source: &str,
     ) -> io::Result<CompiledAsset> {
-        let mut asset = static_assets::compile_asset(node, path, source)?;
+        let mut asset = static_assets::compile_asset_with_resolver(node, path, source, |value| {
+            self.resolve(path, value)
+        })?;
         if self.reference_mode == ReferenceMode::Map
             && let Some(schema) = &self.game_object_schema
         {
@@ -1113,9 +1128,9 @@ impl Compiler<'_> {
         let resolved = read_with_context(&path, fs::canonicalize)?;
         if !resolved.starts_with(&self.root)
             && !self
-                .redirected_apt
+                .redirected_sdk
                 .as_ref()
-                .is_some_and(|apt| resolved.starts_with(&apt.physical))
+                .is_some_and(|directory| resolved.starts_with(&directory.physical))
         {
             return Err(invalid(&resolved, "path lies outside the data root"));
         }
@@ -1130,9 +1145,8 @@ impl Compiler<'_> {
                 error
             }
         })?;
-        let relative = target
-            .strip_prefix(&self.root)
-            .map_err(|_| invalid(document, "reference lies outside the data root"))?
+        let relative = sdk_relative_path(&target, &self.root, self.redirected_sdk.as_ref())
+            .ok_or_else(|| invalid(document, "reference lies outside the data root"))?
             .with_extension("manifest");
         let mut name = relative
             .to_str()
@@ -1294,12 +1308,16 @@ impl Compiler<'_> {
         let attribute_count = if texture {
             if node.attribute("OutputFormat") != Some("A8R8G8B8")
                 || node.attribute("GenerateMipMaps") != Some("false")
-                || node.attribute("AllowAutomaticResize") != Some("false")
+                || !node.attribute("AllowAutomaticResize").is_none_or(|value| {
+                    let value = value.trim();
+                    value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("false")
+                })
                 || !matches!(node.attribute("Type"), None | Some("StandardTexture"))
             {
                 return Err(invalid(path, "unsupported AptUI texture settings"));
             }
-            5 + usize::from(node.attribute("Type").is_some())
+            4 + usize::from(node.attribute("Type").is_some())
+                + usize::from(node.attribute("AllowAutomaticResize").is_some())
         } else {
             2 + usize::from(geometry)
         };
@@ -1332,7 +1350,14 @@ impl Compiler<'_> {
         let processing_hash = if texture { 0x9f5f_e8b0 } else { type_hash ^ 4 };
         let instance_hash = hash_asset(node, processing_hash, &bytes, path)?;
         let bytes = if texture {
-            texture::tga_to_dds(&bytes).map_err(|error| invalid(&input, error))?
+            if bytes.starts_with(b"DDS ") {
+                // EA embeds supplied DDS data unchanged for either resize setting.
+                texture::prepare_dds(&bytes, false, false)
+                    .map_err(|error| invalid(&input, error))?;
+                bytes
+            } else {
+                texture::tga_to_dds(&bytes).map_err(|error| invalid(&input, error))?
+            }
         } else {
             bytes
         };

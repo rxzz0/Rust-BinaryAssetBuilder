@@ -50,6 +50,7 @@ pub(super) mod music_conditions;
 mod object_creation;
 mod order_display;
 mod particle_system;
+mod pipeline_test;
 mod player_power_button;
 mod player_template;
 mod road;
@@ -122,6 +123,15 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "TerrainParticleMapping" => (0xa321_84fe, 71, surface_mappings::terrain_particles),
         "DynamicsContactTagMapping" => (0x358a_b09d, 72, surface_mappings::dynamics_contacts),
         "PlayerPowerButtonTemplate" => (0xa640_9dd2, 73, player_power_button::compile),
+        "JoypadCommandBarTemplate" => (0x74c4_71d9, 75, stock_content::ui_display),
+        "UIJoypadCommandBarControlGroups" => (0xe599_4135, 84, stock_content::ui_display),
+        "UIJoypadCommandBarCoopCommunicator" => (0xa903_f1e2, 84, stock_content::ui_display),
+        "UIJoypadCommandBarHomogenousGroup" => (0x84a0_bf03, 84, stock_content::ui_display),
+        "UIJoypadCommandBarMixedGroup" => (0xed6b_4dfa, 84, stock_content::ui_display),
+        "UIJoypadCommandBarPlayerPowers" => (0x687a_641f, 84, stock_content::ui_display),
+        "UIJoypadCommandBarSingleUnit" => (0x6b91_0c6b, 84, stock_content::ui_display),
+        "UIJoypadCommandBarStances" => (0x444e_408d, 84, stock_content::ui_display),
+        "UIJoypadCommandBarTopMenu" => (0x157d_0484, 84, stock_content::ui_display),
         "JoypadCommandBarButtonTemplate" => (0x2913_cc3c, 74, joypad_buttons::compile),
         "StanceTemplate" => (0x4829_f362, 75, stance_template::compile),
         "GameScriptList" => (0xa268_995a, 76, game_script_list::compile),
@@ -197,6 +207,62 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "EmotionTemplate" => (0x40da_32d1, 54, emotion::compile),
         "ObjectCreationList" => (0x2273_a9d1, 55, object_creation::compile),
         "Language" => (0xbfff_81d6, 83, stock_common::language),
+        "HeaderTemplate" => (0x401f_f46b, 84, stock_content::ui_display),
+        "UIFloatingTextDisplay" => (0x8700_db82, 84, stock_content::ui_display),
+        "UISubtitleDisplay" => (0x434c_6a31, 84, stock_content::ui_display),
+        "UIMessageDisplay" => (0xd6d6_efaa, 84, stock_content::ui_display),
+        "UITimerDisplay" => (0x7c1a_f1f2, 84, stock_content::ui_display),
+        "UIMouseTacticalCommandCommunicateWithAllies" => {
+            (0x8ba2_6c02, 84, stock_content::ui_display)
+        }
+        "UIMouseTacticalCommandEnter" => (0x4364_6c6a, 84, stock_content::ui_display),
+        "UIMouseTacticalCommandPlaceAIBeacon" => (0xf99b_6672, 84, stock_content::ui_display),
+        "UIMouseTacticalCommandSelect" => (0xdbe5_398f, 84, stock_content::ui_display),
+        "UIMouseTacticalCommandSell" => (0xab4c_591b, 84, stock_content::ui_display),
+        "UIMouseTacticalBuildQueueTab" => (0x107a_d864, 84, stock_content::ui_display),
+        "UIMouseTacticalBuildQueueTypeTab" => (0xfd80_a557, 84, stock_content::ui_display),
+        "UIMouseTacticalQuickChatDisplay" => (0x34be_eb16, 84, stock_content::ui_display),
+        "UIMouseTacticalGroupSelection" => (0x4b91_c129, 84, stock_content::ui_display),
+        "UIMouseTacticalLookAt" => (0x63e9_948b, 84, stock_content::ui_display),
+        "UIMouseTacticalMiscHotKeys" => (0xd346_b6af, 84, stock_content::ui_display),
+        "UIMouseTacticalPlayerPowerHotKeys" => (0x8aa6_bad8, 84, stock_content::ui_display),
+        "UIMouseTacticalRadarTelestrator" => (0xab66_5329, 84, stock_content::ui_display),
+        "UIMouseTacticalTelestrator" => (0x36a0_014e, 84, stock_content::ui_display),
+        "UIMouseTacticalSelectionDetailsButtonHotKeys" => {
+            (0x46c4_afe8, 84, stock_content::ui_display)
+        }
+        "UICoopTinting" => (0x054f_5ace, 84, stock_content::ui_display),
+        "UIMouseDragSelectionFeedback" => (0x20c1_0a91, 84, stock_content::ui_display),
+        "UIMouseHUDElementHotKeyGate" => (0xcd31_1e8e, 84, stock_content::ui_display),
+        "UIMouseTacticalPlayerTechStoreButton" => (0x51e4_4cef, 84, stock_content::ui_display),
+        "UIMouseVoiceChat" => (0xb3ee_cc17, 84, stock_content::ui_display),
+        "UIQuickChatMessage" => (0x2c49_8c12, 84, stock_content::ui_display),
+        "UICommandButton" => (0xaa15_908e, 84, stock_content::ui_display),
+        "UIMouseTacticalExitContainerButton" => (0xb0f7_71e4, 84, stock_content::ui_display),
+        "UIMouseTacticalSetStanceButton" => (0xf2b7_a980, 84, stock_content::ui_display),
+        "UIDecalCloud" => (0x1363_fa2b, 84, stock_content::ui_display),
+        "UIDecalGrid" => (0x003e_27ff, 84, stock_content::ui_display),
+        "UIWorldBuilderDecalGrid" => (0x5793_f574, 84, stock_content::ui_display),
+        "UIRadarObjectsLayer" => (0x81ba_0472, 84, stock_content::ui_display),
+        "UIJoypadCommandBarButtonBuild" => (0x440a_fd34, 84, stock_content::ui_display),
+        "MiscAudio" => (0x5879_481d, 84, stock_content::misc_reference_settings),
+        "MiscEvaEvents" => (0xb521_a78f, 84, stock_content::misc_reference_settings),
+        "IntelDB" => (0x2cc4_1189, 84, stock_content::ui_display),
+        "TerrainAssetCollection" => (0x143c_c65f, 84, stock_content::ui_display),
+        "ArmyDefinition" => (0x0cb4_7a77, 84, stock_content::ui_display),
+        "TestTextureCollection" => (0xabd9_65d2, 84, pipeline_test::texture_collection),
+        "TestGameObject" => (0x9608_e01c, 84, pipeline_test::game_object),
+        "LargeGroupAudioMap" => (0x3e50_2246, 84, stock_content::ui_display),
+        "CrowdResponse" => (0x07bc_a38c, 84, stock_content::ui_display),
+        "MissionHotSpotSettings" => (0xfed7_6cc8, 84, stock_content::ui_display),
+        "ScorchMarkSettings" => (0x698d_0dfa, 84, stock_content::ui_display),
+        "W3DDeviceSettings" => (0x9d49_fcee, 84, stock_content::ui_display),
+        "SiegeEvaEvent" => (0x1082_f8ac, 84, stock_content::ui_display),
+        "PlayerTechUpgradeBinding" => (0xc402_5520, 84, stock_content::ui_display),
+        "UIMilitaryCaptionDisplay" => (0x2e7c_50c8, 84, stock_content::ui_display),
+        "AssetReportTable" => (0x6a9e_6e8b, 84, stock_settings::asset_report),
+        "DLContent" => (0x629b_d41c, 84, stock_settings::downloadable_content),
+        "WaterTextureList" => (0x7194_a098, 84, stock_settings::water_textures),
         "MeshInstanceTemplate" => (0x7538_2abd, 83, stock_settings::mesh),
         "Mouse" => (0x4a53_5d4b, 83, stock_settings::mouse),
         "MultiplayerSettings" => (0x9c2b_6e7e, 83, stock_settings::multiplayer),
@@ -240,6 +306,12 @@ fn encoder(type_name: &str) -> Option<(u32, u8, Marshal)> {
         "MissionTemplate" => (0xd299_ec3a, 25, campaign::mission),
         "CampaignTemplate" => (0xd0c4_5a63, 26, campaign::campaign),
         "CampaignEnumerator" => (0x0714_c282, 27, campaign_enumerator),
+        _ if let Some(type_hash) = stock_content::simple_button_type_hash(type_name) => {
+            (type_hash, 84, stock_content::ui_display)
+        }
+        _ if let Some((type_hash, _)) = ui_media::tactical_cursor_layout(type_name) => {
+            (type_hash, 84, ui_media::tactical_cursors)
+        }
         _ => (
             music_conditions::type_hash(type_name)?,
             78,
@@ -261,6 +333,7 @@ pub(super) fn has_encoder(type_name: &str) -> bool {
                 | "OnDemandTexture"
                 | "Texture"
                 | "TerrainTextureAtlas"
+                | "TestTexture"
         )
 }
 
@@ -268,6 +341,17 @@ pub(super) fn compile_asset(
     node: Node<'_, '_>,
     path: &Path,
     source: &str,
+) -> io::Result<CompiledAsset> {
+    compile_asset_with_resolver(node, path, source, |value| {
+        pipeline_test::resolve_local(path, value)
+    })
+}
+
+pub(super) fn compile_asset_with_resolver(
+    node: Node<'_, '_>,
+    path: &Path,
+    source: &str,
+    resolve: impl Fn(&str) -> io::Result<std::path::PathBuf>,
 ) -> io::Result<CompiledAsset> {
     let type_name = node.tag_name().name();
     let (id, asset_id) = declaration_id(node, path)?;
@@ -277,9 +361,14 @@ pub(super) fn compile_asset(
             format!("unsupported inheritance {type_name}:{id} from {base}"),
         ));
     }
-    let (type_hash, sort_order, marshal) = encoder(type_name)
-        .ok_or_else(|| invalid(path, format!("unsupported static asset type {type_name}")))?;
-    let data = marshal(node, path)?;
+    let (type_hash, sort_order, data, file_hashes) = if type_name == "TestTexture" {
+        let (data, hashes) = pipeline_test::texture_with_resolver(node, path, resolve)?;
+        (0x106b_a1eb, 84, data, hashes)
+    } else {
+        let (type_hash, sort_order, marshal) = encoder(type_name)
+            .ok_or_else(|| invalid(path, format!("unsupported static asset type {type_name}")))?;
+        (type_hash, sort_order, marshal(node, path)?, Vec::new())
+    };
     let processing_hash = if type_name == "W3DAnimation" {
         0xd650_5ce9
     } else if type_name == "W3DMesh" {
@@ -291,8 +380,10 @@ pub(super) fn compile_asset(
         type_hash ^ 4
     };
     let mut instance_hash = hash_xml(node, processing_hash, path)?;
-    if !data.reference_types.is_empty() {
-        instance_hash ^= memory_stream_hash(encode_words(data.reference_types));
+    if !file_hashes.is_empty() || !data.reference_types.is_empty() {
+        instance_hash ^= memory_stream_hash(encode_words(
+            file_hashes.into_iter().chain(data.reference_types),
+        ));
     }
     Ok(CompiledAsset {
         id: asset_id,

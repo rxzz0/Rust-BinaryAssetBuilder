@@ -125,7 +125,7 @@ impl Compiler<'_> {
     }
 }
 
-fn prepare_dds(bytes: &[u8], mipmaps: bool, resizing: bool) -> Result<(), &'static str> {
+pub(super) fn prepare_dds(bytes: &[u8], mipmaps: bool, resizing: bool) -> Result<(), &'static str> {
     let (header, pixels) = bytes
         .split_first_chunk::<128>()
         .ok_or("truncated DDS header")?;
@@ -174,14 +174,13 @@ fn prepare_dds(bytes: &[u8], mipmaps: bool, resizing: bool) -> Result<(), &'stat
     Ok(())
 }
 
-/// Converts the SDK's uncompressed 24-bit and 32-bit AptUI TGA inputs to
-/// single-level A8R8G8B8 DDS data.
+/// Converts 24-bit and 32-bit true-color TGAs to single-level A8R8G8B8 DDS data.
 pub(super) fn tga_to_dds(bytes: &[u8]) -> Result<Vec<u8>, &'static str> {
     let (header, rest) = bytes
         .split_first_chunk::<18>()
         .ok_or("truncated TGA header")?;
-    if header[1] != 0 || header[2] != 2 || header[17] & 0xd0 != 0 {
-        return Err("expected an uncompressed, left-origin true-color TGA");
+    if header[1] != 0 || !matches!(header[2], 2 | 10) || header[17] & 0xd0 != 0 {
+        return Err("expected a left-origin true-color TGA");
     }
     let bytes_per_pixel = match header[16] {
         24 => 3,
@@ -200,9 +199,20 @@ pub(super) fn tga_to_dds(bytes: &[u8]) -> Result<Vec<u8>, &'static str> {
         .ok_or("DDS is too large")?;
     let id_size = usize::from(header[0]);
     let row_size = width as usize * bytes_per_pixel;
-    let pixels = rest
-        .get(id_size..id_size + row_size * height as usize)
-        .ok_or("truncated TGA pixel data")?;
+    let image = rest.get(id_size..).ok_or("truncated TGA image ID")?;
+    let pixels = if header[2] == 10 {
+        std::borrow::Cow::Owned(decode_tga_rle(
+            image,
+            bytes_per_pixel,
+            pixel_count as usize,
+        )?)
+    } else {
+        std::borrow::Cow::Borrowed(
+            image
+                .get(..row_size * height as usize)
+                .ok_or("truncated TGA pixel data")?,
+        )
+    };
 
     let mut dds_header = [0u32; 32];
     dds_header[0] = u32::from_le_bytes(*b"DDS ");
@@ -236,6 +246,36 @@ pub(super) fn tga_to_dds(bytes: &[u8]) -> Result<Vec<u8>, &'static str> {
         }
     }
     Ok(dds)
+}
+
+fn decode_tga_rle(
+    mut image: &[u8],
+    bytes_per_pixel: usize,
+    mut pixels_left: usize,
+) -> Result<Vec<u8>, &'static str> {
+    let mut pixels = Vec::new();
+    while pixels_left > 0 {
+        let (&packet, rest) = image.split_first().ok_or("truncated TGA RLE packet")?;
+        let count = usize::from(packet & 0x7f) + 1;
+        if count > pixels_left {
+            return Err("TGA RLE packet exceeds image size");
+        }
+        let repeated = packet & 0x80 != 0;
+        let stored_pixels = if repeated { 1 } else { count };
+        let (payload, rest) = rest
+            .split_at_checked(stored_pixels * bytes_per_pixel)
+            .ok_or("truncated TGA RLE pixels")?;
+        if repeated {
+            for _ in 0..count {
+                pixels.extend_from_slice(payload);
+            }
+        } else {
+            pixels.extend_from_slice(payload);
+        }
+        pixels_left -= count;
+        image = rest;
+    }
+    Ok(pixels)
 }
 
 fn compile_tga(
@@ -338,6 +378,29 @@ fn compile_tga(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tga_rle_decodes_run_and_raw_packets_in_image_order() {
+        let mut tga = vec![0; 18];
+        tga[0] = 1; // Image ID length.
+        tga[2] = 10;
+        tga[12] = 2;
+        tga[14] = 2;
+        tga[16] = 32;
+        tga[17] = 8; // Bottom-left origin, eight alpha bits.
+        tga.extend([0, 0x81, 1, 2, 3, 4, 1, 5, 6, 7, 8, 9, 10, 11, 12]);
+
+        let dds = tga_to_dds(&tga).unwrap();
+        assert_eq!(
+            &dds[128..],
+            &[5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 1, 2, 3, 4]
+        );
+
+        tga.pop();
+        assert_eq!(tga_to_dds(&tga), Err("truncated TGA RLE pixels"));
+        tga[19] = 0x84;
+        assert_eq!(tga_to_dds(&tga), Err("TGA RLE packet exceeds image size"));
+    }
 
     #[test]
     fn static_tga_encodes_dxt1_mipmaps_and_uncompressed_alpha() {

@@ -11,6 +11,15 @@ use std::path::Path;
 
 pub(super) const TOKEN_LAYOUT: &[u8; 0x79c] = include_bytes!("active_body_tokens.bin");
 pub(super) const SIZE: usize = 0x4c;
+pub(super) const SHIELD_SIZE: usize = 0x6c;
+pub(super) const SHIELD: u32 = 0xd356_5857;
+
+const SHIELD_FX: [&str; 4] = [
+    "ShieldEnabledFX",
+    "ShieldDepleteFX",
+    "ShieldRechargeEndFX",
+    "ShieldTakeDamageFX",
+];
 pub(super) const KIND: u32 = 0x5a0e_3d9b;
 pub(super) const IMMORTAL: u32 = 0x88e9_4f7a;
 pub(super) const MANAGED_ACTIVE: u32 = 0xee0d_6e31;
@@ -18,6 +27,7 @@ pub(super) const MANAGED_ACTIVE: u32 = 0xee0d_6e31;
 pub(super) fn variant(name: &str) -> Option<(u32, &'static [u32])> {
     Some(match name {
         "ActiveBody" => (KIND, &[]),
+        "ShieldBody" => (SHIELD, &[]),
         "ImmortalBody" => (IMMORTAL, &[KIND]),
         "HighlanderBody" => (0x6f0f_9f52, &[KIND]),
         "ManagedActiveBody" => (MANAGED_ACTIVE, &[KIND]),
@@ -28,23 +38,29 @@ pub(super) fn variant(name: &str) -> Option<(u32, &'static [u32])> {
 }
 
 pub(super) fn encode(node: Node<'_, '_>, kind: u32, path: &Path) -> io::Result<[u8; SIZE]> {
-    validate_attributes(
-        node,
-        &[
-            "id",
-            "MaxHealth",
-            "MaxHealthDamagedPercentage",
-            "MaxHealthReallyDamagedPercentage",
-            "InitialHealth",
-            "DodgePercent",
-            "EnteringDamagedTransitionTime",
-            "EnteringReallyDamagedTransitionTime",
-            "CheerRadius",
-            "RemoveUpgradesOnDeath",
-            "BurningDeathBehavior",
-        ],
-        path,
-    )?;
+    let mut attributes = vec![
+        "id",
+        "MaxHealth",
+        "MaxHealthDamagedPercentage",
+        "MaxHealthReallyDamagedPercentage",
+        "InitialHealth",
+        "DodgePercent",
+        "EnteringDamagedTransitionTime",
+        "EnteringReallyDamagedTransitionTime",
+        "CheerRadius",
+        "RemoveUpgradesOnDeath",
+        "BurningDeathBehavior",
+    ];
+    if kind == SHIELD {
+        attributes.extend(SHIELD_FX);
+        attributes.extend([
+            "ShieldAmount",
+            "ShieldArmor",
+            "ShieldRechargeIdleTime",
+            "ShieldActiveModelCondition",
+        ]);
+    }
+    validate_attributes(node, &attributes, path)?;
     let id = required(node, "id", path)?;
     let real = |name, default| finite_number(node.attribute(name).unwrap_or(default), name, path);
     let percent = |name, default| percentage(node.attribute(name).unwrap_or(default), name, path);
@@ -81,6 +97,99 @@ pub(super) fn encode(node: Node<'_, '_>, kind: u32, path: &Path) -> io::Result<[
         };
     }
     Ok(body)
+}
+
+pub(super) fn shield(
+    node: Node<'_, '_>,
+    start: usize,
+    inherited: Table,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Table> {
+    let path = data.path;
+    let mut armor = 0;
+    for attribute in node.attributes() {
+        if let Some(index) = SHIELD_FX.iter().position(|name| *name == attribute.name()) {
+            let reference = super::passive_area::reference(
+                attribute.value(),
+                "FXList",
+                path,
+                references,
+                reference_types,
+            )?;
+            data.word(start + SIZE + index * 4, reference);
+        } else if attribute.name() == "ShieldArmor" {
+            armor = super::passive_area::reference(
+                attribute.value(),
+                "ArmorTemplate",
+                path,
+                references,
+                reference_types,
+            )?;
+        }
+    }
+
+    let mut entries = vec![super::behaviors_basic::base(KIND, inherited)];
+    entries.extend(SHIELD_FX.into_iter().enumerate().map(|(index, name)| {
+        Entry::named(name, 0x0d1c_8e83, Target::Data(start + SIZE + index * 4))
+    }));
+    let amount = start + 0x5c;
+    data.word(
+        amount,
+        finite_number(
+            node.attribute("ShieldAmount").unwrap_or("0"),
+            "ShieldAmount",
+            path,
+        )?
+        .to_bits(),
+    );
+    entries.push(Entry::named(
+        "ShieldAmount",
+        0x6458_64f3,
+        Target::Data(amount),
+    ));
+    let armor_target = if armor == 0 {
+        Target::Null
+    } else {
+        let offset = data.allocate(start + 0x60, 4)?;
+        data.word(offset, armor);
+        Target::Data(offset)
+    };
+    entries.push(Entry::named("ShieldArmor", 0x34e9_127b, armor_target));
+    let recharge = start + 0x64;
+    data.word(
+        recharge,
+        sage_time(
+            node.attribute("ShieldRechargeIdleTime").unwrap_or("0s"),
+            "ShieldRechargeIdleTime",
+            path,
+        )?
+        .to_bits(),
+    );
+    entries.push(Entry::named(
+        "ShieldRechargeIdleTime",
+        0x9986_69e8,
+        Target::Data(recharge),
+    ));
+    let condition = start + 0x68;
+    let flag = node
+        .attribute("ShieldActiveModelCondition")
+        .unwrap_or("INVALID");
+    data.word(
+        condition,
+        if flag == "INVALID" {
+            u32::MAX
+        } else {
+            super::draws::model_condition_index(flag, path)? as u32
+        },
+    );
+    entries.push(Entry::named(
+        "ShieldActiveModelCondition",
+        0x1572_3e0b,
+        Target::Data(condition),
+    ));
+    Ok(Table::record(entries))
 }
 
 pub(super) fn damage_ranges(

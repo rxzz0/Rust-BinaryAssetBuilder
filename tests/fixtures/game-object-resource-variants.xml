@@ -1,0 +1,34 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="TerrainResourceProbe">
+    <Behaviors>
+      <TerrainResource id="ModuleTag_Default"/>
+      <TerrainResource id="ModuleTag_Custom" Radius="12.5" MaxIncome="-19" IncomeInterval="0x2e"
+          HighPriority="true" Visible="false" Upgrade="ProbeUpgrade" UpgradeMustBePresent="Alpha Beta Gamma" UpgradeBonusPercent="27.5%">
+        <ObjectFilter Rule="ANY" Relationship="ALLIES"><IncludeThing>TiberiumFieldProbe</IncludeThing></ObjectFilter>
+      </TerrainResource>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="TiberiumCrystalProbe">
+    <Behaviors>
+      <TiberiumCrystal id="ModuleTag_Default"><RadarColor/></TiberiumCrystal>
+      <TiberiumCrystal id="ModuleTag_Custom" NumBoxes="11" ValuePerBox="123" GrowthStages="4"
+          TimeBetweenGrowthStages="2750ms" GrowthTimePerStage="2.5s"><RadarColor R="17" G="128" B="243"/></TiberiumCrystal>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="TiberiumFieldProbe">
+    <Behaviors>
+      <TiberiumField id="ModuleTag_Default"/>
+      <TiberiumField id="ModuleTag_Custom" DamageUpdateFrequencySeconds="750ms" HealUpdateFrequencySeconds="1.35s"
+        Radius="73.25" DamageRadiusAdd="17.5" HealRadiusAdd="18.5" FieldResolution="47"
+        MaxFieldMoney="800" StartingFieldMoney="700" ThingToSpawn="TiberiumCrystalProbe"
+        SpawnOffset="-7.25" ClusterScaleFactor="1.125" ClusterPowerFactor="1.25"
+        CrystalGrowthRate="12" LifetimeFieldMoney="1113" KillWhenEmptyAndFinishedSpawning="true" AllowStartingFieldCrystalsToGrow="true">
+        <DamageFilter Rule="ANY" Relationship="ENEMIES"><IncludeThing>TerrainResourceProbe</IncludeThing></DamageFilter>
+        <HealFilter Rule="ANY" StatusBitFlags="CAN_ATTACK"><ExcludeThing>TiberiumFieldProbe</ExcludeThing></HealFilter>
+      </TiberiumField>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

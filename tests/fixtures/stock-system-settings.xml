@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <MissionHotSpotSettings id="Default"><DecalTemplate/></MissionHotSpotSettings>
+  <MissionHotSpotSettings id="Custom" WaypointMarker="Marker"><DecalTemplate/></MissionHotSpotSettings>
+  <ScorchMarkSettings id="Default"/>
+  <ScorchMarkSettings id="Custom"><ScorchMarkSetting TerrainClass="Dirt"><Scorch>SCORCH_1</Scorch><Scorch>SCORCH_4</Scorch></ScorchMarkSetting><ScorchMarkSetting TerrainClass="Grass"><Scorch>RANDOM</Scorch></ScorchMarkSetting></ScorchMarkSettings>
+  <W3DDeviceSettings id="Default"><ShroudColor R="0.1" G="0.2" B="0.3"/><TreeFadeObjectFilter/></W3DDeviceSettings>
+  <W3DDeviceSettings id="Custom" MaxTerrainTracks="23" UseSimpleHordeDecals="true" OpacityOfSimpleMergeDecals="75%" OccludedColorLuminanceScale="0.4" MaxRoadSegments="201" MaxRoadVertex="305" MaxRoadIndex="405" FogAlpha="29" ShroudAlpha="155" ClearAlpha="242" DefaultShroudStatus="SHROUDED"><ShroudColor R="0.75" G="0.6" B="0.3"/><TreeFadeObjectFilter Rule="ANY" Include="INFANTRY"/><StandardPublicBone>Bone1</StandardPublicBone><StandardPublicBone>Bone2</StandardPublicBone></W3DDeviceSettings>
+  <SiegeEvaEvent id="Default" Seconds="5s" EvaEvent="SiegeDefault"/>
+  <SiegeEvaEvent id="Custom" EvaEvent="SiegeGeneric" EventType="GENERIC" Seconds="2.5s"/>
+  <PlayerTechUpgradeBinding id="Custom"><Binding TechDependency="Technology" UpgradeToGrant="Upgrade" /><Binding UpgradeToGrant="OtherUpgrade" TechDependency="OtherTechnology" /></PlayerTechUpgradeBinding>
+</AssetDeclaration>

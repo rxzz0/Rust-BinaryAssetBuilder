@@ -1,4 +1,6 @@
-use super::static_assets::game_object::{SCRIPTED_FLAGS, Schema};
+#[cfg(test)]
+use super::static_assets::game_object::SCRIPTED_FLAGS;
+use super::static_assets::game_object::{Schema, scripted_attributes};
 use super::{SAGE_NS, invalid, static_assets};
 use crate::manifest::Manifest;
 use roxmltree::Document;
@@ -17,6 +19,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "LaserDraw",
             "PropDraw",
             "ScriptedModelDraw",
+            "SpotlightDraw",
             "StreamDraw",
             "TankDraw",
             "TracerModelDraw",
@@ -25,7 +28,18 @@ const MODULES: &[(&str, &[&str])] = &[
     ),
     (
         "AI",
-        &["AIUpdate", "AnimalAIUpdate", "HordeAIUpdate", "JetAIUpdate"],
+        &[
+            "AIUpdate",
+            "AIGateUpdate",
+            "AnimalAIUpdate",
+            "ConstructionYardAIUpdate",
+            "DeployStyleAIUpdate",
+            "HordeAIUpdate",
+            "JetAIUpdate",
+            "SupplyTruckAIUpdate",
+            "TransportAIUpdate",
+            "WanderAIUpdate",
+        ],
     ),
     (
         "Body",
@@ -37,6 +51,8 @@ const MODULES: &[(&str, &[&str])] = &[
             "ManagedImmortalBody",
             "ManagerBody",
             "PropBody",
+            "InactiveBody",
+            "ShieldBody",
         ],
     ),
     (
@@ -46,6 +62,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "ModelConditionAudioLoopClientBehavior",
             "ModelConditionEvaEventSelectorClientBehavior",
             "ModelConditionSoundSelectorClientBehavior",
+            "RandomSoundSelectorClientBehavior",
             "UpgradeSoundSelectorClientBehavior",
         ],
     ),
@@ -112,11 +129,17 @@ const MODULES: &[(&str, &[&str])] = &[
             "PrematureDischargeSpecialPower",
             "RadarBehavior",
             "FireWeaponUpdate",
+            "DamageFieldUpdate",
             "PlayerPowerManager",
             "GiveProductionBonusSpecialPower",
             "PlayerUpgradeSpecialPower",
             "StoreTemplateIDBehavior",
             "BezierProjectile",
+            "MissileUpdate",
+            "AutoAbility",
+            "CompositeStructureInfoModule",
+            "WallHubBehavior",
+            "MinefieldBehavior",
             "LineSegmentDamageUpdate",
             "LinearDamageUpdate",
             "LifetimeUpdate",
@@ -126,6 +149,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "AttributeModifierPoolUpdate",
             "BuildingBehavior",
             "BuildingDestructionBehavior",
+            "CaptureBehavior",
             "CreateObjectDie",
             "DefaultProductionExit",
             "DestroyDie",
@@ -145,6 +169,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "ParkingPlaceBehavior",
             "Physics",
             "ProductionUpdate",
+            "PowerUpdate",
             "QueueProductionExitUpdate",
             "RecallUnitsSpecialPower",
             "RepairUpdate",
@@ -175,9 +200,57 @@ const MODULES: &[(&str, &[&str])] = &[
             "DistributeEnergyToAlliesBehavior",
             "DominateEnemySpecialPower",
             "EmotionTrackerUpdate",
+            "AttributeModifierNaval",
+            "CombinedInfoModule",
+            "ExperienceLevelCreate",
+            "InheritUpgradeCreate",
+            "RandomModelCondition",
+            "SupplyCenterCreate",
             "EncloseBehavior",
             "EnergyDisablingBehavior",
             "FreefallUpdate",
+            "Upgrade",
+            "DelayedUpgrade",
+            "ExperienceScalarUpgrade",
+            "InvisibilityUpgrade",
+            "LocomotorSetUpgrade",
+            "MaxHealthUpgrade",
+            "UnpauseSpecialPowerUpgrade",
+            "RadarFreezeSpecialPower",
+            "RadarJamSpecialPower",
+            "RadarSpySpecialPower",
+            "RadarHackSpecialPower",
+            "SpecialPowerUpdate",
+            "AttackTargetSpecialPower",
+            "VeterancyCrateCollide",
+            "WeaponScatterEffectUpdate",
+            "KeepObjectDie",
+            "UpgradeDie",
+            "RefundDie",
+            "TerrainResource",
+            "TiberiumCrystal",
+            "TiberiumField",
+            "DistributedMoney",
+            "ActivateSpecialPowerOnCreate",
+            "OCLUpdate",
+            "EMPUpdate",
+            "DestructibleEnvironmentUpdate",
+            "BeamTargetBehavior",
+            "DockUpdate",
+            "SupplyCenterDockUpdate",
+            "SupplyWarehouseDockUpdate",
+            "InitiateRepairDie",
+            "CaptureAndGiveCommandSetSpecialPower",
+            "CombineSpecialPower",
+            "InvisibilitySpecialPower",
+            "TemporaryOwnerSpecialPower",
+            "GrantUpgradeAreaOfEffectSpecialPower",
+            "SpecialPowerDispatchSpecialPower",
+            "CreateAndEnterObjectSpecialPower",
+            "FindCoverBehavior",
+            "GatherSlavesUpdate",
+            "CostModifierUpgrade",
+            "ReplaceSelfUpgrade",
             "GrantUpgradeCreate",
             "HealCrateCollide",
             "HordeContain",
@@ -186,11 +259,13 @@ const MODULES: &[(&str, &[&str])] = &[
             "InvalidTargetsDeathUpdate",
             "InvisibilityBroadcastUpdate",
             "LaserScatterUpdate",
+            "LeechTargetingAttachUpdate",
             "LoseHealthUpdate",
             "MagneticEffectUpdate",
             "MoneyCrateCollide",
             "MoneyGainAttachUpdate",
             "MovementSpecialPower",
+            "StealUnitUpdate",
             "OCLMonitorUpdate",
             "ParabolicCurveUpdate",
             "ProjectileUpdate",
@@ -205,8 +280,30 @@ const MODULES: &[(&str, &[&str])] = &[
             "SetLocomotorSpeedUpdate",
             "ShieldSphereUpdate",
             "ShipSlowDeath",
+            "ClearanceTestingSlowDeathBehavior",
+            "HelicopterSlowDeath",
             "SpawnCrateUpdate",
             "SpecialAbilityUpdate",
+            "ObjectStatusSpecialAbilityUpdate",
+            "TeleportToCasterSpecialPower",
+            "TiberiumThiefSpecialAbilityUpdate",
+            "GiveUpgradeUpdate",
+            "CloneStoredObjectsSpecialPowerUpdate",
+            "DelayedWeaponFireSpecialAbilityUpdate",
+            "RadarScanMapSpecialAbilityUpdate",
+            "LevelGrantSpecialPower",
+            "GiveOrRestoreUpgradeSpecialPower",
+            "TeleportSpecialAbilityUpdate",
+            "ReplaceObjectUpdate",
+            "OCLMonitorSpecialAbilityUpdate",
+            "SwitchLocomotorsSpecialAbilityUpdate",
+            "RestrictSpecialPowerBehavior",
+            "AreaRestrictSpecialPowerBehavior",
+            "SpecialPowerAssistResponseBehavior",
+            "UnifiedControlBehavior",
+            "UnifiedShroudRevealBehavior",
+            "ClusterBombUpdate",
+            "LaserUpdate",
             "SpecialDisguiseUpdate",
             "SpiderHoleUpdate",
             "StoreCurrentStateUpdate",
@@ -217,6 +314,20 @@ const MODULES: &[(&str, &[&str])] = &[
             "SuppressionUpdate",
             "SwitchLocomotorUpdate",
             "TimedOpacityUpdate",
+            "HordeDispatchSpecialPower",
+            "MoveToPositionAndEvacuateSpecialPower",
+            "MoveToPositionAndReplaceSelfSpecialPower",
+            "RepairSpecialPower",
+            "SpecialPowerTimerRefreshSpecialPower",
+            "UncombineSpecialPower",
+            "ShieldBodyUpdate",
+            "Collide",
+            "TiberiumGrowthModBehavior",
+            "StorePurchasedUpgradeBehavior",
+            "Damager",
+            "DeletionUpdate",
+            "Destroy",
+            "FiringTracker",
             "TrackDamage",
             "TrackIncomingWeaponFireBehavior",
             "UnitCrateCollide",
@@ -264,11 +375,7 @@ pub fn sdk_coverage(schema_root: &Path, mut out: impl Write) -> io::Result<()> {
             if group == "Draws" && name == "ScriptedModelDraw" {
                 let draw = schema.shape(kind, schema_root)?;
                 for field in draw.fields {
-                    let coverage = if matches!(field.name.as_str(), "id" | "ExtraPublicBone")
-                        || SCRIPTED_FLAGS
-                            .iter()
-                            .any(|&(name, _, _)| name == field.name)
-                    {
+                    let coverage = if scripted_attributes().any(|name| name == field.name) {
                         "encoded"
                     } else {
                         "missing"
@@ -280,13 +387,12 @@ pub fn sdk_coverage(schema_root: &Path, mut out: impl Write) -> io::Result<()> {
                     )?;
                 }
                 for field in draw.children {
-                    let coverage = if matches!(
-                        field.name.as_str(),
-                        "ModelConditionState" | "AnimationState"
-                    ) {
-                        "partial"
-                    } else {
-                        "missing"
+                    let coverage = match field.name.as_str() {
+                        "ModelConditionState"
+                        | "AnimationState"
+                        | "AttachModel"
+                        | "EmbedPortal" => "encoded",
+                        _ => "missing",
                     };
                     writeln!(out, "DrawChild\t{}\t{}\t{coverage}", field.name, field.kind)?;
                 }
@@ -957,6 +1063,86 @@ mod tests {
     #[test]
     fn animation_fx_events_match_ea_batch() {
         assert_ea_fixture("animation-fx-events", 1);
+    }
+
+    #[test]
+    fn scripted_model_states_match_ea_batch() {
+        assert_ea_fixture("scripted-model-states", 2);
+    }
+
+    #[test]
+    fn special_ability_variants_match_ea_batch() {
+        assert_ea_fixture("special-ability-variants", 3);
+    }
+
+    #[test]
+    fn update_effect_variants_match_ea_batch() {
+        assert_ea_fixture("update-effect-variants", 2);
+    }
+
+    #[test]
+    fn dock_variants_match_ea_batch() {
+        assert_ea_fixture("dock-variants", 2);
+    }
+
+    #[test]
+    fn ability_monitor_variants_match_ea_batch() {
+        assert_ea_fixture("ability-monitor-variants", 5);
+    }
+
+    #[test]
+    fn power_response_variants_match_ea_batch() {
+        assert_ea_fixture("power-response-variants", 3);
+    }
+
+    #[test]
+    fn unified_capture_variants_match_ea_batch() {
+        assert_ea_fixture("unified-capture-variants", 2);
+    }
+
+    #[test]
+    fn projectile_effect_variants_match_ea_batch() {
+        assert_ea_fixture("projectile-effect-variants", 7);
+    }
+
+    #[test]
+    fn missile_damage_variants_match_ea_batch() {
+        assert_ea_fixture("missile-damage-variants", 7);
+    }
+
+    #[test]
+    fn clone_radar_ability_variants_match_ea_batch() {
+        assert_ea_fixture("clone-radar-ability-variants", 6);
+    }
+
+    #[test]
+    fn grant_ability_variants_match_ea_batch() {
+        assert_ea_fixture("grant-ability-variants", 5);
+    }
+
+    #[test]
+    fn upgrade_dispatch_variants_match_ea_batch() {
+        assert_ea_fixture("upgrade-dispatch-variants", 9);
+    }
+
+    #[test]
+    fn enter_teleport_variants_match_ea_batch() {
+        assert_ea_fixture("enter-teleport-variants", 10);
+    }
+
+    #[test]
+    fn replace_auto_variants_match_ea_batch() {
+        assert_ea_fixture("replace-auto-variants", 4);
+    }
+
+    #[test]
+    fn clearance_rotor_variants_match_ea_batch() {
+        assert_ea_fixture("clearance-rotor-variants", 5);
+    }
+
+    #[test]
+    fn wall_composite_variants_match_ea_batch() {
+        assert_ea_fixture("wall-composite-variants", 5);
     }
 
     #[test]

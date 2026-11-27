@@ -12,6 +12,8 @@ use std::io;
 use std::sync::OnceLock;
 
 const KIND: u32 = 0xe9fd_14c9;
+const LEECH_TARGETING: u32 = 0xca60_38a6;
+const STEAL_UNIT: u32 = 0x2106_8ff6;
 const MONEY_GAIN: u32 = 0xb1a5_4585;
 const STATUS: u32 = 0xa7bd_811e;
 const MODEL: u32 = 0x67db_bfc9;
@@ -71,8 +73,13 @@ pub(super) fn encode(
     const MONEY_STATUS: &str = "MoneyGainObjectStatusValidation";
 
     let path = data.path;
-    let money = node.has_tag_name((SAGE_NS, "MoneyGainAttachUpdate"));
-    let kind = if money { MONEY_GAIN } else { KIND };
+    let kind = match node.tag_name().name() {
+        "LeechTargetingAttachUpdate" => LEECH_TARGETING,
+        "MoneyGainAttachUpdate" => MONEY_GAIN,
+        "StealUnitUpdate" => STEAL_UNIT,
+        _ => KIND,
+    };
+    let money = kind == MONEY_GAIN;
     let allowed: Vec<_> = FIELDS
         .iter()
         .map(|&(name, _, _, _)| name)
@@ -257,12 +264,15 @@ pub(super) fn encode(
         0x09dd_cff3,
         Target::Table(Table::array(count, items)),
     ));
-    if let Some(money_fields) = money_fields {
-        let mut derived = vec![base(KIND, Table::record(entries))];
-        derived.extend(money_fields);
-        entries = derived;
-    }
-    Ok((kind, Table::record(entries)))
+    let parent = Table::record(entries);
+    let fields = if kind == KIND {
+        parent
+    } else {
+        let mut derived = vec![base(KIND, parent)];
+        derived.extend(money_fields.into_iter().flatten());
+        Table::record(derived)
+    };
+    Ok((kind, fields))
 }
 
 fn enum_index(

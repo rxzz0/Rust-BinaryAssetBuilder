@@ -131,7 +131,7 @@ pub(in crate::compile::static_assets) fn compile(
             active_body::TOKEN_LAYOUT,
             active_body::encode(module, kind, path)?,
         ),
-        None if body_name == "PropBody" => (TOKENS, [0; BODY_SIZE]),
+        None if matches!(body_name, "PropBody" | "InactiveBody") => (TOKENS, [0; BODY_SIZE]),
         None => {
             return Err(invalid(
                 path,
@@ -299,8 +299,23 @@ pub(in crate::compile::static_assets) fn compile(
                 let early_fields: &[u32] = match module.tag_name().name() {
                     "SpecialDisguiseUpdate" => &[0x100],
                     "MoneyGainAttachUpdate" => &[0x158],
+                    "DamageFieldUpdate" => &[0x28],
+                    "RadarScanMapSpecialAbilityUpdate" => &[0xf4],
+                    "LevelGrantSpecialPower" => &[0xfc],
+                    "GiveOrRestoreUpgradeSpecialPower" => &[0xf4],
+                    "GrantUpgradeAreaOfEffectSpecialPower" => &[0x1c8, 0x1d0],
+                    "SpecialPowerDispatchSpecialPower" => &[0x1c8],
+                    "OCLSpecialPower" => &[0x1e0, 0x1e4, 0x1ec],
+                    "CreateAndEnterObjectSpecialPower" => &[0x1f4, 0x1e0, 0x1e4, 0x1ec],
+                    "ReplaceObjectUpdate" => &[0xfc],
+                    "ClearanceTestingSlowDeathBehavior" => &[0x84, 0x88],
+                    "HelicopterSlowDeath" => &[0xa0],
                     "DominateEnemySpecialPower" => &[super::dominate_enemy::FILTER_POINTER as u32],
                     "BeamSpecialAbilityUpdate" => &[0xf8, 0x108],
+                    "RadarFreezeSpecialPower" | "RadarSpySpecialPower" => &[0x1c8],
+                    "CombineSpecialPower" => &[0x1c4],
+                    "InvisibilitySpecialPower" => &[0x1d0],
+                    "RefundDie" => &[0x3c, 0x44],
                     "AssembleStructureSpecialAbilityUpdate" => &[0xfc],
                     _ => &[],
                 };
@@ -319,6 +334,12 @@ pub(in crate::compile::static_assets) fn compile(
                     "StealthDetectorUpdate" | "ObjectCreationUpgrade"
                 ) {
                     upgrade_relocation_anchors.push((start, data.payload.len() as u32 - 1));
+                }
+                if module.has_tag_name((SAGE_NS, "CostModifierUpgrade")) {
+                    upgrade_relocation_anchors.push((start, start + 0x3d));
+                }
+                if module.has_tag_name((SAGE_NS, "ReplaceSelfUpgrade")) {
+                    upgrade_relocation_anchors.push((start, start + 0x31));
                 }
                 if module.has_tag_name((SAGE_NS, "SubStructureBuild")) {
                     upgrade_relocation_anchors.push((start, start + 0x34));
@@ -370,13 +391,17 @@ pub(in crate::compile::static_assets) fn compile(
     }
     let body_shift = data.payload.len() - ROOT_SIZE;
     table.shift_data_from(ROOT_SIZE, body_shift);
-    if module.has_tag_name((SAGE_NS, "PropBody")) {
+    if variant.is_none() {
         validate_attributes(module, &["id"], path)?;
         if has_content(module) {
-            return Err(invalid(path, "PropBody cannot contain content"));
+            return Err(invalid(path, format!("{body_name} cannot contain content")));
         }
         let start = data.allocate(0x1dc, 8)?;
-        let kind = 0xff88_404b;
+        let kind = if body_name == "InactiveBody" {
+            0x2923_4e6e
+        } else {
+            0xff88_404b
+        };
         let inherited = behaviors_basic::module_base(module, kind, start, &mut data, false)?;
         let body = Table::sequence(vec![Entry::new(
             2,
@@ -388,7 +413,13 @@ pub(in crate::compile::static_assets) fn compile(
         )]);
         child_targets.push(("Body", Target::Table(body)));
     } else {
-        let body_start = data.allocate(0x1dc, BODY_SIZE)?;
+        let shield = body_name == "ShieldBody";
+        let body_size = if shield {
+            active_body::SHIELD_SIZE
+        } else {
+            BODY_SIZE
+        };
+        let body_start = data.allocate(0x1dc, body_size)?;
         data.payload[body_start..body_start + BODY_SIZE].copy_from_slice(&body_bytes);
         if let Some(target) = active_body::damage_ranges(
             module,
@@ -406,6 +437,20 @@ pub(in crate::compile::static_assets) fn compile(
                     "GameObject layout is missing DamageRangeModifier",
                 ));
             }
+        }
+        if shield {
+            let fields = table
+                .variant_fields("Body")
+                .ok_or_else(|| invalid(path, "GameObject layout is missing Body variant"))?;
+            let inherited = std::mem::replace(fields, Table::record(Vec::new()));
+            *fields = active_body::shield(
+                module,
+                body_start,
+                inherited,
+                &mut data,
+                &mut references,
+                &mut reference_types,
+            )?;
         }
     }
     if let Some((kind, bases)) = variant
@@ -492,13 +537,13 @@ pub(in crate::compile::static_assets) fn compile(
                 return (start, offset);
             }
         }
-        // Some abilities emit derived pointers before inherited pointers.
+        // Some modules emit derived pointers before inherited pointers.
         let index = early_module_fields.partition_point(|&(start, _)| start <= pointer);
         if index > 0 {
             let (start, offsets) = early_module_fields[index - 1];
             let offset = pointer - start;
-            if offsets.contains(&offset) {
-                return (start, offset);
+            if let Some(rank) = offsets.iter().position(|&field| field == offset) {
+                return (start, rank as u32);
             }
         }
         // EA emits the inherited status pointers after the two upgrade lists.

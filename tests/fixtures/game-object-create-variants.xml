@@ -1,0 +1,26 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="CreateDefaults">
+    <Behaviors>
+      <AttributeModifierNaval id="ModuleTag_Naval" />
+      <CombinedInfoModule id="ModuleTag_Info" />
+      <ExperienceLevelCreate id="ModuleTag_Experience" />
+      <RandomModelCondition id="ModuleTag_Condition" />
+      <SupplyCenterCreate id="ModuleTag_Supply" />
+      <InheritUpgradeCreate id="ModuleTag_Inherit" />
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="CreateCustom">
+    <Behaviors>
+      <AttributeModifierNaval id="ModuleTag_Naval" AttributeModifier="NavalBuff" />
+      <CombinedInfoModule id="ModuleTag_Info" DockingBone="DOCK_BONE" />
+      <ExperienceLevelCreate id="ModuleTag_Experience" Level="3" MPOnly="true" />
+      <RandomModelCondition id="ModuleTag_Condition" Conditions="SOLD REALLYDAMAGED" />
+      <InheritUpgradeCreate id="ModuleTag_Inherit" Radius="75.5">
+        <ObjectFilter Rule="ANY" Include="INFANTRY" />
+        <Upgrade>UpgradeOne</Upgrade><Upgrade>UpgradeTwo</Upgrade>
+      </InheritUpgradeCreate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

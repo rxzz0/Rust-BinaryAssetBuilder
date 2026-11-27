@@ -1,0 +1,19 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+ <FXList id="AbilityVariantFX"><NuggetList/></FXList>
+ <GameObject id="AbilityVariantsDefault">
+  <Behaviors>
+   <ObjectStatusSpecialAbilityUpdate id="ModuleTag_Status"/>
+   <TeleportToCasterSpecialPower id="ModuleTag_Teleport"/>
+   <TiberiumThiefSpecialAbilityUpdate id="ModuleTag_Thief"/>
+  </Behaviors>
+  <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+ </GameObject>
+ <GameObject id="AbilityVariantsCustom">
+  <Behaviors>
+   <ObjectStatusSpecialAbilityUpdate id="ModuleTag_Status" Status1="UNATTACKABLE" Status2="UNATTACKABLE"/>
+   <TeleportToCasterSpecialPower id="ModuleTag_Teleport" Radius="5" MinDestinationRadius="10" MaxDestinationRadius="30" MaxRangeFromCasterSP="45" MaxRangeFromCasterMP="60" TriggerFX="AbilityVariantFX" TargetFX="AbilityVariantFX" RequireStoredObjects="true" KillObjectsIfPlacedInBadSpot="true"/>
+   <TiberiumThiefSpecialAbilityUpdate id="ModuleTag_Thief" TiberiumStolenPerUpdate="5" DelayBetweenThefts="2.25s" TiberiumCapacity="100" ObjectStatusWhenNotEmpty="UNATTACKABLE" ModelConditionWhenNotEmpty="DYING" PlayWeaponPreFireFX="true"/>
+  </Behaviors>
+  <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+ </GameObject>
+</AssetDeclaration>

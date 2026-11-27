@@ -1,0 +1,27 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="ModelStateModuleProbe">
+    <Draws><ScriptedModelDraw id="ModuleTag_Draw">
+      <ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name=""/></ModelConditionState>
+      <ModelConditionState ParseCondStateType="PARSE_NORMAL" id="StateId" Name="Sample Name" ConditionsYes="MOVING" Skeleton="ProbeSkeleton" PortraitImage="ProbePortrait" ButtonImage="ProbeButton" OverrideTooltip="TOOLTIP:Example" RetainSubObjects="true">
+        <Model Name="ProbeModel" />
+        <FXEvent/>
+        <FXEvent Frame="7" FrameStep="2" FrameStop="19" FireWhenSkipped="true" Effect="ProbeEffect" Bone="ProbeBone"/>
+        <Turret TurretNameKey="ProbeTurret"/>
+        <SubObject>MySubObject</SubObject>
+        <SubObject>OtherSubObject</SubObject>
+      </ModelConditionState>
+    </ScriptedModelDraw></Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="LuaEventModuleProbe">
+    <Draws><ScriptedModelDraw id="ModuleTag_Draw">
+      <ModelConditionState ParseCondStateType="PARSE_DEFAULT"><Model Name=""/></ModelConditionState>
+      <AnimationState ParseCondStateType="PARSE_DEFAULT">
+        <LuaEvent/>
+        <LuaEvent Frame="7" Data="Payload" Trigger="TRIGGER_ONSTATEENTER"/>
+        <LuaEvent Frame="9" Data="Other" Trigger="TRIGGER_ONSTATELEAVE"/>
+      </AnimationState>
+    </ScriptedModelDraw></Draws>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>

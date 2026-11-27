@@ -41,6 +41,47 @@ pub(super) fn module_base(
     })
 }
 
+pub(super) fn fieldless_module(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    kind: u32,
+    update: bool,
+) -> io::Result<Table> {
+    validate_attributes(node, &["id"], data.path)?;
+    if has_content(node) {
+        return Err(invalid(
+            data.path,
+            format!("unexpected {} content", node.tag_name().name()),
+        ));
+    }
+    let start = data.allocate(pointer, 8)?;
+    Ok(Table::record(vec![module_base(
+        node, kind, start, data, update,
+    )?]))
+}
+
+fn deletion_update(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x4240_9853;
+    let path = data.path;
+    super::super::fx_list::validate_leaf(node, &["id", "MinFrames", "MaxFrames"], path)?;
+    let start = data.allocate(pointer, 16)?;
+    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    for (name, default, offset) in [
+        ("MinFrames", "0", start + 8),
+        ("MaxFrames", "1", start + 12),
+    ] {
+        let value = super::super::sage_uint(node.attribute(name).unwrap_or(default), name, path)?;
+        data.word(offset, value);
+        entries.push(Entry::named(name, 0x7631_77a4, Target::Data(offset)));
+    }
+    Ok((KIND, Table::record(entries)))
+}
+
 fn die_on_producer_death(
     node: Node<'_, '_>,
     pointer: usize,
@@ -546,6 +587,18 @@ pub(super) fn upgrade_parent<'a, 'input: 'a>(
     reference_types: &mut Vec<u32>,
     children: &mut std::iter::Peekable<impl Iterator<Item = Node<'a, 'input>>>,
 ) -> io::Result<Entry> {
+    upgrade_fields(node, kind, start, data, reference_types, children)
+        .map(|fields| base(0xae60_ae98, fields))
+}
+
+pub(super) fn upgrade_fields<'a, 'input: 'a>(
+    node: Node<'_, '_>,
+    kind: u32,
+    start: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+    children: &mut std::iter::Peekable<impl Iterator<Item = Node<'a, 'input>>>,
+) -> io::Result<Table> {
     use super::spawn::{UPGRADE, id_list, weak_reference};
 
     let mut upgrade = vec![module_base(node, kind, start, data, false)?];
@@ -573,7 +626,7 @@ pub(super) fn upgrade_parent<'a, 'input: 'a>(
         let list = id_list(data, start + offset, ids)?;
         upgrade.push(Entry::named(name, 0x26fa_cfc7, Target::Table(list)));
     }
-    Ok(base(0xae60_ae98, Table::record(upgrade)))
+    Ok(Table::record(upgrade))
 }
 
 pub(in crate::compile::static_assets) fn optional_vector(
@@ -1288,6 +1341,125 @@ fn topple_update(
     Ok((KIND, Table::record(entries)))
 }
 
+fn scalar_behavior(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<Option<(u32, Table)>> {
+    const CAPTURE: u32 = 0xf8c4_aa6b;
+    const UNIFIED_CONTROL: u32 = 0xbd7d_7cde;
+    const UNIFIED_SHROUD: u32 = 0x8b6d_f249;
+    const POWER: u32 = 0xf46e_b384;
+    const STORE: u32 = 0x2eb6_c99c;
+    const GROWTH: u32 = 0xae3a_906c;
+    const UINT: u32 = 0x7631_77a4;
+    const BOOL: u32 = 0x77e3_f4f7;
+    const GAME_OBJECT_WEAK: u32 = 0x148e_d75d;
+    const TIME: u32 = 0x9986_69e8;
+    const POWER_TYPE: u32 = 0xe0ed_8382;
+    const REAL: u32 = 0x6458_64f3;
+    const CAPTURE_FIELDS: &[(&str, u32, usize, &str)] = &[
+        ("GrantMoney", UINT, 8, "0"),
+        ("GrantMoneyOneTime", BOOL, 16, "false"),
+        ("SlavedCaptureObject", GAME_OBJECT_WEAK, 12, ""),
+    ];
+    let (kind, size, layout): (_, _, &[(_, _, _, _)]) = match node.tag_name().name() {
+        "CaptureBehavior" => (CAPTURE, 20, CAPTURE_FIELDS),
+        "UnifiedControlBehavior" => (UNIFIED_CONTROL, 24, CAPTURE_FIELDS),
+        "UnifiedShroudRevealBehavior" => (UNIFIED_SHROUD, 24, CAPTURE_FIELDS),
+        "PowerUpdate" => (
+            POWER,
+            24,
+            &[
+                ("UpdatePeriod", TIME, 8, "1s"),
+                ("ReloadTime", TIME, 12, "0s"),
+                ("Duration", TIME, 16, "0s"),
+                ("Type", POWER_TYPE, 20, "INVALID"),
+            ],
+        ),
+        "StorePurchasedUpgradeBehavior" => (STORE, 12, &[("MaxPlayerUpgrades", UINT, 8, "9999")]),
+        "TiberiumGrowthModBehavior" => (
+            GROWTH,
+            60,
+            &[
+                ("GreenTiberiumMultiplier", REAL, 52, "1.0"),
+                ("BlueTiberiumMultiplier", REAL, 56, "1.0"),
+            ],
+        ),
+        _ => return Ok(None),
+    };
+    let path = data.path;
+    let unified = matches!(kind, UNIFIED_CONTROL | UNIFIED_SHROUD);
+    let names: Vec<_> = std::iter::once("id")
+        .chain(layout.iter().map(|&(name, _, _, _)| name))
+        .chain(unified.then_some("UnificationType"))
+        .collect();
+    validate_attributes(node, &names, path)?;
+    let start = data.allocate(pointer, size)?;
+    let behavior = module_base(node, kind, start, data, kind == POWER)?;
+    let parent = if kind == GROWTH {
+        die_parent(node, start, behavior, data)?
+    } else {
+        if has_content(node) {
+            return Err(invalid(
+                path,
+                format!("unexpected {} content", node.tag_name().name()),
+            ));
+        }
+        behavior
+    };
+    let mut entries = vec![parent];
+    for &(name, field_kind, offset, default) in layout {
+        let value = node.attribute(name).unwrap_or(default);
+        let field = start + offset;
+        match field_kind {
+            UINT => data.word(field, super::super::sage_uint(value, name, path)?),
+            BOOL => data.payload[field] = boolean(node, name, false, path)?,
+            TIME => data.word(field, sage_time(value, name, path)?.to_bits()),
+            REAL => data.word(field, finite_number(value, name, path)?.to_bits()),
+            POWER_TYPE => {
+                let value = match value.trim() {
+                    "BACKUP_GENERATOR" => 0,
+                    "INVALID" => 1,
+                    _ => return Err(invalid(path, format!("invalid PowerUpdate Type {value}"))),
+                };
+                data.word(field, value);
+            }
+            GAME_OBJECT_WEAK => {
+                if !value.trim().is_empty() {
+                    let id = asset_reference(
+                        value.split_once('\\').map_or(value, |(name, _)| name),
+                        "GameObject",
+                        path,
+                    )?;
+                    reference_types.push(id.type_id);
+                    data.word(field, id.instance_id);
+                }
+            }
+            _ => unreachable!("unexpected scalar behavior field type"),
+        }
+        entries.push(Entry::named(name, field_kind, Target::Data(field)));
+    }
+    let mut table = Table::record(entries);
+    if unified {
+        let unification = super::super::global_ui::enum_value(
+            node.attribute("UnificationType").unwrap_or("SAME_PLAYER"),
+            &["SAME_PLAYER", "ALLIED_PLAYERS"],
+            path,
+        )?;
+        data.word(start + 20, unification);
+        table = Table::record(vec![
+            base(CAPTURE, table),
+            Entry::named("UnificationType", 0x19b6_94b8, Target::Data(start + 20)),
+        ]);
+        if kind == UNIFIED_SHROUD {
+            table = Table::record(vec![base(UNIFIED_CONTROL, table)]);
+        }
+    }
+    Ok(Some((kind, table)))
+}
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,
@@ -1295,7 +1467,43 @@ pub(super) fn encode(
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
 ) -> io::Result<Option<(u32, Table)>> {
+    if let Some(module) = scalar_behavior(node, pointer, data, reference_types)? {
+        return Ok(Some(module));
+    }
+    let fieldless = match node.tag_name().name() {
+        "Collide" => Some((0x70e5_c103, false)),
+        "Damager" => Some((0x2a79_518f, false)),
+        "Destroy" => Some((0xcb90_9bfe, false)),
+        "FiringTracker" => Some((0x9827_0bd0, true)),
+        "ShieldBodyUpdate" => Some((0x643a_2ac3, true)),
+        "BeamTargetBehavior" => Some((0xc939_197b, false)),
+        _ => None,
+    };
+    if let Some((kind, update)) = fieldless {
+        return fieldless_module(node, pointer, data, kind, update)
+            .map(|table| Some((kind, table)));
+    }
     match node.tag_name().name() {
+        "DockUpdate" | "SupplyCenterDockUpdate" | "SupplyWarehouseDockUpdate" => {
+            return super::dock::encode(node, pointer, data, reference_types).map(Some);
+        }
+        "ClusterBombUpdate" | "LaserUpdate" => {
+            return super::projectile_effects::encode(
+                node,
+                pointer,
+                data,
+                references,
+                reference_types,
+            )
+            .map(Some);
+        }
+        "RestrictSpecialPowerBehavior"
+        | "AreaRestrictSpecialPowerBehavior"
+        | "SpecialPowerAssistResponseBehavior" => {
+            return super::power_response::encode(node, pointer, data, references, reference_types)
+                .map(Some);
+        }
+        "DeletionUpdate" => return deletion_update(node, pointer, data).map(Some),
         "CaptureAndGiveUpgradeBehavior" => {
             return super::capture_upgrade::encode(
                 node,
@@ -1551,21 +1759,88 @@ pub(super) fn encode(
     }
     if matches!(
         node.tag_name().name(),
-        "RecallUnitsSpecialPower"
-            | "SpecialPower"
-            | "ReturnToProducerSpecialPower"
-            | "ReturnToDockSpecialPower"
-            | "MovementSpecialPower"
-            | "AssignSlavesTargetObjectSpecialPower"
-            | "AttackTargetSpecialPower"
-            | "OCLSpecialPower"
-            | "ActivateModuleSpecialPower"
-            | "PrematureDischargeSpecialPower"
-            | "GiveProductionBonusSpecialPower"
-            | "PlayerUpgradeSpecialPower"
-            | "StoreObjectsSpecialPower"
-            | "TeleportStoredObjectsSpecialPower"
+        "KeepObjectDie" | "UpgradeDie" | "RefundDie"
     ) {
+        return super::death_variants::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    let resource = match node.tag_name().name() {
+        "TerrainResource" => Some(super::resource_variants::encode_terrain(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )),
+        "TiberiumCrystal" => Some(super::resource_variants::encode_crystal(
+            node, pointer, data,
+        )),
+        "TiberiumField" => Some(super::resource_variants::encode_field(
+            node,
+            pointer,
+            data,
+            reference_types,
+        )),
+        _ => None,
+    };
+    if let Some(encoded) = resource {
+        return encoded.map(Some);
+    }
+    if matches!(
+        node.tag_name().name(),
+        "DistributedMoney" | "FindCoverBehavior" | "GatherSlavesUpdate"
+    ) {
+        return super::small_behavior_variants::encode(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "SpecialPowerUpdate")) {
+        return super::special_power_variants::encode_update(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
+    if matches!(
+        node.tag_name().name(),
+        "ActivateSpecialPowerOnCreate"
+            | "OCLUpdate"
+            | "InitiateRepairDie"
+            | "EMPUpdate"
+            | "DestructibleEnvironmentUpdate"
+    ) {
+        return super::small_update_variants::encode(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
+    if super::recall::base_layout_variant(node.tag_name().name()).is_some()
+        || super::special_power_variants::variant_layout(node.tag_name().name()).is_some()
+        || matches!(
+            node.tag_name().name(),
+            "RecallUnitsSpecialPower"
+                | "MovementSpecialPower"
+                | "OCLSpecialPower"
+                | "CreateAndEnterObjectSpecialPower"
+                | "ActivateModuleSpecialPower"
+                | "GiveProductionBonusSpecialPower"
+                | "PlayerUpgradeSpecialPower"
+                | "StoreObjectsSpecialPower"
+                | "TeleportStoredObjectsSpecialPower"
+        )
+    {
         return super::recall::encode(node, pointer, data, references, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "BuildingDestructionBehavior")) {
@@ -1686,7 +1961,10 @@ pub(super) fn encode(
     if node.tag_name().namespace() == Some(SAGE_NS)
         && matches!(
             node.tag_name().name(),
-            "AttachUpdate" | "MoneyGainAttachUpdate"
+            "AttachUpdate"
+                | "LeechTargetingAttachUpdate"
+                | "MoneyGainAttachUpdate"
+                | "StealUnitUpdate"
         )
     {
         return super::attach::encode(node, pointer, data, references, reference_types).map(Some);
@@ -1696,7 +1974,13 @@ pub(super) fn encode(
             .map(Some);
     }
     if node.tag_name().namespace() == Some(SAGE_NS)
-        && matches!(node.tag_name().name(), "SlowDeath" | "ShipSlowDeath")
+        && matches!(
+            node.tag_name().name(),
+            "SlowDeath"
+                | "ShipSlowDeath"
+                | "ClearanceTestingSlowDeathBehavior"
+                | "HelicopterSlowDeath"
+        )
     {
         return super::slow_death::encode(node, pointer, data, references, reference_types)
             .map(Some);
@@ -1723,6 +2007,37 @@ pub(super) fn encode(
     }
     if node.has_tag_name((SAGE_NS, "SelectiveVisibilityBehavior")) {
         return super::selective_visibility::encode(node, pointer, data).map(Some);
+    }
+    if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(
+            node.tag_name().name(),
+            "AttributeModifierNaval"
+                | "CombinedInfoModule"
+                | "ExperienceLevelCreate"
+                | "InheritUpgradeCreate"
+                | "RandomModelCondition"
+                | "SupplyCenterCreate"
+        )
+    {
+        return super::create_variants::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(
+            node.tag_name().name(),
+            "Upgrade"
+                | "DelayedUpgrade"
+                | "ExperienceScalarUpgrade"
+                | "InvisibilityUpgrade"
+                | "LocomotorSetUpgrade"
+                | "MaxHealthUpgrade"
+                | "UnpauseSpecialPowerUpgrade"
+                | "CostModifierUpgrade"
+                | "ReplaceSelfUpgrade"
+        )
+    {
+        return super::upgrade_variants::encode(node, pointer, data, references, reference_types)
+            .map(Some);
     }
     if node.has_tag_name((SAGE_NS, "GrantUpgradeCreate")) {
         return super::grant_upgrade_create::encode(
@@ -1910,11 +2225,31 @@ pub(super) fn encode(
         return super::squeeze_fling::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
-    if node.has_tag_name((SAGE_NS, "BezierProjectile")) {
+    if node.has_tag_name((SAGE_NS, "AutoAbility")) {
+        return super::auto_ability::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(
+            node.tag_name().name(),
+            "CompositeStructureInfoModule" | "WallHubBehavior" | "MinefieldBehavior"
+        )
+    {
+        return super::structure_variants::encode(node, pointer, data, references, reference_types)
+            .map(Some);
+    }
+    if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(node.tag_name().name(), "BezierProjectile" | "MissileUpdate")
+    {
         return super::bezier_projectile::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
-    if node.has_tag_name((SAGE_NS, "FireWeaponUpdate")) {
+    if node.tag_name().namespace() == Some(SAGE_NS)
+        && matches!(
+            node.tag_name().name(),
+            "FireWeaponUpdate" | "DamageFieldUpdate"
+        )
+    {
         return fire_weapon_update(node, pointer, data, references, reference_types).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "PlayerPowerManager")) {
@@ -1956,6 +2291,19 @@ pub(super) fn encode(
     if matches!(
         node.tag_name().name(),
         "SpecialAbilityUpdate"
+            | "ObjectStatusSpecialAbilityUpdate"
+            | "TeleportToCasterSpecialPower"
+            | "TiberiumThiefSpecialAbilityUpdate"
+            | "GiveUpgradeUpdate"
+            | "CloneStoredObjectsSpecialPowerUpdate"
+            | "DelayedWeaponFireSpecialAbilityUpdate"
+            | "RadarScanMapSpecialAbilityUpdate"
+            | "LevelGrantSpecialPower"
+            | "GiveOrRestoreUpgradeSpecialPower"
+            | "TeleportSpecialAbilityUpdate"
+            | "ReplaceObjectUpdate"
+            | "OCLMonitorSpecialAbilityUpdate"
+            | "SwitchLocomotorsSpecialAbilityUpdate"
             | "BeamSpecialAbilityUpdate"
             | "AssembleStructureSpecialAbilityUpdate"
             | "ReplaceSelfSpecialAbility"
@@ -2699,25 +3047,61 @@ fn fire_weapon_update(
     reference_types: &mut Vec<u32>,
 ) -> io::Result<(u32, Table)> {
     const KIND: u32 = 0xb28c_3d52;
+    const DAMAGE: u32 = 0xf3b8_02d5;
     let path = data.path;
-    validate_attributes(
-        node,
-        &["id", "FireInterval", "AliveOnly", "ActiveWhenDisabled"],
-        path,
-    )?;
+    let damage = node.tag_name().name() == "DamageFieldUpdate";
+    let mut allowed = vec!["id", "FireInterval", "AliveOnly", "ActiveWhenDisabled"];
+    if damage {
+        allowed.extend(["Radius", "RequiredUpgrade"]);
+    }
+    validate_attributes(node, &allowed, path)?;
     let mut nuggets = Vec::new();
     let mut status = None;
+    let mut filter = None;
     for child in significant_children(node) {
-        if child.has_tag_name((SAGE_NS, "FireWeaponNugget")) && status.is_none() {
+        if child.has_tag_name((SAGE_NS, "FireWeaponNugget")) && status.is_none() && filter.is_none()
+        {
             nuggets.push(child);
-        } else if child.has_tag_name((SAGE_NS, "ObjectStatusValidation")) && status.is_none() {
+        } else if child.has_tag_name((SAGE_NS, "ObjectStatusValidation"))
+            && status.is_none()
+            && filter.is_none()
+        {
             status = Some(child);
+        } else if damage && child.has_tag_name((SAGE_NS, "ObjectFilter")) && filter.is_none() {
+            filter = Some(child);
         } else {
-            return Err(invalid(path, "unsupported FireWeaponUpdate child"));
+            return Err(invalid(
+                path,
+                format!("unsupported {} child", node.tag_name().name()),
+            ));
         }
     }
-    let start = data.allocate(pointer, 0x20)?;
-    let mut entries = vec![module_base(node, KIND, start, data, true)?];
+    let (kind, size) = if damage { (DAMAGE, 0x2c) } else { (KIND, 0x20) };
+    let start = data.allocate(pointer, size)?;
+    let mut entries = vec![module_base(node, kind, start, data, true)?];
+    let mut filter_reference_types = Vec::new();
+    let filter = match filter {
+        Some(child) => Target::Table(super::parking::encode_filter(
+            child,
+            start + 0x28,
+            data,
+            &mut filter_reference_types,
+        )?),
+        None => Target::Null,
+    };
+    if damage {
+        let radius =
+            super::super::sage_int(node.attribute("Radius").unwrap_or("0"), "Radius", path)?;
+        data.word(start + 0x20, radius);
+        let upgrade = super::passive_area::reference(
+            node.attribute("RequiredUpgrade").unwrap_or(""),
+            "UpgradeTemplate",
+            path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + 0x24, upgrade);
+    }
     data.word(
         start + 8,
         sage_time(
@@ -2816,7 +3200,23 @@ fn fire_weapon_update(
         None => Target::Null,
     };
     entries.push(Entry::named("ObjectStatusValidation", 0x3e8f_938c, status));
-    Ok((KIND, Table::record(entries)))
+    // The filter is laid out first, but its reference types are hashed after the nugget types.
+    reference_types.extend(filter_reference_types);
+    let table = Table::record(entries);
+    if damage {
+        let mut entries = vec![base(KIND, table)];
+        entries.extend(fields(
+            start,
+            &[
+                ("Radius", 0x23e6_50b8, 0x20),
+                ("RequiredUpgrade", 0x4aba_1f29, 0x24),
+            ],
+        ));
+        entries.push(Entry::named("ObjectFilter", 0xe46e_a3b2, filter));
+        Ok((kind, Table::record(entries)))
+    } else {
+        Ok((kind, table))
+    }
 }
 
 fn fire_weapon_when_dead(

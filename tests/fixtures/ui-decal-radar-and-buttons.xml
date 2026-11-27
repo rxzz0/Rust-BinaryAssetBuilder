@@ -1,0 +1,24 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UICommandButton id="Default"/>
+  <UICommandButton id="Custom"><FactionSettings Faction="Japan" LockedImage="Locked"><ImageTintColor R="120" G="130" B="140"/></FactionSettings><FactionSettings Faction="Soviet"><ImageTintColor R="255" G="0" B="0"/></FactionSettings></UICommandButton>
+  <UIDecalCloud id="Custom" SpecialPowerRestrictionTexture="Power" BuildTexture="Build" DefenseTexture="Defense"/>
+  <UIDecalGrid id="Default" WallTexture="Wall">
+    <WallDecalColor R="255" G="0" B="0"/>
+    <PrimarySettings ValidTexture="Valid" InvalidTexture="Invalid"><LegalColor R="0" G="255" B="0"/><InvalidColor R="255" G="0" B="0"/></PrimarySettings>
+    <SecondarySettings InvalidTexture="InvalidTwo" ValidTexture="ValidTwo" Opacity="0.5"><LegalColor R="0" G="100" B="0"/><InvalidColor R="100" G="0" B="0"/></SecondarySettings>
+  </UIDecalGrid>
+  <UIWorldBuilderDecalGrid id="Default" Texture="Grid"><Color R="100" G="120" B="140"/></UIWorldBuilderDecalGrid>
+  <UIWorldBuilderDecalGrid id="Custom" Texture="OtherGrid" Opacity="0.75"><Color R="200" G="150" B="100"/></UIWorldBuilderDecalGrid>
+  <UIRadarObjectsLayer id="Default"><NeutralColor R="0" G="0" B="255" A="255"/></UIRadarObjectsLayer>
+  <UIRadarObjectsLayer id="Custom" MinUnitDotSize="6" MinStructureDotSize="9">
+    <NeutralColor R="255" G="0" B="0" A="250"/>
+    <SpecialIcon Image="Inf"><ImageOffset x="1" y="2"/><ObjectFilter Rule="ANY" Include="INFANTRY"/></SpecialIcon>
+    <SpecialIcon Image="Vec"><ImageOffset x="3" y="4"/><ObjectFilter Rule="ANY" Include="VEHICLE"/></SpecialIcon>
+  </UIRadarObjectsLayer>
+  <UIJoypadCommandBarButtonBuild id="Default"/>
+  <UIJoypadCommandBarButtonBuild id="Custom"><FactionSettings Faction="Allies" LockedButtonStateData="Lock"/><FactionSettings LockedButtonStateData="LockSoviet" Faction="Soviet"/></UIJoypadCommandBarButtonBuild>
+  <UIMouseTacticalExitContainerButton id="Default"/>
+  <UIMouseTacticalExitContainerButton id="Custom" HelpTitleFormat="GUI:ExitTitle" HelpDescription="GUI:ExitDescription"/>
+  <UIMouseTacticalSetStanceButton id="Default"/>
+  <UIMouseTacticalSetStanceButton id="Custom"><StanceSettings Stance="AGGRESSIVE"><MouseOverHelp Title="GUI:Aggressive"/></StanceSettings><StanceSettings Stance="HOLD_FIRE"><MouseOverHelp Title="GUI:HoldFire"/></StanceSettings></UIMouseTacticalSetStanceButton>
+</AssetDeclaration>

@@ -1,0 +1,24 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <UpgradeTemplate id="ProbeRestoreUpgrade" Type="OBJECT"/>
+  <FXList id="ProbeLevelFX"><NuggetList/></FXList>
+  <SpecialPowerTemplate id="ProbeGrantPower" TargetType="NONE"/>
+  <GameObject id="GrantAbilityDefaults">
+    <Behaviors>
+      <LevelGrantSpecialPower id="Level"/>
+      <GiveOrRestoreUpgradeSpecialPower id="Restore"/>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+  <GameObject id="GrantAbilityCustom">
+    <Behaviors>
+      <LevelGrantSpecialPower id="Level" LevelFX="ProbeLevelFX" SpecialPowerTemplate="ProbeGrantPower" Experience="250" RadiusEffect="43.25">
+        <CustomAnimAndDuration AnimState="MOVING" Frames="12" Trigger="3"/>
+        <AcceptanceFilter Rule="ANY" Relationship="ALLIES" Include="INFANTRY"><IncludeThing>GrantAbilityDefaults</IncludeThing></AcceptanceFilter>
+      </LevelGrantSpecialPower>
+      <GiveOrRestoreUpgradeSpecialPower id="Restore" UpgradeToGive="ProbeRestoreUpgrade" SpecialPowerTemplate="ProbeGrantPower" CommandButton="Command_ProbeRestore">
+        <CustomAnimAndDuration AnimState="MOVING" Frames="8"/>
+      </GiveOrRestoreUpgradeSpecialPower>
+    </Behaviors>
+    <Body><ImmortalBody id="Body" MaxHealth="1"/></Body>
+  </GameObject>
+</AssetDeclaration>
