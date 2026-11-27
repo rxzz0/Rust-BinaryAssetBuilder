@@ -16,8 +16,14 @@ use std::io;
 
 const TRANSPORT: u32 = 0x578c_272f;
 pub(super) const TRANSPORT_SIZE: usize = 0x14c;
+pub(super) const HORDE_TRANSPORT_SIZE: usize = 0x150;
+const HORDE_TRANSPORT: u32 = 0x408e_9a3f;
 const OPEN: u32 = 0xd7cc_2e35;
 const GARRISON: u32 = 0xbae3_bc7d;
+const HORDE_GARRISON: u32 = 0x1d7f_c977;
+const HEAL: u32 = 0xe491_340b;
+const TUNNEL: u32 = 0xb484_1eab;
+const TUNNEL_TELEPORT: u32 = 0x8ec7_a787;
 const CONTESTABLE: u32 = 0x8c50_f0d7;
 const SLAUGHTER: u32 = 0xc194_7edc;
 const BOOL: u32 = 0x77e3_f4f7;
@@ -121,19 +127,29 @@ pub(super) fn encode(
     let (kind, size) = match node.tag_name().name() {
         "OpenContain" => (OPEN, 0x94),
         "TransportContain" => (TRANSPORT, TRANSPORT_SIZE),
+        "HordeTransportContain" => (HORDE_TRANSPORT, HORDE_TRANSPORT_SIZE),
         "HordeContain" => (horde_contain::KIND, horde_contain::SIZE),
+        "HordeGarrisonContain" => (HORDE_GARRISON, 0xb0),
+        "HealContain" => (HEAL, 0xb4),
+        "TunnelContain" => (TUNNEL, 0xb8),
+        "TunnelTeleportContain" => (TUNNEL_TELEPORT, 0xb8),
         "ContestableGarrisonContain" => (CONTESTABLE, 0xdc),
         "SlaughterHordeContain" => (SLAUGHTER, 0x144),
         _ => (GARRISON, 0xa0),
     };
+    let is_transport = matches!(kind, TRANSPORT | HORDE_TRANSPORT | horde_contain::KIND);
+    let is_horde_garrison = matches!(
+        kind,
+        HORDE_GARRISON | HEAL | TUNNEL | TUNNEL_TELEPORT | SLAUGHTER
+    );
     let mut allowed: Vec<_> = std::iter::once("id")
         .chain(OPEN_FIELDS.iter().map(|&(name, _, _, _)| name))
         .collect();
     match kind {
-        TRANSPORT | horde_contain::KIND => {
+        TRANSPORT | HORDE_TRANSPORT | horde_contain::KIND => {
             allowed.extend(TRANSPORT_FIELDS.iter().map(|&(name, ..)| name));
         }
-        GARRISON | CONTESTABLE | SLAUGHTER => {
+        GARRISON | CONTESTABLE | HORDE_GARRISON | HEAL | TUNNEL | TUNNEL_TELEPORT | SLAUGHTER => {
             allowed.extend(GARRISON_FLAGS.map(|(name, _, _)| name))
         }
         _ => {}
@@ -144,13 +160,17 @@ pub(super) fn encode(
     if kind == CONTESTABLE {
         allowed.extend(CONTESTABLE_FIELDS.map(|(name, ..)| name));
     }
+    if is_horde_garrison {
+        allowed.push("ExitDelay");
+    }
+    match kind {
+        HORDE_TRANSPORT => allowed.push("FlyOffMapOnEmpty"),
+        HEAL => allowed.push("TimeForFullHeal"),
+        TUNNEL | TUNNEL_TELEPORT => allowed.extend(["DeleteRemoved", "TunnelMasterObject"]),
+        _ => {}
+    }
     if kind == SLAUGHTER {
-        allowed.extend([
-            "ExitDelay",
-            "CashBackPercent",
-            "CanAlwaysEnterStatus",
-            "SlaughterFX",
-        ]);
+        allowed.extend(["CashBackPercent", "CanAlwaysEnterStatus", "SlaughterFX"]);
     }
     validate_attributes(node, &allowed, path)?;
     let start = data.allocate(pointer, size)?;
@@ -167,10 +187,17 @@ pub(super) fn encode(
     } else {
         None
     };
-    let ordered_imports = matches!(kind, OPEN | TRANSPORT | CONTESTABLE | horde_contain::KIND);
+    let ordered_imports = is_transport
+        || matches!(kind, OPEN | CONTESTABLE)
+        || (is_horde_garrison && kind != SLAUGHTER);
     if ordered_imports {
         contain_attribute_references(node, kind, start, data, references, reference_types)?;
     }
+    let horde_garrison = if is_horde_garrison {
+        Some(horde_garrison_fields(node, &mut children, start, data)?)
+    } else {
+        None
+    };
     // Derived blocks are allocated before base blocks, but EA hashes references in XML order.
     let horde = if kind == horde_contain::KIND {
         let first_horde = children
@@ -185,7 +212,7 @@ pub(super) fn encode(
     let mut modifiers = Vec::new();
     let mut modifier_reference_types = Vec::new();
     let mut derived_reference_types = Vec::new();
-    let transport = if matches!(kind, TRANSPORT | horde_contain::KIND) {
+    let transport = if is_transport {
         for child in children
             .iter()
             .filter(|child| child.has_tag_name((SAGE_NS, "ModifierToGiveOnExit")))
@@ -354,7 +381,7 @@ pub(super) fn encode(
             Target::Table(Table::array(start + 0x80, member_items)),
         ),
     ]);
-    if matches!(kind, OPEN | TRANSPORT | horde_contain::KIND) {
+    if kind == OPEN || is_transport {
         if children.next().is_some() {
             return Err(invalid(
                 path,
@@ -372,6 +399,13 @@ pub(super) fn encode(
                     references,
                     reference_types,
                 )?,
+                None if kind == HORDE_TRANSPORT => {
+                    data.payload[start + 0x14c] = boolean(node, "FlyOffMapOnEmpty", false, path)?;
+                    Table::record(vec![
+                        base(TRANSPORT, transport),
+                        Entry::named("FlyOffMapOnEmpty", BOOL, Target::Data(start + 0x14c)),
+                    ])
+                }
                 None => transport,
             };
             return Ok((kind, fields));
@@ -425,17 +459,50 @@ pub(super) fn encode(
         }
         return Ok((kind, Table::record(entries)));
     }
-    Ok((
-        kind,
-        match slaughter {
-            Some((mut horde, mut slaughter)) => {
-                horde.insert(0, base(GARRISON, garrison));
-                slaughter.insert(0, base(0x1d7f_c977, Table::record(horde)));
-                Table::record(slaughter)
+    let Some(mut horde) = horde_garrison else {
+        return Ok((kind, garrison));
+    };
+    horde.insert(0, base(GARRISON, garrison));
+    let horde = Table::record(horde);
+    let table = match kind {
+        HORDE_GARRISON => horde,
+        SLAUGHTER => {
+            let mut fields = slaughter.expect("SlaughterHordeContain fields");
+            fields.insert(0, base(HORDE_GARRISON, horde));
+            Table::record(fields)
+        }
+        HEAL => {
+            let time = sage_time(
+                node.attribute("TimeForFullHeal").unwrap_or("0s"),
+                "TimeForFullHeal",
+                path,
+            )?;
+            data.word(start + 0xb0, time.to_bits());
+            Table::record(vec![
+                base(HORDE_GARRISON, horde),
+                Entry::named("TimeForFullHeal", TIME, Target::Data(start + 0xb0)),
+            ])
+        }
+        TUNNEL | TUNNEL_TELEPORT => {
+            data.payload[start + 0xb4] = boolean(node, "DeleteRemoved", false, path)?;
+            let tunnel = Table::record(vec![
+                base(HORDE_GARRISON, horde),
+                Entry::named("DeleteRemoved", BOOL, Target::Data(start + 0xb4)),
+                Entry::named(
+                    "TunnelMasterObject",
+                    0x148e_d75d,
+                    Target::Data(start + 0xb0),
+                ),
+            ]);
+            if kind == TUNNEL_TELEPORT {
+                Table::record(vec![base(TUNNEL, tunnel)])
+            } else {
+                tunnel
             }
-            None => garrison,
-        },
-    ))
+        }
+        _ => unreachable!(),
+    };
+    Ok((kind, table))
 }
 
 fn contain_attribute_references(
@@ -448,6 +515,13 @@ fn contain_attribute_references(
 ) -> io::Result<()> {
     for attr in node.attributes() {
         let (kind, offset) = match attr.name() {
+            "TunnelMasterObject" if matches!(module_kind, TUNNEL | TUNNEL_TELEPORT) => {
+                if !attr.value().trim().is_empty() {
+                    let id = object_id(attr.value(), data.path, reference_types)?;
+                    data.word(start + 0xb0, id);
+                }
+                continue;
+            }
             "AlternateFormation" if module_kind == horde_contain::KIND => {
                 if !attr.value().trim().is_empty() {
                     let id = object_id(attr.value(), data.path, reference_types)?;
@@ -645,7 +719,7 @@ fn slaughter_fields(
     data: &mut BinaryData<'_>,
     references: &mut Vec<AssetReference>,
     reference_types: &mut Vec<u32>,
-) -> io::Result<(Vec<Entry>, Vec<Entry>)> {
+) -> io::Result<Vec<Entry>> {
     let path = data.path;
     let filter = children
         .pop()
@@ -693,7 +767,16 @@ fn slaughter_fields(
         0xe46e_a3b2,
         Target::Table(filter),
     ));
+    Ok(slaughter)
+}
 
+fn horde_garrison_fields(
+    node: Node<'_, '_>,
+    children: &mut Vec<Node<'_, '_>>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<Vec<Entry>> {
+    let path = data.path;
     let delay = node
         .attribute("ExitDelay")
         .unwrap_or("0")
@@ -717,21 +800,10 @@ fn slaughter_fields(
         }
     }
     for ((name, pointer), node) in coords.into_iter().zip(nodes) {
-        let target = if let Some(node) = node {
-            let axes = ["x", "y", "z"];
-            named_leaf(node, &axes, path)?;
-            let offset = data.allocate(start + pointer, 12)?;
-            for (index, axis) in axes.into_iter().enumerate() {
-                let value = finite_number(node.attribute(axis).unwrap_or("0"), axis, path)?;
-                data.word(offset + 4 * index, value.to_bits());
-            }
-            Target::Data(offset)
-        } else {
-            Target::Null
-        };
+        let target = optional_vector(node, start + pointer, data)?;
         horde.push(Entry::named(name, 0x2936_8077, target));
     }
-    Ok((horde, slaughter))
+    Ok(horde)
 }
 
 fn passenger_data(

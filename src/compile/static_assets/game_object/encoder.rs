@@ -280,6 +280,7 @@ pub(in crate::compile::static_assets) fn compile(
                 }
                 let transport_size = match module.tag_name().name() {
                     "TransportContain" => Some(super::garrison::TRANSPORT_SIZE),
+                    "HordeTransportContain" => Some(super::garrison::HORDE_TRANSPORT_SIZE),
                     "HordeContain" => Some(super::horde_contain::SIZE),
                     _ => None,
                 };
@@ -300,6 +301,10 @@ pub(in crate::compile::static_assets) fn compile(
                     "SpecialDisguiseUpdate" => &[0x100],
                     "MoneyGainAttachUpdate" => &[0x158],
                     "BoobyTrapUpdate" => &[0x18c],
+                    "HordeGarrisonContain"
+                    | "HealContain"
+                    | "TunnelContain"
+                    | "TunnelTeleportContain" => &[0xa4, 0xa8, 0xac],
                     "DamageFieldUpdate" => &[0x28],
                     "RadarScanMapSpecialAbilityUpdate" => &[0xf4],
                     "LevelGrantSpecialPower" => &[0xfc],

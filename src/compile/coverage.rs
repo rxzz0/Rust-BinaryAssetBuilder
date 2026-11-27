@@ -95,6 +95,11 @@ const MODULES: &[(&str, &[&str])] = &[
             "BoobyTrapUpdate",
             "Damage",
             "DamageStateList",
+            "HealContain",
+            "HordeGarrisonContain",
+            "HordeTransportContain",
+            "TunnelContain",
+            "TunnelTeleportContain",
             "QueueDockBehavior",
             "AssistedPlacementBehavior",
             "AssistedPlacementInfoBehavior",
@@ -600,6 +605,11 @@ mod tests {
     #[test]
     fn damage_states_match_ea_batch() {
         assert_ea_fixture("damage-states", 2);
+    }
+
+    #[test]
+    fn containment_family_matches_ea_batch() {
+        assert_ea_fixture("contain-family", 7);
     }
 
     #[test]

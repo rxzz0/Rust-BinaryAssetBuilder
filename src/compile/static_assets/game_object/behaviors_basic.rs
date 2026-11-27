@@ -1689,6 +1689,11 @@ pub(super) fn encode(
     if matches!(
         node.tag_name().name(),
         "GarrisonContain"
+            | "HordeGarrisonContain"
+            | "HealContain"
+            | "HordeTransportContain"
+            | "TunnelContain"
+            | "TunnelTeleportContain"
             | "ContestableGarrisonContain"
             | "SlaughterHordeContain"
             | "HordeContain"
