@@ -95,6 +95,7 @@ pub(super) fn encode(
         "BuildPlacementTypeFlag",
         "UnitCategory",
         "WeaponCategory",
+        "HealthBar",
     ];
     for attribute in node.attributes() {
         if attribute.namespace() == Some(XML_NS) && attribute.name() == "base" {
@@ -169,10 +170,6 @@ pub(super) fn encode(
             data.word(offset, time.to_bits());
         }
     }
-    if let Some(value) = node.attribute("Side") {
-        data.word(0x70, weak_id(value, "PlayerTemplate", data.path)?);
-        reference_types.push(fast_hash(b"PlayerTemplate"));
-    }
     if let Some(value) = node.attribute("EditorName") {
         data.string(0x74, value)?;
     }
@@ -221,27 +218,6 @@ pub(super) fn encode(
             data.word(offset, number as u32);
         }
     }
-    if let Some(value) = node
-        .attribute("CommandSet")
-        .filter(|value| !value.trim().is_empty())
-    {
-        data.word(0x90, weak_id(value, "LogicCommandSet", data.path)?);
-        reference_types.push(fast_hash(b"LogicCommandSet"));
-    }
-    for (name, offset) in [
-        ("SelectPortrait", 0x94),
-        ("SelectPortraitTransformed", 0x98),
-        ("ButtonImage", 0x9c),
-        ("ButtonImageTransformed", 0xa0),
-    ] {
-        if let Some(value) = node
-            .attribute(name)
-            .filter(|value| !value.trim().is_empty())
-        {
-            data.word(offset, weak_id(value, "PackedTextureImage", data.path)?);
-            reference_types.push(fast_hash(b"PackedTextureImage"));
-        }
-    }
     for &(name, offset) in UNSIGNED_FIELDS {
         if let Some(value) = node.attribute(name) {
             let number = value
@@ -263,18 +239,6 @@ pub(super) fn encode(
             )
         })?;
         data.word(0x180, milliseconds.div_ceil(200));
-    }
-    for (kind, offset) in [("UnitTypeIcon", 0x164), ("UnitIntro", 0x184)] {
-        if let Some(value) = node.attribute(kind) {
-            let ordinal = super::passive_area::reference(
-                value,
-                kind,
-                data.path,
-                references,
-                reference_types,
-            )?;
-            data.word(offset, ordinal);
-        }
     }
     if let Some(value) = node.attribute("ProductionQueueType") {
         data.word(
@@ -319,6 +283,46 @@ pub(super) fn encode(
             )?
         };
         data.word(0x15c, category);
+    }
+    // EA hashes reference types in the order of the XML attributes.
+    for attribute in node.attributes().filter(|attr| attr.namespace().is_none()) {
+        let name = attribute.name();
+        let value = attribute.value();
+        let (offset, kind) = match name {
+            "Side" => (0x70, "PlayerTemplate"),
+            "CommandSet" => (0x90, "LogicCommandSet"),
+            "SelectPortrait" => (0x94, "PackedTextureImage"),
+            "SelectPortraitTransformed" => (0x98, "PackedTextureImage"),
+            "ButtonImage" => (0x9c, "PackedTextureImage"),
+            "ButtonImageTransformed" => (0xa0, "PackedTextureImage"),
+            "HealthBar" => (0x174, "HealthBarTemplate"),
+            "UnitTypeIcon" => (0x164, "UnitTypeIcon"),
+            "UnitIntro" => (0x184, "UnitIntro"),
+            _ => continue,
+        };
+        if name == "HealthBar"
+            && !value
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
+        {
+            return Err(invalid(
+                data.path,
+                "invalid HealthBarTemplate weak reference",
+            ));
+        }
+        if matches!(name, "UnitIntro" | "UnitTypeIcon") {
+            let ordinal = super::passive_area::reference(
+                value,
+                kind,
+                data.path,
+                references,
+                reference_types,
+            )?;
+            data.word(offset, ordinal);
+        } else if name == "Side" || !value.trim().is_empty() {
+            data.word(offset, weak_id(value, kind, data.path)?);
+            reference_types.push(fast_hash(kind.as_bytes()));
+        }
     }
     Ok(())
 }

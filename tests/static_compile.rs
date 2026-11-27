@@ -2171,6 +2171,74 @@ fn compiles_health_bar_imports_and_weak_object_filters() {
 }
 
 #[test]
+fn game_objects_encode_custom_health_bar_weak_references() {
+    let root = scratch_root();
+    let schemas = root.join("Schemas/xsd");
+    fs::create_dir_all(&schemas).unwrap();
+    fs::write(
+        schemas.join("CnC3Types.xsd"),
+        r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:complexType name="GameObject">
+                <xs:sequence><xs:element name="Body" type="Body"/></xs:sequence>
+                <xs:attribute name="HealthBar" type="HealthBarTemplateWeakRef"/>
+            </xs:complexType>
+            <xs:complexType name="Body">
+                <xs:sequence><xs:element name="ActiveBody" type="ActiveBody"/></xs:sequence>
+            </xs:complexType>
+            <xs:complexType name="ActiveBody"/>
+        </xs:schema>"#,
+    )
+    .unwrap();
+    let input = root.join("mod.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <HealthBarTemplate id="AntennaBars_42" Length="140"/>
+            <GameObject id="Base" HealthBar="AntennaBars_42">
+                <Body><ActiveBody id="BodyTag"/></Body>
+            </GameObject>
+            <GameObject id="Inherited" inheritFrom="Base"/>
+            <GameObject id="Override" inheritFrom="Base" HealthBar="Another_Bar"/>
+            <GameObject id="Blank" inheritFrom="Base" HealthBar=""/>
+            <GameObject id="One" HealthBar="AntennaBars_42" CommandSet="Cmd" Side="Allies" ButtonImage="Icon">
+                <Body><ActiveBody id="BodyTag"/></Body>
+            </GameObject>
+            <GameObject id="Two" Side="Allies" ButtonImage="Icon" CommandSet="Cmd" HealthBar="AntennaBars_42">
+                <Body><ActiveBody id="BodyTag"/></Body>
+            </GameObject>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let mut chunks = &stream.files.bin[4..];
+    for asset in &manifest.assets {
+        let (payload, rest) = chunks.split_at(asset.chunk_sizes.instance as usize);
+        chunks = rest;
+        let expected = match asset.name {
+            b"GameObject:Base" | b"GameObject:Inherited" => 0x3e05_6709_u32,
+            b"GameObject:Override" => 0xceaf_7280,
+            b"GameObject:Blank" => 0,
+            b"GameObject:One" => {
+                assert_eq!(asset.instance_hash, 0xa188_e491);
+                0x3e05_6709
+            }
+            b"GameObject:Two" => {
+                assert_eq!(asset.instance_hash, 0x008d_9607);
+                0x3e05_6709
+            }
+            b"HealthBarTemplate:AntennaBars_42" => continue,
+            _ => panic!("unexpected asset {:?}", asset.name),
+        };
+        assert_eq!(&payload[0x910..0x914], &expected.to_le_bytes());
+        assert_eq!(asset.references.iter().len(), 0);
+        assert_eq!(asset.chunk_sizes.imports, 0);
+    }
+    assert_eq!(manifest.assets.len(), 7);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn compiles_credits_with_ansi_strings_and_empty_lines() {
     let root = scratch_root();
     let xml = root.join("credits.xml");
