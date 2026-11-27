@@ -6,6 +6,9 @@ use super::super::{
 };
 use super::behaviors_basic::{base, inherited};
 use super::draws::{boolean, fields, model_condition_index};
+use super::special_power_variants::{
+    encode_initiate_sound, radar_fields, radar_layout, string_list,
+};
 use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::Node;
 use std::io;
@@ -137,7 +140,9 @@ pub(super) fn encode(
         ("HarvesterBonus", REAL, 0x1d4),
         ("HarvesterBonusAllies", REAL, 0x1d8),
     ];
-    let (kind, size, derived) = match node.tag_name().name() {
+    let name = node.tag_name().name();
+    let radar = radar_layout(name);
+    let (kind, size, derived) = match name {
         "OCLSpecialPower" => (OCL_POWER, 0x1f4, OCL_FIELDS),
         "StoreObjectsSpecialPower" => (0xa74a_234c, 0x1d4, STORE_FIELDS),
         "TeleportStoredObjectsSpecialPower" => (0x318d_c4d6, 0x1d0, TELEPORT_FIELDS),
@@ -146,12 +151,9 @@ pub(super) fn encode(
         "GiveProductionBonusSpecialPower" => (PRODUCTION_BONUS, 0x1dc, BONUS_FIELDS),
         "ActivateModuleSpecialPower" => (ACTIVATE_MODULE, 0x1cc, &[][..]),
         "PlayerUpgradeSpecialPower" => (PLAYER_UPGRADE, 0x1cc, &[][..]),
-        name => (
-            base_layout_variant(name)
-                .ok_or_else(|| invalid(path, format!("unsupported special power module {name}")))?,
-            0x1c4,
-            &[][..],
-        ),
+        _ => radar
+            .or_else(|| base_layout_variant(name).map(|kind| (kind, 0x1c4, &[][..])))
+            .ok_or_else(|| invalid(path, format!("unsupported special power module {name}")))?,
     };
     let allowed: Vec<_> = POWER_FIELDS
         .iter()
@@ -163,11 +165,19 @@ pub(super) fn encode(
     let start = data.allocate(pointer, size)?;
     data.word(start, kind);
     data.word(start + 4, hash_name(required(node, "id", path)?));
-    // EA allocates the derived masks before variable-length base filters.
-    let movement = (kind == MOVEMENT_POWER)
-        .then(|| movement_fields(node, start, data))
-        .transpose()?;
-    let scalar_fields = if movement.is_some() { &[] } else { derived };
+    // EA allocates the derived masks and radar lists before variable-length base filters.
+    let derived_entries = if radar.is_some() {
+        Some(radar_fields(node, start, derived, data)?)
+    } else {
+        (kind == MOVEMENT_POWER)
+            .then(|| movement_fields(node, start, data))
+            .transpose()?
+    };
+    let scalar_fields = if derived_entries.is_some() {
+        &[]
+    } else {
+        derived
+    };
     for &(name, field_type, offset) in POWER_FIELDS.iter().chain(scalar_fields) {
         match field_type {
             BOOL => {
@@ -339,25 +349,16 @@ pub(super) fn encode(
         data.word(start + offset, word);
     }
 
-    let names: Vec<_> = node
-        .attribute("RequirementsFilterMPSkirmish")
-        .unwrap_or("")
-        .split_ascii_whitespace()
-        .collect();
-    let count = start + 0x20;
-    let first = data.list(count, names.len(), 8)?;
-    let mut strings = Vec::new();
-    for (index, name) in names.into_iter().enumerate() {
-        let offset = first + index * 8;
-        data.string(offset, name)?;
-        strings.push((0, Target::Data(offset)));
-    }
+    let mut strings = Some(string_list(
+        node.attribute("RequirementsFilterMPSkirmish").unwrap_or(""),
+        start + 0x20,
+        data,
+    )?);
     let module = Table::record(vec![
         Entry::new(0x19b0_42a0, INT, Target::Data(start)),
         Entry::new(0x8cdc_9898, 0xbdf0_7965, Target::Data(start + 4)),
     ]);
     let mut power = vec![base(0xa50d_729a, inherited(0xd75d_93a2, module))];
-    let mut strings = Some(Table::array(count, strings));
     power.extend(POWER_FIELDS.iter().map(|&(name, kind, offset)| {
         let target = if name == "RequirementsFilterMPSkirmish" {
             Target::Table(strings.take().unwrap())
@@ -388,7 +389,14 @@ pub(super) fn encode(
             ),
         ));
     }
-    power.push(Entry::named("InitiateSound", 0x1ae6_b6b7, Target::Null));
+    let sound = if let Some(child) =
+        children.next_if(|child| child.has_tag_name((SAGE_NS, "InitiateSound")))
+    {
+        encode_initiate_sound(child, start + 0x1b0, data, references, reference_types)?
+    } else {
+        Target::Null
+    };
+    power.push(Entry::named("InitiateSound", 0x1ae6_b6b7, sound));
     if !matches!(kind, OCL_POWER | PLAYER_UPGRADE | ACTIVATE_MODULE)
         && let Some(child) = children.next()
     {
@@ -404,8 +412,8 @@ pub(super) fn encode(
         return Ok((kind, Table::record(power)));
     }
     let mut entries = vec![base(SPECIAL_POWER, Table::record(power))];
-    if let Some(movement) = movement {
-        entries.extend(movement);
+    if let Some(derived_entries) = derived_entries {
+        entries.extend(derived_entries);
     } else {
         entries.extend(fields(start, derived));
     }

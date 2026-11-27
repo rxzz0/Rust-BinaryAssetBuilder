@@ -78,6 +78,7 @@ mod replace_self;
 mod schema;
 mod secondary_damage;
 mod secondary_listener;
+mod special_power_variants;
 pub(super) use shadow::encode_settings_shadow;
 mod aim_weapon;
 mod dominate_enemy;

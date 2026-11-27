@@ -1,0 +1,25 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <SpecialPowerTemplate id="RadarVariantProbePower" TargetType="NONE" />
+  <GameObject id="RadarVariantsDefaults">
+    <Behaviors>
+      <RadarFreezeSpecialPower id="ModuleTag_Freeze" SpecialPowerTemplate="RadarVariantProbePower" />
+      <RadarJamSpecialPower id="ModuleTag_Jam" SpecialPowerTemplate="RadarVariantProbePower" />
+      <RadarSpySpecialPower id="ModuleTag_Spy" SpecialPowerTemplate="RadarVariantProbePower" />
+      <RadarHackSpecialPower id="ModuleTag_Hack" SpecialPowerTemplate="RadarVariantProbePower" />
+      <SpecialPowerUpdate id="ModuleTag_Update" />
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="RadarVariantsCustom">
+    <Behaviors>
+      <RadarFreezeSpecialPower id="ModuleTag_Freeze" SpecialPowerTemplate="RadarVariantProbePower" TargetFilter="EnemyFaction1 EnemyFaction2" FreezeDuration="2.5s" RequirementsFilterMPSkirmish="FirstRequirement SecondRequirement" />
+      <RadarJamSpecialPower id="ModuleTag_Jam" SpecialPowerTemplate="RadarVariantProbePower" JamRadius="17.25" JamDuration="3s" />
+      <RadarSpySpecialPower id="ModuleTag_Spy" SpecialPowerTemplate="RadarVariantProbePower" TargetFilter="Scout1 Scout2 Scout3" SpyDuration="4.5s"><InitiateSound EvaEvent="FixtureScoutEva" /></RadarSpySpecialPower>
+      <RadarHackSpecialPower id="ModuleTag_Hack" SpecialPowerTemplate="RadarVariantProbePower" NumFalseReturns="4" Radius="22.5" HackDuration="5s" />
+      <SpecialPowerUpdate id="ModuleTag_Update" SpecialPowerTemplate="RadarVariantProbePower" StartsPaused="true" DisabledTypesToIgnore="HELD EMP">
+        <InitiateSound Sound="FixturePowerSound" EvaEvent="FixturePowerEva" />
+      </SpecialPowerUpdate>
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

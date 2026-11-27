@@ -1718,7 +1718,18 @@ pub(super) fn encode(
         return super::secondary_damage::encode(node, pointer, data, references, reference_types)
             .map(Some);
     }
+    if node.has_tag_name((SAGE_NS, "SpecialPowerUpdate")) {
+        return super::special_power_variants::encode_update(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
+    }
     if super::recall::base_layout_variant(node.tag_name().name()).is_some()
+        || super::special_power_variants::radar_layout(node.tag_name().name()).is_some()
         || matches!(
             node.tag_name().name(),
             "RecallUnitsSpecialPower"
