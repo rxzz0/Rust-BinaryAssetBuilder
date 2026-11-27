@@ -1530,6 +1530,73 @@ fn sdk_builds_resolve_base_manifests_under_sagexml() {
 
 #[cfg(windows)]
 #[test]
+fn sdk_static_compiles_linked_mod_sources_and_references() {
+    let root = scratch_root();
+    let sdk = root.join("RA3 MOD SDK");
+    let mod_dir = sdk.join("Mods/Reborn");
+    let data = mod_dir.join("Data");
+    let input = data.join("mod.xml");
+    fs::create_dir_all(data.join("System")).unwrap();
+    fs::create_dir_all(mod_dir.join("Art/CA")).unwrap();
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes>
+                <Include type="reference" source="DATA:System/Library.xml"/>
+                <Include type="all" source="ART:CameraVideo.xml"/>
+            </Includes>
+            <VideoEventList id="Intro"><EventList><Movie MovieAsset="LibraryVideo"/></EventList></VideoEventList>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        data.join("System/Library.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Video id="LibraryVideo" Filename="library.bik"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let art = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <Video id="CameraVideo" Filename="camera.bik"/>
+    </AssetDeclaration>"#;
+    fs::write(mod_dir.join("Art/CA/CameraVideo.xml"), art).unwrap();
+    let regular_output = root.join("regular");
+    compile_sdk_static(&input, &sdk, &regular_output).unwrap();
+
+    let redirected = root.join("OneDrive/CNC Files/Reborn");
+    fs::create_dir_all(redirected.parent().unwrap()).unwrap();
+    fs::rename(&mod_dir, &redirected).unwrap();
+    junction(&mod_dir, &redirected);
+    let linked_output = root.join("linked");
+    compile_sdk_static(&input, &sdk.join("."), &linked_output).unwrap();
+    for stream in ["mod", "system/library"] {
+        for extension in ["manifest", "bin", "imp", "relo"] {
+            let relative = format!("mods/reborn/data/{stream}.{extension}");
+            assert_eq!(
+                fs::read(linked_output.join(&relative)).unwrap(),
+                fs::read(regular_output.join(&relative)).unwrap(),
+            );
+        }
+    }
+
+    let external = root.join("external");
+    fs::create_dir(&external).unwrap();
+    fs::write(external.join("CameraVideo.xml"), art).unwrap();
+    fs::rename(mod_dir.join("Art/CA"), mod_dir.join("Art/original")).unwrap();
+    junction(&mod_dir.join("Art/CA"), &external);
+    assert!(
+        compile_sdk_static(&input, &sdk, &linked_output)
+            .unwrap_err()
+            .to_string()
+            .contains("path lies outside the data root")
+    );
+    fs::remove_dir(mod_dir.join("Art/CA")).unwrap();
+    fs::remove_dir(mod_dir).unwrap();
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
 fn sdk_global_preserves_output_layout_through_a_linked_mod() {
     let root = scratch_root();
     let sdk = root.join("RA3 MOD SDK");

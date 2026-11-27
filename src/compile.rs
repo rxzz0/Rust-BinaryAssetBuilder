@@ -143,16 +143,20 @@ fn compile_with_source_references(
 ) -> io::Result<(CompiledStream, HashSet<AssetId>)> {
     let root = fs::canonicalize(data_root)?;
     let resolved_input = fs::canonicalize(input)?;
-    let redirected_directory = match (reference_mode, reference_directory) {
-        (ReferenceMode::Implicit, _) => Some("AdditionalMaps"),
-        (_, None) => Some("AptUI"),
-        _ => None,
+    let redirected_sdk = if let Some(references) = source_references.as_deref() {
+        references.redirected_sdk.clone()
+    } else {
+        let redirected_directory = match (reference_mode, reference_directory) {
+            (ReferenceMode::Implicit, _) => Some("AdditionalMaps"),
+            (_, None) => Some("AptUI"),
+            _ => None,
+        };
+        redirected_directory
+            .filter(|_| !resolved_input.starts_with(&root))
+            .and_then(|directory| {
+                redirected_sdk_directory(input, data_root, &resolved_input, Some(directory))
+            })
     };
-    let redirected_sdk = redirected_directory
-        .filter(|_| !resolved_input.starts_with(&root))
-        .and_then(|directory| {
-            redirected_sdk_directory(input, data_root, &resolved_input, directory)
-        });
     let mod_root =
         sdk_relative_path(&resolved_input, &root, redirected_sdk.as_ref()).and_then(|relative| {
             let mut components = relative.iter();
@@ -251,6 +255,7 @@ fn compile_with_source_references(
     compiler.finish(worldbuilder)
 }
 
+#[derive(Clone)]
 struct RedirectedSdkDirectory {
     sdk_relative: PathBuf,
     physical: PathBuf,
@@ -260,7 +265,7 @@ fn redirected_sdk_directory(
     input: &Path,
     data_root: &Path,
     resolved: &Path,
-    expected_directory: &str,
+    expected_directory: Option<&str>,
 ) -> Option<RedirectedSdkDirectory> {
     let input = std::path::absolute(input).ok()?;
     let data_root = std::path::absolute(data_root).ok()?;
@@ -272,15 +277,39 @@ fn redirected_sdk_directory(
         return None;
     }
     let mut parts = relative.iter();
-    let (mods, name, data, directory) =
-        (parts.next()?, parts.next()?, parts.next()?, parts.next()?);
-    if !mods.eq_ignore_ascii_case("Mods")
-        || !data.eq_ignore_ascii_case("Data")
-        || !directory.eq_ignore_ascii_case(expected_directory)
-    {
+    let (mods, name, data) = (parts.next()?, parts.next()?, parts.next()?);
+    if !mods.eq_ignore_ascii_case("Mods") || !data.eq_ignore_ascii_case("Data") {
         return None;
     }
-    let mod_data = PathBuf::from(mods).join(name).join(data);
+    let mod_path = PathBuf::from(mods).join(name);
+    let mod_data = mod_path.join(data);
+    let directory = parts.next()?;
+    let Some(expected_directory) = expected_directory else {
+        let physical_data = fs::canonicalize(data_root.join(&mod_data)).ok()?;
+        if !resolved.starts_with(&physical_data) {
+            return None;
+        }
+        // Step 6 also reads Art and Audio from the same mod. If only Data is
+        // redirected, keep its physical directory as the boundary.
+        let physical_mod = fs::canonicalize(data_root.join(&mod_path)).ok()?;
+        if physical_data.parent() == Some(physical_mod.as_path())
+            && physical_data
+                .file_name()
+                .is_some_and(|name| name.eq_ignore_ascii_case(data))
+        {
+            return Some(RedirectedSdkDirectory {
+                sdk_relative: mod_path,
+                physical: physical_mod,
+            });
+        }
+        return Some(RedirectedSdkDirectory {
+            sdk_relative: mod_data,
+            physical: physical_data,
+        });
+    };
+    if !directory.eq_ignore_ascii_case(expected_directory) {
+        return None;
+    }
     let sdk_relative = mod_data.join(directory);
     // Resolve the directory separately so a linked file inside it cannot
     // extend the allowed tree to an unrelated location.
