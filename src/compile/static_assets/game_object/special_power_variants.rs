@@ -13,12 +13,32 @@ const REAL: u32 = 0x6458_64f3;
 const TIME: u32 = 0x9986_69e8;
 const UNSIGNED: u32 = 0x7631_77a4;
 const STRINGS: u32 = 0x6d66_ae18;
+const BOOL: u32 = 0x77e3_f4f7;
+const COMMAND_SET: u32 = 0x85d4_4b5d;
+const INVISIBILITY_TEMPLATE: u32 = 0x914c_a765;
+const STATUS: u32 = 0xa7bd_811e;
+const OBJECT_FILTER: u32 = 0xe46e_a3b2;
 const UPDATE: u32 = 0xb9b2_a9b3;
 
 type Field = (&'static str, u32, usize);
 
-pub(super) fn radar_layout(name: &str) -> Option<(u32, usize, &'static [Field])> {
+pub(super) fn variant_layout(name: &str) -> Option<(u32, usize, &'static [Field])> {
     Some(match name {
+        "CaptureAndGiveCommandSetSpecialPower" => {
+            (0xddb9_7e4b, 0x1c8, &[("CommandSet", COMMAND_SET, 0x1c4)])
+        }
+        "CombineSpecialPower" => (0x599f_60d5, 0x1c8, &[]),
+        "InvisibilitySpecialPower" => (
+            0xd2c1_cfc2,
+            0x1d8,
+            &[
+                ("InvisibilityTemplate", INVISIBILITY_TEMPLATE, 0x1c4),
+                ("BroadcastRadius", REAL, 0x1c8),
+                ("Duration", TIME, 0x1cc),
+                ("Permanent", BOOL, 0x1d4),
+            ],
+        ),
+        "TemporaryOwnerSpecialPower" => (0xc662_deb4, 0x1e0, &[("SlaveStatus", STATUS, 0x1c4)]),
         "RadarFreezeSpecialPower" => (
             0x52ee_caed,
             0x1d0,
@@ -53,29 +73,66 @@ pub(super) fn radar_layout(name: &str) -> Option<(u32, usize, &'static [Field])>
     })
 }
 
-pub(super) fn radar_fields(
+pub(super) fn variant_filter(name: &str) -> Option<(&'static str, usize)> {
+    match name {
+        "CombineSpecialPower" => Some(("CombineWithObjectFilter", 0x1c4)),
+        "InvisibilitySpecialPower" => Some(("ObjectFilter", 0x1d0)),
+        _ => None,
+    }
+}
+
+pub(super) fn variant_fields(
     node: Node<'_, '_>,
     start: usize,
     layout: &[Field],
     data: &mut BinaryData<'_>,
+    reference_types: &mut Vec<u32>,
 ) -> io::Result<Vec<Entry>> {
     let mut entries = Vec::with_capacity(layout.len());
     for &(name, kind, offset) in layout {
         let offset = start + offset;
         let value = node.attribute(name);
-        let target = if kind == STRINGS {
-            Target::Table(string_list(value.unwrap_or(""), offset, data)?)
-        } else {
-            let value = match kind {
-                REAL => finite_number(value.unwrap_or("0"), name, data.path)?.to_bits(),
-                TIME => sage_time(value.unwrap_or("0s"), name, data.path)?.to_bits(),
-                UNSIGNED => sage_uint(value.unwrap_or("0"), name, data.path)?,
-                _ => unreachable!("unknown radar field kind"),
-            };
-            data.word(offset, value);
-            Target::Data(offset)
+        let target = match kind {
+            STRINGS => Target::Table(string_list(value.unwrap_or(""), offset, data)?),
+            _ => {
+                match kind {
+                    REAL => data.word(
+                        offset,
+                        finite_number(value.unwrap_or("0"), name, data.path)?.to_bits(),
+                    ),
+                    TIME => data.word(
+                        offset,
+                        sage_time(value.unwrap_or("0s"), name, data.path)?.to_bits(),
+                    ),
+                    UNSIGNED => {
+                        data.word(offset, sage_uint(value.unwrap_or("0"), name, data.path)?);
+                    }
+                    BOOL => data.payload[offset] = boolean(node, name, false, data.path)?,
+                    STATUS => super::secondary_damage::write_status_flags(
+                        value.unwrap_or(""),
+                        offset,
+                        data,
+                    )?,
+                    COMMAND_SET | INVISIBILITY_TEMPLATE => {} // References follow XML attribute order.
+                    _ => unreachable!("unknown special-power field kind"),
+                }
+                Target::Data(offset)
+            }
         };
         entries.push(Entry::named(name, kind, target));
+    }
+    if let Some((name, offset)) = variant_filter(node.tag_name().name()) {
+        let target =
+            match significant_children(node).find(|child| child.has_tag_name((SAGE_NS, name))) {
+                Some(child) => Target::Table(super::parking::encode_filter(
+                    child,
+                    start + offset,
+                    data,
+                    reference_types,
+                )?),
+                None => Target::Null,
+            };
+        entries.push(Entry::named(name, OBJECT_FILTER, target));
     }
     Ok(entries)
 }

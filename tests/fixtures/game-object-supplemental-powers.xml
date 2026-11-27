@@ -1,0 +1,26 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <SpecialPowerTemplate id="SupplementalProbePower" TargetType="NONE" />
+  <GameObject id="SupplementalPowersDefaults">
+    <Behaviors>
+      <CaptureAndGiveCommandSetSpecialPower id="ModuleTag_Capture" SpecialPowerTemplate="SupplementalProbePower" />
+      <CombineSpecialPower id="ModuleTag_Combine" SpecialPowerTemplate="SupplementalProbePower" />
+      <InvisibilitySpecialPower id="ModuleTag_Cloak" SpecialPowerTemplate="SupplementalProbePower" InvisibilityTemplate="ProbeCloakTemplate" />
+      <TemporaryOwnerSpecialPower id="ModuleTag_TakeOwnership" SpecialPowerTemplate="SupplementalProbePower" />
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+  <GameObject id="SupplementalPowersCustom">
+    <Behaviors>
+      <CaptureAndGiveCommandSetSpecialPower id="ModuleTag_Capture" SpecialPowerTemplate="SupplementalProbePower" CommandSet="ProbeCommandSet" />
+      <CombineSpecialPower id="ModuleTag_Combine" SpecialPowerTemplate="SupplementalProbePower" RequirementsFilterMPSkirmish="FirstRequirement">
+        <CombineWithObjectFilter Rule="ANY" Include="VEHICLE" />
+      </CombineSpecialPower>
+      <InvisibilitySpecialPower id="ModuleTag_Cloak" SpecialPowerTemplate="SupplementalProbePower" InvisibilityTemplate="ProbeCloakTemplate" BroadcastRadius="27.5" Duration="4.5s" Permanent="true">
+        <InitiateSound EvaEvent="FixtureCloakEva" />
+        <ObjectFilter Rule="ANY" Include="INFANTRY" Relationship="ALLIES" />
+      </InvisibilitySpecialPower>
+      <TemporaryOwnerSpecialPower id="ModuleTag_TakeOwnership" SpecialPowerTemplate="SupplementalProbePower" SlaveStatus="CAN_ATTACK UNDER_CONSTRUCTION" />
+    </Behaviors>
+    <Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1" /></Body>
+  </GameObject>
+</AssetDeclaration>

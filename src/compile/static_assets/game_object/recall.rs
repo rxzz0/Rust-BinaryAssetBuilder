@@ -7,7 +7,7 @@ use super::super::{
 use super::behaviors_basic::{base, inherited};
 use super::draws::{boolean, fields, model_condition_index};
 use super::special_power_variants::{
-    encode_initiate_sound, radar_fields, radar_layout, string_list,
+    encode_initiate_sound, string_list, variant_fields, variant_filter, variant_layout,
 };
 use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::Node;
@@ -141,7 +141,7 @@ pub(super) fn encode(
         ("HarvesterBonusAllies", REAL, 0x1d8),
     ];
     let name = node.tag_name().name();
-    let radar = radar_layout(name);
+    let variant = variant_layout(name);
     let (kind, size, derived) = match name {
         "OCLSpecialPower" => (OCL_POWER, 0x1f4, OCL_FIELDS),
         "StoreObjectsSpecialPower" => (0xa74a_234c, 0x1d4, STORE_FIELDS),
@@ -151,7 +151,7 @@ pub(super) fn encode(
         "GiveProductionBonusSpecialPower" => (PRODUCTION_BONUS, 0x1dc, BONUS_FIELDS),
         "ActivateModuleSpecialPower" => (ACTIVATE_MODULE, 0x1cc, &[][..]),
         "PlayerUpgradeSpecialPower" => (PLAYER_UPGRADE, 0x1cc, &[][..]),
-        _ => radar
+        _ => variant
             .or_else(|| base_layout_variant(name).map(|kind| (kind, 0x1c4, &[][..])))
             .ok_or_else(|| invalid(path, format!("unsupported special power module {name}")))?,
     };
@@ -165,9 +165,9 @@ pub(super) fn encode(
     let start = data.allocate(pointer, size)?;
     data.word(start, kind);
     data.word(start + 4, hash_name(required(node, "id", path)?));
-    // EA allocates the derived masks and radar lists before variable-length base filters.
-    let derived_entries = if radar.is_some() {
-        Some(radar_fields(node, start, derived, data)?)
+    // EA allocates derived lists, masks, and filters before variable-length base fields.
+    let derived_entries = if variant.is_some() {
+        Some(variant_fields(node, start, derived, data, reference_types)?)
     } else {
         (kind == MOVEMENT_POWER)
             .then(|| movement_fields(node, start, data))
@@ -306,6 +306,9 @@ pub(super) fn encode(
         );
     }
     required(node, TEMPLATE, path)?;
+    if name == "InvisibilitySpecialPower" {
+        required(node, "InvisibilityTemplate", path)?;
+    }
     for (name, value) in node.attributes().map(|a| (a.name(), a.value())).chain(
         (node.attribute(FILTER).is_none()).then_some((FILTER, "GenericSpecialPowerObjectFilter")),
     ) {
@@ -329,6 +332,8 @@ pub(super) fn encode(
                 ("ObjectCreationList", offset)
             }
             "TargetMarkerObjectRef" => ("GameObject", 0x1d0),
+            "CommandSet" => ("LogicCommandSet", 0x1c4),
+            "InvisibilityTemplate" => ("InvisibilityTemplate", 0x1c4),
             _ => continue,
         };
         if value.trim().is_empty() {
@@ -339,7 +344,7 @@ pub(super) fn encode(
         reference_types.push(id.type_id);
         let word = if matches!(
             name,
-            "OnTriggerRechargeSpecialPower" | "TargetMarkerObjectRef"
+            "OnTriggerRechargeSpecialPower" | "TargetMarkerObjectRef" | "CommandSet"
         ) {
             id.instance_id
         } else {
@@ -397,6 +402,9 @@ pub(super) fn encode(
         Target::Null
     };
     power.push(Entry::named("InitiateSound", 0x1ae6_b6b7, sound));
+    if let Some((name, _)) = variant_filter(node.tag_name().name()) {
+        children.next_if(|child| child.has_tag_name((SAGE_NS, name)));
+    }
     if !matches!(kind, OCL_POWER | PLAYER_UPGRADE | ACTIVATE_MODULE)
         && let Some(child) = children.next()
     {
