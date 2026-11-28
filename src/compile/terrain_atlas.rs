@@ -717,6 +717,22 @@ mod tests {
     }
 
     #[test]
+    fn terrain_bc3_keeps_one_alpha_extreme_on_the_ramp() {
+        for (alpha, expected) in [
+            ([255, 0, 1, 2], [0, 2, 0xc7, 0x72, 0x2c, 0xc7, 0x72, 0x2c]),
+            (
+                [255, 0, 127, 255],
+                [127, 255, 0x31, 0x12, 0x23, 0x31, 0x12, 0x23],
+            ),
+        ] {
+            let alpha: [u8; 16] = std::array::from_fn(|i| alpha[i % 4]);
+            let mut block = encode_bc3(&alpha.map(|a| [0, 0, 0, a]));
+            bc3_fit::fit_wide_alpha(&alpha.map(f64::from), &mut block);
+            assert_eq!(&block[..8], &expected);
+        }
+    }
+
+    #[test]
     fn terrain_bc3_rounds_two_color_endpoints_in_rgb565_space() {
         let colors = std::array::from_fn(|i| {
             if i % 4 == 0 {
@@ -731,6 +747,16 @@ mod tests {
         });
         let block = encode_terrain_bc3(&pixels, &colors);
         assert_eq!(&block[8..], &[0x41, 0x18, 0, 0, 0x54, 0x54, 0x54, 0x54]);
+    }
+
+    #[test]
+    fn terrain_bc3_separates_two_colors_that_round_to_one_endpoint() {
+        let mut colors = [[0.0f64; 3]; 16];
+        colors[0] = [0.5, 1.0, 2.5625];
+        let pixels =
+            colors.map(|[b, g, r]| [b.round() as u8, g.round() as u8, r.round() as u8, 255]);
+        let block = encode_terrain_bc3(&pixels, &colors);
+        assert_eq!(&block[8..], &[0x20, 0x08, 0, 0, 0x57, 0x55, 0x55, 0x55]);
     }
 
     #[test]
@@ -752,6 +778,17 @@ mod tests {
         assert_eq!(
             &block[8..],
             &[0x14, 0xf2, 0xf3, 0xe9, 0xfd, 0xbf, 0xbf, 0xaf]
+        );
+    }
+
+    #[test]
+    fn terrain_bc3_refines_multiple_channels_together() {
+        let pixels = std::array::from_fn(|i| [128, 68 + (i % 4) as u8, 4 + (i / 4) as u8, 255]);
+        let colors = pixels.map(|[b, g, r, _]| [b, g, r].map(f64::from));
+        let block = encode_terrain_bc3(&pixels, &colors);
+        assert_eq!(
+            &block[8..],
+            &[0x50, 0x0a, 0x0f, 0x02, 0xab, 0xab, 0xaa, 0xaa]
         );
     }
 }

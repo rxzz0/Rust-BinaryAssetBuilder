@@ -31,7 +31,8 @@ pub(super) fn fit_rgb(colors: &[[f64; 3]; 16], block: &mut [u8; 16]) {
 
     // With two source colors, both can have their own RGB565 endpoint.
     // Quantize against the expanded channel values, with ties going up.
-    if colors.iter().all(|color| *color == light || *color == dark) {
+    let two_colors = colors.iter().all(|color| *color == light || *color == dark);
+    if two_colors {
         let endpoints = [pack_nearest(light), pack_nearest(dark)];
         if endpoints[0] != endpoints[1] {
             write_rgb(score(colors, endpoints, false), block);
@@ -61,6 +62,18 @@ pub(super) fn fit_rgb(colors: &[[f64; 3]; 16], block: &mut [u8; 16]) {
         write_rgb(score(colors, best.endpoints, false), block);
     }
     fit_narrow_rgb(colors, block);
+    if two_colors {
+        // Both samples quantize to the same endpoint. An adjacent endpoint
+        // pair can still distinguish them using the interpolated colors.
+        let current = [
+            u16::from_le_bytes([block[8], block[9]]),
+            u16::from_le_bytes([block[10], block[11]]),
+        ];
+        let best = refine_rgb_jointly(colors, score(colors, current, true));
+        if best.endpoints != current {
+            write_rgb(score(colors, best.endpoints, false), block);
+        }
+    }
 }
 
 fn adjust_channel(endpoint: u16, channel: usize, adjustment: i16) -> u16 {
@@ -156,9 +169,36 @@ fn fit_narrow_rgb(colors: &[[f64; 3]; 16], block: &mut [u8; 16]) {
             }
         }
     }
+    let best = refine_rgb_jointly(colors, best);
     if best.endpoints != original {
         write_rgb(score(colors, best.endpoints, false), block);
     }
+}
+
+fn refine_rgb_jointly(colors: &[[f64; 3]; 16], mut best: RgbFit) -> RgbFit {
+    let [high, low] = best.endpoints;
+    // Quantized RGB565 channels share the same texel index. Changing a
+    // channel in isolation can make the score worse even when changing
+    // neighboring codes in several channels improves the ramp.
+    let lows = adjacent_rgb565(low);
+    for high in adjacent_rgb565(high) {
+        for low in lows {
+            let candidate = score_until(colors, [high, low], true, best.error);
+            if candidate.error < best.error - EPSILON {
+                best = candidate;
+            }
+        }
+    }
+    best
+}
+
+fn adjacent_rgb565(endpoint: u16) -> [u16; 27] {
+    let offsets = [0, 1, -1];
+    std::array::from_fn(|i| {
+        let endpoint = adjust_channel(endpoint, 0, offsets[i / 9]);
+        let endpoint = adjust_channel(endpoint, 1, offsets[i / 3 % 3]);
+        adjust_channel(endpoint, 2, offsets[i % 3])
+    })
 }
 
 fn write_rgb(best: RgbFit, block: &mut [u8; 16]) {
@@ -258,7 +298,16 @@ fn refine_rgb_indices(colors: &[[f64; 3]; 16], endpoints: [u16; 2], block: &mut 
     }
 }
 
-fn score(colors: &[[f64; 3]; 16], mut endpoints: [u16; 2], rounded: bool) -> RgbFit {
+fn score(colors: &[[f64; 3]; 16], endpoints: [u16; 2], rounded: bool) -> RgbFit {
+    score_until(colors, endpoints, rounded, f64::INFINITY)
+}
+
+fn score_until(
+    colors: &[[f64; 3]; 16],
+    mut endpoints: [u16; 2],
+    rounded: bool,
+    error_limit: f64,
+) -> RgbFit {
     if endpoints[0] < endpoints[1] {
         endpoints.swap(0, 1);
     }
@@ -278,6 +327,9 @@ fn score(colors: &[[f64; 3]; 16], mut endpoints: [u16; 2], rounded: bool) -> Rgb
             }
         }
         best.error += first;
+        if best.error >= error_limit {
+            break;
+        }
         best.indices |= index << (2 * i);
     }
     best
@@ -353,6 +405,39 @@ pub(super) fn fit_wide_alpha(samples: &[f64; 16], block: &mut [u8; 16]) {
         return;
     }
 
+    // A six-value ramp can include one end of the alpha range while
+    // reserving the opposite extreme. Prefer this ramp when it encodes
+    // every sample exactly.
+    if min == 0.0 && max == 255.0 {
+        let endpoints = if interior_min == interior_max && interior_min.fract() == 0.0 {
+            // The full-range ramps take precedence if one already
+            // represents the single interior value.
+            let fits_full_range = [(false, [255.0, 0.0]), (true, [0.0, 255.0])]
+                .into_iter()
+                .any(|(six, ends)| {
+                    alpha_palette(ends, six)
+                        .iter()
+                        .any(|value| value.round() == interior_min)
+                });
+            (!fits_full_range).then_some([interior_min, 255.0])
+        } else if interior_min < interior_max && interior_max <= 5.0 {
+            Some([0.0, interior_max])
+        } else if (250.0..255.0).contains(&interior_min) {
+            Some([interior_min, 255.0])
+        } else {
+            None
+        };
+        if let Some(endpoints) =
+            endpoints.filter(|ends| ends.iter().all(|value| value.fract() == 0.0))
+        {
+            let fit = score_alpha(samples, endpoints, true);
+            if fit.rounded_error == 0.0 {
+                write_alpha(fit, block);
+                return;
+            }
+        }
+    }
+
     let eight = optimize_alpha(samples, [max, min], false);
     let six = if interior_min < interior_max {
         [interior_min, interior_max]
@@ -378,9 +463,13 @@ pub(super) fn fit_wide_alpha(samples: &[f64; 16], block: &mut [u8; 16]) {
     // A change within the squared error of a half-alpha step can come from
     // rounding alone. Keep the existing ramp on that boundary.
     if fit.endpoints[0] != fit.endpoints[1] && fit.rounded_error + 0.25 + EPSILON < previous_error {
-        block[..2].copy_from_slice(&fit.endpoints.map(|endpoint| endpoint as u8));
-        block[2..8].copy_from_slice(&fit.indices.to_le_bytes()[..6]);
+        write_alpha(fit, block);
     }
+}
+
+fn write_alpha(fit: AlphaFit, block: &mut [u8; 16]) {
+    block[..2].copy_from_slice(&fit.endpoints.map(|endpoint| endpoint as u8));
+    block[2..8].copy_from_slice(&fit.indices.to_le_bytes()[..6]);
 }
 
 fn optimize_alpha(samples: &[f64; 16], mut endpoints: [f64; 2], six: bool) -> AlphaFit {
