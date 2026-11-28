@@ -84,6 +84,10 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
             "MaxInactiveCopies",
             "PathfindingCheckType",
             "CannotAttackTargetReaction",
+            "TeamGatherBeginFeedbackKey",
+            "ExecutionBeginFeedbackKey",
+            "ExecutionCanceledFeedbackKey",
+            "ExecutionCompleteFeedbackKey",
         ],
         path,
     )?;
@@ -125,6 +129,18 @@ pub(super) fn compile(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> 
     ] {
         if let Some(value) = node.attribute(field) {
             binary.optional_word(offset, enum_index(value, values, field, path)?)?;
+        }
+    }
+    for (field, offset) in [
+        ("TeamGatherBeginFeedbackKey", 32),
+        ("ExecutionBeginFeedbackKey", 36),
+        ("ExecutionCanceledFeedbackKey", 40),
+        ("ExecutionCompleteFeedbackKey", 44),
+    ] {
+        if let Some(value) = node.attribute(field) {
+            let bytes = crate::compile::windows_1252(value)
+                .ok_or_else(|| invalid(path, format!("invalid {field}")))?;
+            binary.optional_word(offset, crate::hash::asset_string_hash(&bytes))?;
         }
     }
     let mut children = significant_children(node);
@@ -569,4 +585,46 @@ fn registered_object_set(value: &str, path: &Path) -> io::Result<u32> {
         .position(|set| set == value.trim())
         .map(|index| index as u32)
         .ok_or_else(|| invalid(path, format!("unknown registered object set {value:?}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strategic_feedback_keys_match_ea_optional_hashes() {
+        let path = Path::new("Probe.xml");
+        let document = Document::parse(
+            r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+                <AIStrategicStateDefinition id="Absent"><Heuristic><ConstantHeuristic Weight="1"/></Heuristic></AIStrategicStateDefinition>
+                <AIStrategicStateDefinition id="Empty" ExecutionBeginFeedbackKey=""><Heuristic><ConstantHeuristic Weight="1"/></Heuristic></AIStrategicStateDefinition>
+                <AIStrategicStateDefinition id="Populated" TeamGatherBeginFeedbackKey="GatherKey" ExecutionBeginFeedbackKey="BeginKey"
+                    ExecutionCanceledFeedbackKey="CancelKey" ExecutionCompleteFeedbackKey="CompleteKey"><Heuristic><ConstantHeuristic Weight="1"/></Heuristic></AIStrategicStateDefinition>
+            </AssetDeclaration>"#,
+        )
+        .unwrap();
+        let states: Vec<_> = significant_children(document.root_element())
+            .map(|node| compile(node, path).unwrap())
+            .collect();
+        let words = |bytes: &[u8]| {
+            bytes
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .copied()
+                .map(u32::from_le_bytes)
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(words(&states[0].payload[32..48]), [0, 0, 0, 0]);
+        assert_eq!(words(&states[1].payload[32..48]), [0, 64, 0, 0]);
+        assert_eq!(words(&states[1].payload[64..68]), [0]);
+        assert_eq!(states[1].relocations, [36, 8, 68, u32::MAX]);
+        assert_eq!(words(&states[2].payload[32..48]), [64, 68, 72, 76]);
+        assert_eq!(
+            words(&states[2].payload[64..80]),
+            [0xcb48_c7d3, 0x7d4f_ef91, 0xf9c4_fdcf, 0x8060_9f6d]
+        );
+        assert_eq!(states[2].relocations, [32, 36, 40, 44, 8, 80, u32::MAX]);
+    }
 }
