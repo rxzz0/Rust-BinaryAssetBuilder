@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <Defines><Define name="PROBE_VOLUME" value="70"/></Defines>
+  <MusicTrack id="ProbeBaseMusic" Volume="55" ReverbEffectLevel="5" DryLevel="90" SubmixSlider="MUSIC" Control="ALLOW_KILL_MID_FILE" Priority="CRITICAL"/>
+  <MusicTrack id="ProbeDerivedMusic" inheritFrom="ProbeBaseMusic" Volume="=$PROBE_VOLUME + 5" Control="FADE_ON_KILL">
+    <VolumeSliderMultiplier Slider="NONE" Multiplier="0.75"/>
+  </MusicTrack>
+</AssetDeclaration>

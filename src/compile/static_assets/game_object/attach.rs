@@ -15,6 +15,14 @@ const KIND: u32 = 0xe9fd_14c9;
 const LEECH_TARGETING: u32 = 0xca60_38a6;
 const STEAL_UNIT: u32 = 0x2106_8ff6;
 const MONEY_GAIN: u32 = 0xb1a5_4585;
+const BOOBY_TRAP: u32 = 0xe502_295e;
+const BOOBY_FILTER: &str = "PreventEnteringFilter";
+const BOOBY_FIELDS: &[(&str, u32, usize)] = &[
+    ("FireWeaponConditionsOnParent", STATUS, 0x150),
+    ("PreventEnteringSetStatusOnParent", STATUS, 0x16c),
+    ("AllowTriggerOnAllies", 0x77e3_f4f7, 0x190),
+    ("SpecialWeapon", 0xd046_dd22, 0x188),
+];
 const STATUS: u32 = 0xa7bd_811e;
 const MODEL: u32 = 0x67db_bfc9;
 const REAL: u32 = 0x6458_64f3;
@@ -76,10 +84,12 @@ pub(super) fn encode(
     let kind = match node.tag_name().name() {
         "LeechTargetingAttachUpdate" => LEECH_TARGETING,
         "MoneyGainAttachUpdate" => MONEY_GAIN,
+        "BoobyTrapUpdate" => BOOBY_TRAP,
         "StealUnitUpdate" => STEAL_UNIT,
         _ => KIND,
     };
     let money = kind == MONEY_GAIN;
+    let booby = kind == BOOBY_TRAP;
     let allowed: Vec<_> = FIELDS
         .iter()
         .map(|&(name, _, _, _)| name)
@@ -88,6 +98,12 @@ pub(super) fn encode(
             ["ActionType", "PurchasePricePercent"]
                 .into_iter()
                 .filter(|_| money),
+        )
+        .chain(
+            BOOBY_FIELDS
+                .iter()
+                .filter(|_| booby)
+                .map(|&(name, ..)| name),
         )
         .collect();
     validate_attributes(node, &allowed, path)?;
@@ -98,11 +114,18 @@ pub(super) fn encode(
         modifiers.push(child);
     }
     let status = children.next_if(|child| money && child.has_tag_name((SAGE_NS, MONEY_STATUS)));
+    let booby_filter =
+        children.next_if(|child| booby && child.has_tag_name((SAGE_NS, BOOBY_FILTER)));
     if children.next().is_some() {
         return Err(invalid(path, "unexpected AttachUpdate child"));
     }
 
-    let start = data.allocate(pointer, if money { 0x15c } else { 0x150 })?;
+    let size = match kind {
+        MONEY_GAIN => 0x15c,
+        BOOBY_TRAP => 0x194,
+        _ => 0x150,
+    };
+    let start = data.allocate(pointer, size)?;
     let mut entries = vec![module_base(node, kind, start, data, true)?];
     let money_fields = if money {
         let action = required(node, "ActionType", path)?;
@@ -127,6 +150,28 @@ pub(super) fn encode(
     } else {
         None
     };
+    let mut booby_reference_types = Vec::new();
+    let booby_fields = if booby {
+        for &(name, _, offset) in &BOOBY_FIELDS[..2] {
+            write_status_flags(node.attribute(name).unwrap_or(""), start + offset, data)?;
+        }
+        data.payload[start + 0x190] =
+            super::draws::boolean(node, "AllowTriggerOnAllies", false, path)?;
+        let mut fields: Vec<_> = super::draws::fields(start, BOOBY_FIELDS).collect();
+        let filter = match booby_filter {
+            Some(child) => Target::Table(super::parking::encode_filter(
+                child,
+                start + 0x18c,
+                data,
+                &mut booby_reference_types,
+            )?),
+            None => Target::Null,
+        };
+        fields.push(Entry::named(BOOBY_FILTER, 0xe46e_a3b2, filter));
+        fields
+    } else {
+        Vec::new()
+    };
     let mut ref_words = [0; 8];
     for attr in node.attributes() {
         if let Some(&(_, token, relative, _)) = FIELDS
@@ -141,6 +186,15 @@ pub(super) fn encode(
                 references,
                 reference_types,
             )?;
+        } else if booby && attr.name() == "SpecialWeapon" {
+            let weapon = super::passive_area::reference(
+                attr.value(),
+                "WeaponTemplate",
+                path,
+                references,
+                reference_types,
+            )?;
+            data.word(start + 0x188, weapon);
         }
     }
     for &(name, token, relative, default) in FIELDS {
@@ -265,11 +319,13 @@ pub(super) fn encode(
         Target::Table(Table::array(count, items)),
     ));
     let parent = Table::record(entries);
+    reference_types.extend(booby_reference_types);
     let fields = if kind == KIND {
         parent
     } else {
         let mut derived = vec![base(KIND, parent)];
         derived.extend(money_fields.into_iter().flatten());
+        derived.extend(booby_fields);
         Table::record(derived)
     };
     Ok((kind, fields))

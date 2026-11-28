@@ -242,6 +242,10 @@ fn embedded_dds_texture_matches_ea_payload_and_relocations() {
     let manifest = Manifest::parse(&stream.manifest).unwrap();
     assert_eq!(manifest.assets.len(), 1);
     assert_eq!(manifest.assets[0].type_hash, 0x9f5f_f8da);
+    assert_eq!(
+        manifest.assets[0].instance_hash.to_le_bytes(),
+        oracle[12..16]
+    );
     let split = oracle.len() - 8;
     assert_eq!(&stream.files.bin[4..], &oracle[32..split]);
     assert_eq!(&stream.files.relo[4..], &oracle[split..]);
@@ -273,10 +277,64 @@ fn on_demand_texture_sidecar_matches_ea_dds() {
         let CustomData::Bytes(data) = custom else {
             panic!("expected DDS sidecar")
         };
-        assert_eq!(&data[..12], &oracle[..12]);
-        assert_eq!(&data[16..], &oracle[16..]);
+        assert_eq!(data.as_slice(), oracle);
         assert_eq!(&data[12..16], &asset.instance_hash.to_le_bytes());
     }
+}
+
+#[test]
+fn static_prebuilt_dds_preserves_partial_mipmaps_and_dimensions() {
+    let root = scratch_root();
+    let input = root.join("probe.xml");
+    let texture = root.join("partial.dds");
+    // A 12x8 DXT3 DDS with only the 12x8 and 6x4 levels.
+    let mut header = [0u32; 32];
+    header[0] = u32::from_le_bytes(*b"DDS ");
+    header[1] = 124;
+    header[2] = 0x000a_1007;
+    header[3..8].copy_from_slice(&[8, 12, 96, 0, 2]);
+    header[19] = 32;
+    header[20] = 4;
+    header[21] = u32::from_le_bytes(*b"DXT3");
+    header[27] = 0x0040_1008;
+    let mut dds: Vec<_> = header.into_iter().flat_map(u32::to_le_bytes).collect();
+    dds.extend(0..128);
+    fs::write(&texture, &dds).unwrap();
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Texture id="Embedded" File="partial.dds"/>
+            <OnDemandTexture id="Cube" File="partial.dds" Type="CubeTexture"/>
+            <OnDemandTexture id="Demand" File="partial.dds" GenerateMipMaps="true" AllowAutomaticResize="true" OutputFormat="DXT5"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+
+    let stream = compile_static(&input, &root, &root).unwrap();
+    assert!(stream.files.bin.ends_with(&dds));
+    assert_eq!(stream.custom_data.len(), 2);
+    for (_, custom) in &stream.custom_data {
+        let CustomData::Bytes(sidecar) = custom else {
+            panic!("expected a DDS sidecar")
+        };
+        assert_eq!(&sidecar[40..sidecar.len() - 8], &dds);
+    }
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let mut offset = 4;
+    for asset in manifest.assets {
+        if asset.name == b"OnDemandTexture:Cube" {
+            assert_eq!(
+                &stream.files.bin[offset..offset + 8],
+                &[0, 0, 0, 0, 2, 0, 0, 0]
+            );
+        }
+        offset += asset.chunk_sizes.instance as usize;
+    }
+
+    fs::write(texture, &dds[..dds.len() - 1]).unwrap();
+    let error = compile_static(&input, &root, &root).err().unwrap();
+    assert!(error.to_string().contains("truncated DDS pixel data"));
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -1282,6 +1340,68 @@ fn static_xpointer_child_selection_matches_ea() {
 }
 
 #[test]
+fn static_animation_script_line_endings_match_ea() {
+    let root = scratch_root();
+    let input = root.join("probe.xml");
+    let script = "\r\n        local code = 42\r\n        return code\r\n      ";
+    let draw = |script: &str| {
+        format!(
+            r#"<ScriptedModelDraw id="ModuleTag_Draw"><AnimationState StateName="STATE_Idle" ParseCondStateType="PARSE_NORMAL"><Script>{script}</Script></AnimationState></ScriptedModelDraw>"#
+        )
+    };
+    for (fragment, hash) in [
+        (None, 0x1649_ffb3),
+        (Some("crlffragment.xml"), 0x7d44_d321),
+        (Some("cdatafragment.xml"), 0xfd4f_5604),
+    ] {
+        let draw_xml = if let Some(fragment) = fragment {
+            let fragment_script = if fragment == "cdatafragment.xml" {
+                format!("<![CDATA[{script}]]>")
+            } else {
+                script.to_owned()
+            };
+            fs::write(
+                root.join(fragment),
+                format!(
+                    r#"<Fragment xmlns="uri:ea.com:eala:asset">{}</Fragment>"#,
+                    draw(&fragment_script)
+                ),
+            )
+            .unwrap();
+            format!(
+                r#"<xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="{fragment}" xpointer="xmlns(n=uri:ea.com:eala:asset) xpointer(/n:Fragment/child::*)"/>"#
+            )
+        } else {
+            draw(script)
+        };
+        fs::write(
+            &input,
+            format!(
+                r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"><GameObject id="Probe"><Draws>{draw_xml}</Draws><Body><ActiveBody id="ModuleTag_Body"/></Body></GameObject></AssetDeclaration>"#
+            ),
+        )
+        .unwrap();
+
+        let stream = compile_static(&input, &root, &root).unwrap();
+        let manifest = Manifest::parse(&stream.manifest).unwrap();
+        assert_eq!(manifest.assets[0].instance_hash, hash);
+        let expected = if fragment.is_some() {
+            script.to_owned()
+        } else {
+            script.replace("\r\n", "\n")
+        };
+        assert!(
+            stream
+                .files
+                .bin
+                .windows(expected.len())
+                .any(|bytes| bytes == expected.as_bytes())
+        );
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn static_expressions_use_transitive_defines_and_explicit_overrides() {
     let root = scratch_root();
     let defs = root.join("defs.xml");
@@ -1368,6 +1488,38 @@ fn static_expressions_do_not_use_defines_from_sibling_documents() {
         .to_string();
     assert!(error.contains("right.xml"));
     assert!(error.contains("unknown define $LEFT"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn static_includes_resolve_trailing_periods_like_ea() {
+    let root = scratch_root();
+    let input = root.join("Mod.xml");
+    let child = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <Video id="example" Filename="example"/>
+    </AssetDeclaration>"#;
+    fs::write(root.join("Child.xml"), child).unwrap();
+    let compile = |source| {
+        fs::write(
+            &input,
+            format!(
+                r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+                    <Includes><Include type="all" source="{source}"/></Includes>
+                </AssetDeclaration>"#,
+            ),
+        )
+        .unwrap();
+        compile_static(&input, &root, &root).unwrap()
+    };
+    let plain = compile("Child.xml");
+    assert_eq!(Manifest::parse(&plain.manifest).unwrap().assets.len(), 1);
+    for source in ["Child.xml.", "DATA:Child.xml."] {
+        let dotted = compile(source);
+        assert_eq!(dotted.manifest, plain.manifest);
+        assert_eq!(dotted.files.bin, plain.files.bin);
+        assert_eq!(dotted.files.imp, plain.files.imp);
+        assert_eq!(dotted.files.relo, plain.files.relo);
+    }
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -1530,6 +1682,73 @@ fn sdk_builds_resolve_base_manifests_under_sagexml() {
 
 #[cfg(windows)]
 #[test]
+fn sdk_static_compiles_linked_mod_sources_and_references() {
+    let root = scratch_root();
+    let sdk = root.join("RA3 MOD SDK");
+    let mod_dir = sdk.join("Mods/Reborn");
+    let data = mod_dir.join("Data");
+    let input = data.join("mod.xml");
+    fs::create_dir_all(data.join("System")).unwrap();
+    fs::create_dir_all(mod_dir.join("Art/CA")).unwrap();
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes>
+                <Include type="reference" source="DATA:System/Library.xml"/>
+                <Include type="all" source="ART:CameraVideo.xml"/>
+            </Includes>
+            <VideoEventList id="Intro"><EventList><Movie MovieAsset="LibraryVideo"/></EventList></VideoEventList>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        data.join("System/Library.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Video id="LibraryVideo" Filename="library.bik"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let art = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <Video id="CameraVideo" Filename="camera.bik"/>
+    </AssetDeclaration>"#;
+    fs::write(mod_dir.join("Art/CA/CameraVideo.xml"), art).unwrap();
+    let regular_output = root.join("regular");
+    compile_sdk_static(&input, &sdk, &regular_output).unwrap();
+
+    let redirected = root.join("OneDrive/CNC Files/Reborn");
+    fs::create_dir_all(redirected.parent().unwrap()).unwrap();
+    fs::rename(&mod_dir, &redirected).unwrap();
+    junction(&mod_dir, &redirected);
+    let linked_output = root.join("linked");
+    compile_sdk_static(&input, &sdk.join("."), &linked_output).unwrap();
+    for stream in ["mod", "system/library"] {
+        for extension in ["manifest", "bin", "imp", "relo"] {
+            let relative = format!("mods/reborn/data/{stream}.{extension}");
+            assert_eq!(
+                fs::read(linked_output.join(&relative)).unwrap(),
+                fs::read(regular_output.join(&relative)).unwrap(),
+            );
+        }
+    }
+
+    let external = root.join("external");
+    fs::create_dir(&external).unwrap();
+    fs::write(external.join("CameraVideo.xml"), art).unwrap();
+    fs::rename(mod_dir.join("Art/CA"), mod_dir.join("Art/original")).unwrap();
+    junction(&mod_dir.join("Art/CA"), &external);
+    assert!(
+        compile_sdk_static(&input, &sdk, &linked_output)
+            .unwrap_err()
+            .to_string()
+            .contains("path lies outside the data root")
+    );
+    fs::remove_dir(mod_dir.join("Art/CA")).unwrap();
+    fs::remove_dir(mod_dir).unwrap();
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
 fn sdk_global_preserves_output_layout_through_a_linked_mod() {
     let root = scratch_root();
     let sdk = root.join("RA3 MOD SDK");
@@ -1537,10 +1756,21 @@ fn sdk_global_preserves_output_layout_through_a_linked_mod() {
     let additional_maps = mod_dir.join("Data/AdditionalMaps");
     let output = sdk.join("builtmods");
     fs::create_dir_all(additional_maps.join("fragments")).unwrap();
+    fs::create_dir_all(mod_dir.join("Data/System")).unwrap();
+    fs::write(
+        mod_dir.join("Data/System/CameraSettings.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <CameraSettings id="RebornCamera"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
     fs::write(
         additional_maps.join("MapMetaData_Colors.xml"),
         r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
-            <Includes><Include type="all" source="DATA:AdditionalMaps/fragments/colors.xml"/></Includes>
+            <Includes>
+                <Include type="all" source="DATA:AdditionalMaps/fragments/colors.xml"/>
+                <Include type="all" source="DATA:System/CameraSettings.xml"/>
+            </Includes>
         </AssetDeclaration>"#,
     )
     .unwrap();
@@ -1560,6 +1790,11 @@ fn sdk_global_preserves_output_layout_through_a_linked_mod() {
         ))
     });
     let expected = stream.each_ref().map(|path| fs::read(path).unwrap());
+    let manifest = Manifest::parse(&expected[0]).unwrap();
+    assert!(manifest.assets.iter().any(|asset| {
+        asset.name == b"CameraSettings:RebornCamera"
+            && asset.source_file_name == b"DATA:mods/reborn/data/system/camerasettings.xml"
+    }));
 
     let redirected = root.join("OneDrive/CNC Files/Reborn");
     fs::create_dir_all(redirected.parent().unwrap()).unwrap();
@@ -1666,6 +1901,37 @@ fn sdk_global_compiles_multiplayer_colors_with_the_sdk_layout() {
     );
     assert!(!output.join("mapmetadata_firsterror.manifest").exists());
     assert!(!output.join(".rust-streams").exists());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn path_music_event_uses_ea_zero_handle_for_missing_header_or_id() {
+    let root = scratch_root();
+    let xml = root.join("pathmusic-missing-header.xml");
+    fs::write(root.join("present.h"), b"#define PATH_EVENT_Other 0x19\r\n").unwrap();
+    for (id, header, instance_hash) in [
+        ("ProbeMissing", "missing.h", 0x9cfe_6efd),
+        ("ProbePresent", "present.h", 0x6fe6_1ffe),
+    ] {
+        fs::write(
+            &xml,
+            format!(
+                r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+                    <PathMusicEvent id="{id}" PathfinderEventHeader="{header}"/>
+                </AssetDeclaration>"#
+            ),
+        )
+        .unwrap();
+        let output = compile_static(&xml, &root, &root).unwrap();
+        let manifest = Manifest::parse(&output.manifest).unwrap();
+        assert_eq!(manifest.assets[0].instance_hash, instance_hash);
+        assert_eq!(
+            &output.files.bin[4..],
+            &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0]
+        );
+        assert_eq!(output.files.relo.len(), 4);
+        assert_eq!(output.files.imp.len(), 4);
+    }
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -2057,6 +2323,74 @@ fn compiles_health_bar_imports_and_weak_object_filters() {
 }
 
 #[test]
+fn game_objects_encode_custom_health_bar_weak_references() {
+    let root = scratch_root();
+    let schemas = root.join("Schemas/xsd");
+    fs::create_dir_all(&schemas).unwrap();
+    fs::write(
+        schemas.join("CnC3Types.xsd"),
+        r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:complexType name="GameObject">
+                <xs:sequence><xs:element name="Body" type="Body"/></xs:sequence>
+                <xs:attribute name="HealthBar" type="HealthBarTemplateWeakRef"/>
+            </xs:complexType>
+            <xs:complexType name="Body">
+                <xs:sequence><xs:element name="ActiveBody" type="ActiveBody"/></xs:sequence>
+            </xs:complexType>
+            <xs:complexType name="ActiveBody"/>
+        </xs:schema>"#,
+    )
+    .unwrap();
+    let input = root.join("mod.xml");
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <HealthBarTemplate id="AntennaBars_42" Length="140"/>
+            <GameObject id="Base" HealthBar="AntennaBars_42">
+                <Body><ActiveBody id="BodyTag"/></Body>
+            </GameObject>
+            <GameObject id="Inherited" inheritFrom="Base"/>
+            <GameObject id="Override" inheritFrom="Base" HealthBar="Another_Bar"/>
+            <GameObject id="Blank" inheritFrom="Base" HealthBar=""/>
+            <GameObject id="One" HealthBar="AntennaBars_42" CommandSet="Cmd" Side="Allies" ButtonImage="Icon">
+                <Body><ActiveBody id="BodyTag"/></Body>
+            </GameObject>
+            <GameObject id="Two" Side="Allies" ButtonImage="Icon" CommandSet="Cmd" HealthBar="AntennaBars_42">
+                <Body><ActiveBody id="BodyTag"/></Body>
+            </GameObject>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let stream = compile_static(&input, &root, &root).unwrap();
+    let manifest = Manifest::parse(&stream.manifest).unwrap();
+    let mut chunks = &stream.files.bin[4..];
+    for asset in &manifest.assets {
+        let (payload, rest) = chunks.split_at(asset.chunk_sizes.instance as usize);
+        chunks = rest;
+        let expected = match asset.name {
+            b"GameObject:Base" | b"GameObject:Inherited" => 0x3e05_6709_u32,
+            b"GameObject:Override" => 0xceaf_7280,
+            b"GameObject:Blank" => 0,
+            b"GameObject:One" => {
+                assert_eq!(asset.instance_hash, 0xa188_e491);
+                0x3e05_6709
+            }
+            b"GameObject:Two" => {
+                assert_eq!(asset.instance_hash, 0x008d_9607);
+                0x3e05_6709
+            }
+            b"HealthBarTemplate:AntennaBars_42" => continue,
+            _ => panic!("unexpected asset {:?}", asset.name),
+        };
+        assert_eq!(&payload[0x910..0x914], &expected.to_le_bytes());
+        assert_eq!(asset.references.iter().len(), 0);
+        assert_eq!(asset.chunk_sizes.imports, 0);
+    }
+    assert_eq!(manifest.assets.len(), 7);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn compiles_credits_with_ansi_strings_and_empty_lines() {
     let root = scratch_root();
     let xml = root.join("credits.xml");
@@ -2102,6 +2436,77 @@ fn compiles_credits_with_ansi_strings_and_empty_lines() {
         [20_u32, 28, 44, 68, 76, 84, u32::MAX]
             .map(u32::to_le_bytes)
             .as_flattened()
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn xml_hash_matches_ea_at_exact_block_boundaries() {
+    let root = scratch_root();
+    let xml = root.join("xml-hash-block-boundary.xml");
+    const DECLARATION: &str = r#"<?xml version="1.0" encoding="Windows-1252"?>"#;
+    const NAMESPACE: &str = r#" xmlns="uri:ea.com:eala:asset""#;
+    for (length, expected) in [
+        (511, 0x6f22_a507),
+        (512, 0x8fbb_6ad4),
+        (513, 0xca65_304a),
+        (1024, 0x4bd9_3af3),
+        (2048, 0xa4d9_dd5f),
+        (4096, 0x916f_b2ad),
+    ] {
+        let prefix = format!(r#"<EvaEvent id="Probe{length}"><!--"#);
+        let suffix = "--></EvaEvent>";
+        let padding =
+            "p".repeat(length - DECLARATION.len() - NAMESPACE.len() - prefix.len() - suffix.len());
+        fs::write(
+            &xml,
+            format!("<AssetDeclaration{NAMESPACE}>{prefix}{padding}{suffix}</AssetDeclaration>"),
+        )
+        .unwrap();
+        let output = compile_static(&xml, &root, &root).unwrap();
+        let manifest = Manifest::parse(&output.manifest).unwrap();
+        assert_eq!(manifest.assets[0].instance_hash, expected, "{length} bytes");
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn music_track_inheritance_matches_ea_stream() {
+    let root = scratch_root();
+    let xml = root.join("music-track-inheritance.xml");
+    let schema_dir = root.join("Schemas/xsd");
+    fs::create_dir_all(&schema_dir).unwrap();
+    fs::write(
+        schema_dir.join("CnC3Types.xsd"),
+        r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:complexType name="MusicTrack"><xs:sequence>
+            <xs:element name="VolumeSliderMultiplier" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence></xs:complexType>
+        </xs:schema>"#,
+    )
+    .unwrap();
+    fs::write(
+        &xml,
+        include_bytes!("fixtures/music-track-inheritance/music-track-inheritance.xml"),
+    )
+    .unwrap();
+
+    let stream = compile_static(&xml, &root, &root).unwrap();
+    assert_eq!(
+        stream.manifest,
+        include_bytes!("fixtures/music-track-inheritance/music-track-inheritance.manifest"),
+    );
+    assert_eq!(
+        stream.files.bin,
+        include_bytes!("fixtures/music-track-inheritance/music-track-inheritance.bin"),
+    );
+    assert_eq!(
+        stream.files.relo,
+        include_bytes!("fixtures/music-track-inheritance/music-track-inheritance.relo"),
+    );
+    assert_eq!(
+        stream.files.imp,
+        include_bytes!("fixtures/music-track-inheritance/music-track-inheritance.imp"),
     );
     fs::remove_dir_all(root).unwrap();
 }
@@ -3200,6 +3605,248 @@ fn sdk_map_skip_preserves_complete_versioned_streams_and_builds_partial_ones() {
         .unwrap(),
         0
     );
+}
+
+#[cfg(windows)]
+#[test]
+fn sdk_map_config_builds_relative_and_external_paths_in_place() {
+    let root = scratch_root();
+    let sdk = root.join("RA3 MOD SDK");
+    let mod_dir = sdk.join("Mods/Reborn");
+    let default = mod_dir.join("Misc/Data/Maps/Official");
+    let relative = mod_dir.join("Data/Maps/Official");
+    let second = mod_dir.join("Data/Other Maps");
+    let external = root.join("External Maps");
+    let xml = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+      <Includes><Include type="all" source="DATA:Shared.xml"/></Includes>
+      <GameMap id="ProbeMap"/>
+    </AssetDeclaration>"#;
+    let shared = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+      <Video id="Clip" Filename="clip.bik"/>
+    </AssetDeclaration>"#;
+    for (directory, name) in [
+        (&default, "ProbeMap"),
+        (&relative, "First"),
+        (&second, "Second"),
+        (&external, "ProbeMap"),
+    ] {
+        let map = directory.join(name);
+        fs::create_dir_all(&map).unwrap();
+        fs::write(map.join("map.xml"), xml).unwrap();
+    }
+    fs::write(mod_dir.join("Data/Shared.xml"), shared).unwrap();
+    let stock = compile_static(&mod_dir.join("Data/Shared.xml"), &sdk, &root).unwrap();
+    fs::write(root.join("worldbuilder.manifest"), stock.manifest).unwrap();
+
+    let build = || {
+        std::process::Command::new(env!("CARGO_BIN_EXE_binary-asset-builder"))
+            .arg("compile-maps-sdk")
+            .arg(&default)
+            .arg("--sdk-root")
+            .arg(&sdk)
+            .arg("--references")
+            .arg(&root)
+            .arg("--output")
+            .arg(&default)
+            .arg("--skip-precompiled")
+            .output()
+            .unwrap()
+    };
+    let result = build();
+    assert!(result.status.success(), "{result:?}");
+    assert!(String::from_utf8_lossy(&result.stdout).contains("Compiled 1 map override streams"));
+    let default_backup = mod_dir.join("Default Maps");
+    fs::rename(&default, &default_backup).unwrap();
+    for map in [second.join("fIRSt"), default.join("FIRST")] {
+        fs::create_dir_all(&map).unwrap();
+        fs::write(map.join("map.xml"), "<invalid").unwrap();
+    }
+    fs::create_dir_all(default.join("Fallback")).unwrap();
+    fs::write(default.join("Fallback/map.xml"), xml).unwrap();
+
+    let config = mod_dir.join("mapdir.toml");
+    let external_path = external
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_ascii_lowercase();
+    fs::write(
+        &config,
+        format!("\u{feff}data/maps/official/\r\n\r\nDATA\\Other Maps\\\r\n{external_path}\r\n"),
+    )
+    .unwrap();
+    let result = build();
+    assert!(result.status.success(), "{result:?}");
+    let log = String::from_utf8_lossy(&result.stdout);
+    assert!(log.contains("Compiled 4 map override streams"));
+    assert_eq!(log.matches("Skipping duplicate").count(), 2);
+    assert!(!second.join("fIRSt/map.version").exists());
+    assert!(!default.join("FIRST/map.version").exists());
+    assert!(
+        String::from_utf8_lossy(&result.stderr).is_empty(),
+        "{result:?}"
+    );
+    for directory in [
+        relative.join("First"),
+        second.join("Second"),
+        external.join("ProbeMap"),
+        default.join("Fallback"),
+    ] {
+        let path = directory.join("map_mod.manifest");
+        let data = fs::read(&path).unwrap();
+        check_linked_files(&path, &Manifest::parse(&data).unwrap()).unwrap();
+        assert!(directory.join("map.version").is_file());
+    }
+    let external_manifest = fs::read(external.join("ProbeMap/map_mod.manifest")).unwrap();
+    let external_manifest = Manifest::parse(&external_manifest).unwrap();
+    let external_source = fs::canonicalize(external.join("ProbeMap/map.xml")).unwrap();
+    let external_source = external_source
+        .to_str()
+        .unwrap()
+        .strip_prefix(r"\\?\")
+        .unwrap();
+    assert!(
+        external_manifest
+            .assets
+            .iter()
+            .any(|asset| asset.source_file_name == external_source.as_bytes())
+    );
+    for extension in ["bin", "imp", "relo"] {
+        let path = format!("ProbeMap/map_mod.{extension}");
+        assert_eq!(
+            fs::read(external.join(&path)).unwrap(),
+            fs::read(default_backup.join(&path)).unwrap(),
+            "{extension}"
+        );
+    }
+    assert!(String::from_utf8_lossy(&build().stdout).contains("Compiled 0 map override streams"));
+
+    fs::create_dir_all(mod_dir.join("Empty")).unwrap();
+    for (text, expected) in [
+        ("Empty\n../Outside", "expected a mod-relative or full path"),
+        ("Empty\nMissing", "cannot open map directory"),
+        (
+            "Empty\nEmpty\nEmpty\nEmpty",
+            "at most three map directories",
+        ),
+    ] {
+        fs::write(&config, text).unwrap();
+        let result = build();
+        let errors = String::from_utf8_lossy(&result.stderr);
+        assert!(!result.status.success(), "{result:?}");
+        assert!(
+            errors.contains("mapdir.toml") && errors.contains(expected),
+            "{errors}"
+        );
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn sdk_map_overrides_preserve_streams_through_a_linked_mod_or_map_tree() {
+    let root = scratch_root();
+    let sdk = root.join("RA3 MOD SDK");
+    let mod_dir = sdk.join("Mods/Reborn");
+    let maps = mod_dir.join("Misc/Data/Maps/Official");
+    let source = maps.join("ProbeMap/map.xml");
+    let data = mod_dir.join("Data");
+    fs::create_dir_all(source.parent().unwrap()).unwrap();
+    fs::create_dir_all(&data).unwrap();
+    fs::write(
+        &source,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes><Include type="all" source="DATA:SharedMapVideo.xml"/></Includes>
+            <GameMap id="ProbeMap"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let shared = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"><Video id="Shared" Filename="shared.bik"/></AssetDeclaration>"#;
+    fs::write(data.join("SharedMapVideo.xml"), shared).unwrap();
+    let stock = compile_static_without_includes(&root);
+    fs::write(root.join("worldbuilder.manifest"), stock.manifest).unwrap();
+
+    let build = |output: &Path| {
+        let result = std::process::Command::new(env!("CARGO_BIN_EXE_binary-asset-builder"))
+            .arg("compile-maps-sdk")
+            .arg(&maps)
+            .arg("--sdk-root")
+            .arg(sdk.join("."))
+            .arg("--references")
+            .arg(&root)
+            .arg("--output")
+            .arg(output)
+            .arg("--skip-precompiled")
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{:?}", result);
+        assert!(
+            result
+                .stdout
+                .ends_with(b"Compiled 1 map override streams with Rust\n"),
+            "{:?}",
+            result
+        );
+        ["manifest", "bin", "imp", "relo"].map(|extension| {
+            fs::read(output.join(format!("ProbeMap/map_mod.{extension}"))).unwrap()
+        })
+    };
+    let regular = build(&root.join("regular"));
+    let external = root.join("OneDrive/CNC Files");
+    fs::create_dir_all(&external).unwrap();
+    let linked_mod = external.join("Reborn");
+    fs::rename(&mod_dir, &linked_mod).unwrap();
+    junction(&mod_dir, &linked_mod);
+    assert_eq!(build(&root.join("linked-mod")), regular);
+    let configured_maps = external.join("Additional Maps");
+    let configured_map = configured_maps.join("ProbeMap");
+    fs::create_dir_all(&configured_map).unwrap();
+    fs::copy(&source, configured_map.join("map.xml")).unwrap();
+    let config = mod_dir.join("mapdir.toml");
+    fs::write(&config, configured_maps.to_str().unwrap()).unwrap();
+    assert_eq!(
+        binary_asset_builder::compile::compile_sdk_map_overrides(
+            &maps, &sdk, &root, &maps, None, true
+        )
+        .unwrap(),
+        1
+    );
+    for (extension, expected) in ["bin", "imp", "relo"].into_iter().zip(&regular[1..]) {
+        assert_eq!(
+            &fs::read(configured_map.join(format!("map_mod.{extension}"))).unwrap(),
+            expected,
+        );
+    }
+    fs::remove_file(config).unwrap();
+    let unrelated = external.join("Unrelated");
+    fs::create_dir(&unrelated).unwrap();
+    fs::write(unrelated.join("SharedMapVideo.xml"), shared).unwrap();
+    fs::rename(&data, mod_dir.join("OriginalData")).unwrap();
+    junction(&data, &unrelated);
+    let error = compile_map(&source, &sdk, &root).err().unwrap();
+    assert!(
+        error
+            .to_string()
+            .contains("path lies outside the data root")
+    );
+    assert!(
+        compile_sdk_maps(
+            &linked_mod.join("Misc/Data/Maps/Official"),
+            &sdk,
+            &root,
+            &maps
+        )
+        .is_err()
+    );
+    fs::remove_dir(&data).unwrap();
+    fs::rename(mod_dir.join("OriginalData"), &data).unwrap();
+    fs::remove_dir(&mod_dir).unwrap();
+    fs::rename(&linked_mod, &mod_dir).unwrap();
+
+    let linked_maps = external.join("Official");
+    fs::rename(&maps, &linked_maps).unwrap();
+    junction(&maps, &linked_maps);
+    assert_eq!(build(&root.join("linked-official")), regular);
+    fs::remove_dir(&maps).unwrap();
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <GameObject id="DamageStatesDefault"><Behaviors><Damage id="ModuleTag_Damage"/><DamageStateList id="ModuleTag_States"><Data/></DamageStateList></Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject>
+  <GameObject id="DamageStatesCustom"><Behaviors><DamageStateList id="ModuleTag_States"><Data MinHealth="25%" MaxHealth="0.75" ObjectStatus="IS_ATTACKING IS_AIMING_WEAPON" ModelConditions="MOVING DYING"/><Data MinHealth="0.1" MaxHealth="100%" ModelConditions="DAMAGED"/></DamageStateList></Behaviors><Body><ImmortalBody id="ModuleTag_Body" MaxHealth="1"/></Body></GameObject>
+</AssetDeclaration>

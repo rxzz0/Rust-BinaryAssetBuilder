@@ -30,6 +30,9 @@ mod expressions;
 mod merge_assets;
 mod precompiled;
 mod sdk_maps;
+pub(crate) use sdk_maps::{
+    MapChoice, MapPriority, configured_map_roots, log_shadowed_map, map_folders,
+};
 mod sdk_static;
 mod static_assets;
 mod stream_order;
@@ -130,8 +133,15 @@ fn compile(
     reference_directory: Option<&Path>,
     reference_mode: ReferenceMode,
 ) -> io::Result<CompiledStream> {
-    compile_with_source_references(input, data_root, reference_directory, reference_mode, None)
-        .map(|(stream, _)| stream)
+    compile_with_source_references(
+        input,
+        data_root,
+        reference_directory,
+        reference_mode,
+        None,
+        None,
+    )
+    .map(|(stream, _)| stream)
 }
 
 fn compile_with_source_references(
@@ -140,26 +150,48 @@ fn compile_with_source_references(
     reference_directory: Option<&Path>,
     reference_mode: ReferenceMode,
     source_references: Option<&mut sdk_static::SourceReferences>,
+    configured_map: Option<&sdk_maps::ConfiguredMapDirectory>,
 ) -> io::Result<(CompiledStream, HashSet<AssetId>)> {
     let root = fs::canonicalize(data_root)?;
     let resolved_input = fs::canonicalize(input)?;
-    let redirected_directory = match (reference_mode, reference_directory) {
-        (ReferenceMode::Implicit, _) => Some("AdditionalMaps"),
-        (_, None) => Some("AptUI"),
-        _ => None,
+    let redirected_directory = if configured_map.is_some() {
+        None
+    } else if let Some(references) = source_references.as_deref() {
+        references.redirected_sdk.clone()
+    } else if reference_mode == ReferenceMode::Map {
+        if resolved_input.starts_with(&root) {
+            None
+        } else {
+            input.parent().and_then(|directory| {
+                redirected_sdk_map_directory(directory, data_root, &root, &resolved_input)
+            })
+        }
+    } else {
+        let redirected_directory = match (reference_mode, reference_directory) {
+            (ReferenceMode::Implicit, _) => Some("AdditionalMaps"),
+            (_, None) => Some("AptUI"),
+            _ => None,
+        };
+        redirected_directory
+            .filter(|_| !resolved_input.starts_with(&root))
+            .and_then(|directory| {
+                redirected_sdk_directory(input, data_root, &resolved_input, Some(directory))
+            })
     };
-    let redirected_sdk = redirected_directory
-        .filter(|_| !resolved_input.starts_with(&root))
-        .and_then(|directory| {
-            redirected_sdk_directory(input, data_root, &resolved_input, directory)
-        });
-    let mod_root =
-        sdk_relative_path(&resolved_input, &root, redirected_sdk.as_ref()).and_then(|relative| {
-            let mut components = relative.iter();
-            let mods = components.next()?;
-            let name = components.next()?;
-            mods.eq_ignore_ascii_case("mods")
-                .then(|| root.join(mods).join(name))
+    let redirects = match configured_map {
+        Some(map) => map.redirects.clone(),
+        None => redirected_directory.into_iter().collect(),
+    };
+    let mod_root = configured_map
+        .map(|map| root.join(&map.mod_relative))
+        .or_else(|| {
+            sdk_relative_path(&resolved_input, &root, &redirects).and_then(|relative| {
+                let mut components = relative.iter();
+                let mods = components.next()?;
+                let name = components.next()?;
+                mods.eq_ignore_ascii_case("mods")
+                    .then(|| root.join(mods).join(name))
+            })
         });
     let is_map = reference_mode == ReferenceMode::Map;
     let map_root = if is_map {
@@ -198,7 +230,8 @@ fn compile_with_source_references(
         audio_paths: paths("Audio", "Audio"),
         map_art_path: map_root.map(|map| map.join("Art")),
         root,
-        redirected_sdk,
+        redirects,
+        external_map_root: configured_map.and_then(|map| map.external_root()),
         visited: HashSet::new(),
         active: HashSet::new(),
         ids: HashSet::new(),
@@ -251,16 +284,75 @@ fn compile_with_source_references(
     compiler.finish(worldbuilder)
 }
 
+#[derive(Clone)]
 struct RedirectedSdkDirectory {
     sdk_relative: PathBuf,
     physical: PathBuf,
+}
+
+fn redirected_sdk_map_directory(
+    directory: &Path,
+    sdk_root: &Path,
+    canonical_sdk: &Path,
+    resolved: &Path,
+) -> Option<RedirectedSdkDirectory> {
+    let sdk_root = std::path::absolute(sdk_root).ok()?;
+    let directory = std::path::absolute(directory).ok()?;
+    let relative = sdk_maps::relative_sdk_path(&directory, &sdk_root)?;
+    if !relative
+        .components()
+        .all(|part| matches!(part, std::path::Component::Normal(_)))
+    {
+        return None;
+    }
+    let mut parts = relative.iter();
+    let (mods, _name, misc, data, maps) = (
+        parts.next()?,
+        parts.next()?,
+        parts.next()?,
+        parts.next()?,
+        parts.next()?,
+    );
+    if !mods.eq_ignore_ascii_case("Mods")
+        || !misc.eq_ignore_ascii_case("Misc")
+        || !data.eq_ignore_ascii_case("Data")
+        || !maps.eq_ignore_ascii_case("Maps")
+    {
+        return None;
+    }
+    redirected_map_tree(&relative, &sdk_root, canonical_sdk, resolved)
+}
+
+fn redirected_map_tree(
+    relative: &Path,
+    sdk_root: &Path,
+    canonical_sdk: &Path,
+    resolved: &Path,
+) -> Option<RedirectedSdkDirectory> {
+    let mut parts = relative.iter();
+    let mut sdk_relative = PathBuf::from(parts.next()?);
+    for part in parts {
+        sdk_relative.push(part);
+        let physical = fs::canonicalize(sdk_root.join(&sdk_relative)).ok()?;
+        if !physical.starts_with(canonical_sdk) {
+            // A linked mod can use its Art/Data siblings. A separately linked
+            // map tree can only use files under that tree or the SDK.
+            return resolved
+                .starts_with(&physical)
+                .then_some(RedirectedSdkDirectory {
+                    sdk_relative,
+                    physical,
+                });
+        }
+    }
+    None
 }
 
 fn redirected_sdk_directory(
     input: &Path,
     data_root: &Path,
     resolved: &Path,
-    expected_directory: &str,
+    expected_directory: Option<&str>,
 ) -> Option<RedirectedSdkDirectory> {
     let input = std::path::absolute(input).ok()?;
     let data_root = std::path::absolute(data_root).ok()?;
@@ -272,18 +364,58 @@ fn redirected_sdk_directory(
         return None;
     }
     let mut parts = relative.iter();
-    let (mods, name, data, directory) =
-        (parts.next()?, parts.next()?, parts.next()?, parts.next()?);
-    if !mods.eq_ignore_ascii_case("Mods")
-        || !data.eq_ignore_ascii_case("Data")
-        || !directory.eq_ignore_ascii_case(expected_directory)
-    {
+    let (mods, name, data) = (parts.next()?, parts.next()?, parts.next()?);
+    if !mods.eq_ignore_ascii_case("Mods") || !data.eq_ignore_ascii_case("Data") {
         return None;
     }
-    let sdk_relative = PathBuf::from(mods).join(name).join(data).join(directory);
+    let mod_path = PathBuf::from(mods).join(name);
+    let mod_data = mod_path.join(data);
+    let directory = parts.next()?;
+    let Some(expected_directory) = expected_directory else {
+        let physical_data = fs::canonicalize(data_root.join(&mod_data)).ok()?;
+        if !resolved.starts_with(&physical_data) {
+            return None;
+        }
+        // Step 6 also reads Art and Audio from the same mod. If only Data is
+        // redirected, keep its physical directory as the boundary.
+        let physical_mod = fs::canonicalize(data_root.join(&mod_path)).ok()?;
+        if physical_data.parent() == Some(physical_mod.as_path())
+            && physical_data
+                .file_name()
+                .is_some_and(|name| name.eq_ignore_ascii_case(data))
+        {
+            return Some(RedirectedSdkDirectory {
+                sdk_relative: mod_path,
+                physical: physical_mod,
+            });
+        }
+        return Some(RedirectedSdkDirectory {
+            sdk_relative: mod_data,
+            physical: physical_data,
+        });
+    };
+    if !directory.eq_ignore_ascii_case(expected_directory) {
+        return None;
+    }
+    let sdk_relative = mod_data.join(directory);
     // Resolve the directory separately so a linked file inside it cannot
     // extend the allowed tree to an unrelated location.
     let physical = fs::canonicalize(data_root.join(&sdk_relative)).ok()?;
+    // A redirected mod Data tree can include siblings of AdditionalMaps.
+    // An independently linked AdditionalMaps directory keeps its own boundary.
+    if expected_directory == "AdditionalMaps"
+        && let Ok(physical_data) = fs::canonicalize(data_root.join(&mod_data))
+        && physical.parent() == Some(physical_data.as_path())
+        && physical
+            .file_name()
+            .is_some_and(|name| name.eq_ignore_ascii_case(directory))
+        && resolved.starts_with(&physical)
+    {
+        return Some(RedirectedSdkDirectory {
+            sdk_relative: mod_data,
+            physical: physical_data,
+        });
+    }
     resolved
         .starts_with(&physical)
         .then_some(RedirectedSdkDirectory {
@@ -295,14 +427,15 @@ fn redirected_sdk_directory(
 fn sdk_relative_path<'a>(
     path: &'a Path,
     root: &Path,
-    redirected_sdk: Option<&RedirectedSdkDirectory>,
+    redirects: &[RedirectedSdkDirectory],
 ) -> Option<Cow<'a, Path>> {
     if let Ok(relative) = path.strip_prefix(root) {
         return Some(Cow::Borrowed(relative));
     }
-    let redirected = redirected_sdk?;
-    let relative = path.strip_prefix(&redirected.physical).ok()?;
-    Some(Cow::Owned(redirected.sdk_relative.join(relative)))
+    redirects.iter().find_map(|directory| {
+        let relative = path.strip_prefix(&directory.physical).ok()?;
+        Some(Cow::Owned(directory.sdk_relative.join(relative)))
+    })
 }
 
 fn search_paths(
@@ -326,7 +459,8 @@ fn search_paths(
 struct Compiler<'a> {
     log: Option<BuildLog>,
     root: PathBuf,
-    redirected_sdk: Option<RedirectedSdkDirectory>,
+    redirects: Vec<RedirectedSdkDirectory>,
+    external_map_root: Option<&'a Path>,
     data_paths: Vec<PathBuf>,
     art_paths: Vec<PathBuf>,
     audio_paths: Vec<PathBuf>,
@@ -510,6 +644,32 @@ impl AssetReference {
 }
 
 impl Compiler<'_> {
+    fn is_external_map_file(&self, path: &Path) -> bool {
+        self.external_map_root
+            .is_some_and(|root| path.starts_with(root))
+    }
+
+    fn source_name(&self, path: &Path) -> io::Result<Rc<str>> {
+        if let Some(relative) = sdk_relative_path(path, &self.root, &self.redirects) {
+            let relative = relative
+                .to_str()
+                .filter(|name| name.is_ascii())
+                .ok_or_else(|| invalid(path, "source path must be ASCII"))?;
+            return Ok(format!("DATA:{}", relative.replace('\\', "/").to_ascii_lowercase()).into());
+        }
+        if !self.is_external_map_file(path) {
+            return Err(invalid(path, "XML lies outside the data root"));
+        }
+        // EA stores an absolute filename for documents outside the SDK data root.
+        let name = path
+            .to_str()
+            .ok_or_else(|| invalid(path, "source path must be Unicode"))?;
+        if let Some(unc) = name.strip_prefix(r"\\?\UNC\") {
+            return Ok(format!(r"\\{unc}").into());
+        }
+        Ok(name.strip_prefix(r"\\?\").unwrap_or(name).into())
+    }
+
     fn read_document(&mut self, path: &Path, tentative: bool, art_include: bool) -> io::Result<()> {
         if self.active.contains(path) {
             return Err(invalid(path, "include cycle"));
@@ -526,14 +686,7 @@ impl Compiler<'_> {
         let document_order = self.next_document_order;
         self.next_document_order += 1;
         self.active.insert(path.to_path_buf());
-        let relative = sdk_relative_path(path, &self.root, self.redirected_sdk.as_ref())
-            .ok_or_else(|| invalid(path, "XML lies outside the data root"))?;
-        let relative = relative
-            .to_str()
-            .filter(|name| name.is_ascii())
-            .ok_or_else(|| invalid(path, "source path must be ASCII"))?;
-        let source: Rc<str> =
-            format!("DATA:{}", relative.replace('\\', "/").to_ascii_lowercase()).into();
+        let source = self.source_name(path)?;
         let xml: Rc<str> = if self.reference_directory.is_some() {
             self.read_static_xml(path)?
         } else {
@@ -982,6 +1135,8 @@ impl Compiler<'_> {
             | "AmbientStream"
             | "AudioEvent"
             | "AudioEventOverridable"
+            | "DialogEvent"
+            | "MusicTrack"
             | "LogicCommandSet"
             | "LogicCommand"
             | "ObjectFilterAsset"
@@ -1014,6 +1169,7 @@ impl Compiler<'_> {
             | "ImageSequence"
             | "DebugHotKeys"
             | "AIStateDefinition"
+            | "AITargetingHeuristic"
             | "ForceFeedbackEvent"
             | "EvaEvent"
             | "LocomotorTemplate"
@@ -1072,6 +1228,13 @@ impl Compiler<'_> {
         let value = value.trim().replace('\\', "/");
         let alias = value.split_once(':');
         let relative = alias.map_or(value.as_str(), |(_, relative)| relative);
+        // EA resolves trailing periods on a filename before looking it up on Windows.
+        let trimmed = relative.trim_end_matches('.');
+        let relative = if trimmed.is_empty() || trimmed.ends_with('/') {
+            relative
+        } else {
+            trimmed
+        };
         let path = Path::new(relative);
         if relative.is_empty() || relative.contains(':') || path.has_root() {
             return Err(invalid(
@@ -1127,10 +1290,11 @@ impl Compiler<'_> {
         };
         let resolved = read_with_context(&path, fs::canonicalize)?;
         if !resolved.starts_with(&self.root)
+            && !self.is_external_map_file(&resolved)
             && !self
-                .redirected_sdk
-                .as_ref()
-                .is_some_and(|directory| resolved.starts_with(&directory.physical))
+                .redirects
+                .iter()
+                .any(|directory| resolved.starts_with(&directory.physical))
         {
             return Err(invalid(&resolved, "path lies outside the data root"));
         }
@@ -1145,7 +1309,16 @@ impl Compiler<'_> {
                 error
             }
         })?;
-        let relative = sdk_relative_path(&target, &self.root, self.redirected_sdk.as_ref())
+        let relative = sdk_relative_path(&target, &self.root, &self.redirects)
+            .or_else(|| {
+                if self.is_external_map_file(&target) {
+                    target
+                        .file_name()
+                        .map(|name| Cow::Borrowed(Path::new(name)))
+                } else {
+                    None
+                }
+            })
             .ok_or_else(|| invalid(document, "reference lies outside the data root"))?
             .with_extension("manifest");
         let mut name = relative
@@ -1347,13 +1520,17 @@ impl Compiler<'_> {
 
         let input = self.resolve(path, file)?;
         let bytes = read_with_context(&input, fs::read)?;
-        let processing_hash = if texture { 0x9f5f_e8b0 } else { type_hash ^ 4 };
+        let processing_hash = type_hash
+            ^ if texture {
+                texture::TEXTURE_COMPILER_VERSION
+            } else {
+                4
+            };
         let instance_hash = hash_asset(node, processing_hash, &bytes, path)?;
         let bytes = if texture {
             if bytes.starts_with(b"DDS ") {
                 // EA embeds supplied DDS data unchanged for either resize setting.
-                texture::prepare_dds(&bytes, false, false)
-                    .map_err(|error| invalid(&input, error))?;
+                texture::validate_dds(&bytes).map_err(|error| invalid(&input, error))?;
                 bytes
             } else {
                 texture::tga_to_dds(&bytes).map_err(|error| invalid(&input, error))?
@@ -1809,15 +1986,7 @@ fn hash_xml(node: Node<'_, '_>, processing_hash: u32, path: &Path) -> io::Result
     let xml = windows_1252(&xml)
         .ok_or_else(|| invalid(path, "asset XML contains characters outside Windows-1252"))?;
     let seed = fast_hash_with_seed(processing_hash, b"11");
-    // The legacy HashingWriter omits its last block when the length is an exact multiple.
-    let hashed_len = if xml.len().is_multiple_of(512) {
-        xml.len() - 512
-    } else {
-        xml.len()
-    };
-    Ok(xml[..hashed_len]
-        .chunks(512)
-        .fold(seed, fast_hash_with_seed))
+    Ok(xml.chunks(512).fold(seed, fast_hash_with_seed))
 }
 
 fn windows_1252(text: &str) -> Option<Cow<'_, [u8]>> {
@@ -1846,35 +2015,30 @@ fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
         .next()
         .expect("parsed XML element name");
     let prefix = name.split_once(':').map(|(prefix, _)| prefix);
-    let preserve_namespaces = node.attribute((XML_NS, "base")).is_some();
     let mut attribute_end = range.start + 1 + name.len();
     let mut has_namespace = false;
     xml.push('<');
     xml.push_str(name);
     for attr in node.attributes() {
-        if preserve_namespaces {
-            has_namespace |= write_namespace_attributes(
-                node,
-                prefix,
-                &input[attribute_end..attr.range().start],
-                xml,
-            );
-            attribute_end = attr.range().end;
-        }
+        has_namespace |= write_namespace_attributes(
+            node,
+            prefix,
+            &input[attribute_end..attr.range().start],
+            xml,
+        );
+        attribute_end = attr.range().end;
         xml.push(' ');
         xml.push_str(&input[attr.range_qname()]);
         xml.push_str("=\"");
         escape_xml(attr.value(), true, xml);
         xml.push('"');
     }
-    if preserve_namespaces {
-        has_namespace |= write_namespace_attributes(
-            node,
-            prefix,
-            &input[attribute_end..range.start + opening_tag_end(original)],
-            xml,
-        );
-    }
+    has_namespace |= write_namespace_attributes(
+        node,
+        prefix,
+        &input[attribute_end..range.start + opening_tag_end(original)],
+        xml,
+    );
     if root && !has_namespace {
         xml.push_str(" xmlns");
         if let Some(prefix) = prefix {
@@ -1892,17 +2056,17 @@ fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
         match child.node_type() {
             roxmltree::NodeType::Element => write_xml(child, false, xml),
             roxmltree::NodeType::Text => {
-                let text = child.text().unwrap();
-                if !is_xml_whitespace(text) {
-                    // The Windows XmlWriter normalizes line breaks in text to CRLF.
-                    for line in text.split_inclusive('\n') {
-                        if let Some(line) = line.strip_suffix('\n') {
-                            escape_xml(line, false, xml);
-                            xml.push_str("\r\n");
-                        } else {
-                            escape_xml(line, false, xml);
-                        }
-                    }
+                let end = child.next_sibling().map_or_else(
+                    || range.start + original.rfind("</").unwrap(),
+                    |next| next.range().start,
+                );
+                // EA retains CDATA in the source document and treats included
+                // animation script CDATA as text when hashing the asset XML.
+                let source = &input[child.range().start..end];
+                if source.contains("<![CDATA[") && !xinclude::has_included_script_marker(node) {
+                    write_xml_cdata_text(source, xml);
+                } else {
+                    write_xml_text(child.text().unwrap(), xml);
                 }
             }
             roxmltree::NodeType::Comment => {
@@ -1916,6 +2080,46 @@ fn write_xml(node: Node<'_, '_>, root: bool, xml: &mut String) {
     xml.push_str("</");
     xml.push_str(name);
     xml.push('>');
+}
+
+fn write_xml_text(text: &str, xml: &mut String) {
+    if !is_xml_whitespace(text) {
+        // The Windows XmlWriter normalizes line breaks in text to CRLF.
+        let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+        for (index, line) in normalized.split('\n').enumerate() {
+            if index != 0 {
+                xml.push_str("\r\n");
+            }
+            escape_xml(line, false, xml);
+        }
+    }
+}
+
+fn write_xml_cdata_text(mut source: &str, xml: &mut String) {
+    while let Some((text, cdata)) = source.split_once("<![CDATA[") {
+        write_xml_text_fragment(text, xml);
+        let (content, rest) = cdata
+            .split_once("]]>")
+            .expect("parsed CDATA has a closing delimiter");
+        xml.push_str("<![CDATA[");
+        xml.push_str(
+            &content
+                .replace("\r\n", "\n")
+                .replace('\r', "\n")
+                .replace('\n', "\r\n"),
+        );
+        xml.push_str("]]>");
+        source = rest;
+    }
+    write_xml_text_fragment(source, xml);
+}
+
+fn write_xml_text_fragment(source: &str, xml: &mut String) {
+    if !is_xml_whitespace(source) {
+        let wrapped = format!("<text>{source}</text>");
+        let fragment = Document::parse(&wrapped).expect("text fragment from parsed XML");
+        write_xml_text(fragment.root_element().text().unwrap(), xml);
+    }
 }
 
 fn opening_tag_end(source: &str) -> usize {
@@ -1935,29 +2139,40 @@ fn opening_tag_end(source: &str) -> usize {
 fn write_namespace_attributes(
     node: Node<'_, '_>,
     element_prefix: Option<&str>,
-    mut raw: &str,
+    raw: &str,
     xml: &mut String,
 ) -> bool {
     let mut has_namespace = false;
-    while let Some((name, value)) = raw.trim_start().split_once('=') {
+    for (name, uri) in namespace_attributes(node, raw) {
+        has_namespace |= name.strip_prefix("xmlns:") == element_prefix;
+        xml.push(' ');
+        xml.push_str(name);
+        xml.push_str("=\"");
+        escape_xml(uri, true, xml);
+        xml.push('"');
+    }
+    has_namespace
+}
+
+fn namespace_attributes<'a, 'input: 'a>(
+    node: Node<'a, 'input>,
+    mut raw: &'input str,
+) -> impl Iterator<Item = (&'input str, &'a str)> {
+    std::iter::from_fn(move || {
+        let (name, value) = raw.trim_start().split_once('=')?;
         let name = name.trim_end();
-        let prefix = name.strip_prefix("xmlns:");
         let value = value.trim_start();
         let delimiter = value.as_bytes()[0] as char;
         let (_, rest) = value[1..]
             .split_once(delimiter)
             .expect("parsed XML attribute");
-        has_namespace |= prefix == element_prefix;
-        if let Some(uri) = node.lookup_namespace_uri(prefix) {
-            xml.push(' ');
-            xml.push_str(name);
-            xml.push_str("=\"");
-            escape_xml(uri, true, xml);
-            xml.push('"');
-        }
         raw = rest;
-    }
-    has_namespace
+        Some((
+            name,
+            node.lookup_namespace_uri(name.strip_prefix("xmlns:"))
+                .unwrap_or(""),
+        ))
+    })
 }
 
 fn is_xml_whitespace(text: &str) -> bool {

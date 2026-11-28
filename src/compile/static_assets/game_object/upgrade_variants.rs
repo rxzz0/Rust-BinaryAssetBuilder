@@ -11,6 +11,72 @@ use crate::compile::{SAGE_NS, invalid, required};
 use roxmltree::Node;
 use std::io;
 
+pub(super) fn encode_fire_when_damaged(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+    references: &mut Vec<AssetReference>,
+    reference_types: &mut Vec<u32>,
+) -> io::Result<(u32, Table)> {
+    const KIND: u32 = 0x0897_b555;
+    const WEAPON: u32 = 0xd046_dd22;
+    const FIELDS: &[(&str, u32, usize)] = &[
+        ("InitiallyActive", 0x77e3_f4f7, 0x4c),
+        ("DamageTypes", 0x7631_77a4, 0x24),
+        ("DamageAmount", 0x6458_64f3, 0x28),
+        ("ReactionWeaponPristine", WEAPON, 0x2c),
+        ("ReactionWeaponDamaged", WEAPON, 0x30),
+        ("ReactionWeaponReallyDamaged", WEAPON, 0x34),
+        ("ReactionWeaponRubble", WEAPON, 0x38),
+        ("ContinuousWeaponPristine", WEAPON, 0x3c),
+        ("ContinuousWeaponDamaged", WEAPON, 0x40),
+        ("ContinuousWeaponReallyDamaged", WEAPON, 0x44),
+        ("ContinuousWeaponRubble", WEAPON, 0x48),
+    ];
+    let path = data.path;
+    let allowed: Vec<_> = std::iter::once("id")
+        .chain(UPGRADE.iter().chain(FIELDS).map(|&(name, ..)| name))
+        .collect();
+    validate_attributes(node, &allowed, path)?;
+    let start = data.allocate(pointer, 0x50)?;
+    for attr in node.attributes() {
+        if let Some(&(_, _, offset)) = FIELDS
+            .iter()
+            .find(|&&(name, token, _)| name == attr.name() && token == WEAPON)
+        {
+            let ordinal = reference(
+                attr.value(),
+                "WeaponTemplate",
+                path,
+                references,
+                reference_types,
+            )?;
+            data.word(start + offset, ordinal);
+        }
+    }
+    let types = sage_uint(
+        node.attribute("DamageTypes").unwrap_or("0"),
+        "DamageTypes",
+        path,
+    )?;
+    let amount = finite_number(
+        node.attribute("DamageAmount").unwrap_or("0"),
+        "DamageAmount",
+        path,
+    )?;
+    data.word(start + 0x24, types);
+    data.word(start + 0x28, amount.to_bits());
+    data.payload[start + 0x4c] = boolean(node, "InitiallyActive", false, path)?;
+    let mut children = significant_children(node).peekable();
+    let parent = upgrade_fields(node, KIND, start, data, reference_types, &mut children)?;
+    if children.next().is_some() {
+        return Err(invalid(path, "unexpected FireWeaponWhenDamaged child"));
+    }
+    let mut entries = vec![base(0xae60_ae98, parent)];
+    entries.extend(fields(start, FIELDS));
+    Ok((KIND, Table::record(entries)))
+}
+
 pub(super) fn encode(
     node: Node<'_, '_>,
     pointer: usize,

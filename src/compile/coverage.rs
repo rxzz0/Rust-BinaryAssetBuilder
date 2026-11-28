@@ -9,8 +9,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 
-// Dispatch coverage, not a claim of complete field support. Draw field coverage
-// comes from the same flag table used by the encoder.
+// Dispatch coverage. ScriptedModelDraw also checks its direct schema fields.
 const MODULES: &[(&str, &[&str])] = &[
     (
         "Draws",
@@ -93,6 +92,14 @@ const MODULES: &[(&str, &[&str])] = &[
             "SlavedUpdate",
             "PassiveAreaEffectBehavior",
             "AttachUpdate",
+            "BoobyTrapUpdate",
+            "Damage",
+            "DamageStateList",
+            "HealContain",
+            "HordeGarrisonContain",
+            "HordeTransportContain",
+            "TunnelContain",
+            "TunnelTeleportContain",
             "QueueDockBehavior",
             "AssistedPlacementBehavior",
             "AssistedPlacementInfoBehavior",
@@ -157,6 +164,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "EngineerContain",
             "FXListBehavior",
             "FireWeaponWhenDead",
+            "FireWeaponWhenDamaged",
             "FireWeaponCollide",
             "MonitorConditionUpdate",
             "OreMinerBehavior",
@@ -258,6 +266,7 @@ const MODULES: &[(&str, &[&str])] = &[
             "HitReactionBehavior",
             "InvalidTargetsDeathUpdate",
             "InvisibilityBroadcastUpdate",
+            "InvisibilityUpdate",
             "LaserScatterUpdate",
             "LeechTargetingAttachUpdate",
             "LoseHealthUpdate",
@@ -366,16 +375,31 @@ pub fn sdk_coverage(schema_root: &Path, mut out: impl Write) -> io::Result<()> {
             .map(|f| (&f.name, &f.kind))
             .collect::<BTreeSet<_>>()
         {
-            let coverage = match (group, name.as_str()) {
-                ("Draws", "ScriptedModelDraw") => "partial",
-                _ if supported.contains(&name.as_str()) => "encoder-present",
-                _ => "missing",
-            };
-            writeln!(out, "{group}\t{name}\t{kind}\t{coverage}")?;
             if group == "Draws" && name == "ScriptedModelDraw" {
                 let draw = schema.shape(kind, schema_root)?;
-                for field in draw.fields {
-                    let coverage = if scripted_attributes().any(|name| name == field.name) {
+                let attributes: HashSet<_> = scripted_attributes().collect();
+                let children = [
+                    "ModelConditionState",
+                    "AnimationState",
+                    "AttachModel",
+                    "EmbedPortal",
+                ];
+                let complete = draw
+                    .fields
+                    .iter()
+                    .all(|field| attributes.contains(field.name.as_str()))
+                    && draw
+                        .children
+                        .iter()
+                        .all(|field| children.contains(&field.name.as_str()));
+                let coverage = if complete {
+                    "encoder-present"
+                } else {
+                    "partial"
+                };
+                writeln!(out, "{group}\t{name}\t{kind}\t{coverage}")?;
+                for field in &draw.fields {
+                    let coverage = if attributes.contains(field.name.as_str()) {
                         "encoded"
                     } else {
                         "missing"
@@ -386,16 +410,21 @@ pub fn sdk_coverage(schema_root: &Path, mut out: impl Write) -> io::Result<()> {
                         field.name, field.kind
                     )?;
                 }
-                for field in draw.children {
-                    let coverage = match field.name.as_str() {
-                        "ModelConditionState"
-                        | "AnimationState"
-                        | "AttachModel"
-                        | "EmbedPortal" => "encoded",
-                        _ => "missing",
+                for field in &draw.children {
+                    let coverage = if children.contains(&field.name.as_str()) {
+                        "encoded"
+                    } else {
+                        "missing"
                     };
                     writeln!(out, "DrawChild\t{}\t{}\t{coverage}", field.name, field.kind)?;
                 }
+            } else {
+                let coverage = if supported.contains(&name.as_str()) {
+                    "encoder-present"
+                } else {
+                    "missing"
+                };
+                writeln!(out, "{group}\t{name}\t{kind}\t{coverage}")?;
             }
         }
     }
@@ -561,6 +590,26 @@ mod tests {
         assert_eq!(sdk_flags, rust_flags);
 
         assert_ea_fixture("scripted-model-draw", 2);
+    }
+
+    #[test]
+    fn scripted_draw_mixed_fields_match_ea_batch() {
+        assert_ea_fixture("scripted-draw-mixed", 1);
+    }
+
+    #[test]
+    fn damage_and_stealth_variants_match_ea_batch() {
+        assert_ea_fixture("damage-stealth-variants", 10);
+    }
+
+    #[test]
+    fn damage_states_match_ea_batch() {
+        assert_ea_fixture("damage-states", 2);
+    }
+
+    #[test]
+    fn containment_family_matches_ea_batch() {
+        assert_ea_fixture("contain-family", 7);
     }
 
     #[test]
@@ -1435,6 +1484,21 @@ mod tests {
     #[test]
     fn single_sound_fields_match_ea_batch() {
         assert_ea_fixture("single-sound-fields", 6);
+    }
+
+    #[test]
+    fn eva_empty_side_sounds_match_ea_batch() {
+        assert_ea_fixture("eva-empty-side-sound", 3);
+    }
+
+    #[test]
+    fn ai_personality_map_matches_ea_batch() {
+        assert_ea_fixture("ai-personality-map", 1);
+    }
+
+    #[test]
+    fn video_event_fades_match_ea_batch() {
+        assert_ea_fixture("video-event-fades", 2);
     }
 
     #[test]

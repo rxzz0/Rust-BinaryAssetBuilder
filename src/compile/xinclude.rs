@@ -1,14 +1,17 @@
 use super::{
-    Compiler, XML_NS, escape_xml, invalid, opening_tag_end, read_with_context, required,
+    Compiler, SAGE_NS, XML_NS, escape_xml, invalid, opening_tag_end, read_with_context, required,
     write_namespace_attributes,
 };
 use roxmltree::{Document, Node};
+use std::borrow::Cow;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 const XI_NS: &str = "http://www.w3.org/2001/XInclude";
+// Carry inclusion provenance through reparsing without changing the asset hash.
+const INCLUDED_SCRIPT: &str = "bab-included-script";
 
 impl Compiler<'_> {
     pub(super) fn read_static_xml(&mut self, path: &Path) -> io::Result<Rc<str>> {
@@ -232,7 +235,80 @@ fn write_fragment(node: Node<'_, '_>, include: Node<'_, '_>, base: &str, expande
         escape_xml(base, true, expanded);
         expanded.push('"');
     }
-    expanded.push_str(&fragment[insert..]);
+    let mut copied = range.start + insert;
+    for script in node.descendants().filter(|child| {
+        child.has_tag_name((SAGE_NS, "Script"))
+            && (child
+                .parent_element()
+                .is_some_and(|parent| parent.has_tag_name((SAGE_NS, "AnimationState")))
+                || (*child == node
+                    && include
+                        .parent_element()
+                        .is_some_and(|parent| parent.has_tag_name((SAGE_NS, "AnimationState")))))
+    }) {
+        let source = &input[script.range()];
+        let tag_end = opening_tag_end(source) + 1;
+        let contents = &source[tag_end..];
+        if (contents.contains('\r') || contents.contains("<![CDATA["))
+            && !has_included_script_marker(script)
+        {
+            let end = script.range().start + tag_end;
+            expanded.push_str(&input[copied..end]);
+            expanded.push_str("<?");
+            expanded.push_str(INCLUDED_SCRIPT);
+            expanded.push_str("?>");
+            copied = end;
+        }
+    }
+    expanded.push_str(&input[copied..range.end]);
+}
+
+pub(super) fn has_included_script_marker(script: Node<'_, '_>) -> bool {
+    script.has_tag_name((SAGE_NS, "Script"))
+        && script
+            .first_child()
+            .and_then(|child| child.pi())
+            .is_some_and(|pi| pi.target == INCLUDED_SCRIPT && pi.value.is_none())
+}
+
+pub(super) fn script_text<'a>(node: Node<'a, '_>) -> impl Iterator<Item = Cow<'a, str>> {
+    let included = has_included_script_marker(node);
+    node.children().filter(Node::is_text).map(move |child| {
+        if !included {
+            return Cow::Borrowed(child.text().expect("XML text node"));
+        }
+        // EA's XInclude reader keeps physical CRs in the script value.
+        // Preserve the original text and CDATA in the XML used for hashing.
+        let input = node.document().input_text();
+        let end = child.next_sibling().map_or_else(
+            || node.range().start + input[node.range()].rfind("</").unwrap(),
+            |next| next.range().start,
+        );
+        let source = &input[child.range().start..end];
+        if !source.contains('\r') {
+            return Cow::Borrowed(child.text().expect("XML text node"));
+        }
+        let mut escaped = String::from("<text>");
+        let mut rest = source;
+        while let Some((text, cdata)) = rest.split_once("<![CDATA[") {
+            escaped.push_str(&text.replace('\r', "&#13;"));
+            let (content, after) = cdata.split_once("]]>").expect("parsed XML CDATA");
+            escaped.push_str("<![CDATA[");
+            escaped.push_str(&content.replace('\r', "]]>&#13;<![CDATA["));
+            escaped.push_str("]]>");
+            rest = after;
+        }
+        escaped.push_str(&rest.replace('\r', "&#13;"));
+        escaped.push_str("</text>");
+        let document = Document::parse(&escaped).expect("script text from parsed XML");
+        Cow::Owned(
+            document
+                .root_element()
+                .text()
+                .unwrap_or_default()
+                .to_owned(),
+        )
+    })
 }
 
 fn relative_xml_path(directory: &Path, file: &Path) -> String {

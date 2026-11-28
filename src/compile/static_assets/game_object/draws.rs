@@ -672,20 +672,20 @@ fn scripted_model(
         }
         data.word(start + 0x24, flags);
     }
-    for (name, kind, offset) in [
-        ("TrackMarks", "Texture", 0x28),
-        ("WadingParticleSys", "FXParticleSystemTemplate", 0x90),
-    ] {
-        if let Some(value) = node.attribute(name) {
-            let ordinal = super::passive_area::reference(
-                value,
-                kind,
-                data.path,
-                references,
-                reference_types,
-            )?;
-            data.word(start + offset, ordinal);
-        }
+    for attr in node.attributes() {
+        let (kind, offset) = match attr.name() {
+            "TrackMarks" => ("Texture", 0x28),
+            "WadingParticleSys" => ("FXParticleSystemTemplate", 0x90),
+            _ => continue,
+        };
+        let ordinal = super::passive_area::reference(
+            attr.value(),
+            kind,
+            data.path,
+            references,
+            reference_types,
+        )?;
+        data.word(start + offset, ordinal);
     }
 
     let bones = node
@@ -992,9 +992,14 @@ fn model_state(
             data.string(start + offset, value)?;
         }
     }
-    for (name, offset) in [("PortraitImage", 0x50), ("ButtonImage", 0x54)] {
-        if let Some(value) = node.attribute(name).filter(|value| !value.is_empty()) {
-            let reference = asset_reference(value, "PackedTextureImage", data.path)?;
+    for attr in node.attributes() {
+        let offset = match attr.name() {
+            "PortraitImage" => 0x50,
+            "ButtonImage" => 0x54,
+            _ => continue,
+        };
+        if !attr.value().is_empty() {
+            let reference = asset_reference(attr.value(), "PackedTextureImage", data.path)?;
             references.push(reference.into());
             reference_types.push(reference.type_id);
             data.word(start + offset, references.len() as u32);

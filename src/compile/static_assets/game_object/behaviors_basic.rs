@@ -1689,6 +1689,11 @@ pub(super) fn encode(
     if matches!(
         node.tag_name().name(),
         "GarrisonContain"
+            | "HordeGarrisonContain"
+            | "HealContain"
+            | "HordeTransportContain"
+            | "TunnelContain"
+            | "TunnelTeleportContain"
             | "ContestableGarrisonContain"
             | "SlaughterHordeContain"
             | "HordeContain"
@@ -1749,6 +1754,16 @@ pub(super) fn encode(
                 Entry::named("StreamId", 0x23e6_50b8, Target::Data(start + 8)),
             ]),
         )));
+    }
+    if node.has_tag_name((SAGE_NS, "FireWeaponWhenDamaged")) {
+        return super::upgrade_variants::encode_fire_when_damaged(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
     }
     if node.has_tag_name((SAGE_NS, "FireWeaponWhenDead")) {
         return fire_weapon_when_dead(node, pointer, data, references, reference_types).map(Some);
@@ -1964,6 +1979,7 @@ pub(super) fn encode(
             "AttachUpdate"
                 | "LeechTargetingAttachUpdate"
                 | "MoneyGainAttachUpdate"
+                | "BoobyTrapUpdate"
                 | "StealUnitUpdate"
         )
     {
@@ -2074,6 +2090,16 @@ pub(super) fn encode(
     }
     if node.has_tag_name((SAGE_NS, "SetLocomotorSpeedUpdate")) {
         return super::set_locomotor_speed::encode(node, pointer, data, reference_types).map(Some);
+    }
+    if node.has_tag_name((SAGE_NS, "InvisibilityUpdate")) {
+        return super::invisibility_broadcast::encode_self(
+            node,
+            pointer,
+            data,
+            references,
+            reference_types,
+        )
+        .map(Some);
     }
     if node.has_tag_name((SAGE_NS, "InvisibilityBroadcastUpdate")) {
         return super::invisibility_broadcast::encode(
@@ -2336,6 +2362,9 @@ pub(super) fn encode(
         data.word(start + 12, duration.to_bits());
         entries.extend(fields(start, FIELDS));
         return Ok(Some((KIND, Table::record(entries))));
+    }
+    if matches!(node.tag_name().name(), "Damage" | "DamageStateList") {
+        return damage_states(node, pointer, data).map(Some);
     }
     if node.has_tag_name((SAGE_NS, "TrackDamage")) {
         const KIND: u32 = 0xd554_889d;
@@ -3037,6 +3066,76 @@ fn lifetime_update(
     };
     entries.push(Entry::named(COUNT, 0x23e6_50b8, count));
     Ok((KIND, Table::record(entries)))
+}
+
+fn damage_states(
+    node: Node<'_, '_>,
+    pointer: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<(u32, Table)> {
+    const DAMAGE: u32 = 0x025c_0bd7;
+    const LIST: u32 = 0xf807_9c05;
+    const FIELDS: &[(&str, u32, usize)] = &[
+        ("MinHealth", 0x6458_64f3, 0),
+        ("MaxHealth", 0x6458_64f3, 4),
+        ("ObjectStatus", 0xa7bd_811e, 8),
+        ("ModelConditions", 0x67db_bfc9, 0x24),
+    ];
+    let path = data.path;
+    validate_attributes(node, &["id"], path)?;
+    if node.has_tag_name((SAGE_NS, "Damage")) {
+        if has_content(node) {
+            return Err(invalid(path, "unexpected Damage content"));
+        }
+        let start = data.allocate(pointer, 8)?;
+        let module = module_base(node, DAMAGE, start, data, false)?;
+        return Ok((DAMAGE, inherited(0x2900_211d, Table::record(vec![module]))));
+    }
+    let states: Vec<_> = significant_children(node).collect();
+    if states.is_empty() {
+        return Err(invalid(path, "DamageStateList requires Data"));
+    }
+    let start = data.allocate(pointer, 0x10)?;
+    let module = module_base(node, LIST, start, data, false)?;
+    let inherited = base(DAMAGE, inherited(0x2900_211d, Table::record(vec![module])));
+    let count = start + 8;
+    let first = data.list(count, states.len(), 0x60)?;
+    let mut items = Vec::with_capacity(states.len());
+    for (index, child) in states.into_iter().enumerate() {
+        if !child.has_tag_name((SAGE_NS, "Data")) || has_content(child) {
+            return Err(invalid(path, "unexpected DamageStateList child"));
+        }
+        validate_attributes(
+            child,
+            &["MinHealth", "MaxHealth", "ObjectStatus", "ModelConditions"],
+            path,
+        )?;
+        let offset = first + index * 0x60;
+        for &(name, _, relative) in &FIELDS[..2] {
+            let value = percentage(child.attribute(name).unwrap_or("0"), name, path)?;
+            data.word(offset + relative, value.to_bits());
+        }
+        super::secondary_damage::write_status_flags(
+            child.attribute("ObjectStatus").unwrap_or(""),
+            offset + 8,
+            data,
+        )?;
+        super::draws::write_model_conditions(
+            child.attribute("ModelConditions").unwrap_or(""),
+            offset + 0x24,
+            data,
+        )?;
+        items.push((
+            0,
+            Target::Table(Table::record(fields(offset, FIELDS).collect())),
+        ));
+    }
+    let list = Entry::named(
+        "Data",
+        0xb34e_2162,
+        Target::Table(Table::array(count, items)),
+    );
+    Ok((LIST, Table::record(vec![inherited, list])))
 }
 
 fn fire_weapon_update(

@@ -5,6 +5,7 @@ use super::super::{
     validate_attributes,
 };
 use super::draws::{boolean, fields, write_model_conditions};
+use crate::compile::xinclude::script_text;
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::Node;
 use std::io;
@@ -183,11 +184,7 @@ impl AnimationEncoder<'_, '_> {
             if script.children().any(|child| child.is_element()) {
                 return Err(invalid(path, "Script cannot contain child elements"));
             }
-            let text: String = script
-                .children()
-                .filter(Node::is_text)
-                .filter_map(|child| child.text())
-                .collect();
+            let text: String = script_text(script).collect();
             let offset = self.data.allocate(start + 0x6c, 8)?;
             self.data.string(offset, &text)?;
             Target::Data(offset)

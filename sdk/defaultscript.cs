@@ -13,7 +13,9 @@
 //===================================================//
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Text;
 using Microsoft.Win32;
@@ -236,7 +238,9 @@ namespace EALABuild
             modGUIData.Add(new GUIElementData("step6", "Build Static Data", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step7", "Merge Assets", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
             modGUIData.Add(new GUIElementData("step8", "Fix Assets", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
-            modGUIData.Add(new GUIElementData("compileMissingMapOverrides", "Compile missing map overrides", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
+            modGUIData.Add(new GUIElementData("compileMissingMapOverrides", "Build Maps", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
+            modGUIData.Add(new GUIElementData("forceBuildMaps", "Force Build Maps", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
+            WatchMapCheckboxes();
             modGUIData.Add(new GUIElementData("sp2", "", GUIElementData.LabelType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step10", "Create BIG Files", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step11", "Create Skudef File", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
@@ -248,6 +252,67 @@ namespace EALABuild
         }
         #endregion
 
+
+        private static Type mapOptionsApplication;
+        private static object boundForceBuildMaps;
+
+        private static void WatchMapCheckboxes()
+        {
+            // The host loads defaultscript.cs without a Windows Forms reference.
+            foreach (System.Reflection.Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                mapOptionsApplication = assembly.GetType("System.Windows.Forms.Application");
+                if (mapOptionsApplication == null)
+                    continue;
+                System.Reflection.EventInfo idle = mapOptionsApplication.GetEvent("Idle");
+                EventHandler handler = BindMapCheckboxes;
+                idle.RemoveEventHandler(null, handler);
+                idle.AddEventHandler(null, handler);
+                break;
+            }
+        }
+
+        private static void BindMapCheckboxes(object sender, EventArgs args)
+        {
+            IEnumerable forms = (IEnumerable)mapOptionsApplication.GetProperty("OpenForms").GetValue(null, null);
+            foreach (object form in forms)
+            {
+                object build = FindMapCheckbox(form, "Build Maps");
+                object force = FindMapCheckbox(form, "Force Build Maps");
+                if (build == null || force == null)
+                    continue;
+
+                if (boundForceBuildMaps != force)
+                {
+                    PropertyDescriptor checkedProperty = TypeDescriptor.GetProperties(build)["Checked"];
+                    PropertyDescriptor enabledProperty = TypeDescriptor.GetProperties(force)["Enabled"];
+                    EventHandler update = delegate
+                    {
+                        enabledProperty.SetValue(force, checkedProperty.GetValue(build));
+                    };
+                    TypeDescriptor.GetEvents(build)["CheckedChanged"].AddEventHandler(build, update);
+                    update(null, EventArgs.Empty);
+                    boundForceBuildMaps = force;
+                }
+                mapOptionsApplication.GetEvent("Idle").RemoveEventHandler(null, (EventHandler)BindMapCheckboxes);
+                return;
+            }
+        }
+
+        private static object FindMapCheckbox(object control, string label)
+        {
+            if (control.GetType().FullName == "System.Windows.Forms.CheckBox"
+                && (string)TypeDescriptor.GetProperties(control)["Text"].GetValue(control) == label)
+                return control;
+            IEnumerable children = (IEnumerable)TypeDescriptor.GetProperties(control)["Controls"].GetValue(control);
+            foreach (object child in children)
+            {
+                object match = FindMapCheckbox(child, label);
+                if (match != null)
+                    return match;
+            }
+            return null;
+        }
 
         private string bigStage;
         private System.Diagnostics.Process miscBig;
@@ -262,8 +327,8 @@ namespace EALABuild
                 bigStage = stage;
             }
             System.Diagnostics.ProcessStartInfo start = new System.Diagnostics.ProcessStartInfo(
-                Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), String.Format("pack-big \"{0}\" --output \"{1}\" --reuse \"{2}\"",
-                    input, Path.Combine(bigStage, name), Path.Combine(ModInstallPath, name)));
+                Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), String.Format("{0} \"{1}\" --output \"{2}\" --reuse \"{3}\"",
+                    name == ModBigMisc ? "pack-misc-big" : "pack-big", input, Path.Combine(bigStage, name), Path.Combine(ModInstallPath, name)));
             start.UseShellExecute = false;
             start.CreateNoWindow = true;
             start.RedirectStandardError = true;
@@ -342,13 +407,18 @@ namespace EALABuild
             return Environment.GetEnvironmentVariable("BAB_OVERLAP_MISC") == "1";
         }
 
+        private bool HasMiscBigInput()
+        {
+            return Directory.Exists(ModAdditionalFilesPath) || File.Exists(Path.Combine(ModPath, "mapdir.toml"));
+        }
+
         private void StartMiscBig()
         {
-            if (!Directory.Exists(ModAdditionalFilesPath))
+            if (!HasMiscBigInput())
                 return;
             try
             {
-                miscBig = StartBig(ModAdditionalFilesPath, ModBigMisc, out miscBigLog);
+                miscBig = StartBig(ModPath, ModBigMisc, out miscBigLog);
             }
             catch (Exception error)
             {
@@ -411,8 +481,8 @@ namespace EALABuild
                     using (System.Diagnostics.Process streams = StartBig(BuiltModPath, ModBigStreams, out streamsLog))
                         WaitForBig(streams, streamsLog);
                 }
-                if (miscBig == null && Directory.Exists(ModAdditionalFilesPath))
-                    miscBig = StartBig(ModAdditionalFilesPath, ModBigMisc, out miscBigLog);
+                if (miscBig == null && HasMiscBigInput())
+                    miscBig = StartBig(ModPath, ModBigMisc, out miscBigLog);
                 if (miscBig != null)
                     WaitForBig(miscBig, miscBigLog);
                 if (bigStage != null)
@@ -706,11 +776,15 @@ namespace EALABuild
 				{
 				    BuildHelper.DisplayLine("Step 9: Compiling map overrides with Rust");
 				    string maps = Path.Combine(ModAdditionalFilesPath, @"data\maps\official");
+				    object forceMaps;
+				    bool force = currentGUIData.TryGetValue("forceBuildMaps", out forceMaps)
+				        && forceMaps is bool && (bool)forceMaps;
 				    RunExecutableArguments argsMaps = new RunExecutableArguments(Cmd);
 				    argsMaps.Arguments = String.Format(
-				        "/C (@echo off) & (\"{0}\" compile-maps-sdk \"{1}\" --sdk-root \"{2}\" --references \"{3}\" --output \"{1}\" --game-data \"{4}\" --skip-precompiled 2>&1)"
+				        "/C (@echo off) & (\"{0}\" compile-maps-sdk \"{1}\" --sdk-root \"{2}\" --references \"{3}\" --output \"{1}\" --game-data \"{4}\"{5} 2>&1)"
 				        + " || (echo Error: Could not run the map override build. & exit /b 0)",
-				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), maps, SDKDirectory, BuiltModsPath, RA3DataDir);
+				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), maps, SDKDirectory, BuiltModsPath, RA3DataDir,
+				        force ? "" : " --skip-precompiled");
 				    RunRustBuildStep(argsMaps);
 				    break;
 				}
@@ -721,9 +795,9 @@ namespace EALABuild
 				    argsBig.Arguments = String.Format(
 				        "/C (@echo off)"
 				        + " && (if exist \"{1}\" (\"{0}\" pack-big \"{1}\" --output \"{2}\\{3}\" 2>&1))"
-				        + " && (if exist \"{4}\" (\"{0}\" pack-big \"{4}\" --output \"{2}\\{5}\" 2>&1))"
+				        + (HasMiscBigInput() ? " && (\"{0}\" pack-misc-big \"{4}\" --output \"{2}\\{5}\" 2>&1)" : "")
 				        + " || (echo ERROR Creating BIG files failed. & exit /b 1)",
-				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), BuiltModPath, ModInstallPath, ModBigStreams, ModAdditionalFilesPath, ModBigMisc);
+				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), BuiltModPath, ModInstallPath, ModBigStreams, ModPath, ModBigMisc);
 				    RunRustBuildStep(argsBig);
 				    break;
                 case 11:

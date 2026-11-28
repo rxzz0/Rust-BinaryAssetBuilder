@@ -165,10 +165,23 @@ impl Compiler<'_> {
                 )?;
                 let header_path = match inherited_header {
                     Some(header) => header,
-                    None => self.resolve(path, required(effective, EVENT_HEADER, path)?)?,
+                    None => {
+                        self.resolve_music_event_header(
+                            path,
+                            required(effective, EVENT_HEADER, path)?,
+                        )?
+                        .0
+                    }
                 };
-                let header = self.music_header(header_path)?;
-                let event = header.get("PATH_EVENT_", name, path)?;
+                let header = header_path
+                    .map(|file| self.music_header(file))
+                    .transpose()?;
+                let event = header
+                    .and_then(|header| header.lookup("PATH_EVENT_", name))
+                    .unwrap_or_else(|| {
+                        eprintln!("Warning: Pathfinder header has no PATH_EVENT_{name}");
+                        0
+                    });
                 let transferable = match effective.attribute("IsXferable").unwrap_or("true").trim()
                 {
                     "true" | "1" => 1,
@@ -187,7 +200,7 @@ impl Compiler<'_> {
                     relocations.push(8);
                     mix.push(alternate.type_id);
                 }
-                mix.push(header.hash);
+                mix.push(header.map_or(0, |header| header.hash));
                 (encode_words(words), 0x76d0_ceef, 0x76d0_cee6, 20, merged)
             }
             "PathMusicMap" => {
@@ -263,7 +276,7 @@ impl Compiler<'_> {
         &self,
         node: Node<'_, '_>,
         path: &Path,
-    ) -> io::Result<Option<(String, PathBuf)>> {
+    ) -> io::Result<Option<(String, Option<PathBuf>)>> {
         let Some(base) = node.attribute("inheritFrom") else {
             return Ok(None);
         };
@@ -298,14 +311,15 @@ impl Compiler<'_> {
         if has_content(parent) {
             return Err(invalid(path, "unexpected content in Pathfinder event base"));
         }
-        let header = match node.attribute(EVENT_HEADER) {
-            Some(file) => self.resolve(path, file)?,
-            None => self.resolve(
-                &candidate.path,
+        let (header_source, header_value) = match node.attribute(EVENT_HEADER) {
+            Some(file) => (path, file),
+            None => (
+                candidate.path.as_path(),
                 required(parent, EVENT_HEADER, &candidate.path)?,
-            )?,
+            ),
         };
-        let inherited_path = sdk_path(&header)?;
+        let (header, inherited_path) =
+            self.resolve_music_event_header(header_source, header_value)?;
         let mut xml = format!("<PathMusicEvent xmlns=\"{SAGE_NS}\"");
         for attribute in parent.attributes() {
             let name = attribute.name();
@@ -331,6 +345,36 @@ impl Compiler<'_> {
         }
         xml.push_str(" />");
         Ok(Some((xml, header)))
+    }
+
+    fn resolve_music_event_header(
+        &self,
+        path: &Path,
+        value: &str,
+    ) -> io::Result<(Option<PathBuf>, String)> {
+        match self.resolve(path, value) {
+            Ok(file) => {
+                let name = sdk_path(&file)?;
+                Ok((Some(file), name))
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                eprintln!("Warning: {error}");
+                let value = value.trim().replace('\\', "/");
+                let name = match value.split_once(':') {
+                    Some((alias, relative)) if alias.eq_ignore_ascii_case("AUDIO") => {
+                        let audio = sdk_path(&self.root.join("Audio"))?.replace('\\', "/");
+                        format!(
+                            "{audio}\\{}",
+                            relative.replace('/', "\\").to_ascii_lowercase()
+                        )
+                    }
+                    None => sdk_path(&path.with_file_name(&value))?,
+                    _ => return Err(error),
+                };
+                Ok((None, name))
+            }
+            Err(error) => Err(error),
+        }
     }
 
     fn music_header(&mut self, path: PathBuf) -> io::Result<&Header> {
@@ -369,10 +413,14 @@ impl Compiler<'_> {
 
 impl Header {
     fn get(&self, prefix: &str, name: &str, path: &Path) -> io::Result<u32> {
+        self.lookup(prefix, name)
+            .ok_or_else(|| invalid(path, format!("Pathfinder header has no {prefix}{name}")))
+    }
+
+    fn lookup(&self, prefix: &str, name: &str) -> Option<u32> {
         self.values
             .get(&format!("{prefix}{name}").to_ascii_lowercase())
             .copied()
-            .ok_or_else(|| invalid(path, format!("Pathfinder header has no {prefix}{name}")))
     }
 }
 

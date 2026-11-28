@@ -6,6 +6,8 @@ use super::{
 use roxmltree::Node;
 use std::{io, path::Path};
 
+pub(super) const TEXTURE_COMPILER_VERSION: u32 = 0x106a;
+
 impl Compiler<'_> {
     pub(super) fn compile_texture(
         &self,
@@ -28,11 +30,16 @@ impl Compiler<'_> {
             ],
             path,
         )?;
-        if has_content(node)
-            || node.attribute("Type").unwrap_or("StandardTexture") != "StandardTexture"
-        {
-            return Err(invalid(path, "expected a standard on-demand texture"));
+        if has_content(node) {
+            return Err(invalid(path, "expected an empty texture declaration"));
         }
+        let kind = node.attribute("Type").unwrap_or("StandardTexture");
+        let texture_type = match kind {
+            "StandardTexture" => 0u32,
+            "VolumeTexture" => 1,
+            "CubeTexture" => 2,
+            _ => return Err(invalid(path, format!("invalid texture Type {kind:?}"))),
+        };
         let bool_attr = |name| match node.attribute(name).unwrap_or("true").trim() {
             "true" | "1" => Ok(true),
             "false" | "0" => Ok(false),
@@ -55,12 +62,18 @@ impl Compiler<'_> {
             .is_some_and(|extension| extension.eq_ignore_ascii_case("tga"))
             && !bytes.starts_with(b"DDS ")
         {
+            if texture_type != 0 {
+                return Err(invalid(
+                    &input,
+                    format!("TGA conversion for {kind} is unsupported"),
+                ));
+            }
             bytes = compile_tga(&bytes, mipmaps, resizing, format)
                 .map_err(|error| invalid(&input, error))?;
         }
-        // EA preserves the DDS bytes even when the XML requests another format.
-        prepare_dds(&bytes, mipmaps, resizing).map_err(|error| invalid(&input, error))?;
-        let instance_hash = hash_xml(node, type_hash ^ 4, path)?
+        // EA applies conversion settings to source images and passes through prebuilt DDS data.
+        validate_dds(&bytes).map_err(|error| invalid(&input, error))?;
+        let instance_hash = hash_xml(node, type_hash ^ TEXTURE_COMPILER_VERSION, path)?
             ^ memory_stream_hash(file_hash.to_le_bytes().to_vec());
         let size =
             u32::try_from(bytes.len()).map_err(|_| invalid(&input, "DDS sidecar is too large"))?;
@@ -113,7 +126,10 @@ impl Compiler<'_> {
             instance_hash,
             name: format!("OnDemandTexture:{name}"),
             source: source.to_owned(),
-            payload: vec![0; 8],
+            payload: [0, texture_type]
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect(),
             relocations: Vec::new(),
             imports: Vec::new(),
             references: Vec::new(),
@@ -125,35 +141,47 @@ impl Compiler<'_> {
     }
 }
 
-pub(super) fn prepare_dds(bytes: &[u8], mipmaps: bool, resizing: bool) -> Result<(), &'static str> {
+pub(super) fn validate_dds(bytes: &[u8]) -> Result<(), &'static str> {
+    const CUBEMAP: u32 = 0x0200;
+    const CUBEMAP_FACES: u32 = 0xfc00;
+    const VOLUME: u32 = 0x0020_0000;
+
     let (header, pixels) = bytes
         .split_first_chunk::<128>()
         .ok_or("truncated DDS header")?;
     let word = |index| u32::from_le_bytes(header.as_chunks::<4>().0[index]);
-    if word(0) != u32::from_le_bytes(*b"DDS ") || word(1) != 124 || word(19) != 32 || word(28) != 0
-    {
-        return Err("expected a 2D DDS texture");
+    if word(0) != u32::from_le_bytes(*b"DDS ") || word(1) != 124 || word(19) != 32 {
+        return Err("invalid DDS header");
     }
+    let caps = word(28);
+    let (faces, depth) = match caps {
+        0 => (1, 1),
+        VOLUME => (1, word(6)),
+        caps if caps & !CUBEMAP_FACES == CUBEMAP && caps & CUBEMAP_FACES != 0 => {
+            ((caps & CUBEMAP_FACES).count_ones(), 1)
+        }
+        _ => return Err("unsupported DDS surface layout"),
+    };
     let (width, height) = (word(4), word(3));
-    if width == 0 || height == 0 || width > 16384 || height > 16384 {
+    if [width, height, depth]
+        .into_iter()
+        .any(|value| !(1..=16384).contains(&value))
+    {
         return Err("invalid DDS dimensions");
     }
-    if resizing && (!width.is_power_of_two() || !height.is_power_of_two()) {
-        return Err("DDS resizing is unsupported");
-    }
     let levels = word(7).max(1);
-    let full_mips = u32::BITS - width.max(height).leading_zeros();
-    if levels > full_mips || mipmaps && levels != full_mips {
+    let full_mips = u32::BITS - width.max(height).max(depth).leading_zeros();
+    if levels > full_mips {
         return Err("unsupported DDS mipmap layout");
     }
-    let level_size = |w: u32, h: u32| -> Result<usize, &'static str> {
+    let level_size = |w: u32, h: u32| -> Result<u64, &'static str> {
         if word(20) & 4 != 0 {
             let block_size = match &word(21).to_le_bytes() {
                 b"DXT1" => 8,
                 b"DXT3" | b"DXT5" => 16,
                 _ => return Err("unsupported DDS compression"),
             };
-            Ok(w.div_ceil(4) as usize * h.div_ceil(4) as usize * block_size)
+            Ok(u64::from(w.div_ceil(4)) * u64::from(h.div_ceil(4)) * block_size)
         } else {
             let pixel_bytes = match word(22) {
                 16 => 2,
@@ -161,14 +189,15 @@ pub(super) fn prepare_dds(bytes: &[u8], mipmaps: bool, resizing: bool) -> Result
                 32 => 4,
                 _ => return Err("unsupported DDS pixel size"),
             };
-            Ok(w as usize * h as usize * pixel_bytes)
+            Ok(u64::from(w) * u64::from(h) * pixel_bytes)
         }
     };
     let mut size = 0;
     for i in 0..levels {
-        size += level_size((width >> i).max(1), (height >> i).max(1))?;
+        size +=
+            level_size((width >> i).max(1), (height >> i).max(1))? * u64::from((depth >> i).max(1));
     }
-    if pixels.len() < size {
+    if (pixels.len() as u64) < size * u64::from(faces) {
         return Err("truncated DDS pixel data");
     }
     Ok(())
@@ -403,6 +432,32 @@ mod tests {
     }
 
     #[test]
+    fn dds_checks_cube_faces_and_volume_mip_slices() {
+        for (caps, depth, levels, blocks) in [
+            (0xfe00, 0, 2, 30),       // Six faces with 8x8 and 4x4 levels.
+            (0x0600, 0, 2, 5),        // One face with the same levels.
+            (0x0020_0000, 16, 5, 79), // Volume down to 1x1x1.
+        ] {
+            let mut header = [0u32; 32];
+            header[0] = u32::from_le_bytes(*b"DDS ");
+            header[1] = 124;
+            header[3] = 8;
+            header[4] = 8;
+            header[6] = depth;
+            header[7] = levels;
+            header[19] = 32;
+            header[20] = 4;
+            header[21] = u32::from_le_bytes(*b"DXT3");
+            header[28] = caps;
+            let mut dds: Vec<_> = header.into_iter().flat_map(u32::to_le_bytes).collect();
+            dds.resize(128 + blocks * 16, 0);
+            assert_eq!(validate_dds(&dds), Ok(()));
+            dds.pop();
+            assert_eq!(validate_dds(&dds), Err("truncated DDS pixel data"));
+        }
+    }
+
+    #[test]
     fn static_tga_encodes_dxt1_mipmaps_and_uncompressed_alpha() {
         let mut tga = vec![0; 18];
         tga[2] = 2;
@@ -413,7 +468,7 @@ mod tests {
         tga.extend([0, 0, 255, 127].repeat(16));
 
         let dxt1 = compile_tga(&tga, true, true, "DXT1").unwrap();
-        prepare_dds(&dxt1, true, true).unwrap();
+        validate_dds(&dxt1).unwrap();
         assert_eq!(&dxt1[84..88], b"DXT1");
         assert_eq!(dxt1[28], 3);
         assert_eq!(dxt1.len(), 128 + 3 * 8);
@@ -422,7 +477,7 @@ mod tests {
         }
 
         let rgba = compile_tga(&tga, false, false, "A8R8G8B8").unwrap();
-        prepare_dds(&rgba, false, false).unwrap();
+        validate_dds(&rgba).unwrap();
         assert_eq!(rgba.len(), 128 + 16 * 4);
         assert_eq!(&rgba[128..132], &[0, 0, 255, 127]);
     }

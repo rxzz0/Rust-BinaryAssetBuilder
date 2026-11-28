@@ -1,0 +1,8 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <AIPersonalityDefinition id="ProbeRandom" PersonalityUIName="Personality:Random" PersonalityType="ProbeRandom" SkirmishPersonality="true">
+    <Side>Null</Side>
+    <PersonalityMap Side="Allies" Personality="ProbeOne"/>
+    <PersonalityMap Personality="AIPersonalityDefinition:ProbeTwo" Side="Soviet"/>
+    <CountAsStructureForBuildPurposesFilter Rule="ANY" Include="STRUCTURE"/>
+  </AIPersonalityDefinition>
+</AssetDeclaration>

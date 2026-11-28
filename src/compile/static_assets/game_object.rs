@@ -152,6 +152,7 @@ pub(super) fn object_filter_asset(node: Node<'_, '_>, path: &Path) -> io::Result
 use super::{asset_reference, declaration_id};
 use crate::compile::{
     CompiledAsset, Compiler, SAGE_NS, XML_NS, escape_xml, invalid, is_xml_whitespace,
+    namespace_attributes, opening_tag_end, xinclude::script_text,
 };
 use crate::manifest::AssetId;
 use roxmltree::{Document, Node};
@@ -378,7 +379,20 @@ impl Element {
             ));
         }
         let mut element = Self::new(name);
+        let input = node.document().input_text();
+        let range = node.range();
+        let source = &input[range.clone()];
+        let name_end = source
+            .find(|character: char| character.is_whitespace() || matches!(character, '/' | '>'))
+            .expect("parsed XML element name");
+        let mut cursor = range.start + name_end;
         for attr in node.attributes() {
+            element.attributes.extend(
+                namespace_attributes(node, &input[cursor..attr.range().start])
+                    .filter(|(name, _)| *name != "xmlns")
+                    .map(|(name, uri)| (name.to_owned(), uri.to_owned())),
+            );
+            cursor = attr.range().end;
             let value = attr.value();
             match (attr.namespace(), attr.name()) {
                 (None, "inheritFrom" | "TypeId") => {}
@@ -419,15 +433,26 @@ impl Element {
                 }
             }
         }
+        element.attributes.extend(
+            namespace_attributes(node, &input[cursor..range.start + opening_tag_end(source)])
+                .filter(|(name, _)| *name != "xmlns")
+                .map(|(name, uri)| (name.to_owned(), uri.to_owned())),
+        );
         for child in node.children() {
             if child.is_element() {
                 element.children.push(Self::read(child, path)?);
-            } else if let Some(text) = child
-                .text()
-                .filter(|text| child.is_text() && !is_xml_whitespace(text))
+            } else if name != "Script"
+                && let Some(text) = child
+                    .text()
+                    .filter(|text| child.is_text() && !is_xml_whitespace(text))
             {
                 element.text.push_str(text);
             }
+        }
+        if name == "Script" {
+            element
+                .text
+                .extend(script_text(node).filter(|text| !is_xml_whitespace(text)));
         }
         Ok(element)
     }
@@ -623,7 +648,7 @@ impl Element {
             return;
         }
         xml.push('>');
-        escape_xml(&self.text, false, xml);
+        escape_xml(&self.text, self.name == "Script", xml);
         for child in &self.children {
             child.write_xml(xml, false);
         }

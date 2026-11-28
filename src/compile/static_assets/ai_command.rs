@@ -11,7 +11,7 @@ use std::io;
 use std::path::Path;
 use std::sync::OnceLock;
 
-const SCHEMA: &str =
+pub(super) const SCHEMA: &str =
     include_str!("../../../schemas/ra3/xsd/SkirmishAI/AssetTypeAISpecialPower.xsd");
 
 pub(super) fn write_info(
