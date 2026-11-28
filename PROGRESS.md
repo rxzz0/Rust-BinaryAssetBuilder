@@ -5,9 +5,11 @@
 - **Stock Global Data parity.** Resume by rerunning the full EA comparison through `AIMicroManagerLibrary.xml`. The shared ObjectFilter fix covers the previous `IgnoreTargets` status-mask blocker. The full stock stream comparison is still pending.
 - **Native DXT5 terrain atlas parity.** The narrow fixture matches all 21,824 blocks and all four linked files. The three broader fixtures match 81,294 of 87,296 blocks, leaving 6,002. Continue on EA's RGB565 candidate ordering and fractional alpha partition selection. Keep the encoder native-only.
 - **GenEvo end-to-end verification.** Rerun the full mod with the latest project-root executable. The reported XML failures have targeted EA comparisons. Broader inheritance and ObjectFilter parity across the full mod still needs verification.
-- **Native TGA resize parity.** GenEvo Step 6 stops at `Portrait_Temp_Ability.tga`. Obtain the original TGA and its texture declaration, then match EA's resize rounding before enabling native conversion. EA upsized the 17×19 control to 32×32 with both values of `AllowAutomaticResize` for both texture types.
+- **Native TGA resize parity.** GenEvo Step 6 stops at `Portrait_Temp_Ability.tga`. The original image is available and passes with an EA-generated DDS under default texture settings. Obtain the mod's original XML declaration to confirm those settings for GenEvo. Match EA's resize rounding before enabling native conversion. EA upsized the 17×19 control to 32×32 with both values of `AllowAutomaticResize` for both texture types.
 
 ## Checkpoints
+
+- Checkpoint 544 — Ran the tester's 106×106 RLE true-color portrait through EA. The default inline and on-demand declarations both produced the same 128×128 BC1 DDS with eight levels. Using that DDS as input gave identical EA and installed Rust stream files and sidecar. For the uncompressed base level, the native resize probe differed by one in 21 of 65,536 channel bytes. No compiler change.
 
 - Checkpoint 543 — Compared EA's non-power-of-two TGA conversion across nine generated image sizes. A wrapped triangle filter and ordered dithering reproduced the dimensions, but 9,536 of 4,194,304 base-level bytes differed on the 750×596 control. Verified that the installed Rust release and EA emit identical stream files and sidecars when fed the same EA-generated DDS inputs, including uncompressed, mipmapped and BC1 controls. No compiler change.
 
