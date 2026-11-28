@@ -156,7 +156,7 @@ impl Compiler<'_> {
             streamed,
             sample_rate: node.attribute("PCSampleRate").map(str::to_owned),
             subtitle: node.attribute("SubtitleStringName").map(str::to_owned),
-            xml_hash: hash_xml(node, 0x8339_8e45 ^ 1_001_010, path),
+            xml_hash: hash_xml(node, 0x8fe7_9286, path),
         })
     }
 }

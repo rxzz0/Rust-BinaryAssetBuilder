@@ -387,6 +387,49 @@ fn audio_file_pcm_payload_and_cdata_match_ea() {
 }
 
 #[test]
+fn audio_file_xas_stream_and_cdata_match_ea() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio-xas");
+    let stream = compile_static(&root.join("probe.xml"), &root, &root).unwrap();
+    assert_eq!(
+        stream.manifest,
+        include_bytes!("fixtures/audio-xas/probe.manifest")
+    );
+    assert_eq!(
+        stream.files.bin,
+        include_bytes!("fixtures/audio-xas/probe.bin")
+    );
+    assert_eq!(
+        stream.files.relo,
+        include_bytes!("fixtures/audio-xas/probe.relo")
+    );
+    assert_eq!(
+        stream.files.imp,
+        include_bytes!("fixtures/audio-xas/probe.imp")
+    );
+    assert_eq!(stream.custom_data.len(), 2);
+    for (filename, expected) in [
+        (
+            "166b084d.53c81e47.99923596.dc12a8d7.cdata",
+            include_bytes!("fixtures/audio-xas/ram.cdata").as_slice(),
+        ),
+        (
+            "166b084d.53c81e47.bcadb923.200c98f1.cdata",
+            include_bytes!("fixtures/audio-xas/streamed.cdata").as_slice(),
+        ),
+    ] {
+        let (_, custom) = stream
+            .custom_data
+            .iter()
+            .find(|(name, _)| name == filename)
+            .unwrap();
+        let CustomData::Bytes(bytes) = custom else {
+            panic!("expected generated XAS")
+        };
+        assert_eq!(bytes, expected);
+    }
+}
+
+#[test]
 fn game_object_minimal_matches_ea_oracle() {
     for (name, xml, expected_manifest, bin, relo, imp) in [
         (
