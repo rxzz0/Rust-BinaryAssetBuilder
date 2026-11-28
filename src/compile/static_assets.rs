@@ -559,51 +559,20 @@ fn ai_budget(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
         shares.extend([account, percent.to_bits()]);
     }
 
-    let mut weights = Vec::new();
-    for choice in heuristic.children().filter(Node::is_element) {
-        if !choice.has_tag_name((SAGE_NS, "ConstantHeuristic")) || has_content(choice) {
-            return Err(invalid(
-                path,
-                "only ConstantHeuristic is supported for AI budgets",
-            ));
-        }
-        validate_attributes(choice, &["Weight"], path)?;
-        let weight = choice.attribute("Weight").unwrap_or("1.0");
-        weights.push(finite_number(weight, "AI heuristic weight", path)?.to_bits());
+    let mut binary = binary::BinaryData {
+        payload: vec![0; 20],
+        relocations: Vec::new(),
+        path,
+    };
+    let first = binary.list(12, shares.len() / 2, 8)?;
+    for (index, word) in shares.into_iter().enumerate() {
+        binary.word(first + 4 * index, word);
     }
-    if weights.is_empty() {
-        return Err(invalid(path, "expected at least one AI budget heuristic"));
-    }
-    let count = weights.len() as u32;
-    let heuristic_offset = 20 + 4 * shares.len() as u32;
-    let mut words = vec![
-        0,
-        count,
-        heuristic_offset,
-        (shares.len() / 2) as u32,
-        if shares.is_empty() { 0 } else { 20 },
-    ];
-    let mut relocations = Vec::new();
-    if !shares.is_empty() {
-        relocations.push(16);
-    }
-    words.extend(shares);
-    relocations.push(8);
-    let values_offset = heuristic_offset + 4 * count;
-    for index in 0..count {
-        words.push(values_offset + 8 * index);
-        relocations.push(heuristic_offset + 4 * index);
-    }
-    let constant_type = fast_hash(b"AIStateConstantHeuristic");
-    for weight in weights {
-        words.extend([constant_type, weight]);
-    }
-    relocations.push(u32::MAX);
-    Ok(Marshaled {
-        payload: encode_words(words),
-        relocations,
+    let reference_types = ai_heuristics::write_heuristics(heuristic, 4, &mut binary)?;
+    Ok(binary.finish(Marshaled {
+        reference_types,
         ..Marshaled::default()
-    })
+    }))
 }
 
 fn money_transaction_categories() -> &'static [String] {
