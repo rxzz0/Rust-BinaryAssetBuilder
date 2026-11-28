@@ -225,6 +225,7 @@ fn write_tactic(
             "Distance",
             "CombatLeashSlack",
             "TargetDispositionToDisplay",
+            "GatherWaypoint",
             "UseTransports",
             "UpdateTime",
             "Targetless",
@@ -288,6 +289,11 @@ fn write_tactic(
     for (index, word) in words.into_iter().enumerate() {
         binary.word(offset + 4 * index, word);
     }
+    let waypoint = node.attribute("GatherWaypoint");
+    if let Some(waypoint) = waypoint {
+        let string = binary.allocate(offset + 40, 8)?;
+        binary.string(string, waypoint)?;
+    }
     binary.word(
         offset + 64,
         boolean_bytes(
@@ -306,6 +312,13 @@ fn write_tactic(
         return Err(invalid(path, "AI tactic has more than four team templates"));
     }
     let first = binary.list(offset + 56, teams.len(), TEAM_SIZE)?;
+    if waypoint.is_some() && !teams.is_empty() {
+        // EA lists both tactic pointers before the nested string pointer.
+        let team_relocation = binary.relocations.len() - 1;
+        binary
+            .relocations
+            .swap(team_relocation - 1, team_relocation);
+    }
     for (index, team) in teams.into_iter().enumerate() {
         write_team(team, first + index * TEAM_SIZE, binary, data)?;
     }
@@ -590,6 +603,23 @@ fn registered_object_set(value: &str, path: &Path) -> io::Result<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tactic_waypoint_and_team_relocations_match_ea() {
+        let document = Document::parse(
+            r#"<AIStrategicStateDefinition xmlns="uri:ea.com:eala:asset" id="Custom">
+                <Heuristic><ConstantHeuristic Weight="1"/></Heuristic>
+                <Tactic id="Attack" Tactic="SimpleAttack" GatherWaypoint="Mixed_Point_Test">
+                    <TeamTemplate MicroManager="GatherProbeMicro"/>
+                </Tactic>
+            </AIStrategicStateDefinition>"#,
+        )
+        .unwrap();
+        let state = compile(document.root_element(), Path::new("Waypoint.xml")).unwrap();
+        assert_eq!(&state.payload[132..140], &[16, 0, 0, 0, 140, 0, 0, 0]);
+        assert_eq!(&state.payload[140..160], b"Mixed_Point_Test\0\0\0\0");
+        assert_eq!(&state.relocations[..5], &[60, 8, 104, 124, 136]);
+    }
 
     #[test]
     fn strategic_feedback_keys_match_ea_optional_hashes() {
