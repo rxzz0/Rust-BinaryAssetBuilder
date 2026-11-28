@@ -112,10 +112,10 @@ fn fit_narrow_rgb(colors: &[[f64; 3]; 16], block: &mut [u8; 16]) {
         return;
     }
     let varying = std::array::from_fn(|c| max[c] > min[c]);
-    let (first, second) = match varying {
-        [false, true, true] => (1, 2),
-        [true, false, true] => (0, 2),
-        [true, true, false] => (0, 1),
+    let (first, second, constant) = match varying {
+        [false, true, true] => (1, 2, 0),
+        [true, false, true] => (0, 2, 1),
+        [true, true, false] => (0, 1, 2),
         _ => return,
     };
     let high = pack(max);
@@ -139,6 +139,20 @@ fn fit_narrow_rgb(colors: &[[f64; 3]; 16], block: &mut [u8; 16]) {
                         best = candidate;
                     }
                 }
+            }
+        }
+    }
+
+    // The interpolated ramp can represent a constant channel more closely
+    // when the two endpoints straddle its value on the RGB565 grid.
+    let [high, low] = best.endpoints;
+    for high_offset in offsets {
+        let high = adjust_channel(high, constant, high_offset);
+        for low_offset in offsets {
+            let low = adjust_channel(low, constant, low_offset);
+            let candidate = score(colors, [high, low], true);
+            if candidate.error < best.error - EPSILON {
+                best = candidate;
             }
         }
     }

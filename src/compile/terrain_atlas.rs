@@ -743,4 +743,15 @@ mod tests {
             &[0x73, 0xf7, 0x93, 0xef, 0x5f, 0x7f, 0x7e, 0x7e]
         );
     }
+
+    #[test]
+    fn terrain_bc3_can_interpolate_a_constant_channel() {
+        let pixels = std::array::from_fn(|i| [158, 60 + (i % 4) as u8, 240 + (i / 4) as u8, 255]);
+        let colors = pixels.map(|[b, g, r, _]| [b, g, r].map(f64::from));
+        let block = encode_terrain_bc3(&pixels, &colors);
+        assert_eq!(
+            &block[8..],
+            &[0x14, 0xf2, 0xf3, 0xe9, 0xfd, 0xbf, 0xbf, 0xaf]
+        );
+    }
 }
