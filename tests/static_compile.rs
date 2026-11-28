@@ -3577,6 +3577,119 @@ fn sdk_map_skip_preserves_complete_versioned_streams_and_builds_partial_ones() {
 
 #[cfg(windows)]
 #[test]
+fn sdk_map_config_builds_relative_and_external_paths_in_place() {
+    let root = scratch_root();
+    let sdk = root.join("RA3 MOD SDK");
+    let mod_dir = sdk.join("Mods/Reborn");
+    let default = mod_dir.join("Misc/Data/Maps/Official");
+    let relative = mod_dir.join("Data/Maps/Official");
+    let second = mod_dir.join("Data/Other Maps");
+    let external = root.join("External Maps");
+    let xml = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+      <Includes><Include type="all" source="DATA:Shared.xml"/></Includes>
+      <GameMap id="ProbeMap"/>
+    </AssetDeclaration>"#;
+    let shared = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+      <Video id="Clip" Filename="clip.bik"/>
+    </AssetDeclaration>"#;
+    for directory in [&default, &relative, &second, &external] {
+        let map = directory.join("ProbeMap");
+        fs::create_dir_all(&map).unwrap();
+        fs::write(map.join("map.xml"), xml).unwrap();
+    }
+    fs::write(mod_dir.join("Data/Shared.xml"), shared).unwrap();
+    let stock = compile_static(&mod_dir.join("Data/Shared.xml"), &sdk, &root).unwrap();
+    fs::write(root.join("worldbuilder.manifest"), stock.manifest).unwrap();
+
+    let build = || {
+        std::process::Command::new(env!("CARGO_BIN_EXE_binary-asset-builder"))
+            .arg("compile-maps-sdk")
+            .arg(&default)
+            .arg("--sdk-root")
+            .arg(&sdk)
+            .arg("--references")
+            .arg(&root)
+            .arg("--output")
+            .arg(&default)
+            .arg("--skip-precompiled")
+            .output()
+            .unwrap()
+    };
+    let result = build();
+    assert!(result.status.success(), "{result:?}");
+    assert!(String::from_utf8_lossy(&result.stdout).contains("Compiled 1 map override streams"));
+    let default_backup = mod_dir.join("Default Maps");
+    fs::rename(&default, &default_backup).unwrap();
+
+    let config = mod_dir.join("mapdir.toml");
+    let external_path = external
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_ascii_lowercase();
+    fs::write(
+        &config,
+        format!("\u{feff}data/maps/official/\r\n\r\nDATA\\Other Maps\\\r\n{external_path}\r\n"),
+    )
+    .unwrap();
+    let result = build();
+    assert!(result.status.success(), "{result:?}");
+    assert!(String::from_utf8_lossy(&result.stdout).contains("Compiled 3 map override streams"));
+    assert!(
+        String::from_utf8_lossy(&result.stderr).is_empty(),
+        "{result:?}"
+    );
+    for directory in [&relative, &second, &external] {
+        let path = directory.join("ProbeMap/map_mod.manifest");
+        let data = fs::read(&path).unwrap();
+        check_linked_files(&path, &Manifest::parse(&data).unwrap()).unwrap();
+        assert!(directory.join("ProbeMap/map.version").is_file());
+    }
+    let external_manifest = fs::read(external.join("ProbeMap/map_mod.manifest")).unwrap();
+    let external_manifest = Manifest::parse(&external_manifest).unwrap();
+    let external_source = fs::canonicalize(external.join("ProbeMap/map.xml")).unwrap();
+    let external_source = external_source
+        .to_str()
+        .unwrap()
+        .strip_prefix(r"\\?\")
+        .unwrap();
+    assert!(
+        external_manifest
+            .assets
+            .iter()
+            .any(|asset| asset.source_file_name == external_source.as_bytes())
+    );
+    for extension in ["bin", "imp", "relo"] {
+        let path = format!("ProbeMap/map_mod.{extension}");
+        assert_eq!(
+            fs::read(external.join(&path)).unwrap(),
+            fs::read(default_backup.join(&path)).unwrap(),
+            "{extension}"
+        );
+    }
+    assert!(String::from_utf8_lossy(&build().stdout).contains("Compiled 0 map override streams"));
+
+    fs::create_dir_all(mod_dir.join("Empty")).unwrap();
+    for (text, expected) in [
+        ("Empty\n../Outside", "expected a mod-relative or full path"),
+        ("Empty\nMissing", "cannot open map directory"),
+        (
+            "Empty\nEmpty\nEmpty\nEmpty",
+            "at most three map directories",
+        ),
+    ] {
+        fs::write(&config, text).unwrap();
+        let result = build();
+        let errors = String::from_utf8_lossy(&result.stderr);
+        assert!(!result.status.success(), "{result:?}");
+        assert!(
+            errors.contains("mapdir.toml") && errors.contains(expected),
+            "{errors}"
+        );
+    }
+}
+
+#[cfg(windows)]
+#[test]
 fn sdk_map_overrides_preserve_streams_through_a_linked_mod_or_map_tree() {
     let root = scratch_root();
     let sdk = root.join("RA3 MOD SDK");
@@ -3631,6 +3744,26 @@ fn sdk_map_overrides_preserve_streams_through_a_linked_mod_or_map_tree() {
     fs::rename(&mod_dir, &linked_mod).unwrap();
     junction(&mod_dir, &linked_mod);
     assert_eq!(build(&root.join("linked-mod")), regular);
+    let configured_maps = external.join("Additional Maps");
+    let configured_map = configured_maps.join("ProbeMap");
+    fs::create_dir_all(&configured_map).unwrap();
+    fs::copy(&source, configured_map.join("map.xml")).unwrap();
+    let config = mod_dir.join("mapdir.toml");
+    fs::write(&config, configured_maps.to_str().unwrap()).unwrap();
+    assert_eq!(
+        binary_asset_builder::compile::compile_sdk_map_overrides(
+            &maps, &sdk, &root, &maps, None, true
+        )
+        .unwrap(),
+        1
+    );
+    for (extension, expected) in ["bin", "imp", "relo"].into_iter().zip(&regular[1..]) {
+        assert_eq!(
+            &fs::read(configured_map.join(format!("map_mod.{extension}"))).unwrap(),
+            expected,
+        );
+    }
+    fs::remove_file(config).unwrap();
     let unrelated = external.join("Unrelated");
     fs::create_dir(&unrelated).unwrap();
     fs::write(unrelated.join("SharedMapVideo.xml"), shared).unwrap();

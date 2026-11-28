@@ -130,8 +130,15 @@ fn compile(
     reference_directory: Option<&Path>,
     reference_mode: ReferenceMode,
 ) -> io::Result<CompiledStream> {
-    compile_with_source_references(input, data_root, reference_directory, reference_mode, None)
-        .map(|(stream, _)| stream)
+    compile_with_source_references(
+        input,
+        data_root,
+        reference_directory,
+        reference_mode,
+        None,
+        None,
+    )
+    .map(|(stream, _)| stream)
 }
 
 fn compile_with_source_references(
@@ -140,10 +147,13 @@ fn compile_with_source_references(
     reference_directory: Option<&Path>,
     reference_mode: ReferenceMode,
     source_references: Option<&mut sdk_static::SourceReferences>,
+    configured_map: Option<&sdk_maps::ConfiguredMapDirectory>,
 ) -> io::Result<(CompiledStream, HashSet<AssetId>)> {
     let root = fs::canonicalize(data_root)?;
     let resolved_input = fs::canonicalize(input)?;
-    let redirected_sdk = if let Some(references) = source_references.as_deref() {
+    let redirected_directory = if configured_map.is_some() {
+        None
+    } else if let Some(references) = source_references.as_deref() {
         references.redirected_sdk.clone()
     } else if reference_mode == ReferenceMode::Map {
         if resolved_input.starts_with(&root) {
@@ -165,13 +175,20 @@ fn compile_with_source_references(
                 redirected_sdk_directory(input, data_root, &resolved_input, Some(directory))
             })
     };
-    let mod_root =
-        sdk_relative_path(&resolved_input, &root, redirected_sdk.as_ref()).and_then(|relative| {
-            let mut components = relative.iter();
-            let mods = components.next()?;
-            let name = components.next()?;
-            mods.eq_ignore_ascii_case("mods")
-                .then(|| root.join(mods).join(name))
+    let redirects = match configured_map {
+        Some(map) => map.redirects.clone(),
+        None => redirected_directory.into_iter().collect(),
+    };
+    let mod_root = configured_map
+        .map(|map| root.join(&map.mod_relative))
+        .or_else(|| {
+            sdk_relative_path(&resolved_input, &root, &redirects).and_then(|relative| {
+                let mut components = relative.iter();
+                let mods = components.next()?;
+                let name = components.next()?;
+                mods.eq_ignore_ascii_case("mods")
+                    .then(|| root.join(mods).join(name))
+            })
         });
     let is_map = reference_mode == ReferenceMode::Map;
     let map_root = if is_map {
@@ -210,7 +227,8 @@ fn compile_with_source_references(
         audio_paths: paths("Audio", "Audio"),
         map_art_path: map_root.map(|map| map.join("Art")),
         root,
-        redirected_sdk,
+        redirects,
+        external_map_root: configured_map.and_then(|map| map.external_root()),
         visited: HashSet::new(),
         active: HashSet::new(),
         ids: HashSet::new(),
@@ -277,7 +295,7 @@ fn redirected_sdk_map_directory(
 ) -> Option<RedirectedSdkDirectory> {
     let sdk_root = std::path::absolute(sdk_root).ok()?;
     let directory = std::path::absolute(directory).ok()?;
-    let relative = directory.strip_prefix(&sdk_root).ok()?;
+    let relative = sdk_maps::relative_sdk_path(&directory, &sdk_root)?;
     if !relative
         .components()
         .all(|part| matches!(part, std::path::Component::Normal(_)))
@@ -285,7 +303,7 @@ fn redirected_sdk_map_directory(
         return None;
     }
     let mut parts = relative.iter();
-    let (mods, name, misc, data, maps) = (
+    let (mods, _name, misc, data, maps) = (
         parts.next()?,
         parts.next()?,
         parts.next()?,
@@ -299,8 +317,18 @@ fn redirected_sdk_map_directory(
     {
         return None;
     }
-    let mut sdk_relative = PathBuf::from(mods);
-    for part in [name, misc, data, maps].into_iter().chain(parts) {
+    redirected_map_tree(&relative, &sdk_root, canonical_sdk, resolved)
+}
+
+fn redirected_map_tree(
+    relative: &Path,
+    sdk_root: &Path,
+    canonical_sdk: &Path,
+    resolved: &Path,
+) -> Option<RedirectedSdkDirectory> {
+    let mut parts = relative.iter();
+    let mut sdk_relative = PathBuf::from(parts.next()?);
+    for part in parts {
         sdk_relative.push(part);
         let physical = fs::canonicalize(sdk_root.join(&sdk_relative)).ok()?;
         if !physical.starts_with(canonical_sdk) {
@@ -396,14 +424,15 @@ fn redirected_sdk_directory(
 fn sdk_relative_path<'a>(
     path: &'a Path,
     root: &Path,
-    redirected_sdk: Option<&RedirectedSdkDirectory>,
+    redirects: &[RedirectedSdkDirectory],
 ) -> Option<Cow<'a, Path>> {
     if let Ok(relative) = path.strip_prefix(root) {
         return Some(Cow::Borrowed(relative));
     }
-    let redirected = redirected_sdk?;
-    let relative = path.strip_prefix(&redirected.physical).ok()?;
-    Some(Cow::Owned(redirected.sdk_relative.join(relative)))
+    redirects.iter().find_map(|directory| {
+        let relative = path.strip_prefix(&directory.physical).ok()?;
+        Some(Cow::Owned(directory.sdk_relative.join(relative)))
+    })
 }
 
 fn search_paths(
@@ -427,7 +456,8 @@ fn search_paths(
 struct Compiler<'a> {
     log: Option<BuildLog>,
     root: PathBuf,
-    redirected_sdk: Option<RedirectedSdkDirectory>,
+    redirects: Vec<RedirectedSdkDirectory>,
+    external_map_root: Option<&'a Path>,
     data_paths: Vec<PathBuf>,
     art_paths: Vec<PathBuf>,
     audio_paths: Vec<PathBuf>,
@@ -611,6 +641,32 @@ impl AssetReference {
 }
 
 impl Compiler<'_> {
+    fn is_external_map_file(&self, path: &Path) -> bool {
+        self.external_map_root
+            .is_some_and(|root| path.starts_with(root))
+    }
+
+    fn source_name(&self, path: &Path) -> io::Result<Rc<str>> {
+        if let Some(relative) = sdk_relative_path(path, &self.root, &self.redirects) {
+            let relative = relative
+                .to_str()
+                .filter(|name| name.is_ascii())
+                .ok_or_else(|| invalid(path, "source path must be ASCII"))?;
+            return Ok(format!("DATA:{}", relative.replace('\\', "/").to_ascii_lowercase()).into());
+        }
+        if !self.is_external_map_file(path) {
+            return Err(invalid(path, "XML lies outside the data root"));
+        }
+        // EA stores an absolute filename for documents outside the SDK data root.
+        let name = path
+            .to_str()
+            .ok_or_else(|| invalid(path, "source path must be Unicode"))?;
+        if let Some(unc) = name.strip_prefix(r"\\?\UNC\") {
+            return Ok(format!(r"\\{unc}").into());
+        }
+        Ok(name.strip_prefix(r"\\?\").unwrap_or(name).into())
+    }
+
     fn read_document(&mut self, path: &Path, tentative: bool, art_include: bool) -> io::Result<()> {
         if self.active.contains(path) {
             return Err(invalid(path, "include cycle"));
@@ -627,14 +683,7 @@ impl Compiler<'_> {
         let document_order = self.next_document_order;
         self.next_document_order += 1;
         self.active.insert(path.to_path_buf());
-        let relative = sdk_relative_path(path, &self.root, self.redirected_sdk.as_ref())
-            .ok_or_else(|| invalid(path, "XML lies outside the data root"))?;
-        let relative = relative
-            .to_str()
-            .filter(|name| name.is_ascii())
-            .ok_or_else(|| invalid(path, "source path must be ASCII"))?;
-        let source: Rc<str> =
-            format!("DATA:{}", relative.replace('\\', "/").to_ascii_lowercase()).into();
+        let source = self.source_name(path)?;
         let xml: Rc<str> = if self.reference_directory.is_some() {
             self.read_static_xml(path)?
         } else {
@@ -1230,10 +1279,11 @@ impl Compiler<'_> {
         };
         let resolved = read_with_context(&path, fs::canonicalize)?;
         if !resolved.starts_with(&self.root)
+            && !self.is_external_map_file(&resolved)
             && !self
-                .redirected_sdk
-                .as_ref()
-                .is_some_and(|directory| resolved.starts_with(&directory.physical))
+                .redirects
+                .iter()
+                .any(|directory| resolved.starts_with(&directory.physical))
         {
             return Err(invalid(&resolved, "path lies outside the data root"));
         }
@@ -1248,7 +1298,16 @@ impl Compiler<'_> {
                 error
             }
         })?;
-        let relative = sdk_relative_path(&target, &self.root, self.redirected_sdk.as_ref())
+        let relative = sdk_relative_path(&target, &self.root, &self.redirects)
+            .or_else(|| {
+                if self.is_external_map_file(&target) {
+                    target
+                        .file_name()
+                        .map(|name| Cow::Borrowed(Path::new(name)))
+                } else {
+                    None
+                }
+            })
             .ok_or_else(|| invalid(document, "reference lies outside the data root"))?
             .with_extension("manifest");
         let mut name = relative

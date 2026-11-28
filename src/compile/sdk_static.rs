@@ -67,6 +67,7 @@ fn compile_sdk_static_impl(
                 Some(output),
                 ReferenceMode::SdkStatic,
                 Some(&mut references),
+                None,
             )?;
             let mut outputs = Vec::new();
             for (name, stream) in references.streams {
@@ -184,6 +185,7 @@ impl SourceReferences {
                 Some(built_mods),
                 ReferenceMode::SdkStatic,
                 Some(self),
+                None,
             );
             self.active.remove(source);
             let (stream, ids) = result?;
@@ -236,7 +238,7 @@ fn sdk_input(
     let redirect = (!resolved.starts_with(&root))
         .then(|| redirected_sdk_directory(input, sdk_root, &resolved, redirected_directory))
         .flatten();
-    let relative = sdk_relative_path(&resolved, &root, redirect.as_ref())
+    let relative = sdk_relative_path(&resolved, &root, redirect.as_slice())
         .ok_or_else(|| invalid(&resolved, "input lies outside the SDK"))?;
     let mut parts = relative.iter();
     let (Some(mods), Some(_), Some(data), Some(_)) =

@@ -165,6 +165,16 @@ After switching from an older script, review the **Create BIG Files** and **Crea
 
 Place each map in `Mods/<mod>/Misc/data/maps/official/<MapName>` with its `map.xml` and any override XML files it includes. On Windows, `Official` and `official` resolve to the same folder. ModStudio packages existing map streams in the Misc BIG when **Create BIG Files** is enabled. Enable **Compile missing map overrides** to build maps whose folder has no complete matching `.bin`, `.imp`, `.manifest`, and `.relo` set. Rust writes the linked `map_mod` stream and `map.version` beside the map.
 
+To choose different folders for Step 9, create `mapdir.toml` in your mod's root folder, beside its `Data` and `Misc` folders. Use plain text with up to three paths, one per line. Relative paths start at the mod root. Full Windows paths can point outside the SDK. Spaces, forward or backslashes, and mixed case are supported.
+
+```text
+Data/Mod/Maps/
+Data/Maps/Official/
+D:/Shared Maps/My Mod/
+```
+
+Step 9 scans the listed folders for map subfolders and writes the results beside each map. An absent or blank file uses the default folder above. Step 10 still packages the usual SDK folders.
+
 ### RA3 SDK coverage and EA verification
 
 Run these from the repository root after building the Rust release.
