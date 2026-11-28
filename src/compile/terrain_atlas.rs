@@ -294,8 +294,12 @@ fn triangle_mip<T>(
 pub(super) fn encode_bc3(pixels: &[Pixel; 16]) -> [u8; 16] {
     if pixels[1..].iter().all(|pixel| *pixel == pixels[0]) {
         let mut block = [0; 16];
-        block[0] = pixels[0][3];
+        let alpha = pixels[0][3];
+        block[..2].copy_from_slice(&[alpha, alpha.saturating_add(1)]);
         block[8..10].copy_from_slice(&rgb565(pixels[0]).to_le_bytes());
+        if pixels[0][..3] == [0, 0, 0] {
+            block[8..].copy_from_slice(&BLACK_BC3_COLOR);
+        }
         return block;
     }
     let mut alpha_min = u8::MAX;
@@ -355,13 +359,25 @@ pub(super) fn encode_bc3(pixels: &[Pixel; 16]) -> [u8; 16] {
         color_indices |= (index as u32) << (2 * i);
     }
     let mut block = [0; 16];
-    block[..2].copy_from_slice(&[alpha_max, alpha_min]);
+    let alpha1 = if alpha_max == alpha_min {
+        alpha_max.saturating_add(1)
+    } else {
+        alpha_min
+    };
+    block[..2].copy_from_slice(&[alpha_max, alpha1]);
     block[2..8].copy_from_slice(&alpha_indices.to_le_bytes()[..6]);
-    block[8..10].copy_from_slice(&color0.to_le_bytes());
-    block[10..12].copy_from_slice(&color1.to_le_bytes());
-    block[12..].copy_from_slice(&color_indices.to_le_bytes());
+    if max_luma == 0 {
+        block[8..].copy_from_slice(&BLACK_BC3_COLOR);
+    } else {
+        block[8..10].copy_from_slice(&color0.to_le_bytes());
+        block[10..12].copy_from_slice(&color1.to_le_bytes());
+        block[12..].copy_from_slice(&color_indices.to_le_bytes());
+    }
     block
 }
+
+// EA stores black as endpoint 1 with every texel selecting that endpoint.
+const BLACK_BC3_COLOR: [u8; 8] = [1, 0, 0, 0, 0x55, 0x55, 0x55, 0x55];
 
 fn luminance([b, g, r, _]: Pixel) -> u32 {
     29 * u32::from(b) + 150 * u32::from(g) + 77 * u32::from(r)
@@ -437,5 +453,21 @@ mod tests {
         let mip = triangle_mip(&pixels, 4, 4, 2, normal_word);
         assert_eq!(mip[0], 4 << 10);
         assert_eq!(normal_word([61 * 64 + 32, 0, 0, 0], 64), 7);
+    }
+
+    #[test]
+    fn bc3_matches_ea_for_empty_blocks_and_constant_alpha() {
+        assert_eq!(
+            encode_bc3(&[[0; 4]; 16]),
+            [0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0x55, 0x55, 0x55, 0x55]
+        );
+        assert_eq!(
+            encode_bc3(&[[0, 0, 0, 255]; 16]),
+            [
+                255, 255, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0x55, 0x55, 0x55, 0x55
+            ]
+        );
+        let pixels = std::array::from_fn(|i| [i as u8, 0, 0, 80]);
+        assert_eq!(&encode_bc3(&pixels)[..8], &[80, 81, 0, 0, 0, 0, 0, 0]);
     }
 }
