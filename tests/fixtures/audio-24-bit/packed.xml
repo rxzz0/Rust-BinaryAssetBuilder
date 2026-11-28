@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+<AudioFile id="packedNONERam" File="packed.wav" PCCompression="NONE" IsStreamedOnPC="false" />
+<AudioFile id="packedNONEStream" File="packed.wav" PCCompression="NONE" IsStreamedOnPC="true" />
+<AudioFile id="packedXASRam" File="packed.wav" PCCompression="XAS" IsStreamedOnPC="false" />
+<AudioFile id="packedXASStream" File="packed.wav" PCCompression="XAS" IsStreamedOnPC="true" />
+</AssetDeclaration>
