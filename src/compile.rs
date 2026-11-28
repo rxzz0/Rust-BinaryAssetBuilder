@@ -1227,6 +1227,13 @@ impl Compiler<'_> {
         let value = value.trim().replace('\\', "/");
         let alias = value.split_once(':');
         let relative = alias.map_or(value.as_str(), |(_, relative)| relative);
+        // EA resolves trailing periods on a filename before looking it up on Windows.
+        let trimmed = relative.trim_end_matches('.');
+        let relative = if trimmed.is_empty() || trimmed.ends_with('/') {
+            relative
+        } else {
+            trimmed
+        };
         let path = Path::new(relative);
         if relative.is_empty() || relative.contains(':') || path.has_root() {
             return Err(invalid(

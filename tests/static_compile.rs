@@ -1492,6 +1492,38 @@ fn static_expressions_do_not_use_defines_from_sibling_documents() {
 }
 
 #[test]
+fn static_includes_resolve_trailing_periods_like_ea() {
+    let root = scratch_root();
+    let input = root.join("Mod.xml");
+    let child = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+        <Video id="example" Filename="example"/>
+    </AssetDeclaration>"#;
+    fs::write(root.join("Child.xml"), child).unwrap();
+    let compile = |source| {
+        fs::write(
+            &input,
+            format!(
+                r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+                    <Includes><Include type="all" source="{source}"/></Includes>
+                </AssetDeclaration>"#,
+            ),
+        )
+        .unwrap();
+        compile_static(&input, &root, &root).unwrap()
+    };
+    let plain = compile("Child.xml");
+    assert_eq!(Manifest::parse(&plain.manifest).unwrap().assets.len(), 1);
+    for source in ["Child.xml.", "DATA:Child.xml."] {
+        let dotted = compile(source);
+        assert_eq!(dotted.manifest, plain.manifest);
+        assert_eq!(dotted.files.bin, plain.files.bin);
+        assert_eq!(dotted.files.imp, plain.files.imp);
+        assert_eq!(dotted.files.relo, plain.files.relo);
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn static_includes_accept_empty_legacy_w3x_placeholders() {
     let root = scratch_root();
     let input = root.join("Mod.xml");
