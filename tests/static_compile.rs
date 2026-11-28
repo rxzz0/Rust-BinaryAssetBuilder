@@ -3203,23 +3203,42 @@ fn static_asset_duplicate_precedence_matches_ea() {
 }
 
 #[test]
-fn sdk_static_logic_command_status_filters_match_ea() {
+fn sdk_static_object_filters_match_ea() {
     let root = scratch_root();
-    let data = root.join("Mods/StatusProbe/Data");
     let built = root.join("builtmods");
-    fs::create_dir_all(&data).unwrap();
-    let input = data.join("mod.xml");
-    const FIXTURE: &str = "tests/fixtures/logic-command-status-filter";
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join(FIXTURE);
-    fs::copy(fixture.join("mod.xml"), &input).unwrap();
-    compile_sdk_static(&input, &root, &built).unwrap();
-    let output = built.join("mods/statusprobe/data");
-    for file in ["mod.manifest", "mod.bin", "mod.imp", "mod.relo"] {
-        assert_eq!(
-            fs::read(output.join(file)).unwrap(),
-            fs::read(fixture.join(file)).unwrap(),
-            "{file}"
-        );
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let fixtures = repo.join("tests/fixtures");
+    let mut schema_dirs = vec![(repo.join("schemas/ra3/xsd"), root.join("Schemas/xsd"))];
+    while let Some((source, destination)) = schema_dirs.pop() {
+        fs::create_dir_all(&destination).unwrap();
+        for entry in fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let target = destination.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                schema_dirs.push((entry.path(), target));
+            } else {
+                fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+    for (name, mod_name) in [
+        ("logic-command-status-filter", "statusprobe"),
+        ("object-filter-variants", "statusexpanded"),
+    ] {
+        let data = root.join("Mods").join(mod_name).join("Data");
+        fs::create_dir_all(&data).unwrap();
+        let input = data.join("mod.xml");
+        let output = built.join("mods").join(mod_name).join("data");
+        let fixture = fixtures.join(name);
+        fs::copy(fixture.join("mod.xml"), &input).unwrap();
+        compile_sdk_static(&input, &root, &built).unwrap();
+        for file in ["mod.manifest", "mod.bin", "mod.imp", "mod.relo"] {
+            assert_eq!(
+                fs::read(output.join(file)).unwrap(),
+                fs::read(fixture.join(file)).unwrap(),
+                "{name}/{file}"
+            );
+        }
     }
     fs::remove_dir_all(root).unwrap();
 }

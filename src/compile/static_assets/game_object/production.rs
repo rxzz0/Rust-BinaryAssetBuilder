@@ -1,5 +1,4 @@
 use super::super::binary::BinaryData;
-use super::super::global_ui::object_filter;
 use super::super::tokenized::{Entry, Table, Target};
 use super::super::{
     AssetReference, asset_reference, finite_number, hash_name, production_queue_type, sage_time,
@@ -221,24 +220,12 @@ impl ProductionEncoder<'_, '_> {
                 self.data.word(offset + field, value.to_bits());
             }
             let filter_start = offset + 12;
-            object_filter(filter, filter_start, self.data)?;
-            let lists = [0x60, 0x68].map(|field| {
-                let word = |offset| {
-                    u32::from_le_bytes(self.data.payload[offset..offset + 4].try_into().unwrap())
-                        as usize
-                };
-                let count = word(filter_start + field);
-                let first = word(filter_start + field + 4);
-                (0..count)
-                    .map(|i| (0, Target::Data(first + i * 4)))
-                    .collect()
-            });
-            for child in significant_children(filter) {
-                if child.text().is_some_and(|value| !value.trim().is_empty()) {
-                    self.reference_types
-                        .push(super::super::fast_hash(b"GameObject"));
-                }
-            }
+            let filter = super::parking::encode_inline_filter(
+                filter,
+                filter_start,
+                self.data,
+                self.reference_types,
+            )?;
             let mut entries: Vec<_> = fields(
                 offset,
                 &[
@@ -251,7 +238,7 @@ impl ProductionEncoder<'_, '_> {
             entries.push(Entry::named(
                 "ModifierFilter",
                 0xe46e_a3b2,
-                Target::Table(super::recall::filter_table(filter_start, lists)),
+                Target::Table(filter),
             ));
             items.push((0, Target::Table(Table::record(entries))));
         }
