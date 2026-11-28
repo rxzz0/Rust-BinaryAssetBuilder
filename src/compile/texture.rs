@@ -1,10 +1,13 @@
 use super::static_assets::{declaration_id, validate_attributes};
 use super::{
-    CompiledAsset, Compiler, CustomData, has_content, hash_source_file, hash_xml, invalid,
+    CompiledAsset, Compiler, CustomData, has_content, hash_source_file_with, hash_xml, invalid,
     memory_stream_hash, required,
 };
+use crate::hash::fast_hash_with_signed_tail;
 use roxmltree::Node;
 use std::{io, path::Path};
+
+mod resize;
 
 pub(super) const TEXTURE_COMPILER_VERSION: u32 = 0x106a;
 
@@ -49,7 +52,7 @@ impl Compiler<'_> {
         let resizing = bool_attr("AllowAutomaticResize")?;
         let input = self.resolve(path, required(node, "File", path)?)?;
         let mut bytes = Vec::new();
-        let file_hash = hash_source_file(&input, &mut bytes)?;
+        let file_hash = hash_source_file_with(&input, &mut bytes, fast_hash_with_signed_tail)?;
         let format = node.attribute("OutputFormat").unwrap_or("DXT1");
         if !matches!(
             format,
@@ -321,8 +324,13 @@ fn compile_tga(
     if width > 16384 || height > 16384 {
         return Err("invalid TGA dimensions");
     }
-    if resizing && (!width.is_power_of_two() || !height.is_power_of_two()) {
-        return Err("TGA resizing is unsupported");
+    if !width.is_power_of_two() || !height.is_power_of_two() {
+        if format == "A8R8G8B8" && !mipmaps {
+            return resize::uncompressed_dds(decoded, width, height);
+        }
+        if resizing {
+            return Err("TGA resizing is unsupported");
+        }
     }
     let compressed = match format {
         "DXT1" => true,
@@ -429,6 +437,29 @@ mod tests {
         assert_eq!(tga_to_dds(&tga), Err("truncated TGA RLE pixels"));
         tga[19] = 0x84;
         assert_eq!(tga_to_dds(&tga), Err("TGA RLE packet exceeds image size"));
+    }
+
+    #[test]
+    fn tga_resize_matches_ea_on_narrow_odd_rows() {
+        let mut tga = vec![0; 18];
+        tga[2] = 2;
+        tga[12] = 2;
+        tga[14] = 3;
+        tga[16] = 32;
+        tga[17] = 0x28;
+        tga.extend([
+            0, 0, 0, 23, 13, 0, 31, 62, 7, 31, 0, 64, 20, 31, 31, 103, 14, 62, 0, 105, 27, 62, 31,
+            144,
+        ]);
+        let expected = [
+            6, 12, 8, 49, 12, 12, 23, 68, 8, 20, 8, 59, 14, 19, 23, 78, 13, 43, 8, 89, 19, 42, 23,
+            108, 15, 50, 8, 99, 21, 50, 23, 118,
+        ];
+        for resize in [true, false] {
+            let dds = compile_tga(&tga, false, resize, "A8R8G8B8").unwrap();
+            assert_eq!(&dds[12..24], &[4, 0, 0, 0, 2, 0, 0, 0, 32, 0, 0, 0]);
+            assert_eq!(&dds[128..], &expected);
+        }
     }
 
     #[test]
