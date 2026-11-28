@@ -1,5 +1,5 @@
 use super::ai_personality::{CHILDREN, CRITERIA, FILTER, IN_TROUBLE, child_index, reference_name};
-use super::ai_settings::MICRO_SCHEMA;
+use super::ai_settings::{MICRO_SCHEMA, POWER_DELAY};
 use super::{declaration_id, significant_children};
 use crate::compile::{CompiledAsset, Compiler, SAGE_NS, escape_xml, invalid, is_xml_whitespace};
 use crate::manifest::AssetId;
@@ -176,7 +176,9 @@ impl Element {
     fn merge_child(&mut self, mut child: Self, path: &Path) -> io::Result<()> {
         let rank = |name: &str| match self.name.as_str() {
             PERSONALITY => CHILDREN.iter().position(|(tag, _, _)| *tag == name),
-            MICRO => [RETREAT, IGNORE].iter().position(|tag| *tag == name),
+            MICRO => [POWER_DELAY, RETREAT, IGNORE]
+                .iter()
+                .position(|tag| *tag == name),
             FILTER | IGNORE => ["IncludeThing", "ExcludeThing"]
                 .iter()
                 .position(|tag| *tag == name),
@@ -271,7 +273,7 @@ impl Element {
     fn write_xml(&self, xml: &mut String, root: bool) {
         xml.push('<');
         xml.push_str(&self.name);
-        if root {
+        if root && self.name != MICRO {
             xml.push_str(" xmlns=\"uri:ea.com:eala:asset\"");
         }
         for (name, value) in &self.attributes {
@@ -280,6 +282,9 @@ impl Element {
             xml.push_str("=\"");
             escape_xml(value, true, xml);
             xml.push('"');
+        }
+        if root && self.name == MICRO {
+            xml.push_str(" xmlns=\"uri:ea.com:eala:asset\"");
         }
         if self.children.is_empty() && self.text.is_empty() {
             xml.push_str(" />");

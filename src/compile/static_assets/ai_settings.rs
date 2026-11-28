@@ -1,15 +1,20 @@
 use super::ai_personality::write_base_criteria;
+use super::ai_strategic::enum_index;
 use super::binary::BinaryData;
 use super::global_ui::{filter_reference_types, object_filter};
-use super::{Marshaled, finite_number, sage_time, significant_children, validate_attributes};
+use super::{
+    Marshaled, finite_number, sage_time, schema_enums, significant_children, validate_attributes,
+};
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::{Document, Node};
 use std::io;
 use std::path::Path;
+use std::sync::OnceLock;
 
 const DATA_SCHEMA: &str = include_str!("../../../schemas/ra3/xsd/AssetTypeAIData.xsd");
 pub(super) const MICRO_SCHEMA: &str =
     include_str!("../../../schemas/ra3/xsd/SkirmishAI/AssetTypeAIMicroManager.xsd");
+pub(super) const POWER_DELAY: &str = "SpecificSpecialPowerDelay";
 const XSD: &str = "http://www.w3.org/2001/XMLSchema";
 
 pub(super) fn data(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
@@ -38,6 +43,14 @@ pub(super) fn micro(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
     };
     write_attributes(node, MICRO_SCHEMA, 160, None, &mut binary)?;
     let mut children = significant_children(node).peekable();
+    let mut delays = Vec::new();
+    while let Some(delay) = children.next_if(|child| child.has_tag_name((SAGE_NS, POWER_DELAY))) {
+        delays.push(delay);
+    }
+    let first = binary.list(144, delays.len(), 16)?;
+    for (index, delay) in delays.into_iter().enumerate() {
+        write_power_delay(delay, first + 16 * index, &mut binary)?;
+    }
     if let Some(criteria) =
         children.next_if(|child| child.has_tag_name((SAGE_NS, "RetreatBaseCriteria")))
     {
@@ -61,6 +74,49 @@ pub(super) fn micro(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
         reference_types,
         ..Marshaled::default()
     })
+}
+
+fn write_power_delay(
+    node: Node<'_, '_>,
+    offset: usize,
+    binary: &mut BinaryData<'_>,
+) -> io::Result<()> {
+    const FIELDS: [&str; 4] = [
+        "PowerType",
+        "TogglePowerSubType",
+        "MinimumDelay",
+        "MaximumDelay",
+    ];
+    let path = binary.path;
+    validate_attributes(node, &FIELDS, path)?;
+    if has_content(node) {
+        return Err(invalid(
+            path,
+            "unexpected content in SpecificSpecialPowerDelay",
+        ));
+    }
+    static ENUMS: OnceLock<[Vec<String>; 2]> = OnceLock::new();
+    let [powers, hints] = ENUMS.get_or_init(|| {
+        schema_enums(
+            super::ai_command::SCHEMA,
+            ["AISpecialPowerHeuristic", "ToggleStatusAiHint"],
+        )
+    });
+    let words = [
+        enum_index(required(node, FIELDS[0], path)?, powers, FIELDS[0], path)?,
+        enum_index(
+            node.attribute(FIELDS[1]).unwrap_or("TOGGLE_NO_HINT"),
+            hints,
+            FIELDS[1],
+            path,
+        )?,
+        sage_time(node.attribute(FIELDS[2]).unwrap_or("0s"), FIELDS[2], path)?.to_bits(),
+        sage_time(node.attribute(FIELDS[3]).unwrap_or("0s"), FIELDS[3], path)?.to_bits(),
+    ];
+    for (index, word) in words.into_iter().enumerate() {
+        binary.word(offset + 4 * index, word);
+    }
+    Ok(())
 }
 
 fn write_attributes(
