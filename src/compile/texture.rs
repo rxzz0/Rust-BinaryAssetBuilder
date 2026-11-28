@@ -7,6 +7,7 @@ use crate::hash::fast_hash_with_signed_tail;
 use roxmltree::Node;
 use std::{io, path::Path};
 
+mod bc1;
 mod resize;
 
 pub(super) const TEXTURE_COMPILER_VERSION: u32 = 0x106a;
@@ -49,7 +50,7 @@ impl Compiler<'_> {
             _ => Err(invalid(path, format!("invalid {name}"))),
         };
         let mipmaps = bool_attr("GenerateMipMaps")?;
-        let resizing = bool_attr("AllowAutomaticResize")?;
+        bool_attr("AllowAutomaticResize")?;
         let input = self.resolve(path, required(node, "File", path)?)?;
         let mut bytes = Vec::new();
         let file_hash = hash_source_file_with(&input, &mut bytes, fast_hash_with_signed_tail)?;
@@ -71,8 +72,7 @@ impl Compiler<'_> {
                     format!("TGA conversion for {kind} is unsupported"),
                 ));
             }
-            bytes = compile_tga(&bytes, mipmaps, resizing, format)
-                .map_err(|error| invalid(&input, error))?;
+            bytes = compile_tga(&bytes, mipmaps, format).map_err(|error| invalid(&input, error))?;
         }
         // EA applies conversion settings to source images and passes through prebuilt DDS data.
         validate_dds(&bytes).map_err(|error| invalid(&input, error))?;
@@ -310,12 +310,7 @@ fn decode_tga_rle(
     Ok(pixels)
 }
 
-fn compile_tga(
-    bytes: &[u8],
-    mipmaps: bool,
-    resizing: bool,
-    format: &str,
-) -> Result<Vec<u8>, &'static str> {
+fn compile_tga(bytes: &[u8], mipmaps: bool, format: &str) -> Result<Vec<u8>, &'static str> {
     let mut decoded = tga_to_dds(bytes)?;
     let (mut width, mut height) = (
         u32::from_le_bytes(decoded[16..20].try_into().unwrap()) as usize,
@@ -324,14 +319,13 @@ fn compile_tga(
     if width > 16384 || height > 16384 {
         return Err("invalid TGA dimensions");
     }
-    if !width.is_power_of_two() || !height.is_power_of_two() {
-        if format == "A8R8G8B8" {
-            decoded = resize::uncompressed_dds(decoded, width, height)?;
-            width = width.next_power_of_two();
-            height = height.next_power_of_two();
-        } else if resizing {
-            return Err("TGA resizing is unsupported");
-        }
+    // These EA conversion paths round up to powers of two even when resize is disabled.
+    if (!width.is_power_of_two() || !height.is_power_of_two())
+        && matches!(format, "A8R8G8B8" | "DXT1")
+    {
+        decoded = resize::uncompressed_dds(decoded, width, height)?;
+        width = width.next_power_of_two();
+        height = height.next_power_of_two();
     }
     let compressed = match format {
         "DXT1" => true,
@@ -356,9 +350,9 @@ fn compile_tga(
     let mut word = |index: usize, value: u32| {
         dds[index * 4..index * 4 + 4].copy_from_slice(&value.to_le_bytes());
     };
-    word(2, 0x81007 | if levels > 1 { 0x2_0000 } else { 0 });
-    word(7, if levels > 1 { levels } else { 0 });
-    word(27, if levels > 1 { 0x401008 } else { 0x1000 });
+    word(2, 0x81007 | if mipmaps { 0x2_0000 } else { 0 });
+    word(7, if mipmaps { levels } else { 0 });
+    word(27, if mipmaps { 0x401008 } else { 0x1000 });
     word(5, (width.div_ceil(4) * height.div_ceil(4) * 8) as u32);
     word(20, 4);
     word(21, u32::from_le_bytes(*b"DXT1"));
@@ -366,45 +360,7 @@ fn compile_tga(
         word(index, 0);
     }
 
-    let (mut width, mut height) = (width, height);
-    let mut pixels = std::borrow::Cow::Borrowed(pixels.as_chunks::<4>().0);
-    for level in 0..levels {
-        for y in (0..height).step_by(4) {
-            for x in (0..width).step_by(4) {
-                let block = std::array::from_fn(|i| {
-                    pixels[(y + i / 4).min(height - 1) * width + (x + i % 4).min(width - 1)]
-                });
-                // The BC3 color block is also a BC1 block for opaque pixels.
-                let encoded = super::terrain_atlas::encode_bc3(&block);
-                dds.extend_from_slice(&encoded[8..]);
-            }
-        }
-        if level + 1 < levels {
-            let next_width = (width / 2).max(1);
-            let next_height = (height / 2).max(1);
-            let mut next = Vec::with_capacity(next_width * next_height);
-            for y in 0..next_height {
-                for x in 0..next_width {
-                    let a = pixels[(y * 2) * width + x * 2];
-                    let b = pixels[(y * 2) * width + (x * 2 + 1).min(width - 1)];
-                    let c = pixels[(y * 2 + 1).min(height - 1) * width + x * 2];
-                    let d =
-                        pixels[(y * 2 + 1).min(height - 1) * width + (x * 2 + 1).min(width - 1)];
-                    next.push(std::array::from_fn(|i| {
-                        ((u16::from(a[i])
-                            + u16::from(b[i])
-                            + u16::from(c[i])
-                            + u16::from(d[i])
-                            + 2)
-                            / 4) as u8
-                    }));
-                }
-            }
-            pixels = std::borrow::Cow::Owned(next);
-            width = next_width;
-            height = next_height;
-        }
-    }
+    bc1::append_levels(&mut dds, pixels.as_chunks::<4>().0, width, height, levels)?;
     Ok(dds)
 }
 
@@ -451,32 +407,58 @@ mod tests {
             6, 12, 8, 49, 12, 12, 23, 68, 8, 20, 8, 59, 14, 19, 23, 78, 13, 43, 8, 89, 19, 42, 23,
             108, 15, 50, 8, 99, 21, 50, 23, 118,
         ];
-        for resize in [true, false] {
-            let dds = compile_tga(&tga, false, resize, "A8R8G8B8").unwrap();
-            assert_eq!(&dds[12..24], &[4, 0, 0, 0, 2, 0, 0, 0, 32, 0, 0, 0]);
-            assert_eq!(&dds[128..], &expected);
+        let dds = compile_tga(&tga, false, "A8R8G8B8").unwrap();
+        assert_eq!(&dds[12..24], &[4, 0, 0, 0, 2, 0, 0, 0, 32, 0, 0, 0]);
+        assert_eq!(&dds[128..], &expected);
 
-            let mipped = compile_tga(&tga, true, resize, "A8R8G8B8").unwrap();
-            validate_dds(&mipped).unwrap();
-            assert_eq!(&mipped[8..12], &0xa1007u32.to_le_bytes());
-            assert_eq!(&mipped[28..32], &3u32.to_le_bytes());
-            assert_eq!(&mipped[108..112], &0x401008u32.to_le_bytes());
-            assert_eq!(&mipped[128..160], &expected);
-            assert_eq!(
-                &mipped[160..],
-                &[11, 20, 16, 69, 16, 42, 16, 99, 14, 31, 16, 84]
-            );
-        }
+        let mipped = compile_tga(&tga, true, "A8R8G8B8").unwrap();
+        validate_dds(&mipped).unwrap();
+        assert_eq!(&mipped[8..12], &0xa1007u32.to_le_bytes());
+        assert_eq!(&mipped[28..32], &3u32.to_le_bytes());
+        assert_eq!(&mipped[108..112], &0x401008u32.to_le_bytes());
+        assert_eq!(&mipped[128..160], &expected);
+        assert_eq!(
+            &mipped[160..],
+            &[11, 20, 16, 69, 16, 42, 16, 99, 14, 31, 16, 84]
+        );
 
         tga[12] = 1;
         tga[14] = 1;
         tga.truncate(22);
-        let single = compile_tga(&tga, true, true, "A8R8G8B8").unwrap();
+        let single = compile_tga(&tga, true, "A8R8G8B8").unwrap();
         validate_dds(&single).unwrap();
         assert_eq!(&single[8..12], &0xa1007u32.to_le_bytes());
         assert_eq!(&single[28..32], &1u32.to_le_bytes());
         assert_eq!(&single[108..112], &0x401008u32.to_le_bytes());
         assert_eq!(&single[128..], &tga[18..]);
+    }
+
+    #[test]
+    fn tga_resized_dxt1_matches_ea_through_the_last_mip() {
+        let mut tga = vec![0; 18];
+        tga[2] = 2;
+        tga[12] = 3;
+        tga[14] = 5;
+        tga[16] = 32;
+        tga[17] = 0x28;
+        tga.extend([
+            64, 65, 243, 255, 84, 135, 216, 255, 108, 102, 159, 255, 204, 191, 224, 255, 231, 61,
+            126, 255, 115, 32, 173, 255, 10, 117, 112, 255, 3, 36, 30, 255, 117, 34, 16, 255, 169,
+            36, 121, 255, 142, 248, 109, 255, 67, 242, 124, 255, 242, 208, 97, 255, 48, 49, 220,
+            255, 181, 216, 210, 255,
+        ]);
+        let dds = compile_tga(&tga, true, "DXT1").unwrap();
+        validate_dds(&dds).unwrap();
+        assert_eq!(&dds[12..24], &[8, 0, 0, 0, 4, 0, 0, 0, 16, 0, 0, 0]);
+        assert_eq!(&dds[28..32], &4u32.to_le_bytes());
+        assert_eq!(
+            &dds[128..],
+            &[
+                175, 203, 110, 73, 0, 160, 248, 94, 178, 174, 12, 99, 85, 141, 47, 190, 79, 157,
+                78, 130, 255, 87, 171, 2, 110, 109, 14, 147, 85, 170, 170, 170, 78, 139, 46, 132,
+                170, 171, 171, 171,
+            ]
+        );
     }
 
     #[test]
@@ -513,18 +495,23 @@ mod tests {
         tga[14] = 4;
         tga[16] = 32;
         tga[17] = 0x28;
-        tga.extend([0, 0, 255, 127].repeat(16));
+        tga.extend([0, 0, 255, 255].repeat(16));
 
-        let dxt1 = compile_tga(&tga, true, true, "DXT1").unwrap();
+        let dxt1 = compile_tga(&tga, true, "DXT1").unwrap();
         validate_dds(&dxt1).unwrap();
         assert_eq!(&dxt1[84..88], b"DXT1");
         assert_eq!(dxt1[28], 3);
         assert_eq!(dxt1.len(), 128 + 3 * 8);
-        for block in dxt1[128..].as_chunks::<8>().0 {
-            assert_eq!(block, &[0, 0xf8, 0, 0, 0, 0, 0, 0]);
-        }
+        assert_eq!(
+            &dxt1[128..],
+            &[
+                1, 0xf8, 0, 0xf8, 0x55, 0x55, 0x55, 0x55, 1, 0xf8, 0, 0xf8, 0x55, 0x55, 0x5d, 0x5d,
+                1, 0xf8, 0, 0xf8, 0x55, 0x57, 0x57, 0x57,
+            ]
+        );
 
-        let rgba = compile_tga(&tga, false, false, "A8R8G8B8").unwrap();
+        tga[21] = 127;
+        let rgba = compile_tga(&tga, false, "A8R8G8B8").unwrap();
         validate_dds(&rgba).unwrap();
         assert_eq!(rgba.len(), 128 + 16 * 4);
         assert_eq!(&rgba[128..132], &[0, 0, 255, 127]);

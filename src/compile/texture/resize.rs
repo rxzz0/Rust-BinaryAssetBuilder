@@ -62,34 +62,53 @@ pub(super) fn append_uncompressed_mips(
     let (base, mipmaps) = dds.split_at_mut(base_end);
     let pixels = base[128..].as_chunks::<4>().0;
     let mut destination = mipmaps.as_chunks_mut::<4>().0.iter_mut();
-    let normalized: [f32; 256] = std::array::from_fn(|value| value as f32 / 255.0);
-    let mut row = vec![[0.0; 4]; width];
-
     for level in 1..levels {
-        let columns = mip_taps(width, (width >> level).max(1));
-        let rows = mip_taps(height, (height >> level).max(1));
-        for (first_y, weights) in rows {
-            row.fill([0.0; 4]);
-            for (y, weight) in (first_y..).zip(weights) {
-                for (output, pixel) in row.iter_mut().zip(&pixels[y * width..][..width]) {
-                    for (value, &channel) in output.iter_mut().zip(pixel) {
-                        *value = accumulate(*value, normalized[channel as usize], weight);
-                    }
-                }
-            }
-            for (first_x, weights) in &columns {
-                let mut output = [0.0; 4];
-                for (&pixel, &weight) in row[*first_x..].iter().zip(weights) {
-                    for (value, channel) in output.iter_mut().zip(pixel) {
-                        *value = accumulate(*value, channel, weight);
-                    }
-                }
-                let rounded = output.map(|value| (f64::from(value) * 255.0 + 0.5) as u8);
-                *destination.next().unwrap() = rounded;
-            }
-        }
+        filter_mip(
+            pixels,
+            width,
+            height,
+            (width >> level).max(1),
+            (height >> level).max(1),
+            |pixel| {
+                *destination.next().unwrap() =
+                    pixel.map(|value| (f64::from(value) * 255.0 + 0.5) as u8);
+            },
+        );
     }
     Ok(dds)
+}
+
+pub(super) fn filter_mip(
+    pixels: &[[u8; 4]],
+    width: usize,
+    height: usize,
+    output_width: usize,
+    output_height: usize,
+    mut write: impl FnMut([f32; 4]),
+) {
+    let normalized: [f32; 256] = std::array::from_fn(|value| value as f32 / 255.0);
+    let mut row = vec![[0.0; 4]; width];
+    let columns = mip_taps(width, output_width);
+    let rows = mip_taps(height, output_height);
+    for (first_y, weights) in rows {
+        row.fill([0.0; 4]);
+        for (y, weight) in (first_y..).zip(weights) {
+            for (output, pixel) in row.iter_mut().zip(&pixels[y * width..][..width]) {
+                for (value, &channel) in output.iter_mut().zip(pixel) {
+                    *value = accumulate(*value, normalized[channel as usize], weight);
+                }
+            }
+        }
+        for (first_x, weights) in &columns {
+            let mut output = [0.0; 4];
+            for (&pixel, &weight) in row[*first_x..].iter().zip(weights) {
+                for (value, channel) in output.iter_mut().zip(pixel) {
+                    *value = accumulate(*value, channel, weight);
+                }
+            }
+            write(output);
+        }
+    }
 }
 
 fn accumulate(sum: f32, sample: f32, weight: f64) -> f32 {
