@@ -317,7 +317,7 @@ fn compile_tga(
     format: &str,
 ) -> Result<Vec<u8>, &'static str> {
     let mut decoded = tga_to_dds(bytes)?;
-    let (width, height) = (
+    let (mut width, mut height) = (
         u32::from_le_bytes(decoded[16..20].try_into().unwrap()) as usize,
         u32::from_le_bytes(decoded[12..16].try_into().unwrap()) as usize,
     );
@@ -325,10 +325,11 @@ fn compile_tga(
         return Err("invalid TGA dimensions");
     }
     if !width.is_power_of_two() || !height.is_power_of_two() {
-        if format == "A8R8G8B8" && !mipmaps {
-            return resize::uncompressed_dds(decoded, width, height);
-        }
-        if resizing {
+        if format == "A8R8G8B8" {
+            decoded = resize::uncompressed_dds(decoded, width, height)?;
+            width = width.next_power_of_two();
+            height = height.next_power_of_two();
+        } else if resizing {
             return Err("TGA resizing is unsupported");
         }
     }
@@ -337,8 +338,12 @@ fn compile_tga(
         "A8R8G8B8" => false,
         _ => return Err("unsupported TGA OutputFormat"),
     };
-    if !compressed && !mipmaps {
-        return Ok(decoded);
+    if !compressed {
+        return if mipmaps {
+            resize::append_uncompressed_mips(decoded, width, height)
+        } else {
+            Ok(decoded)
+        };
     }
 
     let (header, pixels) = decoded.split_at_mut(128);
@@ -351,37 +356,28 @@ fn compile_tga(
     let mut word = |index: usize, value: u32| {
         dds[index * 4..index * 4 + 4].copy_from_slice(&value.to_le_bytes());
     };
-    let storage = if compressed { 0x80000 } else { 0x8 };
-    word(2, 0x1007 | storage | if levels > 1 { 0x2_0000 } else { 0 });
+    word(2, 0x81007 | if levels > 1 { 0x2_0000 } else { 0 });
     word(7, if levels > 1 { levels } else { 0 });
     word(27, if levels > 1 { 0x401008 } else { 0x1000 });
-    if compressed {
-        word(5, (width.div_ceil(4) * height.div_ceil(4) * 8) as u32);
-        word(20, 4);
-        word(21, u32::from_le_bytes(*b"DXT1"));
-        for index in 22..27 {
-            word(index, 0);
-        }
-    } else {
-        word(5, (width * 4) as u32);
+    word(5, (width.div_ceil(4) * height.div_ceil(4) * 8) as u32);
+    word(20, 4);
+    word(21, u32::from_le_bytes(*b"DXT1"));
+    for index in 22..27 {
+        word(index, 0);
     }
 
     let (mut width, mut height) = (width, height);
     let mut pixels = std::borrow::Cow::Borrowed(pixels.as_chunks::<4>().0);
     for level in 0..levels {
-        if compressed {
-            for y in (0..height).step_by(4) {
-                for x in (0..width).step_by(4) {
-                    let block = std::array::from_fn(|i| {
-                        pixels[(y + i / 4).min(height - 1) * width + (x + i % 4).min(width - 1)]
-                    });
-                    // The BC3 color block is also a BC1 block for opaque pixels.
-                    let encoded = super::terrain_atlas::encode_bc3(&block);
-                    dds.extend_from_slice(&encoded[8..]);
-                }
+        for y in (0..height).step_by(4) {
+            for x in (0..width).step_by(4) {
+                let block = std::array::from_fn(|i| {
+                    pixels[(y + i / 4).min(height - 1) * width + (x + i % 4).min(width - 1)]
+                });
+                // The BC3 color block is also a BC1 block for opaque pixels.
+                let encoded = super::terrain_atlas::encode_bc3(&block);
+                dds.extend_from_slice(&encoded[8..]);
             }
-        } else {
-            dds.extend_from_slice(pixels.as_flattened());
         }
         if level + 1 < levels {
             let next_width = (width / 2).max(1);
@@ -459,7 +455,28 @@ mod tests {
             let dds = compile_tga(&tga, false, resize, "A8R8G8B8").unwrap();
             assert_eq!(&dds[12..24], &[4, 0, 0, 0, 2, 0, 0, 0, 32, 0, 0, 0]);
             assert_eq!(&dds[128..], &expected);
+
+            let mipped = compile_tga(&tga, true, resize, "A8R8G8B8").unwrap();
+            validate_dds(&mipped).unwrap();
+            assert_eq!(&mipped[8..12], &0xa1007u32.to_le_bytes());
+            assert_eq!(&mipped[28..32], &3u32.to_le_bytes());
+            assert_eq!(&mipped[108..112], &0x401008u32.to_le_bytes());
+            assert_eq!(&mipped[128..160], &expected);
+            assert_eq!(
+                &mipped[160..],
+                &[11, 20, 16, 69, 16, 42, 16, 99, 14, 31, 16, 84]
+            );
         }
+
+        tga[12] = 1;
+        tga[14] = 1;
+        tga.truncate(22);
+        let single = compile_tga(&tga, true, true, "A8R8G8B8").unwrap();
+        validate_dds(&single).unwrap();
+        assert_eq!(&single[8..12], &0xa1007u32.to_le_bytes());
+        assert_eq!(&single[28..32], &1u32.to_le_bytes());
+        assert_eq!(&single[108..112], &0x401008u32.to_le_bytes());
+        assert_eq!(&single[128..], &tga[18..]);
     }
 
     #[test]

@@ -41,6 +41,81 @@ pub(super) fn uncompressed_dds(
     Ok(dds)
 }
 
+pub(super) fn append_uncompressed_mips(
+    mut dds: Vec<u8>,
+    width: usize,
+    height: usize,
+) -> Result<Vec<u8>, &'static str> {
+    let levels = width.max(height).ilog2() + 1;
+    let extra_size: usize = (1..levels)
+        .map(|level| (width >> level).max(1) * (height >> level).max(1) * 4)
+        .sum();
+    dds.try_reserve_exact(extra_size)
+        .map_err(|_| "mipmapped DDS is too large")?;
+    for (offset, value) in [(8, 0xa1007u32), (28, levels), (108, 0x401008)] {
+        dds[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    // Each level is filtered directly from the base image, before rounding to bytes.
+    let base_end = dds.len();
+    dds.resize(base_end + extra_size, 0);
+    let (base, mipmaps) = dds.split_at_mut(base_end);
+    let pixels = base[128..].as_chunks::<4>().0;
+    let mut destination = mipmaps.as_chunks_mut::<4>().0.iter_mut();
+    let normalized: [f32; 256] = std::array::from_fn(|value| value as f32 / 255.0);
+    let mut row = vec![[0.0; 4]; width];
+
+    for level in 1..levels {
+        let columns = mip_taps(width, (width >> level).max(1));
+        let rows = mip_taps(height, (height >> level).max(1));
+        for (first_y, weights) in rows {
+            row.fill([0.0; 4]);
+            for (y, weight) in (first_y..).zip(weights) {
+                for (output, pixel) in row.iter_mut().zip(&pixels[y * width..][..width]) {
+                    for (value, &channel) in output.iter_mut().zip(pixel) {
+                        *value = accumulate(*value, normalized[channel as usize], weight);
+                    }
+                }
+            }
+            for (first_x, weights) in &columns {
+                let mut output = [0.0; 4];
+                for (&pixel, &weight) in row[*first_x..].iter().zip(weights) {
+                    for (value, channel) in output.iter_mut().zip(pixel) {
+                        *value = accumulate(*value, channel, weight);
+                    }
+                }
+                let rounded = output.map(|value| (f64::from(value) * 255.0 + 0.5) as u8);
+                *destination.next().unwrap() = rounded;
+            }
+        }
+    }
+    Ok(dds)
+}
+
+fn accumulate(sum: f32, sample: f32, weight: f64) -> f32 {
+    (f64::from(sum) + f64::from(sample) * weight) as f32
+}
+
+fn mip_taps(source: usize, destination: usize) -> Vec<(usize, Vec<f64>)> {
+    let scale = source / destination;
+    (0..destination)
+        .map(|index| {
+            let start = index * scale;
+            let first = start.saturating_sub(scale / 2);
+            let end = (start + scale + scale / 2).min(source);
+            let center = 2 * start + scale;
+            let mut weights: Vec<_> = (first..end)
+                .map(|x| (2 * scale - (2 * x + 1).abs_diff(center)) as f64)
+                .collect();
+            let normalization = 1.0 / weights.iter().sum::<f64>();
+            for weight in &mut weights {
+                *weight *= normalization;
+            }
+            (first, weights)
+        })
+        .collect()
+}
+
 fn triangle_taps(source_size: usize, output_size: usize) -> Vec<Vec<(usize, f32)>> {
     let ratio = output_size as f32 / source_size as f32;
     let half_inverse = f64::from(0.5 / ratio);
