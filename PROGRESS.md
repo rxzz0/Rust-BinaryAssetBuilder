@@ -5,8 +5,11 @@
 - **Stock Global Data parity.** Resume by rerunning the full EA comparison through `AIMicroManagerLibrary.xml`. The shared ObjectFilter fix covers the previous `IgnoreTargets` status-mask blocker. The full stock stream comparison is still pending.
 - **Native DXT5 terrain atlas parity.** The narrow fixture matches all 21,824 blocks and all four linked files. The three broader fixtures match 81,294 of 87,296 blocks, leaving 6,002. Continue on EA's RGB565 candidate ordering and fractional alpha partition selection. Keep the encoder native-only.
 - **GenEvo end-to-end verification.** Rerun the full mod with the latest project-root executable. The reported XML failures have targeted EA comparisons. Broader inheritance and ObjectFilter parity across the full mod still needs verification.
+- **Native TGA resize parity.** GenEvo Step 6 stops at `Portrait_Temp_Ability.tga`. Obtain the original TGA and its texture declaration, then match EA's resize rounding before enabling native conversion. EA upsized the 17×19 control to 32×32 with both values of `AllowAutomaticResize` for both texture types.
 
 ## Checkpoints
+
+- Checkpoint 543 — Compared EA's non-power-of-two TGA conversion across nine generated image sizes. A wrapped triangle filter and ordered dithering reproduced the dimensions, but 9,536 of 4,194,304 base-level bytes differed on the 750×596 control. Verified that the installed Rust release and EA emit identical stream files and sidecars when fed the same EA-generated DDS inputs, including uncompressed, mipmapped and BC1 controls. No compiler change.
 
 - Checkpoint 542 — Rechecked one-frame WAV parity with eight fresh EA processes and two Rust builds. All four linked stream files were identical across all ten runs. EA emitted 3–5 distinct sidecars per one-frame audio declaration across XAS and PCM, both streamed and in memory. Rust matched every byte that stayed stable across the EA runs and produced identical sidecars on both builds. EA's first decoded XAS sample varied for identical input. Both two-frame XAS controls matched EA byte for byte on every run. Kept the deterministic encoder and recorded the one-frame sidecar exception to byte parity. No compiler change.
 
