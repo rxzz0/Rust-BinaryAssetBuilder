@@ -262,8 +262,8 @@ namespace EALABuild
                 bigStage = stage;
             }
             System.Diagnostics.ProcessStartInfo start = new System.Diagnostics.ProcessStartInfo(
-                Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), String.Format("pack-big \"{0}\" --output \"{1}\" --reuse \"{2}\"",
-                    input, Path.Combine(bigStage, name), Path.Combine(ModInstallPath, name)));
+                Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), String.Format("{0} \"{1}\" --output \"{2}\" --reuse \"{3}\"",
+                    name == ModBigMisc ? "pack-misc-big" : "pack-big", input, Path.Combine(bigStage, name), Path.Combine(ModInstallPath, name)));
             start.UseShellExecute = false;
             start.CreateNoWindow = true;
             start.RedirectStandardError = true;
@@ -342,13 +342,18 @@ namespace EALABuild
             return Environment.GetEnvironmentVariable("BAB_OVERLAP_MISC") == "1";
         }
 
+        private bool HasMiscBigInput()
+        {
+            return Directory.Exists(ModAdditionalFilesPath) || File.Exists(Path.Combine(ModPath, "mapdir.toml"));
+        }
+
         private void StartMiscBig()
         {
-            if (!Directory.Exists(ModAdditionalFilesPath))
+            if (!HasMiscBigInput())
                 return;
             try
             {
-                miscBig = StartBig(ModAdditionalFilesPath, ModBigMisc, out miscBigLog);
+                miscBig = StartBig(ModPath, ModBigMisc, out miscBigLog);
             }
             catch (Exception error)
             {
@@ -411,8 +416,8 @@ namespace EALABuild
                     using (System.Diagnostics.Process streams = StartBig(BuiltModPath, ModBigStreams, out streamsLog))
                         WaitForBig(streams, streamsLog);
                 }
-                if (miscBig == null && Directory.Exists(ModAdditionalFilesPath))
-                    miscBig = StartBig(ModAdditionalFilesPath, ModBigMisc, out miscBigLog);
+                if (miscBig == null && HasMiscBigInput())
+                    miscBig = StartBig(ModPath, ModBigMisc, out miscBigLog);
                 if (miscBig != null)
                     WaitForBig(miscBig, miscBigLog);
                 if (bigStage != null)
@@ -721,9 +726,9 @@ namespace EALABuild
 				    argsBig.Arguments = String.Format(
 				        "/C (@echo off)"
 				        + " && (if exist \"{1}\" (\"{0}\" pack-big \"{1}\" --output \"{2}\\{3}\" 2>&1))"
-				        + " && (if exist \"{4}\" (\"{0}\" pack-big \"{4}\" --output \"{2}\\{5}\" 2>&1))"
+				        + (HasMiscBigInput() ? " && (\"{0}\" pack-misc-big \"{4}\" --output \"{2}\\{5}\" 2>&1)" : "")
 				        + " || (echo ERROR Creating BIG files failed. & exit /b 1)",
-				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), BuiltModPath, ModInstallPath, ModBigStreams, ModAdditionalFilesPath, ModBigMisc);
+				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), BuiltModPath, ModInstallPath, ModBigStreams, ModPath, ModBigMisc);
 				    RunRustBuildStep(argsBig);
 				    break;
                 case 11:

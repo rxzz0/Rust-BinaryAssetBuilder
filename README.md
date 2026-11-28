@@ -173,7 +173,7 @@ Data/Maps/Official/
 D:/Shared Maps/My Mod/
 ```
 
-Step 9 scans the listed folders for map subfolders and writes the results beside each map. An absent or blank file uses the default folder above. Step 10 still packages the usual SDK folders.
+Step 9 scans the listed folders for map subfolders and writes the results beside each map. An absent or blank file uses the default folder above. When **Create BIG Files** is enabled, Step 10 also puts the configured map folders into the Misc BIG under `data\maps\official\<MapName>`. Map folder names must be unique across the custom folders and the maps already in Misc.
 
 ### RA3 SDK coverage and EA verification
 

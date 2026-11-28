@@ -60,3 +60,132 @@ fn matches_makebig_and_reuses_only_identical_contents() {
     fs::remove_dir(input).unwrap();
     fs::remove_dir(root).unwrap();
 }
+
+#[test]
+fn packs_configured_map_folders_at_official_paths() {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("bab-misc-big-{}-{nonce}", std::process::id()));
+    let mod_directory = root.join("SDK/Mods/Reborn");
+    let external = root.join("Shared Maps");
+    let expected = root.join("expected");
+    let output = root.join("out.big");
+    let standard = root.join("expected.big");
+    let staged = root.join("staged.big");
+    let misc = mod_directory.join("Misc");
+    let custom = mod_directory.join("Data/Custom Maps");
+    let local = misc.join("Alternate Maps");
+    let config = mod_directory.join("mapdir.toml");
+    let command = |output: &Path, previous: &Path| {
+        std::process::Command::new(env!("CARGO_BIN_EXE_binary-asset-builder"))
+            .arg("pack-misc-big")
+            .arg(&mod_directory)
+            .arg("--output")
+            .arg(output)
+            .arg("--reuse")
+            .arg(previous)
+            .output()
+            .unwrap()
+    };
+    let write = |base: &Path, name: &str, bytes: &[u8]| {
+        let path = base.join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    };
+    for (source, path, packed, bytes) in [
+        (
+            &custom,
+            "Alpha/an.asset",
+            "data/maps/official/Alpha/an.asset",
+            &b"excluded"[..],
+        ),
+        (
+            &custom,
+            "Alpha/map.version",
+            "data/maps/official/Alpha/map.version",
+            b"_mod\r\n",
+        ),
+        (
+            &custom,
+            "Alpha/alpha.map",
+            "data/maps/official/Alpha/alpha.map",
+            b"terrain",
+        ),
+        (
+            &custom,
+            "Alpha/Art/alpha.w3x",
+            "data/maps/official/Alpha/Art/alpha.w3x",
+            b"art",
+        ),
+        (
+            &external,
+            "Beta/map_mod.manifest",
+            "data/maps/official/Beta/map_mod.manifest",
+            b"manifest",
+        ),
+        (
+            &external,
+            "Beta/beta.map",
+            "data/maps/official/Beta/beta.map",
+            b"beta terrain",
+        ),
+    ] {
+        write(source, path, bytes);
+        write(&expected, packed, bytes);
+    }
+    write(&external, "Notes/readme.txt", b"unrelated");
+    fs::write(
+        &config,
+        format!("Data/Custom Maps/\n{}\n", external.display()),
+    )
+    .unwrap();
+    let result = command(&output, &output);
+    assert!(result.status.success(), "{result:?}");
+    pack_big(&expected, &standard).unwrap();
+    assert_eq!(fs::read(&output).unwrap(), fs::read(&standard).unwrap());
+
+    for (source, path, packed, bytes) in [
+        (
+            &misc,
+            "data/maps/official/Stock/stock.map",
+            "data/maps/official/Stock/stock.map",
+            &b"stock"[..],
+        ),
+        (&misc, "root.txt", "root.txt", b"misc"),
+        (
+            &local,
+            "Gamma/gamma.map",
+            "data/maps/official/Gamma/gamma.map",
+            b"gamma",
+        ),
+    ] {
+        write(source, path, bytes);
+        write(&expected, packed, bytes);
+    }
+    fs::write(
+        &config,
+        format!(
+            "Data/Custom Maps/\n{}\nMisc/Alternate Maps\n",
+            external.display()
+        ),
+    )
+    .unwrap();
+    let result = command(&output, &output);
+    assert!(result.status.success(), "{result:?}");
+    pack_big(&expected, &standard).unwrap();
+    let expected = fs::read(&standard).unwrap();
+    assert_eq!(fs::read(&output).unwrap(), expected);
+    let result = command(&staged, &output);
+    assert!(result.status.success(), "{result:?}");
+    assert!(!staged.exists());
+
+    write(&external, "aLPHA/map.xml", b"ambiguous");
+    let result = command(&output, &output);
+    assert!(!result.status.success(), "{result:?}");
+    assert!(String::from_utf8_lossy(&result.stderr).contains("map folder \"alpha\""));
+    assert_eq!(fs::read(&output).unwrap(), expected);
+    fs::remove_dir_all(root).unwrap();
+}

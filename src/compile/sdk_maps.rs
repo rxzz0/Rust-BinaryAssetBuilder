@@ -209,6 +209,41 @@ fn configured_map_directories(
     Ok(directories)
 }
 
+pub(crate) fn configured_map_roots(mod_directory: &Path) -> io::Result<Vec<PathBuf>> {
+    let directory = std::path::absolute(mod_directory)?;
+    let name = directory
+        .file_name()
+        .ok_or_else(|| invalid(&directory, "expected an SDK mod directory"))?;
+    let mods = directory
+        .parent()
+        .filter(|parent| {
+            parent
+                .file_name()
+                .is_some_and(|name| name.eq_ignore_ascii_case("Mods"))
+        })
+        .ok_or_else(|| invalid(&directory, "expected an SDK Mods directory"))?;
+    let sdk = mods
+        .parent()
+        .ok_or_else(|| invalid(&directory, "expected an SDK root"))?;
+    let relative = Path::new(mods.file_name().unwrap()).join(name);
+    Ok(configured_map_directories(sdk, &relative)?
+        .into_iter()
+        .map(|directory| directory.input)
+        .collect())
+}
+
+pub(crate) fn map_folders(directory: &Path) -> io::Result<Vec<fs::DirEntry>> {
+    let mut maps = Vec::new();
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() && !entry.file_name().eq_ignore_ascii_case("official") {
+            maps.push(entry);
+        }
+    }
+    maps.sort_by_key(|entry| entry.file_name());
+    Ok(maps)
+}
+
 fn build_maps(
     input: &Path,
     sdk_root: &Path,
@@ -218,13 +253,8 @@ fn build_maps(
     skip_precompiled: bool,
     configured: Option<&ConfiguredMapDirectory>,
 ) -> io::Result<usize> {
-    let mut maps = fs::read_dir(input)?.collect::<io::Result<Vec<_>>>()?;
-    maps.sort_by_key(|entry| entry.file_name());
     let mut compiled = 0;
-    for map in maps {
-        if !map.file_type()?.is_dir() || map.file_name().eq_ignore_ascii_case("official") {
-            continue;
-        }
+    for map in map_folders(input)? {
         let name = map.file_name();
         let path = map.path();
         let result = (|| {
@@ -292,7 +322,7 @@ pub(super) fn worldbuilder_dependencies(
     needed
 }
 
-fn map_source(directory: &Path) -> io::Result<Option<PathBuf>> {
+fn map_xml_and_terrain(directory: &Path) -> io::Result<(Option<PathBuf>, bool)> {
     let mut terrain = false;
     for entry in fs::read_dir(directory)? {
         let entry = entry?;
@@ -300,17 +330,27 @@ fn map_source(directory: &Path) -> io::Result<Option<PathBuf>> {
             continue;
         }
         if entry.file_name().eq_ignore_ascii_case("map.xml") {
-            return Ok(Some(entry.path()));
+            return Ok((Some(entry.path()), terrain));
         }
         terrain |= entry
             .path()
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("map"));
     }
-    if terrain {
+    Ok((None, terrain))
+}
+
+fn map_source(directory: &Path) -> io::Result<Option<PathBuf>> {
+    let (xml, terrain) = map_xml_and_terrain(directory)?;
+    if xml.is_none() && terrain {
         return Err(invalid(directory, "unbuilt map is missing map.xml"));
     }
-    Ok(None)
+    Ok(xml)
+}
+
+pub(crate) fn has_packable_map(directory: &Path) -> io::Result<bool> {
+    let (xml, terrain) = map_xml_and_terrain(directory)?;
+    Ok(xml.is_some() || terrain || has_precompiled_map(directory)?)
 }
 
 fn has_precompiled_map(directory: &Path) -> io::Result<bool> {
