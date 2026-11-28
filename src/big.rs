@@ -1,7 +1,7 @@
 //! Uncompressed BIG4 archives produced by the Red Alert 3 SDK.
 
-use crate::compile::{configured_map_roots, has_packable_map, map_folders};
-use std::collections::{HashMap, HashSet};
+use crate::compile::{MapChoice, MapPriority, configured_map_roots, log_shadowed_map, map_folders};
+use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf, absolute};
@@ -10,7 +10,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const BUFFER_SIZE: usize = 1024 * 1024;
 const INDEX_TRAILER: &[u8] = b"L219\0\0\0\0";
 const OFFICIAL_MAPS: &str = "data/maps/official";
-const OFFICIAL_MAP_PREFIX: &str = "data\\maps\\official\\";
 
 struct Entry {
     path: PathBuf,
@@ -59,27 +58,22 @@ pub fn stage_misc_big(
     };
     let roots = configured_map_roots(mod_directory)?;
     let mut maps = Vec::new();
-    let mut by_name = HashMap::new();
+    let mut priority = MapPriority::default();
     let mut inputs = MapInputs::default();
     for root in &roots {
         for map in map_folders(root)? {
             let source = map.path();
-            if !has_packable_map(&source)? {
-                continue;
-            }
-            let name = archive_name(Path::new(&map.file_name()))?;
-            if let Some(other) = by_name.insert(name.clone(), source.clone()) {
-                if source != other {
-                    return Err(invalid(format!(
-                        "map folder {name:?} is present in {} and {}",
-                        other.display(),
-                        source.display()
-                    )));
+            match priority.consider(&map)? {
+                MapChoice::NotMap => continue,
+                MapChoice::Shadowed => {
+                    inputs.mapped.insert(source);
                 }
-                continue;
+                MapChoice::Selected => {
+                    let name = archive_name(Path::new(&map.file_name()))?;
+                    inputs.mapped.insert(source.clone());
+                    maps.push((source, Path::new(OFFICIAL_MAPS).join(name)));
+                }
             }
-            inputs.mapped.insert(source.clone());
-            maps.push((source, Path::new(OFFICIAL_MAPS).join(name)));
         }
     }
     if misc.is_none() && maps.is_empty() {
@@ -88,6 +82,9 @@ pub fn stage_misc_big(
     inputs
         .configured_roots
         .extend(roots.iter().map(PathBuf::as_path));
+    if !maps.is_empty() {
+        inputs.priority = Some(&priority);
+    }
     let output = archive_output(
         output,
         misc.as_deref()
@@ -99,7 +96,7 @@ pub fn stage_misc_big(
         collect(misc, misc, Path::new(""), &inputs, &mut entries)?;
     }
     for entry in &entries {
-        if !by_name.is_empty()
+        if !maps.is_empty()
             && matches!(
                 entry.name.as_str(),
                 "data" | "data\\maps" | "data\\maps\\official"
@@ -110,22 +107,12 @@ pub fn stage_misc_big(
                 entry.name
             )));
         }
-        if let Some(name) = entry
-            .name
-            .strip_prefix(OFFICIAL_MAP_PREFIX)
-            .and_then(|name| name.split('\\').next())
-            && let Some(other) = by_name.get(name)
-        {
-            return Err(invalid(format!(
-                "map folder {name:?} is present in Misc and {}",
-                other.display()
-            )));
-        }
     }
+    let has_overrides = !maps.is_empty();
     for (source, name) in maps {
         collect(&source, &source, &name, &MapInputs::default(), &mut entries)?;
     }
-    if !by_name.is_empty() {
+    if has_overrides {
         // MakeBig visits child directories in name order before the files in each directory.
         entries.sort_by_cached_key(|entry| {
             let mut components = entry.name.split('\\').peekable();
@@ -201,6 +188,7 @@ fn stage_entries(entries: &[Entry], output: &Path, previous: &Path) -> io::Resul
 struct MapInputs<'a> {
     mapped: HashSet<PathBuf>,
     configured_roots: HashSet<&'a Path>,
+    priority: Option<&'a MapPriority>,
 }
 
 fn collect(
@@ -214,7 +202,23 @@ fn collect(
     children.sort_by_cached_key(|entry| entry.file_name().to_ascii_uppercase());
     let mut files = Vec::new();
     let mut previous = None;
+    let official_priority = maps.priority.filter(|_| {
+        let relative = directory.strip_prefix(root).unwrap();
+        let parts: Vec<_> = relative.iter().collect();
+        matches!(parts.as_slice(), [data, maps, official]
+            if data.eq_ignore_ascii_case("data") && maps.eq_ignore_ascii_case("maps") && official.eq_ignore_ascii_case("official"))
+    });
     for child in children {
+        let path = child.path();
+        if maps.mapped.contains(&path) {
+            continue;
+        }
+        if let Some(winner) =
+            official_priority.and_then(|priority| priority.winner(&child.file_name()))
+        {
+            log_shadowed_map(winner, &path);
+            continue;
+        }
         let key = child.file_name().to_ascii_uppercase();
         if previous.as_ref() == Some(&key) {
             return Err(invalid(format!(
@@ -224,11 +228,8 @@ fn collect(
         }
         previous = Some(key);
         let kind = child.file_type()?;
-        let path = child.path();
         if kind.is_dir() {
-            if !maps.mapped.contains(&path) {
-                collect(root, &path, prefix, maps, entries)?;
-            }
+            collect(root, &path, prefix, maps, entries)?;
         } else if kind.is_file() {
             files.push(child);
         } else if maps.configured_roots.is_empty()

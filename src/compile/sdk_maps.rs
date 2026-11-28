@@ -6,6 +6,7 @@ use crate::compile_batch::publish_map_stream;
 use crate::manifest::{AssetEntry, AssetId};
 use crate::sdk_references::prepare_references;
 use std::collections::{HashMap, HashSet};
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -45,25 +46,26 @@ pub fn compile_sdk_map_overrides(
     mut game_data: Option<&Path>,
     skip_precompiled: bool,
 ) -> io::Result<usize> {
+    let mut priority = MapPriority::default();
+    let mut compiled = 0;
+    let mut has_config = false;
     if let Some(mod_relative) = default_map_mod(input, sdk_root, output)? {
         let directories = configured_map_directories(sdk_root, &mod_relative)?;
-        if !directories.is_empty() {
-            return directories.iter().try_fold(0, |total, directory| {
-                build_maps(
-                    &directory.input,
-                    sdk_root,
-                    references,
-                    &directory.input,
-                    &mut game_data,
-                    skip_precompiled,
-                    Some(directory),
-                )
-                .map(|count| total + count)
-            });
+        has_config = !directories.is_empty();
+        for directory in &directories {
+            compiled += build_maps(
+                priority.select(&directory.input)?,
+                sdk_root,
+                references,
+                &directory.input,
+                &mut game_data,
+                skip_precompiled,
+                Some(directory),
+            )?;
         }
     }
     if !input.try_exists()? {
-        return Ok(0);
+        return Ok(compiled);
     }
     let canonical_sdk = fs::canonicalize(sdk_root)?;
     let resolved = fs::canonicalize(input)?;
@@ -75,8 +77,13 @@ pub fn compile_sdk_map_overrides(
     } else {
         return Err(invalid(&resolved, "map directory lies outside the SDK"));
     };
+    let maps = if has_config {
+        priority.select(input)?
+    } else {
+        map_folders(input)?
+    };
     build_maps(
-        input,
+        maps,
         sdk_root,
         references,
         output,
@@ -84,6 +91,7 @@ pub fn compile_sdk_map_overrides(
         skip_precompiled,
         None,
     )
+    .map(|count| compiled + count)
 }
 
 pub(super) fn relative_sdk_path(path: &Path, sdk: &Path) -> Option<PathBuf> {
@@ -244,8 +252,61 @@ pub(crate) fn map_folders(directory: &Path) -> io::Result<Vec<fs::DirEntry>> {
     Ok(maps)
 }
 
+#[derive(Default)]
+pub(crate) struct MapPriority(HashMap<OsString, PathBuf>);
+
+pub(crate) enum MapChoice {
+    NotMap,
+    Selected,
+    Shadowed,
+}
+
+impl MapPriority {
+    pub(crate) fn consider(&mut self, map: &fs::DirEntry) -> io::Result<MapChoice> {
+        let source = map.path();
+        if !has_packable_map(&source)? {
+            return Ok(MapChoice::NotMap);
+        }
+        let name = map.file_name().to_ascii_lowercase();
+        match self.0.entry(name) {
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(source);
+                Ok(MapChoice::Selected)
+            }
+            std::collections::hash_map::Entry::Occupied(entry) => {
+                if source != *entry.get() {
+                    log_shadowed_map(entry.get(), &source);
+                }
+                Ok(MapChoice::Shadowed)
+            }
+        }
+    }
+
+    pub(crate) fn winner(&self, name: &OsStr) -> Option<&Path> {
+        self.0.get(&name.to_ascii_lowercase()).map(PathBuf::as_path)
+    }
+
+    fn select(&mut self, directory: &Path) -> io::Result<Vec<fs::DirEntry>> {
+        let mut selected = Vec::new();
+        for map in map_folders(directory)? {
+            if matches!(self.consider(&map)?, MapChoice::Selected) {
+                selected.push(map);
+            }
+        }
+        Ok(selected)
+    }
+}
+
+pub(crate) fn log_shadowed_map(winner: &Path, skipped: &Path) {
+    println!(
+        "Using map {}. Skipping duplicate {}",
+        winner.display(),
+        skipped.display()
+    );
+}
+
 fn build_maps(
-    input: &Path,
+    maps: Vec<fs::DirEntry>,
     sdk_root: &Path,
     references: &Path,
     output: &Path,
@@ -254,7 +315,7 @@ fn build_maps(
     configured: Option<&ConfiguredMapDirectory>,
 ) -> io::Result<usize> {
     let mut compiled = 0;
-    for map in map_folders(input)? {
+    for map in maps {
         let name = map.file_name();
         let path = map.path();
         let result = (|| {

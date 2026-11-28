@@ -3592,8 +3592,13 @@ fn sdk_map_config_builds_relative_and_external_paths_in_place() {
     let shared = r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
       <Video id="Clip" Filename="clip.bik"/>
     </AssetDeclaration>"#;
-    for directory in [&default, &relative, &second, &external] {
-        let map = directory.join("ProbeMap");
+    for (directory, name) in [
+        (&default, "ProbeMap"),
+        (&relative, "First"),
+        (&second, "Second"),
+        (&external, "ProbeMap"),
+    ] {
+        let map = directory.join(name);
         fs::create_dir_all(&map).unwrap();
         fs::write(map.join("map.xml"), xml).unwrap();
     }
@@ -3620,6 +3625,12 @@ fn sdk_map_config_builds_relative_and_external_paths_in_place() {
     assert!(String::from_utf8_lossy(&result.stdout).contains("Compiled 1 map override streams"));
     let default_backup = mod_dir.join("Default Maps");
     fs::rename(&default, &default_backup).unwrap();
+    for map in [second.join("fIRSt"), default.join("FIRST")] {
+        fs::create_dir_all(&map).unwrap();
+        fs::write(map.join("map.xml"), "<invalid").unwrap();
+    }
+    fs::create_dir_all(default.join("Fallback")).unwrap();
+    fs::write(default.join("Fallback/map.xml"), xml).unwrap();
 
     let config = mod_dir.join("mapdir.toml");
     let external_path = external
@@ -3633,16 +3644,25 @@ fn sdk_map_config_builds_relative_and_external_paths_in_place() {
     .unwrap();
     let result = build();
     assert!(result.status.success(), "{result:?}");
-    assert!(String::from_utf8_lossy(&result.stdout).contains("Compiled 3 map override streams"));
+    let log = String::from_utf8_lossy(&result.stdout);
+    assert!(log.contains("Compiled 4 map override streams"));
+    assert_eq!(log.matches("Skipping duplicate").count(), 2);
+    assert!(!second.join("fIRSt/map.version").exists());
+    assert!(!default.join("FIRST/map.version").exists());
     assert!(
         String::from_utf8_lossy(&result.stderr).is_empty(),
         "{result:?}"
     );
-    for directory in [&relative, &second, &external] {
-        let path = directory.join("ProbeMap/map_mod.manifest");
+    for directory in [
+        relative.join("First"),
+        second.join("Second"),
+        external.join("ProbeMap"),
+        default.join("Fallback"),
+    ] {
+        let path = directory.join("map_mod.manifest");
         let data = fs::read(&path).unwrap();
         check_linked_files(&path, &Manifest::parse(&data).unwrap()).unwrap();
-        assert!(directory.join("ProbeMap/map.version").is_file());
+        assert!(directory.join("map.version").is_file());
     }
     let external_manifest = fs::read(external.join("ProbeMap/map_mod.manifest")).unwrap();
     let external_manifest = Manifest::parse(&external_manifest).unwrap();

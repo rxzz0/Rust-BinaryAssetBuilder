@@ -182,10 +182,42 @@ fn packs_configured_map_folders_at_official_paths() {
     assert!(result.status.success(), "{result:?}");
     assert!(!staged.exists());
 
-    write(&external, "aLPHA/map.xml", b"ambiguous");
+    write(&external, "aLPHA/map.xml", b"shadowed custom XML");
+    write(
+        &misc,
+        "data/maps/official/Alpha/loser.map",
+        b"shadowed Misc terrain",
+    );
     let result = command(&output, &output);
-    assert!(!result.status.success(), "{result:?}");
-    assert!(String::from_utf8_lossy(&result.stderr).contains("map folder \"alpha\""));
+    assert!(result.status.success(), "{result:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&result.stdout)
+            .matches("Skipping duplicate")
+            .count(),
+        2
+    );
     assert_eq!(fs::read(&output).unwrap(), expected);
+
+    fs::write(
+        &config,
+        format!(
+            "{}\nData/Custom Maps/\nMisc/Alternate Maps\n",
+            external.display()
+        ),
+    )
+    .unwrap();
+    let result = command(&output, &output);
+    assert!(result.status.success(), "{result:?}");
+    let archive = fs::read(&output).unwrap();
+    assert!(
+        archive
+            .windows(b"shadowed custom XML".len())
+            .any(|bytes| bytes == b"shadowed custom XML")
+    );
+    assert!(
+        !archive
+            .windows(b"alpha.map".len())
+            .any(|bytes| bytes == b"alpha.map")
+    );
     fs::remove_dir_all(root).unwrap();
 }

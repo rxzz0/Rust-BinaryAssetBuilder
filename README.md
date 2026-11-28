@@ -173,7 +173,7 @@ Data/Maps/Official/
 D:/Shared Maps/My Mod/
 ```
 
-Step 9 scans the listed folders for map subfolders and writes the results beside each map. An absent or blank file uses the default folder above. When **Create BIG Files** is enabled, Step 10 also puts the configured map folders into the Misc BIG under `data\maps\official\<MapName>`. Map folder names must be unique across the custom folders and the maps already in Misc.
+Step 9 scans the listed folders for map subfolders and writes the results beside each selected map. When **Create BIG Files** is enabled, Step 10 puts selected maps into the Misc BIG under `data\maps\official\<MapName>`. Both steps use the first matching map folder in `mapdir.toml`, comparing names case-insensitively, and fall back to the maps in Misc. The build log identifies skipped duplicates.
 
 ### RA3 SDK coverage and EA verification
 

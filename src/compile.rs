@@ -30,7 +30,9 @@ mod expressions;
 mod merge_assets;
 mod precompiled;
 mod sdk_maps;
-pub(crate) use sdk_maps::{configured_map_roots, has_packable_map, map_folders};
+pub(crate) use sdk_maps::{
+    MapChoice, MapPriority, configured_map_roots, log_shadowed_map, map_folders,
+};
 mod sdk_static;
 mod static_assets;
 mod stream_order;
