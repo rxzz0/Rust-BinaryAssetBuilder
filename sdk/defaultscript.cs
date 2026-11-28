@@ -13,7 +13,9 @@
 //===================================================//
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Text;
 using Microsoft.Win32;
@@ -236,7 +238,9 @@ namespace EALABuild
             modGUIData.Add(new GUIElementData("step6", "Build Static Data", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step7", "Merge Assets", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
             modGUIData.Add(new GUIElementData("step8", "Fix Assets", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
-            modGUIData.Add(new GUIElementData("compileMissingMapOverrides", "Compile missing map overrides", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
+            modGUIData.Add(new GUIElementData("compileMissingMapOverrides", "Build Maps", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
+            modGUIData.Add(new GUIElementData("forceBuildMaps", "Force Build Maps", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
+            WatchMapCheckboxes();
             modGUIData.Add(new GUIElementData("sp2", "", GUIElementData.LabelType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step10", "Create BIG Files", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
 			modGUIData.Add(new GUIElementData("step11", "Create Skudef File", GUIElementData.CheckBoxType, ScriptIndex.ModScript));
@@ -248,6 +252,67 @@ namespace EALABuild
         }
         #endregion
 
+
+        private static Type mapOptionsApplication;
+        private static object boundForceBuildMaps;
+
+        private static void WatchMapCheckboxes()
+        {
+            // The host loads defaultscript.cs without a Windows Forms reference.
+            foreach (System.Reflection.Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                mapOptionsApplication = assembly.GetType("System.Windows.Forms.Application");
+                if (mapOptionsApplication == null)
+                    continue;
+                System.Reflection.EventInfo idle = mapOptionsApplication.GetEvent("Idle");
+                EventHandler handler = BindMapCheckboxes;
+                idle.RemoveEventHandler(null, handler);
+                idle.AddEventHandler(null, handler);
+                break;
+            }
+        }
+
+        private static void BindMapCheckboxes(object sender, EventArgs args)
+        {
+            IEnumerable forms = (IEnumerable)mapOptionsApplication.GetProperty("OpenForms").GetValue(null, null);
+            foreach (object form in forms)
+            {
+                object build = FindMapCheckbox(form, "Build Maps");
+                object force = FindMapCheckbox(form, "Force Build Maps");
+                if (build == null || force == null)
+                    continue;
+
+                if (boundForceBuildMaps != force)
+                {
+                    PropertyDescriptor checkedProperty = TypeDescriptor.GetProperties(build)["Checked"];
+                    PropertyDescriptor enabledProperty = TypeDescriptor.GetProperties(force)["Enabled"];
+                    EventHandler update = delegate
+                    {
+                        enabledProperty.SetValue(force, checkedProperty.GetValue(build));
+                    };
+                    TypeDescriptor.GetEvents(build)["CheckedChanged"].AddEventHandler(build, update);
+                    update(null, EventArgs.Empty);
+                    boundForceBuildMaps = force;
+                }
+                mapOptionsApplication.GetEvent("Idle").RemoveEventHandler(null, (EventHandler)BindMapCheckboxes);
+                return;
+            }
+        }
+
+        private static object FindMapCheckbox(object control, string label)
+        {
+            if (control.GetType().FullName == "System.Windows.Forms.CheckBox"
+                && (string)TypeDescriptor.GetProperties(control)["Text"].GetValue(control) == label)
+                return control;
+            IEnumerable children = (IEnumerable)TypeDescriptor.GetProperties(control)["Controls"].GetValue(control);
+            foreach (object child in children)
+            {
+                object match = FindMapCheckbox(child, label);
+                if (match != null)
+                    return match;
+            }
+            return null;
+        }
 
         private string bigStage;
         private System.Diagnostics.Process miscBig;
@@ -711,11 +776,15 @@ namespace EALABuild
 				{
 				    BuildHelper.DisplayLine("Step 9: Compiling map overrides with Rust");
 				    string maps = Path.Combine(ModAdditionalFilesPath, @"data\maps\official");
+				    object forceMaps;
+				    bool force = currentGUIData.TryGetValue("forceBuildMaps", out forceMaps)
+				        && forceMaps is bool && (bool)forceMaps;
 				    RunExecutableArguments argsMaps = new RunExecutableArguments(Cmd);
 				    argsMaps.Arguments = String.Format(
-				        "/C (@echo off) & (\"{0}\" compile-maps-sdk \"{1}\" --sdk-root \"{2}\" --references \"{3}\" --output \"{1}\" --game-data \"{4}\" --skip-precompiled 2>&1)"
+				        "/C (@echo off) & (\"{0}\" compile-maps-sdk \"{1}\" --sdk-root \"{2}\" --references \"{3}\" --output \"{1}\" --game-data \"{4}\"{5} 2>&1)"
 				        + " || (echo Error: Could not run the map override build. & exit /b 0)",
-				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), maps, SDKDirectory, BuiltModsPath, RA3DataDir);
+				        Path.Combine(SDKDirectory, @"tools\binary-asset-builder.exe"), maps, SDKDirectory, BuiltModsPath, RA3DataDir,
+				        force ? "" : " --skip-precompiled");
 				    RunRustBuildStep(argsMaps);
 				    break;
 				}
