@@ -646,6 +646,43 @@ fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
 }
 
 #[test]
+fn sdk_static_reports_occupied_staging_path_and_preserves_recovery_files() {
+    let root = scratch_root();
+    let input = root.join("Mods/Example/Data/Mod.xml");
+    let built = root.join("builtmods");
+    let output = built.join("mods/example/data");
+    let stage = output.join(".rust-streams");
+    let recovery = stage.join("previous/mod.bin");
+    fs::create_dir_all(input.parent().unwrap()).unwrap();
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset" />"#,
+    )
+    .unwrap();
+    fs::create_dir_all(recovery.parent().unwrap()).unwrap();
+    fs::write(&recovery, b"previous output").unwrap();
+
+    let error = compile_sdk_static(&input, &root, &built).unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+    let diagnostic = error.to_string().replace('\\', "/");
+    let expected = stage.display().to_string().replace('\\', "/");
+    assert!(diagnostic.contains(&expected), "{diagnostic}");
+    assert_eq!(fs::read(&recovery).unwrap(), b"previous output");
+    assert!(!output.join("mod.manifest").exists());
+
+    let saved = root.join("saved-stage");
+    fs::rename(&stage, &saved).unwrap();
+    compile_sdk_static(&input, &root, &built).unwrap();
+    assert!(output.join("mod.manifest").is_file());
+    assert!(!stage.exists());
+    assert_eq!(
+        fs::read(saved.join("previous/mod.bin")).unwrap(),
+        b"previous output"
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_static_treats_missing_source_includes_as_empty() {
     let root = scratch_root();
     let data = root.join("Mods/Example/Data");

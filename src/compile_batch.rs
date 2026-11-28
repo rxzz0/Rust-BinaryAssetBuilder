@@ -217,9 +217,27 @@ pub(crate) fn publish_prepared(
     prepare: impl FnOnce() -> io::Result<Vec<Output>>,
     replace: impl Fn(&Path) -> bool,
 ) -> io::Result<()> {
-    fs::create_dir_all(output)?;
+    fs::create_dir_all(output).map_err(|error| {
+        io::Error::new(
+            error.kind(),
+            format!(
+                "cannot create build output directory {} ({error})",
+                output.display()
+            ),
+        )
+    })?;
     let stage = output.join(".rust-streams");
-    fs::create_dir(&stage)?;
+    fs::create_dir(&stage).map_err(|error| {
+        let message = if error.kind() == io::ErrorKind::AlreadyExists {
+            format!(
+                "build staging path already exists at {}. If no build is running, move it outside the build output before retrying",
+                stage.display()
+            )
+        } else {
+            format!("cannot create build staging directory {} ({error})", stage.display())
+        };
+        io::Error::new(error.kind(), message)
+    })?;
     let fresh = stage.join("new");
     let old = stage.join("previous");
     let mut backed_up = Vec::new();
