@@ -197,20 +197,35 @@ fn write_dds(out: &mut Vec<u8>, pixels: Vec<Pixel>, width: usize, height: usize,
         let scale = 1 << level;
         let (mip_width, mip_height) = (width / scale, height / scale);
         if bc3 {
-            let mip;
-            let pixels = if level == 0 {
-                &pixels[..]
-            } else {
-                mip = triangle_mip(&pixels, width, height, scale, |pixel, divisor| {
-                    pixel.map(|value| ((value + divisor / 2) / divisor) as u8)
-                });
-                &mip
-            };
+            let mip = (level != 0).then(|| {
+                triangle_mip(&pixels, width, height, scale, |pixel, divisor| {
+                    let rounded = pixel.map(|value| ((value + divisor / 2) / divisor) as u8);
+                    (
+                        rounded,
+                        f64::from(pixel[3]) / f64::from(divisor),
+                        (0..3).all(|i| pixel[i] == u32::from(rounded[i]) * divisor),
+                    )
+                })
+            });
             for y in (0..mip_height).step_by(4) {
                 for x in (0..mip_width).step_by(4) {
-                    let block =
-                        std::array::from_fn(|i| pixels[(y + i / 4) * mip_width + x + i % 4]);
-                    out.extend(encode_bc3(&block));
+                    let index = |i: usize| (y + i / 4) * mip_width + x + i % 4;
+                    if let Some(mip) = &mip {
+                        let samples: [(Pixel, f64, bool); 16] =
+                            std::array::from_fn(|i| mip[index(i)]);
+                        let pixels = samples.map(|(pixel, _, _)| pixel);
+                        let mut block = encode_bc3(&pixels);
+                        fit_filtered_alpha(&samples.map(|(_, alpha, _)| alpha), &mut block);
+                        if samples.iter().all(|&(_, _, exact_rgb)| exact_rgb) {
+                            fit_solid_rgb(&pixels, &mut block);
+                        }
+                        out.extend(block);
+                    } else {
+                        let pixels = std::array::from_fn(|i| pixels[index(i)]);
+                        let mut block = encode_bc3(&pixels);
+                        fit_solid_rgb(&pixels, &mut block);
+                        out.extend(block);
+                    }
                 }
             }
         } else if level == 0 {
@@ -388,6 +403,114 @@ pub(super) fn encode_bc3(pixels: &[Pixel; 16]) -> [u8; 16] {
     block
 }
 
+fn fit_filtered_alpha(samples: &[f64; 16], block: &mut [u8; 16]) {
+    let high = samples.iter().copied().fold(0.0, f64::max);
+    let low = samples.iter().copied().fold(255.0, f64::min);
+    let span = high - low;
+    if span == 0.0 || span > 8.0 || samples.iter().all(|sample| sample.fract() == 0.0) {
+        return;
+    }
+
+    // Use the fractional samples to assign the ramp positions, then refit
+    // its endpoints by least squares before quantizing them to bytes.
+    let positions = samples.map(|alpha| (7.0 * (high - alpha) / span).round() as u8);
+    let mean_position = positions.iter().map(|&p| f64::from(p)).sum::<f64>() / 16.0;
+    let mean_alpha = samples.iter().sum::<f64>() / 16.0;
+    let (mut variance, mut covariance) = (0.0, 0.0);
+    for (&position, &sample) in positions.iter().zip(samples) {
+        let offset = f64::from(position) - mean_position;
+        variance += offset * offset;
+        covariance += offset * (sample - mean_alpha);
+    }
+    let slope = covariance / variance;
+    let high = (mean_alpha - slope * mean_position).round() as u8;
+    let low = (mean_alpha + slope * (7.0 - mean_position)).round() as u8;
+    if high <= low || block[0] <= block[1] {
+        return;
+    }
+
+    let previous = u64::from_le_bytes(std::array::from_fn(
+        |i| {
+            if i < 6 { block[2 + i] } else { 0 }
+        },
+    ));
+    let (mut fitted, mut rounded_gain, mut fractional_gain) = (0u64, 0.0, 0.0);
+    let alpha_at = |high, low, position| {
+        (f64::from(high) * (7.0 - position) + f64::from(low) * position) / 7.0
+    };
+    for (i, (&position, &sample)) in positions.iter().zip(samples).enumerate() {
+        let old_index = ((previous >> (3 * i)) & 7) as usize;
+        let old = alpha_at(
+            block[0],
+            block[1],
+            f64::from([0, 7, 1, 2, 3, 4, 5, 6][old_index]),
+        );
+        let new = alpha_at(high, low, f64::from(position));
+        rounded_gain += (old.round() - sample).powi(2) - (new.round() - sample).powi(2);
+        fractional_gain += (old - sample).powi(2) - (new - sample).powi(2);
+        fitted |= [0u64, 2, 3, 4, 5, 6, 7, 1][usize::from(position)] << (3 * i);
+    }
+    // When the decoded error ties, a two-cluster fit can still choose a
+    // more representative pair of endpoints for the fractional samples.
+    if rounded_gain > 1e-9
+        || (rounded_gain.abs() <= 1e-9
+            && fractional_gain > 1e-9
+            && positions.iter().all(|&p| p == 0 || p == 7))
+    {
+        block[..2].copy_from_slice(&[high, low]);
+        block[2..8].copy_from_slice(&fitted.to_le_bytes()[..6]);
+    }
+}
+
+// For each byte that the interpolated ramp can represent exactly, find the
+// closest pair of endpoint codes. Keeping the table local to terrain preserves
+// the separate DXT1 texture path.
+const fn solid_rgb_pairs(bits: u16) -> [(u16, u16); 256] {
+    let mut pairs = [(u16::MAX, 0); 256];
+    let mut a = 0u16;
+    while a < 1 << bits {
+        let first = (a << (8 - bits)) | (a >> (2 * bits - 8));
+        let mut b = 0;
+        while b < 1 << bits {
+            let second = (b << (8 - bits)) | (b >> (2 * bits - 8));
+            let value = ((2 * first + second + 1) / 3) as usize;
+            let (old_a, old_b) = pairs[value];
+            if old_a == u16::MAX || a.abs_diff(b) < old_a.abs_diff(old_b) {
+                pairs[value] = (a, b);
+            }
+            b += 1;
+        }
+        a += 1;
+    }
+    pairs
+}
+
+fn fit_solid_rgb(pixels: &[Pixel; 16], block: &mut [u8; 16]) {
+    const FIVE_BIT: [(u16, u16); 256] = solid_rgb_pairs(5);
+    const SIX_BIT: [(u16, u16); 256] = solid_rgb_pairs(6);
+
+    let [b, g, r, _] = pixels[0];
+    if (b == g && g == r) || !pixels[1..].iter().all(|pixel| pixel[..3] == [b, g, r]) {
+        return;
+    }
+    let channels = [
+        FIVE_BIT[usize::from(b)],
+        SIX_BIT[usize::from(g)],
+        FIVE_BIT[usize::from(r)],
+    ];
+    // This fit covers chromatic solids represented by interpolation in all
+    // three channels. The single-endpoint cases have separate tie behavior.
+    if channels.iter().any(|&(a, b)| a == u16::MAX || a == b) {
+        return;
+    }
+    let [(b0, b1), (g0, g1), (r0, r1)] = channels;
+    let (a, b) = (r0 << 11 | g0 << 5 | b0, r1 << 11 | g1 << 5 | b1);
+    let (high, low, indices) = if a > b { (a, b, 0xaa) } else { (b, a, 0xff) };
+    block[8..10].copy_from_slice(&high.to_le_bytes());
+    block[10..12].copy_from_slice(&low.to_le_bytes());
+    block[12..].fill(indices);
+}
+
 // EA stores black as endpoint 1 with every texel selecting that endpoint.
 const BLACK_BC3_COLOR: [u8; 8] = [1, 0, 0, 0, 0x55, 0x55, 0x55, 0x55];
 
@@ -489,6 +612,45 @@ mod tests {
         assert_eq!(
             &encode_bc3(&pixels)[..8],
             &[0x23, 0x20, 0x31, 0x11, 0x13, 0x31, 0x11, 0x13]
+        );
+    }
+
+    #[test]
+    fn bc3_fits_fractional_mip_alpha_before_rounding_endpoints() {
+        let mut samples = [33.0, 34.0, 33.0, 30.0].repeat(4);
+        samples[12..].copy_from_slice(&[28.875, 29.75, 28.875, 26.25]);
+        let cases = [
+            (
+                samples.try_into().unwrap(),
+                [0x22, 0x1b, 0x82, 0x2a, 0xa8, 0x82, 0xea, 0x3a],
+            ),
+            (
+                std::array::from_fn(|i| match i {
+                    12 => 29.15625,
+                    13.. => 29.3125,
+                    i if i % 4 == 0 => 33.0 + 9.0 / 28.0,
+                    _ => 33.5,
+                }),
+                [0x21, 0x1d, 0, 0, 0, 0, 0x90, 0x24],
+            ),
+        ];
+        for (samples, expected) in cases {
+            let mut block = encode_bc3(&samples.map(|alpha: f64| [0, 0, 0, alpha.round() as u8]));
+            fit_filtered_alpha(&samples, &mut block);
+            assert_eq!(&block[..8], &expected);
+        }
+    }
+
+    #[test]
+    fn bc3_fits_solid_color_with_rgb565_interpolation() {
+        let pixels = std::array::from_fn(|i| [32, 64, 164, i as u8]);
+        let mut block = encode_bc3(&pixels);
+        let alpha = block[..8].to_vec();
+        fit_solid_rgb(&pixels, &mut block);
+        assert_eq!(block[..8], alpha);
+        assert_eq!(
+            &block[8..],
+            &[0x46, 0xb2, 0xe3, 0x99, 0xff, 0xff, 0xff, 0xff]
         );
     }
 }
