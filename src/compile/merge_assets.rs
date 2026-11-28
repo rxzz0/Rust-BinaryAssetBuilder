@@ -1,7 +1,7 @@
 //! Merges SDK precompiled assets into a native linked stream.
 
 use super::{RA3_ALL_TYPES_HASH, invalid, precompiled, read_with_context};
-use crate::compile_batch::{Contents, publish_prepared};
+use crate::compile_batch::{Contents, Output, publish_prepared};
 use crate::linked_stream::check_linked_files;
 use crate::manifest::{AssetEntry, AssetReferences, ByteOrder, ChunkSizes, Manifest};
 use std::collections::{HashMap, HashSet};
@@ -64,8 +64,9 @@ pub fn merge_assets(input: &Path, assets_directory: &Path) -> io::Result<usize> 
             });
             let references: Vec<Vec<_>> = incoming
                 .iter()
-                .map(|asset| {
-                    asset
+                .map(|archive| {
+                    archive
+                        .asset
                         .references
                         .iter()
                         .map(|reference| reference.id)
@@ -74,7 +75,8 @@ pub fn merge_assets(input: &Path, assets_directory: &Path) -> io::Result<usize> 
                 .collect();
             let mut entries = Vec::with_capacity(manifest.assets.len() + incoming.len());
             let mut incoming_ids = HashMap::with_capacity(incoming.len());
-            for (asset, references) in incoming.iter().zip(&references) {
+            for (archive, references) in incoming.iter().zip(&references) {
+                let asset = &archive.asset;
                 incoming_ids.insert(asset.id, asset);
                 let mut sizes = [0; 3];
                 for ((output, size), chunk) in outputs.iter_mut().zip(&mut sizes).zip([
@@ -175,11 +177,58 @@ pub fn merge_assets(input: &Path, assets_directory: &Path) -> io::Result<usize> 
                 input.file_name().unwrap().to_owned(),
                 Contents::Bytes(manifest),
             ));
+            published.extend(custom_data_outputs(directory, input, incoming)?);
             Ok(published)
         },
         |_| false,
     )?;
     Ok(count)
+}
+
+fn custom_data_outputs(
+    directory: &Path,
+    input: &Path,
+    incoming: Vec<precompiled::Archive>,
+) -> io::Result<Vec<Output>> {
+    let folder = Path::new(input.file_stem().unwrap()).join("cdata");
+    let target = directory.join(&folder);
+    let mut prefixes = HashSet::with_capacity(incoming.len());
+    let mut copies = Vec::new();
+    for archive in incoming {
+        prefixes.insert(precompiled::custom_data_prefix(&archive.asset));
+        if let Some(source) = archive.custom_data {
+            let name = folder.join(precompiled::custom_data_name(&archive.asset));
+            copies.push((name.into_os_string(), Contents::Copy(source)));
+        }
+    }
+
+    // AssetMerger clears any older sidecar for the incoming asset's type and instance.
+    let mut outputs = Vec::new();
+    match fs::read_dir(&target) {
+        Ok(entries) => {
+            for entry in entries {
+                let entry = entry?;
+                let name = entry.file_name();
+                let path = Path::new(&name);
+                if path
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("cdata"))
+                    && name
+                        .to_str()
+                        .and_then(|name| name.rsplit_once('.'))
+                        .and_then(|(stem, _)| stem.rsplit_once('.'))
+                        .is_some_and(|(prefix, _)| prefixes.contains(&prefix.to_ascii_uppercase()))
+                    && entry.file_type()?.is_file()
+                {
+                    outputs.push((folder.join(name).into_os_string(), Contents::Remove));
+                }
+            }
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    outputs.extend(copies);
+    Ok(outputs)
 }
 
 #[cfg(test)]
@@ -363,5 +412,57 @@ mod tests {
             originals
         );
         assert!(!root.join(".rust-streams").exists());
+    }
+
+    #[test]
+    fn merges_audio_and_replaces_only_its_sidecars() {
+        let stream = TestStream::new();
+        let root = &stream.0;
+        let input = root.join("mod.manifest");
+        let directory = root.join("archives");
+        let archive = directory.join("folder/AudioFile.Test.asset");
+        let name = b"AudioFile:Test";
+        let type_id = fast_hash(b"AudioFile");
+        let instance_id = fast_hash(b"test");
+        let type_hash = 0x53c8_1e47;
+        let prefix = format!("{type_id:08X}.{type_hash:08X}.{instance_id:08X}");
+        let mut bytes: Vec<_> = [type_id, instance_id, type_hash, 7, 0, 4, 0, 0]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        for value in [name.as_slice(), b"AUDIO:test.xml"] {
+            bytes.extend((value.len() as u32).to_le_bytes());
+            bytes.extend(value);
+        }
+        bytes.extend(b"test");
+        fs::write(archive, bytes).unwrap();
+
+        let filename = format!("{prefix}.00000007.cdata");
+        let source = directory.join("folder").join(filename.to_ascii_lowercase());
+        let output = root.join("mod/cdata");
+        fs::create_dir_all(&output).unwrap();
+        fs::write(&source, b"encoded audio").unwrap();
+        fs::write(directory.join(&filename), b"outside sibling directory").unwrap();
+        fs::write(output.join(&filename), b"previous copy").unwrap();
+        let stale = output.join(format!("{prefix}.00000006.cdata"));
+        fs::write(&stale, b"older version").unwrap();
+        fs::write(output.join("keep.cdata"), b"unrelated").unwrap();
+
+        assert_eq!(merge_assets(&input, &directory).unwrap(), 1);
+        let raw = fs::read(&input).unwrap();
+        let manifest = Manifest::parse(&raw).unwrap();
+        assert_eq!(manifest.assets[0].name, name);
+        assert_eq!(manifest.assets[0].instance_hash, 7);
+        assert_eq!(manifest.assets[0].tokenized, Some(0));
+        check_linked_files(&input, &manifest).unwrap();
+        assert_eq!(fs::read(output.join(&filename)).unwrap(), b"encoded audio");
+        assert_eq!(fs::read(output.join("keep.cdata")).unwrap(), b"unrelated");
+        assert!(!stale.exists());
+
+        fs::remove_file(source).unwrap();
+        assert_eq!(merge_assets(&input, &directory).unwrap(), 1);
+        assert_eq!(fs::read(&input).unwrap(), raw);
+        assert!(!output.join(&filename).exists());
+        assert_eq!(fs::read(output.join("keep.cdata")).unwrap(), b"unrelated");
     }
 }

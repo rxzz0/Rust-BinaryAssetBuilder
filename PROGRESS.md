@@ -11,6 +11,8 @@
 
 ## Checkpoints
 
+- Checkpoint 548 — Step 7 merges precompiled RA3 AudioFile archives and publishes matching sibling CDATA unchanged. Matched the SDK AssetMerger byte for byte across ten cases using the GenEvo USA_12 attachment, including sidecar replacement, nested folders, and missing or unrelated CDATA. Verified the installed release and confirmed the original sidecar bytes in the packed BIG. Formatting, strict Clippy and all 455 Windows x64 tests passed. Updated the SDK and project-root executables. The full GenEvo build and in-game playback await the tester. Five-hour usage was 100%. Next project task is the stock Global Data audit.
+
 - Checkpoint 547 — Enabled native DXT1 compression for resized TGA textures. The installed compiler matched all 1,367 BC1 blocks and the DDS header for the original 106×106 GenEvo portrait and stock XML settings. Matched 20 linked files and 29 sidecars across the inline and on-demand portraits, 256 grayscale blocks, and square and rectangular controls with and without mipmaps. Formatting, strict Clippy and all 454 Windows x64 tests passed. Installed and verified the SDK and project-root executables. Next project task is the stock Global Data audit.
 
 - Checkpoint 546 — Added native uncompressed TGA mip chains with clipped double-precision triangle weights, vertical-first filtering and EA's DDS header. Matched 16 linked files and 12 sidecars across nine non-power-of-two controls, the original portrait with A8R8G8B8 selected, and three power-of-two texture declarations including a 1×1 texture. Formatting, strict Clippy and all 453 Windows x64 tests passed. Updated and verified the SDK and project-root executables. The original DXT1 declaration remains open.
