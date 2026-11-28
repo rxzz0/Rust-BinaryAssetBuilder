@@ -3203,6 +3203,28 @@ fn static_asset_duplicate_precedence_matches_ea() {
 }
 
 #[test]
+fn sdk_static_logic_command_status_filters_match_ea() {
+    let root = scratch_root();
+    let data = root.join("Mods/StatusProbe/Data");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    let input = data.join("mod.xml");
+    const FIXTURE: &str = "tests/fixtures/logic-command-status-filter";
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join(FIXTURE);
+    fs::copy(fixture.join("mod.xml"), &input).unwrap();
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let output = built.join("mods/statusprobe/data");
+    for file in ["mod.manifest", "mod.bin", "mod.imp", "mod.relo"] {
+        assert_eq!(
+            fs::read(output.join(file)).unwrap(),
+            fs::read(fixture.join(file)).unwrap(),
+            "{file}"
+        );
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_static_misc_eva_accepts_empty_references() {
     let root = scratch_root();
     let data = root.join("Mods/Empty/Data");

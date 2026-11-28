@@ -1,0 +1,6 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+<GameObject id="ProbeObject"><Body><ActiveBody id="Body" MaxHealth="100"/></Body></GameObject>
+<LogicCommand id="All"><AISpecialPowerInfo Heuristic="MOVEMENT" Manager="MICRO_MANAGER"><ObjectFilter StatusBitFlags="CAN_ATTACK CAN_ATTACK_WHILE_STEALTHED" StatusBitFlagsExclude="STEALTHED"><IncludeThing>ProbeObject</IncludeThing><ExcludeThing>ProbeObject</ExcludeThing></ObjectFilter></AISpecialPowerInfo></LogicCommand>
+<LogicCommand id="Empty"><AISpecialPowerInfo Heuristic="MOVEMENT" Manager="MICRO_MANAGER"><ObjectFilter StatusBitFlags=""/></AISpecialPowerInfo></LogicCommand>
+<LogicCommand id="Omitted"><AISpecialPowerInfo Heuristic="MOVEMENT" Manager="MICRO_MANAGER"><ObjectFilter/></AISpecialPowerInfo></LogicCommand>
+</AssetDeclaration>

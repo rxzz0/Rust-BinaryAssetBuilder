@@ -308,7 +308,15 @@ pub(super) fn object_filter(
     let path = binary.path;
     validate_attributes(
         node,
-        &["Rule", "Relationship", "Alignment", "Include", "Exclude"],
+        &[
+            "Rule",
+            "Relationship",
+            "Alignment",
+            "Include",
+            "Exclude",
+            "StatusBitFlags",
+            "StatusBitFlagsExclude",
+        ],
         path,
     )?;
     let mut words = [0; 22];
@@ -341,6 +349,7 @@ pub(super) fn object_filter(
     for (index, word) in words.into_iter().enumerate() {
         binary.word(start + 4 * index, word);
     }
+    super::game_object::encode_filter_status_masks(node, start, binary)?;
 
     let mut children = significant_children(node).peekable();
     for (tag, offset) in [("IncludeThing", 96), ("ExcludeThing", 104)] {

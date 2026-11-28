@@ -116,6 +116,7 @@ pub(super) use behaviors_basic::{encode_die_mux, weapon_slot};
 pub(super) use client_behaviors::{audio_reference, encode_inline_voice};
 pub(super) use draws::{model_condition_index, write_model_conditions};
 pub(super) use encoder::compile;
+pub(super) use parking::encode_filter_status_masks;
 pub(super) use parking::encode_inline_filter;
 pub(super) use passive_area::category_flags;
 pub(super) use secondary_damage::write_status_flags;
