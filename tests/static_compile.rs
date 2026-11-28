@@ -3203,6 +3203,48 @@ fn static_asset_duplicate_precedence_matches_ea() {
 }
 
 #[test]
+fn sdk_static_misc_eva_accepts_empty_references() {
+    let root = scratch_root();
+    let data = root.join("Mods/Empty/Data");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    let input = data.join("mod.xml");
+    let fixture = include_str!("fixtures/misc-eva-empty-reference/mod.xml");
+    fs::write(&input, fixture).unwrap();
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let output = built.join("mods/empty/data");
+    for (file, expected) in [
+        (
+            "mod.manifest",
+            include_bytes!("fixtures/misc-eva-empty-reference/mod.manifest").as_slice(),
+        ),
+        (
+            "mod.bin",
+            include_bytes!("fixtures/misc-eva-empty-reference/mod.bin").as_slice(),
+        ),
+        (
+            "mod.imp",
+            include_bytes!("fixtures/misc-eva-empty-reference/mod.imp").as_slice(),
+        ),
+        (
+            "mod.relo",
+            include_bytes!("fixtures/misc-eva-empty-reference/mod.relo").as_slice(),
+        ),
+    ] {
+        assert_eq!(fs::read(output.join(file)).unwrap(), expected, "{file}");
+    }
+
+    for replacement in ["", r#" IncomingRadarTransmission="   ""#] {
+        let invalid = fixture.replace(r#" IncomingRadarTransmission="""#, replacement);
+        assert_ne!(fixture, invalid);
+        fs::write(&input, invalid).unwrap();
+        let error = compile_sdk_static(&input, &root, &built).unwrap_err();
+        assert!(error.to_string().contains("IncomingRadarTransmission"));
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_static_damage_fx_inheritance_matches_ea_stream() {
     let root = scratch_root();
     let data = root.join("Mods/Test/Data");

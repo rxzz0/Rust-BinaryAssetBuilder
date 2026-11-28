@@ -1,0 +1,7 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+  <EvaEvent id="Radar" />
+  <MiscEvaEvents id="Defaults" LowPower="Radar" SilosNeeded="" BuildingStolen="" IncomingRadarTransmission="" AllyDefeated="" EnemyDefeated="" LocalPlayerDefeated="" LocalPlayerVictorious="" CannotBuildDueToCPLimit="" BuildQueuePausedDueToCPLimit="" BuildQueuePausedDueToFunds="" CannotBuildDueToFunds="" CannotRepairDueToFunds="" CannotUsePowerDueToFunds="" TiberiumFieldDepleted="" NewMissionObjective="" CompletedMissionObjective="" NewBonusObjective="" CompletedBonusMissionObjective="" IntelDatabaseEntryReceived="" UpgradeComplete="" BuildingBeingStolen="" BeaconPlacedPlayer="" BeaconPlacedAlly="" ObservedPlayerDefeated="" WallsBeingClimbed="" StructureInfiltrated="" ControlPointCaptured="" ControlPointLost="" ControlPointHasBeenCaptured="" CTFFlagCaptured="" CTFEnemyCapturedFlag="" CTFFlagDropped="" CTFEnemyDroppedFlag="" CTFYouHaveFlag="" CTFEnemyHasFlag="" SiegeBarrierDisengaged="" SiegeBarrierEngaged="">
+    <AIBeaconTypeSettings BeaconType="Assault" PlacedEvent="" />
+    <AIBeaconTypeSettings BeaconType="HoldObject" PlacedEvent="Radar" />
+  </MiscEvaEvents>
+</AssetDeclaration>
