@@ -116,7 +116,7 @@ impl Compiler<'_> {
             .iter()
             .flat_map(|offset| offset.to_le_bytes())
             .collect();
-        let instance_hash = hash_xml(node, TYPE_HASH ^ 4, path)? ^ memory_stream_hash(file_hashes);
+        let instance_hash = hash_xml(node, 0x467d_00b6, path)? ^ memory_stream_hash(file_hashes);
         Ok(CompiledAsset {
             id,
             type_hash: TYPE_HASH,
@@ -196,14 +196,16 @@ fn write_dds(out: &mut Vec<u8>, pixels: Vec<Pixel>, width: usize, height: usize,
     for level in 0..MIP_LEVELS {
         let scale = 1 << level;
         let (mip_width, mip_height) = (width / scale, height / scale);
-        let mip;
-        let pixels = if level == 0 {
-            &pixels[..]
-        } else {
-            mip = triangle_mip(&pixels, width, height, scale);
-            &mip
-        };
         if bc3 {
+            let mip;
+            let pixels = if level == 0 {
+                &pixels[..]
+            } else {
+                mip = triangle_mip(&pixels, width, height, scale, |pixel, divisor| {
+                    pixel.map(|value| ((value + divisor / 2) / divisor) as u8)
+                });
+                &mip
+            };
             for y in (0..mip_height).step_by(4) {
                 for x in (0..mip_width).step_by(4) {
                     let block =
@@ -211,9 +213,13 @@ fn write_dds(out: &mut Vec<u8>, pixels: Vec<Pixel>, width: usize, height: usize,
                     out.extend(encode_bc3(&block));
                 }
             }
+        } else if level == 0 {
+            for pixel in &pixels {
+                out.extend(normal_word(pixel.map(u32::from), 1).to_le_bytes());
+            }
         } else {
-            for [b, g, r, _] in pixels {
-                let word = quantize(*r, 31) << 10 | quantize(*g, 31) << 5 | quantize(*b, 31);
+            let mip = triangle_mip(&pixels, width, height, scale, normal_word);
+            for word in mip {
                 out.extend(word.to_le_bytes());
             }
         }
@@ -221,43 +227,65 @@ fn write_dds(out: &mut Vec<u8>, pixels: Vec<Pixel>, width: usize, height: usize,
     (out.len() - start) as u32
 }
 
-fn triangle_mip(pixels: &[Pixel], width: usize, height: usize, scale: usize) -> Vec<Pixel> {
+fn normal_word([b, g, r, _]: [u32; 4], divisor: u32) -> u16 {
+    // EA quantizes directly from the filtered values into the 5-bit DDS channels.
+    let denominator = 255 * divisor;
+    let quantize = |value| ((31 * value + denominator / 2) / denominator) as u16;
+    quantize(r) << 10 | quantize(g) << 5 | quantize(b)
+}
+
+fn triangle_mip<T>(
+    pixels: &[Pixel],
+    width: usize,
+    height: usize,
+    scale: usize,
+    convert: impl Fn([u32; 4], u32) -> T,
+) -> Vec<T> {
     let (mip_width, mip_height) = (width / scale, height / scale);
     let weights: Vec<_> = (0..scale * 2)
         .map(|i| (2 * i.min(scale * 2 - 1 - i) + 1) as u32)
         .collect();
-    let origin = (scale / 2) as isize;
+    let taps = |index: usize, extent: usize| {
+        let origin = index * scale;
+        let first = origin.saturating_sub(scale / 2);
+        let skipped = (scale / 2).saturating_sub(origin);
+        let end = (skipped + extent - first).min(weights.len());
+        (first, &weights[skipped..end])
+    };
+    let columns: Vec<_> = (0..mip_width)
+        .map(|x| {
+            let (first, weights) = taps(x, width);
+            (first, weights, weights.iter().sum::<u32>())
+        })
+        .collect();
     let mut horizontal = vec![[0u32; 4]; mip_width * height];
     for (source, target) in pixels
         .chunks_exact(width)
         .zip(horizontal.chunks_exact_mut(mip_width))
     {
-        for (x, result) in target.iter_mut().enumerate() {
-            for (tap, &weight) in weights.iter().enumerate() {
-                let sample = (x * scale + tap) as isize - origin;
-                let sample = source[sample.clamp(0, width as isize - 1) as usize];
-                for (channel, &sample) in result.iter_mut().zip(&sample) {
+        for (result, &(first, weights, _)) in target.iter_mut().zip(&columns) {
+            for (sample, &weight) in source[first..].iter().zip(weights) {
+                for (channel, &sample) in result.iter_mut().zip(sample) {
                     *channel += u32::from(sample) * weight;
                 }
             }
         }
     }
-    let divisor = weights.iter().sum::<u32>().pow(2);
-    let mut output = vec![[0; 4]; mip_width * mip_height];
-    for (y, row) in output.chunks_exact_mut(mip_width).enumerate() {
-        for (x, pixel) in row.iter_mut().enumerate() {
+    let mut output = Vec::with_capacity(mip_width * mip_height);
+    for y in 0..mip_height {
+        let (first, weights) = taps(y, height);
+        let vertical_divisor = weights.iter().sum::<u32>();
+        for (x, &(_, _, horizontal_divisor)) in columns.iter().enumerate() {
             let mut channels = [0u32; 4];
             for (tap, &weight) in weights.iter().enumerate() {
-                let sample_y = (y * scale + tap) as isize - origin;
-                let sample_y = sample_y.clamp(0, height as isize - 1) as usize;
                 for (channel, &sample) in channels
                     .iter_mut()
-                    .zip(&horizontal[sample_y * mip_width + x])
+                    .zip(&horizontal[(first + tap) * mip_width + x])
                 {
                     *channel += sample * weight;
                 }
             }
-            *pixel = channels.map(|value| ((value + divisor / 2) / divisor) as u8);
+            output.push(convert(channels, horizontal_divisor * vertical_divisor));
         }
     }
     output
@@ -395,5 +423,19 @@ mod tests {
                 .iter()
                 .all(|word| *word == [224, 127])
         );
+    }
+
+    #[test]
+    fn terrain_normal_mips_trim_edge_taps_and_quantize_after_filtering() {
+        let row = [
+            [0, 0, 0, 255],
+            [0, 0, 0, 255],
+            [0, 0, 210, 255],
+            [0, 0, 0, 255],
+        ];
+        let pixels = row.repeat(4);
+        let mip = triangle_mip(&pixels, 4, 4, 2, normal_word);
+        assert_eq!(mip[0], 4 << 10);
+        assert_eq!(normal_word([61 * 64 + 32, 0, 0, 0], 64), 7);
     }
 }
