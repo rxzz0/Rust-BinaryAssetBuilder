@@ -16,6 +16,8 @@ const GENERATED: [&str; 5] = ["manifest", "bin", "relo", "imp", "version"];
 pub(crate) enum Contents {
     Bytes(Vec<u8>),
     CustomData(Vec<(String, CustomData)>),
+    Copy(PathBuf),
+    Remove,
 }
 
 pub(crate) type Output = (OsString, Contents);
@@ -217,9 +219,27 @@ pub(crate) fn publish_prepared(
     prepare: impl FnOnce() -> io::Result<Vec<Output>>,
     replace: impl Fn(&Path) -> bool,
 ) -> io::Result<()> {
-    fs::create_dir_all(output)?;
+    fs::create_dir_all(output).map_err(|error| {
+        io::Error::new(
+            error.kind(),
+            format!(
+                "cannot create build output directory {} ({error})",
+                output.display()
+            ),
+        )
+    })?;
     let stage = output.join(".rust-streams");
-    fs::create_dir(&stage)?;
+    fs::create_dir(&stage).map_err(|error| {
+        let message = if error.kind() == io::ErrorKind::AlreadyExists {
+            format!(
+                "build staging path already exists at {}. If no build is running, move it outside the build output before retrying",
+                stage.display()
+            )
+        } else {
+            format!("cannot create build staging directory {} ({error})", stage.display())
+        };
+        io::Error::new(error.kind(), message)
+    })?;
     let fresh = stage.join("new");
     let old = stage.join("previous");
     let mut backed_up = Vec::new();
@@ -245,6 +265,11 @@ pub(crate) fn publish_prepared(
                     fs::create_dir_all(destination.parent().unwrap())?;
                     fs::write(destination, bytes)?;
                 }
+                Contents::Copy(source) => {
+                    fs::create_dir_all(destination.parent().unwrap())?;
+                    fs::copy(source, destination)?;
+                }
+                Contents::Remove => {}
                 Contents::CustomData(files) => {
                     fs::create_dir_all(&destination)?;
                     for (file, data) in files {
@@ -285,7 +310,17 @@ pub(crate) fn publish_prepared(
                 previous.push(entry.file_name());
             }
         }
+        let removed_names: HashSet<_> = outputs
+            .iter()
+            .filter(|(_, contents)| matches!(contents, Contents::Remove))
+            .map(|(name, _)| name.to_ascii_lowercase())
+            .collect();
         for (name, contents) in &outputs {
+            if matches!(contents, Contents::Copy(_))
+                && removed_names.contains(&name.to_ascii_lowercase())
+            {
+                continue;
+            }
             if (matches!(contents, Contents::CustomData(_))
                 || Path::new(name).components().count() > 1)
                 && output.join(name).exists()
@@ -299,7 +334,10 @@ pub(crate) fn publish_prepared(
             fs::rename(output.join(&name), backup)?;
             backed_up.push(name);
         }
-        for (name, _) in &outputs {
+        for (name, contents) in &outputs {
+            if matches!(contents, Contents::Remove) {
+                continue;
+            }
             let destination = output.join(name);
             fs::create_dir_all(destination.parent().unwrap())?;
             fs::rename(fresh.join(name), destination)?;

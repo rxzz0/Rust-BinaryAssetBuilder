@@ -184,15 +184,12 @@ pub(in crate::compile::static_assets) fn encode_inline_filter(
         ],
     )
     .collect();
-    for (name, offset) in [("StatusBitFlags", 0x58), ("StatusBitFlagsExclude", 0x5c)] {
-        let target = if let Some(value) = node.attribute(name) {
-            let flags = data.allocate(start + offset, STATUS_BYTES)?;
-            write_status_flags(value, flags, data)?;
-            Target::Data(flags)
-        } else {
-            Target::Null
-        };
-        entries.push(Entry::named(name, 0xa7bd_811e, target));
+    for (name, target) in encode_filter_status_masks(node, start, data)? {
+        entries.push(Entry::named(
+            name,
+            0xa7bd_811e,
+            target.map_or(Target::Null, Target::Data),
+        ));
     }
 
     let mut children = significant_children(node).peekable();
@@ -222,6 +219,22 @@ pub(in crate::compile::static_assets) fn encode_inline_filter(
         return Err(invalid(path, "unexpected ObjectFilter child"));
     }
     Ok(Table::record(entries))
+}
+
+pub(in crate::compile::static_assets) fn encode_filter_status_masks(
+    node: Node<'_, '_>,
+    start: usize,
+    data: &mut BinaryData<'_>,
+) -> io::Result<[(&'static str, Option<usize>); 2]> {
+    let mut masks = [("StatusBitFlags", None), ("StatusBitFlagsExclude", None)];
+    for ((name, target), offset) in masks.iter_mut().zip([0x58, 0x5c]) {
+        if let Some(value) = node.attribute(*name) {
+            let flags = data.allocate(start + offset, STATUS_BYTES)?;
+            write_status_flags(value, flags, data)?;
+            *target = Some(flags);
+        }
+    }
+    Ok(masks)
 }
 
 pub(super) fn relationship_mask(value: &str, path: &std::path::Path) -> io::Result<u32> {

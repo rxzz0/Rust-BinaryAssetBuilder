@@ -387,6 +387,76 @@ fn audio_file_pcm_payload_and_cdata_match_ea() {
 }
 
 #[test]
+fn audio_file_xas_stream_and_cdata_match_ea() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio-xas");
+    let stream = compile_static(&root.join("probe.xml"), &root, &root).unwrap();
+    assert_eq!(
+        stream.manifest,
+        include_bytes!("fixtures/audio-xas/probe.manifest")
+    );
+    assert_eq!(
+        stream.files.bin,
+        include_bytes!("fixtures/audio-xas/probe.bin")
+    );
+    assert_eq!(
+        stream.files.relo,
+        include_bytes!("fixtures/audio-xas/probe.relo")
+    );
+    assert_eq!(
+        stream.files.imp,
+        include_bytes!("fixtures/audio-xas/probe.imp")
+    );
+    assert_eq!(stream.custom_data.len(), 2);
+    for (filename, expected) in [
+        (
+            "166b084d.53c81e47.99923596.dc12a8d7.cdata",
+            include_bytes!("fixtures/audio-xas/ram.cdata").as_slice(),
+        ),
+        (
+            "166b084d.53c81e47.bcadb923.200c98f1.cdata",
+            include_bytes!("fixtures/audio-xas/streamed.cdata").as_slice(),
+        ),
+    ] {
+        let (_, custom) = stream
+            .custom_data
+            .iter()
+            .find(|(name, _)| name == filename)
+            .unwrap();
+        let CustomData::Bytes(bytes) = custom else {
+            panic!("expected generated XAS")
+        };
+        assert_eq!(bytes, expected);
+    }
+}
+
+#[test]
+fn audio_file_24_bit_pcm_and_xas_match_ea() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio-24-bit");
+    let stream = compile_static(&root.join("packed.xml"), &root, &root).unwrap();
+
+    for (filename, expected) in [
+        (
+            "166b084d.53c81e47.4b2534e6.a10c1ba2.cdata",
+            include_bytes!("fixtures/audio-24-bit/pcm-ram.cdata").as_slice(),
+        ),
+        (
+            "166b084d.53c81e47.5221a24c.9d41c359.cdata",
+            include_bytes!("fixtures/audio-24-bit/xas-stream.cdata").as_slice(),
+        ),
+    ] {
+        let (_, custom) = stream
+            .custom_data
+            .iter()
+            .find(|(name, _)| name == filename)
+            .unwrap();
+        let CustomData::Bytes(bytes) = custom else {
+            panic!("expected generated audio")
+        };
+        assert_eq!(bytes, expected, "{filename}");
+    }
+}
+
+#[test]
 fn game_object_minimal_matches_ea_oracle() {
     for (name, xml, expected_manifest, bin, relo, imp) in [
         (
@@ -571,6 +641,43 @@ fn sdk_static_builds_without_an_ea_compiler_and_preserves_outputs_on_failure() {
     assert_eq!(
         files.map(|name| fs::read(output.join(name)).unwrap()),
         expected
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn sdk_static_reports_occupied_staging_path_and_preserves_recovery_files() {
+    let root = scratch_root();
+    let input = root.join("Mods/Example/Data/Mod.xml");
+    let built = root.join("builtmods");
+    let output = built.join("mods/example/data");
+    let stage = output.join(".rust-streams");
+    let recovery = stage.join("previous/mod.bin");
+    fs::create_dir_all(input.parent().unwrap()).unwrap();
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset" />"#,
+    )
+    .unwrap();
+    fs::create_dir_all(recovery.parent().unwrap()).unwrap();
+    fs::write(&recovery, b"previous output").unwrap();
+
+    let error = compile_sdk_static(&input, &root, &built).unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+    let diagnostic = error.to_string().replace('\\', "/");
+    let expected = stage.display().to_string().replace('\\', "/");
+    assert!(diagnostic.contains(&expected), "{diagnostic}");
+    assert_eq!(fs::read(&recovery).unwrap(), b"previous output");
+    assert!(!output.join("mod.manifest").exists());
+
+    let saved = root.join("saved-stage");
+    fs::rename(&stage, &saved).unwrap();
+    compile_sdk_static(&input, &root, &built).unwrap();
+    assert!(output.join("mod.manifest").is_file());
+    assert!(!stage.exists());
+    assert_eq!(
+        fs::read(saved.join("previous/mod.bin")).unwrap(),
+        b"previous output"
     );
     fs::remove_dir_all(root).unwrap();
 }
@@ -3093,6 +3200,221 @@ fn static_asset_duplicate_precedence_matches_ea() {
             .to_string()
             .contains("duplicate asset ID PlayerTech:ParentPriority")
     );
+}
+
+fn copy_bundled_sdk_schema(repo: &Path, root: &Path) {
+    let mut schema_dirs = vec![(repo.join("schemas/ra3/xsd"), root.join("Schemas/xsd"))];
+    while let Some((source, destination)) = schema_dirs.pop() {
+        fs::create_dir_all(&destination).unwrap();
+        for entry in fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let target = destination.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                schema_dirs.push((entry.path(), target));
+            } else {
+                fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn sdk_static_image_rotation_matches_ea() {
+    let root = scratch_root();
+    let data = root.join("Mods/ImageRotation/Data");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    let input = data.join("mod.xml");
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let fixture = fixtures.join("image-rotation");
+    let xml = fs::read_to_string(fixture.join("mod.xml")).unwrap();
+    fs::write(&input, &xml).unwrap();
+    fs::copy(
+        fixtures.join("on-demand-texture/probe-dxt.dds"),
+        data.join("probe-dxt.dds"),
+    )
+    .unwrap();
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let output = built.join("mods/imagerotation/data");
+    for file in ["mod.manifest", "mod.bin", "mod.imp", "mod.relo"] {
+        assert_eq!(
+            fs::read(output.join(file)).unwrap(),
+            fs::read(fixture.join(file)).unwrap(),
+            "{file}"
+        );
+    }
+    let invalid = xml.replace("Rotated=\"False\"", "Rotated=\"FALSE\"");
+    fs::write(&input, invalid).unwrap();
+    let error = compile_sdk_static(&input, &root, &built).unwrap_err();
+    assert!(error.to_string().contains("invalid Rotated"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn sdk_static_object_filters_match_ea() {
+    let root = scratch_root();
+    let built = root.join("builtmods");
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let fixtures = repo.join("tests/fixtures");
+    copy_bundled_sdk_schema(repo, &root);
+    for (name, mod_name) in [
+        ("logic-command-status-filter", "statusprobe"),
+        ("object-filter-variants", "statusexpanded"),
+    ] {
+        let data = root.join("Mods").join(mod_name).join("Data");
+        fs::create_dir_all(&data).unwrap();
+        let input = data.join("mod.xml");
+        let output = built.join("mods").join(mod_name).join("data");
+        let fixture = fixtures.join(name);
+        fs::copy(fixture.join("mod.xml"), &input).unwrap();
+        compile_sdk_static(&input, &root, &built).unwrap();
+        for file in ["mod.manifest", "mod.bin", "mod.imp", "mod.relo"] {
+            assert_eq!(
+                fs::read(output.join(file)).unwrap(),
+                fs::read(fixture.join(file)).unwrap(),
+                "{name}/{file}"
+            );
+        }
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn sdk_static_player_tech_binding_inheritance_matches_ea() {
+    let root = scratch_root();
+    let built = root.join("builtmods");
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+    copy_bundled_sdk_schema(repo, &root);
+    let fixtures = repo.join("tests/fixtures/player-tech-binding-inheritance");
+    for mode in ["local", "instance"] {
+        let mod_name = format!("techbindings-{mode}");
+        let data = root.join("Mods").join(&mod_name).join("Data");
+        fs::create_dir_all(&data).unwrap();
+        let fixture = fixtures.join(mode);
+        let input = data.join("mod.xml");
+        fs::copy(fixture.join("mod.xml"), &input).unwrap();
+        if mode == "instance" {
+            fs::copy(fixture.join("base.xml"), data.join("base.xml")).unwrap();
+        }
+        compile_sdk_static(&input, &root, &built).unwrap();
+        let output = built.join("mods").join(mod_name).join("data");
+        for file in ["mod.manifest", "mod.bin", "mod.imp", "mod.relo"] {
+            assert!(
+                fs::read(output.join(file)).unwrap() == fs::read(fixture.join(file)).unwrap(),
+                "{mode}/{file} differs from EA"
+            );
+        }
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn sdk_static_misc_eva_accepts_empty_references() {
+    let root = scratch_root();
+    let data = root.join("Mods/Empty/Data");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    let input = data.join("mod.xml");
+    let fixture = include_str!("fixtures/misc-eva-empty-reference/mod.xml");
+    fs::write(&input, fixture).unwrap();
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let output = built.join("mods/empty/data");
+    for (file, expected) in [
+        (
+            "mod.manifest",
+            include_bytes!("fixtures/misc-eva-empty-reference/mod.manifest").as_slice(),
+        ),
+        (
+            "mod.bin",
+            include_bytes!("fixtures/misc-eva-empty-reference/mod.bin").as_slice(),
+        ),
+        (
+            "mod.imp",
+            include_bytes!("fixtures/misc-eva-empty-reference/mod.imp").as_slice(),
+        ),
+        (
+            "mod.relo",
+            include_bytes!("fixtures/misc-eva-empty-reference/mod.relo").as_slice(),
+        ),
+    ] {
+        assert_eq!(fs::read(output.join(file)).unwrap(), expected, "{file}");
+    }
+
+    for replacement in ["", r#" IncomingRadarTransmission="   ""#] {
+        let invalid = fixture.replace(r#" IncomingRadarTransmission="""#, replacement);
+        assert_ne!(fixture, invalid);
+        fs::write(&input, invalid).unwrap();
+        let error = compile_sdk_static(&input, &root, &built).unwrap_err();
+        assert!(error.to_string().contains("IncomingRadarTransmission"));
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn sdk_static_damage_fx_inheritance_matches_ea_stream() {
+    let root = scratch_root();
+    let data = root.join("Mods/Test/Data");
+    let schemas = root.join("Schemas/xsd");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    fs::create_dir_all(&schemas).unwrap();
+    fs::write(
+        schemas.join("CnC3Types.xsd"),
+        include_str!("../schemas/ra3/xsd/AssetTypeDamageFX.xsd").replace(
+            "</xs:schema>",
+            r#"<xs:complexType name="BaseAssetType"/></xs:schema>"#,
+        ),
+    )
+    .unwrap();
+    let input = data.join("mod.xml");
+    fs::write(
+        &input,
+        include_bytes!("fixtures/damage-fx-inheritance/mod.xml"),
+    )
+    .unwrap();
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let output = built.join("mods/test/data");
+    for (file, expected) in [
+        (
+            "mod.manifest",
+            include_bytes!("fixtures/damage-fx-inheritance/mod.manifest").as_slice(),
+        ),
+        (
+            "mod.bin",
+            include_bytes!("fixtures/damage-fx-inheritance/mod.bin").as_slice(),
+        ),
+        (
+            "mod.imp",
+            include_bytes!("fixtures/damage-fx-inheritance/mod.imp").as_slice(),
+        ),
+        (
+            "mod.relo",
+            include_bytes!("fixtures/damage-fx-inheritance/mod.relo").as_slice(),
+        ),
+    ] {
+        assert_eq!(fs::read(output.join(file)).unwrap(), expected, "{file}");
+    }
+
+    fs::write(
+        data.join("base.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"><DamageFX id="GenericStructureDamageFX"/></AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes><Include type="instance" source="base.xml"/></Includes>
+            <DamageFX id="VehicleDamageFX" inheritFrom="GenericStructureDamageFX"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let error = compile_sdk_static(&input, &root, &built).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("DamageFX base GenericStructureDamageFX is not a BaseInheritableAsset")
+    );
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

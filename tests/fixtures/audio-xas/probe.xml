@@ -1,0 +1,4 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <AudioFile id="XasRamProbe" File="audio-file-probe.wav" PCCompression="XAS" IsStreamedOnPC="false" />
+    <AudioFile id="XasStreamProbe" File="audio-file-probe.wav" PCCompression="XAS" IsStreamedOnPC="true" />
+</AssetDeclaration>

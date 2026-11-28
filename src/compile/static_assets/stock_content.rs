@@ -285,7 +285,15 @@ pub(super) fn misc_reference_settings(node: Node<'_, '_>, path: &Path) -> io::Re
     validate_attributes(node, &allowed, path)?;
     for (name, mandatory) in fields {
         if *mandatory {
-            required(node, name, path)?;
+            match node.attribute(name.as_str()) {
+                // The schema requires the attribute to be present and allows
+                // an empty asset reference. The writer leaves its slot zero.
+                Some("") => {}
+                Some(_) => {
+                    required(node, name, path)?;
+                }
+                None => return Err(invalid(path, format!("missing required {name} attribute"))),
+            }
         }
     }
     for attribute in node.attributes() {

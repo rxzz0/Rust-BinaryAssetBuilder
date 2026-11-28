@@ -1,7 +1,7 @@
 use super::binary::BinaryData;
 use super::{
-    Marshaled, asset_reference, encode_words, fast_hash, finite_number, required_element,
-    significant_children, text_value, validate_attributes, write_import,
+    Marshaled, asset_reference, encode_words, fast_hash, finite_number, hash_name,
+    required_element, significant_children, text_value, validate_attributes, write_import,
 };
 use crate::compile::{SAGE_NS, has_content, invalid, required};
 use roxmltree::{Document, Node};
@@ -176,11 +176,7 @@ pub(super) fn packed_texture_image(node: Node<'_, '_>, path: &Path) -> io::Resul
     if children.next().is_some() {
         return Err(invalid(path, "unexpected content in PackedTextureImage"));
     }
-    let rotated = match node.attribute("Rotated").map(str::trim) {
-        None | Some("false" | "0") => 0,
-        Some("true" | "1") => 1,
-        Some(value) => return Err(invalid(path, format!("invalid Rotated {value:?}"))),
-    };
+    let rotated = u32::from(super::fx_list::boolean(node, "Rotated", false, path)?);
     data.word(32, rotated);
     result.payload = data.payload;
     Ok(result)
@@ -308,10 +304,22 @@ pub(super) fn object_filter(
     let path = binary.path;
     validate_attributes(
         node,
-        &["Rule", "Relationship", "Alignment", "Include", "Exclude"],
+        &[
+            "id",
+            "Rule",
+            "Relationship",
+            "Alignment",
+            "Include",
+            "Exclude",
+            "StatusBitFlags",
+            "StatusBitFlagsExclude",
+        ],
         path,
     )?;
     let mut words = [0; 22];
+    if let Some(id) = node.attribute("id") {
+        words[0] = hash_name(id);
+    }
     words[1] = enum_value(
         node.attribute("Rule").unwrap_or("NONE"),
         &["UNPARSED", "ALL", "ANY", "NONE"],
@@ -341,6 +349,7 @@ pub(super) fn object_filter(
     for (index, word) in words.into_iter().enumerate() {
         binary.word(start + 4 * index, word);
     }
+    super::game_object::encode_filter_status_masks(node, start, binary)?;
 
     let mut children = significant_children(node).peekable();
     for (tag, offset) in [("IncludeThing", 96), ("ExcludeThing", 104)] {

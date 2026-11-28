@@ -116,6 +116,7 @@ pub(super) use behaviors_basic::{encode_die_mux, weapon_slot};
 pub(super) use client_behaviors::{audio_reference, encode_inline_voice};
 pub(super) use draws::{model_condition_index, write_model_conditions};
 pub(super) use encoder::compile;
+pub(super) use parking::encode_filter_status_masks;
 pub(super) use parking::encode_inline_filter;
 pub(super) use passive_area::category_flags;
 pub(super) use secondary_damage::write_status_flags;
@@ -223,6 +224,21 @@ impl Compiler<'_> {
         let kind = node.tag_name().name();
         let mut result = Element::new(kind);
         self.with_xml_base(node, path, inherit_from, |parent, parent_path, included| {
+            // EA's SDK compiler requires an inheritable type for external
+            // parents. Standalone and map builds also use partial schemas.
+            let requires_inheritable_type = matches!(
+                self.reference_mode,
+                crate::compile::ReferenceMode::SdkStatic | crate::compile::ReferenceMode::Implicit
+            ) || kind == "DamageFX";
+            if included
+                && requires_inheritable_type
+                && !schema.derives_from(parent.tag_name().name(), "BaseInheritableAsset")
+            {
+                return Err(invalid(
+                    path,
+                    format!("{kind} base {inherit_from} is not a BaseInheritableAsset"),
+                ));
+            }
             if overlay.action != Some(Join::Replace) {
                 let mut base = self.schema_inherited_xml(parent, parent_path, schema, chain)?;
                 if included {

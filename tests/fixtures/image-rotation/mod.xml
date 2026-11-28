@@ -1,0 +1,11 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <OnDemandTexture id="GenEvo_LoadingScreenImage" File="probe-dxt.dds" GenerateMipMaps="false" AllowAutomaticResize="false"/>
+    <OnDemandTextureImage id="GenEvo_LoadingScreenImage" Texture="GenEvo_LoadingScreenImage" Rotated="False">
+        <Dimensions x="750" y="596"/>
+        <Coords x="0" y="0"/>
+        <TextureDimensions x="1024" y="1024"/>
+    </OnDemandTextureImage>
+    <OnDemandTextureImage id="OnDemandTrue" Rotated="True"><Dimensions/><Coords/><TextureDimensions/></OnDemandTextureImage>
+    <PackedTextureImage id="PackedFalse" Rotated="False"><Dimensions/><Coords/><TextureDimensions/></PackedTextureImage>
+    <PackedTextureImage id="PackedTrue" Rotated="True"><Dimensions/><Coords/><TextureDimensions/></PackedTextureImage>
+</AssetDeclaration>

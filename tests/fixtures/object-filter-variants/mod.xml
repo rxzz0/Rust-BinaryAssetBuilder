@@ -1,0 +1,30 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <SpecialPowerTemplate id="SpecialPower_GenEvoChinaAttachBattleBunker" TargetType="NONE"/>
+    <GameObject id="ChinaTankOverlord">
+        <Behaviors>
+            <ProductionUpdate id="Production">
+                <ProductionModifier CostMultiplier="0.5">
+                    <ModifierFilter id="NamedModifier" StatusBitFlags="GENERIC_TOGGLE_STATE" StatusBitFlagsExclude="TRANSFORMATION_TOGGLE_STATE">
+                        <IncludeThing>ChinaTankOverlord</IncludeThing>
+                    </ModifierFilter>
+                </ProductionModifier>
+            </ProductionUpdate>
+        </Behaviors>
+        <Body><ActiveBody id="Body" MaxHealth="100"/></Body>
+    </GameObject>
+    <LogicCommand Options="NEED_TARGET_ALLY_OBJECT" Type="SPECIAL_POWER" id="Command_GenEvoChinaAttachBattleBunker">
+        <SpecialPower>SpecialPower_GenEvoChinaAttachBattleBunker</SpecialPower>
+        <AISpecialPowerInfo Heuristic="UPGRADE" Manager="SKIRMISH_AI" MinEnemiesNearby="0"
+            TargetObjectInclude="HUGE_VEHICLE" TargetObjectExclude="STRUCTURE INFANTRY"
+            SearchRadius="9999" RequireKillTargets="false">
+            <ObjectFilter Relationship="SAME_PLAYER" Rule="NONE" StatusBitFlags="GENERIC_TOGGLE_STATE" StatusBitFlagsExclude="TRANSFORMATION_TOGGLE_STATE">
+                <IncludeThing>ChinaTankOverlord</IncludeThing>
+            </ObjectFilter>
+        </AISpecialPowerInfo>
+    </LogicCommand>
+    <LogicCommand id="NamedFilterProbe">
+        <AISpecialPowerInfo Heuristic="MOVEMENT" Manager="MICRO_MANAGER">
+            <ObjectFilter id="NamedFilter"/>
+        </AISpecialPowerInfo>
+    </LogicCommand>
+</AssetDeclaration>

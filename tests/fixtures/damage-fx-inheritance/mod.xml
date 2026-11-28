@@ -1,0 +1,12 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <FXList id="ImpactFx"><NuggetList/></FXList>
+    <FXList id="DebrisFx"><NuggetList/></FXList>
+    <DamageFX id="VehicleDamageFX" inheritFrom="GenericStructureDamageFX"/>
+    <DamageFX id="GenericStructureDamageFX">
+        <FXGroup Type="DEFAULT" Amount="10.0" ThrottleTime="50ms" MajorFX="ImpactFx"/>
+        <FXGroup Type="SOVIET_CANNON" Amount="20" MinorFX="DebrisFx"/>
+    </DamageFX>
+    <DamageFX id="HeavyDamageFX" inheritFrom="VehicleDamageFX">
+        <FXGroup Type="SOVIET_CANNON" Amount="35" VeteranTopFX="ImpactFx" />
+    </DamageFX>
+</AssetDeclaration>

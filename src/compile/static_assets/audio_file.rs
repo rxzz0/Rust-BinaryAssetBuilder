@@ -156,7 +156,7 @@ impl Compiler<'_> {
             streamed,
             sample_rate: node.attribute("PCSampleRate").map(str::to_owned),
             subtitle: node.attribute("SubtitleStringName").map(str::to_owned),
-            xml_hash: hash_xml(node, 0x8339_8e45 ^ 1_001_010, path),
+            xml_hash: hash_xml(node, 0x8fe7_9286, path),
         })
     }
 }
@@ -309,7 +309,7 @@ impl<'a> Wave<'a> {
         let sample_bytes = usize::from(bits / 8);
         if !supported_format
             || !matches!(channels, 1 | 2 | 4 | 6)
-            || !matches!(bits, 8 | 16)
+            || !matches!(bits, 8 | 16 | 24)
             || usize::from(word(12)) != usize::from(channels) * sample_bytes
             || rate == 0
             || rate > u16::MAX as u32
@@ -319,7 +319,7 @@ impl<'a> Wave<'a> {
         {
             return Err(invalid(
                 path,
-                "expected 8- or 16-bit PCM WAV with 1, 2, 4 or 6 channels",
+                "expected 8-, 16-, or 24-bit PCM WAV with 1, 2, 4 or 6 channels",
             ));
         }
         Ok(Self {
@@ -335,13 +335,15 @@ impl<'a> Wave<'a> {
     }
 
     fn sample(&self, index: usize) -> i16 {
-        let Some(&low) = self.samples.get(index * self.sample_bytes) else {
+        let start = index * self.sample_bytes;
+        let Some(bytes) = self.samples.get(start..start + self.sample_bytes) else {
             return 0;
         };
-        if self.sample_bytes == 1 {
-            (i16::from(low) - 128) << 8
-        } else {
-            i16::from_le_bytes([low, self.samples[index * 2 + 1]])
+        match bytes {
+            [sample] => (i16::from(*sample) - 128) << 8,
+            // EA discards the low byte of packed 24-bit samples before encoding.
+            [low, high] | [_, low, high] => i16::from_le_bytes([*low, *high]),
+            _ => unreachable!("WAV sample size was validated"),
         }
     }
 }

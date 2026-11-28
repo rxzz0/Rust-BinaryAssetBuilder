@@ -1130,59 +1130,10 @@ impl Compiler<'_> {
             {
                 self.compile_inherited_ai(node, path, source)
             }
-            "GameObject"
-            | "TestGameObject"
-            | "AmbientStream"
-            | "AudioEvent"
-            | "AudioEventOverridable"
-            | "DialogEvent"
-            | "MusicTrack"
-            | "LogicCommandSet"
-            | "LogicCommand"
-            | "ObjectFilterAsset"
-            | "PlayerTech"
-            | "PlayerTemplate"
-            | "AttributeModifier"
-            | "UpgradeTemplate"
-            | "UnitTypeIcon"
-            | "UIDecalDestinationMarker"
-            | "DynamicsSettings"
-            | "SpecialPowerTemplate"
-            | "WeaponTemplate"
-            | "ArmorTemplate"
-            | "ExperienceLevelTemplate"
-            | "ObjectCreationList"
-            | "Language"
-            | "ProjectilePath"
-            | "RegisteredObjectSet"
-            | "MeshInstanceTemplate"
-            | "RedAlertTemplate"
-            | "ShadowMap"
-            | "UnitOverlayIconSettings"
-            | "Weather"
-            | "FontDefaultSetting"
-            | "FontSubstitution"
-            | "FormationAssistant"
-            | "FormationAssistantTemplate"
-            | "FormationAssistantUnitDefinition"
-            | "FormationSelectionTemplate"
-            | "ImageSequence"
-            | "DebugHotKeys"
-            | "AIStateDefinition"
-            | "AITargetingHeuristic"
-            | "ForceFeedbackEvent"
-            | "EvaEvent"
-            | "LocomotorTemplate"
-            | "BounceKickTerrainMapping"
-            | "ConnectionLineManager"
-            | "PathMusicGameDynamicState"
-            | "TerrainParticleMapping"
-            | "FXList"
-                if node.attribute("inheritFrom").is_some() =>
-            {
+            "TerrainTextureAtlas" => self.compile_terrain_atlas(node, path, source),
+            _ if node.attribute("inheritFrom").is_some() => {
                 self.compile_schema_inherited_asset(node, path, source)
             }
-            "TerrainTextureAtlas" => self.compile_terrain_atlas(node, path, source),
             _ => self.compile_schema_leaf(node, path, source),
         }
     }
@@ -1959,7 +1910,15 @@ fn hash_asset(
     Ok(xml_hash ^ memory_stream_hash(file_hash.to_le_bytes().to_vec()))
 }
 
-pub(crate) fn hash_source_file(path: &Path, mut copy: impl Write) -> io::Result<u32> {
+pub(crate) fn hash_source_file(path: &Path, copy: impl Write) -> io::Result<u32> {
+    hash_source_file_with(path, copy, fast_hash_with_seed)
+}
+
+fn hash_source_file_with(
+    path: &Path,
+    mut copy: impl Write,
+    hash_chunk: fn(u32, &[u8]) -> u32,
+) -> io::Result<u32> {
     let mut file = fs::File::open(path)?;
     let length = u32::try_from(file.metadata()?.len())
         .map_err(|_| invalid(path, "source file is too large"))?;
@@ -1970,7 +1929,7 @@ pub(crate) fn hash_source_file(path: &Path, mut copy: impl Write) -> io::Result<
         let size = buffer.len().min(remaining);
         let chunk = &mut buffer[..size];
         file.read_exact(chunk)?;
-        hash = fast_hash_with_seed(hash, chunk);
+        hash = hash_chunk(hash, chunk);
         copy.write_all(chunk)?;
         remaining -= size;
     }

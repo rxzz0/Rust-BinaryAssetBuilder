@@ -2,13 +2,19 @@
 
 use super::{CompiledAsset, fast_hash, invalid, read_with_context};
 use crate::manifest::AssetId;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-pub(super) fn read_assets(directory: &Path) -> io::Result<Vec<CompiledAsset>> {
-    let paths = asset_paths(directory)?;
+pub(super) struct Archive {
+    pub asset: CompiledAsset,
+    pub custom_data: Option<PathBuf>,
+}
+
+pub(super) fn read_assets(directory: &Path) -> io::Result<Vec<Archive>> {
+    let (paths, mut sidecars) = asset_paths(directory)?;
     let mut assets = Vec::with_capacity(paths.len());
     let mut seen = HashSet::with_capacity(paths.len());
     for path in paths {
@@ -20,16 +26,26 @@ pub(super) fn read_assets(directory: &Path) -> io::Result<Vec<CompiledAsset>> {
                 format!("duplicate precompiled asset {}", asset.name),
             ));
         }
-        assets.push(asset);
+        let sidecar = path.with_file_name(custom_data_name(&asset));
+        let custom_data = sidecars.remove(&sidecar_key(&sidecar));
+        if let Some(source) = &custom_data
+            && !fs::symlink_metadata(source)?.is_file()
+        {
+            return Err(invalid(source, "expected a regular precompiled sidecar"));
+        }
+        assets.push(Archive { asset, custom_data });
     }
     Ok(assets)
 }
 
-fn asset_paths(directory: &Path) -> io::Result<Vec<PathBuf>> {
+type Sidecars = HashMap<PathBuf, PathBuf>;
+
+fn asset_paths(directory: &Path) -> io::Result<(Vec<PathBuf>, Sidecars)> {
     let root = fs::canonicalize(directory)?;
     let mut pending = vec![root.clone()];
     let mut visited = HashSet::new();
     let mut paths = Vec::new();
+    let mut sidecars = HashMap::new();
     while let Some(directory) = pending.pop() {
         if !visited.insert(directory.clone()) {
             continue;
@@ -38,9 +54,15 @@ fn asset_paths(directory: &Path) -> io::Result<Vec<PathBuf>> {
             let entry = entry?;
             let kind = entry.file_type()?;
             let path = entry.path();
-            let is_archive = path
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("asset"));
+            let extension = path.extension().unwrap_or_default();
+            if !kind.is_dir() && extension.eq_ignore_ascii_case("cdata") {
+                let key = sidecar_key(&path);
+                if sidecars.insert(key, path.clone()).is_some() {
+                    return Err(invalid(&path, "duplicate precompiled sidecar name"));
+                }
+                continue;
+            }
+            let is_archive = extension.eq_ignore_ascii_case("asset");
             if !kind.is_dir() && !is_archive {
                 continue;
             }
@@ -62,7 +84,27 @@ fn asset_paths(directory: &Path) -> io::Result<Vec<PathBuf>> {
         }
     }
     paths.sort_unstable();
-    Ok(paths)
+    Ok((paths, sidecars))
+}
+
+fn sidecar_key(path: &Path) -> PathBuf {
+    path.with_file_name(path.file_name().unwrap().to_ascii_lowercase())
+}
+
+pub(super) fn custom_data_prefix(asset: &CompiledAsset) -> String {
+    format!(
+        "{:08X}.{:08X}.{:08X}",
+        asset.id.type_id, asset.type_hash, asset.id.instance_id
+    )
+}
+
+pub(super) fn custom_data_name(asset: &CompiledAsset) -> OsString {
+    format!(
+        "{}.{:08X}.cdata",
+        custom_data_prefix(asset),
+        asset.instance_hash
+    )
+    .into()
 }
 
 fn parse_asset(path: &Path, mut bytes: &[u8]) -> io::Result<CompiledAsset> {
@@ -119,13 +161,17 @@ fn parse_asset(path: &Path, mut bytes: &[u8]) -> io::Result<CompiledAsset> {
     if !file_stem.is_some_and(|stem| stem.eq_ignore_ascii_case(&format!("{kind}.{instance}"))) {
         return Err(invalid(path, "expected a Type.Name.asset file name"));
     }
-    // This format carries no tokenization flag or custom data. W3D animations use neither.
-    if kind != "W3DAnimation" || type_hash != 0x5545_5fe8 {
-        return Err(invalid(
-            path,
-            format!("unsupported precompiled asset type {kind}"),
-        ));
-    }
+    // The interchange format stores sidecars separately and has no tokenization flag.
+    let sort_order = match (kind, type_hash) {
+        ("W3DAnimation", 0x5545_5fe8) => 66,
+        ("AudioFile", 0x53c8_1e47) => 39,
+        _ => {
+            return Err(invalid(
+                path,
+                format!("unsupported precompiled asset type {kind}"),
+            ));
+        }
+    };
     let [Some(payload), Some(relocations), Some(imports)] =
         [payload, relocations, imports].map(|size| take(&mut bytes, size as usize))
     else {
@@ -153,7 +199,7 @@ fn parse_asset(path: &Path, mut bytes: &[u8]) -> io::Result<CompiledAsset> {
         weak_references: Vec::new(),
         custom_data: None,
         tokenized: false,
-        sort_order: 66,
+        sort_order,
     })
 }
 

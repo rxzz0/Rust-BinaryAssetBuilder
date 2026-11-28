@@ -1,0 +1,3 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+<PlayerTechUpgradeBinding id="PlayerTechUpgradeBinding_Base"><Binding TechDependency="PlayerTech_AIPlayer" UpgradeToGrant="Upgrade_AIPlayerOnly"/></PlayerTechUpgradeBinding>
+</AssetDeclaration>

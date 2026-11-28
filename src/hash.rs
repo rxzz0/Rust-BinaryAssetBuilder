@@ -19,7 +19,11 @@ pub fn fast_hash_with_seed(seed: u32, bytes: &[u8]) -> u32 {
 
 /// Hashes the ANSI bytes used for RA3 StringHash values.
 pub(crate) fn asset_string_hash(bytes: &[u8]) -> u32 {
-    fast_hash_seeded::<true>(bytes.len() as u32, bytes)
+    fast_hash_with_signed_tail(bytes.len() as u32, bytes)
+}
+
+pub(crate) fn fast_hash_with_signed_tail(seed: u32, bytes: &[u8]) -> u32 {
+    fast_hash_seeded::<true>(seed, bytes)
 }
 
 fn fast_hash_seeded<const SIGNED_TAIL: bool>(seed: u32, bytes: &[u8]) -> u32 {
