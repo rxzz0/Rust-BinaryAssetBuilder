@@ -224,12 +224,19 @@ impl Compiler<'_> {
         let kind = node.tag_name().name();
         let mut result = Element::new(kind);
         self.with_xml_base(node, path, inherit_from, |parent, parent_path, included| {
-            // EA permits local DamageFX inheritance despite DamageFX extending
-            // BaseAssetType. EA requires BaseInheritableAsset for an instance include.
-            if kind == "DamageFX" && included {
+            // EA's SDK compiler requires an inheritable type for external
+            // parents. Standalone and map builds also use partial schemas.
+            let requires_inheritable_type = matches!(
+                self.reference_mode,
+                crate::compile::ReferenceMode::SdkStatic | crate::compile::ReferenceMode::Implicit
+            ) || kind == "DamageFX";
+            if included
+                && requires_inheritable_type
+                && !schema.derives_from(parent.tag_name().name(), "BaseInheritableAsset")
+            {
                 return Err(invalid(
                     path,
-                    format!("DamageFX base {inherit_from} is not a BaseInheritableAsset"),
+                    format!("{kind} base {inherit_from} is not a BaseInheritableAsset"),
                 ));
             }
             if overlay.action != Some(Join::Replace) {

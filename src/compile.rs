@@ -1130,60 +1130,10 @@ impl Compiler<'_> {
             {
                 self.compile_inherited_ai(node, path, source)
             }
-            "GameObject"
-            | "TestGameObject"
-            | "AmbientStream"
-            | "AudioEvent"
-            | "AudioEventOverridable"
-            | "DialogEvent"
-            | "MusicTrack"
-            | "LogicCommandSet"
-            | "LogicCommand"
-            | "ObjectFilterAsset"
-            | "PlayerTech"
-            | "PlayerTemplate"
-            | "AttributeModifier"
-            | "UpgradeTemplate"
-            | "UnitTypeIcon"
-            | "UIDecalDestinationMarker"
-            | "DynamicsSettings"
-            | "SpecialPowerTemplate"
-            | "WeaponTemplate"
-            | "ArmorTemplate"
-            | "DamageFX"
-            | "ExperienceLevelTemplate"
-            | "ObjectCreationList"
-            | "Language"
-            | "ProjectilePath"
-            | "RegisteredObjectSet"
-            | "MeshInstanceTemplate"
-            | "RedAlertTemplate"
-            | "ShadowMap"
-            | "UnitOverlayIconSettings"
-            | "Weather"
-            | "FontDefaultSetting"
-            | "FontSubstitution"
-            | "FormationAssistant"
-            | "FormationAssistantTemplate"
-            | "FormationAssistantUnitDefinition"
-            | "FormationSelectionTemplate"
-            | "ImageSequence"
-            | "DebugHotKeys"
-            | "AIStateDefinition"
-            | "AITargetingHeuristic"
-            | "ForceFeedbackEvent"
-            | "EvaEvent"
-            | "LocomotorTemplate"
-            | "BounceKickTerrainMapping"
-            | "ConnectionLineManager"
-            | "PathMusicGameDynamicState"
-            | "TerrainParticleMapping"
-            | "FXList"
-                if node.attribute("inheritFrom").is_some() =>
-            {
+            "TerrainTextureAtlas" => self.compile_terrain_atlas(node, path, source),
+            _ if node.attribute("inheritFrom").is_some() => {
                 self.compile_schema_inherited_asset(node, path, source)
             }
-            "TerrainTextureAtlas" => self.compile_terrain_atlas(node, path, source),
             _ => self.compile_schema_leaf(node, path, source),
         }
     }

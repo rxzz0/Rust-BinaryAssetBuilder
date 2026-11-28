@@ -3202,12 +3202,7 @@ fn static_asset_duplicate_precedence_matches_ea() {
     );
 }
 
-#[test]
-fn sdk_static_object_filters_match_ea() {
-    let root = scratch_root();
-    let built = root.join("builtmods");
-    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let fixtures = repo.join("tests/fixtures");
+fn copy_bundled_sdk_schema(repo: &Path, root: &Path) {
     let mut schema_dirs = vec![(repo.join("schemas/ra3/xsd"), root.join("Schemas/xsd"))];
     while let Some((source, destination)) = schema_dirs.pop() {
         fs::create_dir_all(&destination).unwrap();
@@ -3221,6 +3216,15 @@ fn sdk_static_object_filters_match_ea() {
             }
         }
     }
+}
+
+#[test]
+fn sdk_static_object_filters_match_ea() {
+    let root = scratch_root();
+    let built = root.join("builtmods");
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let fixtures = repo.join("tests/fixtures");
+    copy_bundled_sdk_schema(repo, &root);
     for (name, mod_name) in [
         ("logic-command-status-filter", "statusprobe"),
         ("object-filter-variants", "statusexpanded"),
@@ -3237,6 +3241,35 @@ fn sdk_static_object_filters_match_ea() {
                 fs::read(output.join(file)).unwrap(),
                 fs::read(fixture.join(file)).unwrap(),
                 "{name}/{file}"
+            );
+        }
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn sdk_static_player_tech_binding_inheritance_matches_ea() {
+    let root = scratch_root();
+    let built = root.join("builtmods");
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+    copy_bundled_sdk_schema(repo, &root);
+    let fixtures = repo.join("tests/fixtures/player-tech-binding-inheritance");
+    for mode in ["local", "instance"] {
+        let mod_name = format!("techbindings-{mode}");
+        let data = root.join("Mods").join(&mod_name).join("Data");
+        fs::create_dir_all(&data).unwrap();
+        let fixture = fixtures.join(mode);
+        let input = data.join("mod.xml");
+        fs::copy(fixture.join("mod.xml"), &input).unwrap();
+        if mode == "instance" {
+            fs::copy(fixture.join("base.xml"), data.join("base.xml")).unwrap();
+        }
+        compile_sdk_static(&input, &root, &built).unwrap();
+        let output = built.join("mods").join(mod_name).join("data");
+        for file in ["mod.manifest", "mod.bin", "mod.imp", "mod.relo"] {
+            assert!(
+                fs::read(output.join(file)).unwrap() == fs::read(fixture.join(file)).unwrap(),
+                "{mode}/{file} differs from EA"
             );
         }
     }

@@ -258,7 +258,7 @@ impl Schema {
             .collect()
     }
 
-    fn derives_from<'a>(&'a self, mut kind: &'a str, base: &str) -> bool {
+    pub(super) fn derives_from<'a>(&'a self, mut kind: &'a str, base: &str) -> bool {
         for _ in 0..64 {
             if kind == base {
                 return true;

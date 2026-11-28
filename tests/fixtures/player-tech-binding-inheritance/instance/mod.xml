@@ -1,0 +1,10 @@
+<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+    <Includes><Include type="instance" source="base.xml"/></Includes>
+    <PlayerTech id="PlayerTech_AIPlayer"/>
+    <PlayerTech id="PlayerTech_America_SpecialPowerUpgradeAmericaTankPaladin"/>
+    <PlayerTech id="PlayerTech_America_SpecialPowerUpgradeAmericaJetStealthFighter"/>
+    <UpgradeTemplate id="Upgrade_AIPlayerOnly"/>
+    <UpgradeTemplate id="Upgrade_SpecialPowerUpgradeAmericaTankPaladin"/>
+    <UpgradeTemplate id="Upgrade_SpecialPowerUpgradeAmericaJetStealthFighter"/>
+<PlayerTechUpgradeBinding id="PlayerTechUpgradeBinding_America" inheritFrom="PlayerTechUpgradeBinding_Base"><Binding TechDependency="PlayerTech_America_SpecialPowerUpgradeAmericaTankPaladin" UpgradeToGrant="Upgrade_SpecialPowerUpgradeAmericaTankPaladin"/><Binding TechDependency="PlayerTech_America_SpecialPowerUpgradeAmericaJetStealthFighter" UpgradeToGrant="Upgrade_SpecialPowerUpgradeAmericaJetStealthFighter"/></PlayerTechUpgradeBinding>
+</AssetDeclaration>
