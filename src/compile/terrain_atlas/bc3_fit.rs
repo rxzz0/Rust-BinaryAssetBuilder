@@ -13,10 +13,7 @@ struct RgbFit {
 }
 
 pub(super) fn fit_rgb(colors: &[[f64; 3]; 16], block: &mut [u8; 16]) {
-    let original = [
-        u16::from_le_bytes([block[8], block[9]]),
-        u16::from_le_bytes([block[10], block[11]]),
-    ];
+    let original = rgb_endpoints(block);
     let original_error = score(colors, original, true).error;
     let luminance = |[b, g, r]: [f64; 3]| 29.0 * b + 150.0 * g + 77.0 * r;
     let (mut light, mut dark) = (colors[0], colors[0]);
@@ -65,15 +62,19 @@ pub(super) fn fit_rgb(colors: &[[f64; 3]; 16], block: &mut [u8; 16]) {
     if two_colors {
         // Both samples quantize to the same endpoint. An adjacent endpoint
         // pair can still distinguish them using the interpolated colors.
-        let current = [
-            u16::from_le_bytes([block[8], block[9]]),
-            u16::from_le_bytes([block[10], block[11]]),
-        ];
-        let best = refine_rgb_jointly(colors, score(colors, current, true));
+        let current = rgb_endpoints(block);
+        let best = refine_rgb_jointly(colors, score(colors, current, true), current);
         if best.endpoints != current {
             write_rgb(score(colors, best.endpoints, false), block);
         }
     }
+}
+
+fn rgb_endpoints(block: &[u8; 16]) -> [u16; 2] {
+    [
+        u16::from_le_bytes([block[8], block[9]]),
+        u16::from_le_bytes([block[10], block[11]]),
+    ]
 }
 
 fn adjust_channel(endpoint: u16, channel: usize, adjustment: i16) -> u16 {
@@ -121,10 +122,14 @@ fn fit_narrow_rgb(colors: &[[f64; 3]; 16], block: &mut [u8; 16]) {
             min[c] = min[c].min(sample);
         }
     }
+    let varying = std::array::from_fn(|c| max[c] > min[c]);
+    if varying == [true; 3] {
+        fit_rgb_near_center(colors, min, max, block);
+        return;
+    }
     if (0..3).any(|c| max[c] - min[c] > 4.0) {
         return;
     }
-    let varying = std::array::from_fn(|c| max[c] > min[c]);
     let (first, second, constant) = match varying {
         [false, true, true] => (1, 2, 0),
         [true, false, true] => (0, 2, 1),
@@ -134,10 +139,7 @@ fn fit_narrow_rgb(colors: &[[f64; 3]; 16], block: &mut [u8; 16]) {
     let high = pack(max);
     let low = pack(min);
     let offsets = [0, 1, -1];
-    let original = [
-        u16::from_le_bytes([block[8], block[9]]),
-        u16::from_le_bytes([block[10], block[11]]),
-    ];
+    let original = rgb_endpoints(block);
     let mut best = score(colors, original, true);
     for high_first in offsets {
         let a = adjust_channel(high, first, high_first);
@@ -169,14 +171,45 @@ fn fit_narrow_rgb(colors: &[[f64; 3]; 16], block: &mut [u8; 16]) {
             }
         }
     }
-    let best = refine_rgb_jointly(colors, best);
+    let best = refine_rgb_jointly(colors, best, best.endpoints);
     if best.endpoints != original {
         write_rgb(score(colors, best.endpoints, false), block);
     }
 }
 
-fn refine_rgb_jointly(colors: &[[f64; 3]; 16], mut best: RgbFit) -> RgbFit {
-    let [high, low] = best.endpoints;
+fn fit_rgb_near_center(
+    colors: &[[f64; 3]; 16],
+    min: [f64; 3],
+    max: [f64; 3],
+    block: &mut [u8; 16],
+) {
+    let min = pack(min);
+    let max = pack(max);
+    let center = pack(std::array::from_fn(|c| {
+        colors.iter().map(|color| color[c]).sum::<f64>() / colors.len() as f64
+    }));
+    // If the entire block fits within adjacent codes of the center,
+    // test that neighborhood even if the initial fit used distant codes.
+    if (0..3).all(|c| {
+        let code = |endpoint: u16| (endpoint >> SHIFTS[c]) & MAX_CODES[c];
+        code(min).abs_diff(code(center)) <= 1 && code(max).abs_diff(code(center)) <= 1
+    }) {
+        let current = rgb_endpoints(block);
+        let initial = score(colors, current, true);
+        let best = refine_rgb_jointly(colors, initial, [center; 2]);
+        // Require more than half a channel step of squared error per texel
+        // in both palettes before replacing a fit from a different search.
+        let rounding_error = RGB_WEIGHTS.iter().sum::<f64>() * 0.25 * colors.len() as f64;
+        if best.error + rounding_error < initial.error {
+            let final_fit = score(colors, best.endpoints, false);
+            if final_fit.error + rounding_error < score(colors, current, false).error {
+                write_rgb(final_fit, block);
+            }
+        }
+    }
+}
+
+fn refine_rgb_jointly(colors: &[[f64; 3]; 16], mut best: RgbFit, [high, low]: [u16; 2]) -> RgbFit {
     // Quantized RGB565 channels share the same texel index. Changing a
     // channel in isolation can make the score worse even when changing
     // neighboring codes in several channels improves the ramp.

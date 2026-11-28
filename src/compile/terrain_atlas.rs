@@ -791,4 +791,21 @@ mod tests {
             &[0x50, 0x0a, 0x0f, 0x02, 0xab, 0xab, 0xaa, 0xaa]
         );
     }
+
+    #[test]
+    fn terrain_bc3_searches_near_the_center_of_a_narrow_filtered_block() {
+        let red = [240.714_285_714_285_72, 242.5, 244.5, 246.5];
+        let colors: [[f64; 3]; 16] = std::array::from_fn(|i| {
+            let row = i / 4;
+            let blue = if row == 3 { 158.125 } else { 158.0 };
+            [blue, 56.5 + 2.0 * (i % 4) as f64, red[row]]
+        });
+        let pixels =
+            colors.map(|[b, g, r]| [b.round() as u8, g.round() as u8, r.round() as u8, 255]);
+        let block = encode_terrain_bc3(&pixels, &colors);
+        assert_eq!(
+            &block[8..],
+            &[0xd3, 0xf1, 0x13, 0xea, 0xfa, 0xe8, 0xe8, 0xe8]
+        );
+    }
 }
