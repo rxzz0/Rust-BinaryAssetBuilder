@@ -1169,6 +1169,7 @@ impl Compiler<'_> {
             | "ImageSequence"
             | "DebugHotKeys"
             | "AIStateDefinition"
+            | "AITargetingHeuristic"
             | "ForceFeedbackEvent"
             | "EvaEvent"
             | "LocomotorTemplate"
