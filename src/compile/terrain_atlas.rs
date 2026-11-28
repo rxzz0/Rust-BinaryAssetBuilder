@@ -7,6 +7,8 @@ use super::{
 use roxmltree::Node;
 use std::{io, path::Path};
 
+mod bc3_fit;
+
 const TYPE_HASH: u32 = 0x18e9_13ea;
 const TILE_SIZE: usize = 256;
 const BORDER: usize = 16;
@@ -202,30 +204,40 @@ fn write_dds(out: &mut Vec<u8>, pixels: Vec<Pixel>, width: usize, height: usize,
                     let rounded = pixel.map(|value| ((value + divisor / 2) / divisor) as u8);
                     (
                         rounded,
+                        std::array::from_fn::<_, 3, _>(|i| {
+                            (f64::from(pixel[i]) / f64::from(divisor)) as f32
+                        }),
                         f64::from(pixel[3]) / f64::from(divisor),
-                        (0..3).all(|i| pixel[i] == u32::from(rounded[i]) * divisor),
                     )
                 })
             });
             for y in (0..mip_height).step_by(4) {
                 for x in (0..mip_width).step_by(4) {
                     let index = |i: usize| (y + i / 4) * mip_width + x + i % 4;
-                    if let Some(mip) = &mip {
-                        let samples: [(Pixel, f64, bool); 16] =
-                            std::array::from_fn(|i| mip[index(i)]);
+                    let block = if let Some(mip) = &mip {
+                        let samples: [_; 16] = std::array::from_fn(|i| mip[index(i)]);
                         let pixels = samples.map(|(pixel, _, _)| pixel);
-                        let mut block = encode_bc3(&pixels);
-                        fit_filtered_alpha(&samples.map(|(_, alpha, _)| alpha), &mut block);
-                        if samples.iter().all(|&(_, _, exact_rgb)| exact_rgb) {
-                            fit_solid_rgb(&pixels, &mut block);
+                        let colors = samples.map(|(_, rgb, _)| rgb.map(f64::from));
+                        let mut block = encode_terrain_bc3(&pixels, &colors);
+                        let alpha = samples.map(|(_, _, alpha)| alpha);
+                        fit_filtered_alpha(&alpha, &mut block);
+                        if !bc3_fit::fit_alpha_extremes(&alpha, &mut block) {
+                            bc3_fit::fit_wide_alpha(&alpha, &mut block);
                         }
-                        out.extend(block);
+                        block
                     } else {
                         let pixels = std::array::from_fn(|i| pixels[index(i)]);
-                        let mut block = encode_bc3(&pixels);
-                        fit_solid_rgb(&pixels, &mut block);
-                        out.extend(block);
-                    }
+                        let colors = pixels.map(|[b, g, r, _]| [b, g, r].map(f64::from));
+                        let mut block = encode_terrain_bc3(&pixels, &colors);
+                        if block[0].saturating_sub(block[1]) > 8 {
+                            bc3_fit::fit_wide_alpha(
+                                &pixels.map(|pixel| f64::from(pixel[3])),
+                                &mut block,
+                            );
+                        }
+                        block
+                    };
+                    out.extend(block);
                 }
             }
         } else if level == 0 {
@@ -240,6 +252,18 @@ fn write_dds(out: &mut Vec<u8>, pixels: Vec<Pixel>, width: usize, height: usize,
         }
     }
     (out.len() - start) as u32
+}
+
+fn encode_terrain_bc3(pixels: &[Pixel; 16], colors: &[[f64; 3]; 16]) -> [u8; 16] {
+    let mut block = encode_bc3(pixels);
+    if colors[1..].iter().all(|color| *color == colors[0]) {
+        if colors[0].iter().all(|value| value.fract() == 0.0) {
+            fit_solid_rgb(pixels, &mut block);
+        }
+    } else {
+        bc3_fit::fit_rgb(colors, &mut block);
+    }
+    block
 }
 
 fn normal_word([b, g, r, _]: [u32; 4], divisor: u32) -> u16 {
@@ -651,6 +675,72 @@ mod tests {
         assert_eq!(
             &block[8..],
             &[0x46, 0xb2, 0xe3, 0x99, 0xff, 0xff, 0xff, 0xff]
+        );
+    }
+
+    #[test]
+    fn terrain_bc3_fits_a_varying_color_block() {
+        let colors = [
+            [96, 64, 116],
+            [99, 64, 138],
+            [102, 64, 160],
+            [105, 65, 181],
+            [103, 81, 138],
+            [106, 81, 160],
+            [109, 81, 182],
+            [112, 82, 203],
+            [110, 98, 160],
+            [113, 98, 182],
+            [116, 98, 204],
+            [119, 99, 226],
+            [117, 115, 181],
+            [120, 115, 203],
+            [123, 115, 226],
+            [126, 116, 248],
+        ];
+        let pixels = colors.map(|[b, g, r]| [b, g, r, 255]);
+        let block = encode_terrain_bc3(&pixels, &colors.map(|color| color.map(f64::from)));
+        assert_eq!(
+            &block[8..],
+            &[0x8f, 0xd3, 0xec, 0x89, 0xd5, 0xbf, 0x2a, 0x00]
+        );
+    }
+
+    #[test]
+    fn terrain_bc3_fits_wide_alpha_with_reserved_extremes() {
+        let alpha = [
+            253, 254, 255, 0, 253, 254, 255, 0, 254, 255, 0, 1, 254, 255, 0, 1,
+        ];
+        let mut block = encode_bc3(&alpha.map(|a| [0, 0, 0, a]));
+        bc3_fit::fit_wide_alpha(&alpha.map(f64::from), &mut block);
+        assert_eq!(&block[..8], &[1, 254, 0xc9, 0x9d, 0xdc, 0xb9, 0x91, 0x1b]);
+    }
+
+    #[test]
+    fn terrain_bc3_rounds_two_color_endpoints_in_rgb565_space() {
+        let colors = std::array::from_fn(|i| {
+            if i % 4 == 0 {
+                [4.0, 8.0, 20.5]
+            } else {
+                [0.0; 3]
+            }
+        });
+        let pixels = colors.map(|color: [f64; 3]| {
+            let [b, g, r] = color.map(|value| value.round() as u8);
+            [b, g, r, 255]
+        });
+        let block = encode_terrain_bc3(&pixels, &colors);
+        assert_eq!(&block[8..], &[0x41, 0x18, 0, 0, 0x54, 0x54, 0x54, 0x54]);
+    }
+
+    #[test]
+    fn terrain_bc3_fits_both_endpoints_of_a_narrow_color_block() {
+        let pixels = std::array::from_fn(|i| [158, 240 + (i % 4) as u8, 240 + (i / 4) as u8, 255]);
+        let colors = pixels.map(|[b, g, r, _]| [b, g, r].map(f64::from));
+        let block = encode_terrain_bc3(&pixels, &colors);
+        assert_eq!(
+            &block[8..],
+            &[0x73, 0xf7, 0x93, 0xef, 0x5f, 0x7f, 0x7e, 0x7e]
         );
     }
 }
