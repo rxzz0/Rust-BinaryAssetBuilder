@@ -345,10 +345,22 @@ pub(super) fn encode_bc3(pixels: &[Pixel; 16]) -> [u8; 16] {
     ];
     let mut alpha_indices = 0u64;
     let mut color_indices = 0u32;
+    let alpha_span = alpha_max - alpha_min;
     for (i, &[b, g, r, alpha]) in pixels.iter().enumerate() {
-        let alpha_index = (0..8)
-            .min_by_key(|&i| alpha.abs_diff(alpha_palette[i]))
-            .unwrap();
+        let alpha_index = if alpha == alpha_max {
+            0
+        } else if alpha == alpha_min {
+            1
+        } else if alpha_span <= 7 {
+            // Every interior alpha is representable after rounding the ramp.
+            // EA selects the last matching ramp entry when several round alike.
+            let distance = u16::from(alpha_max - alpha);
+            1 + usize::from((7 * distance + 3) / u16::from(alpha_span))
+        } else {
+            (0..8)
+                .min_by_key(|&i| alpha.abs_diff(alpha_palette[i]))
+                .unwrap()
+        };
         alpha_indices |= (alpha_index as u64) << (3 * i);
         let index = (0..4)
             .min_by_key(|&i| {
@@ -469,5 +481,14 @@ mod tests {
         );
         let pixels = std::array::from_fn(|i| [i as u8, 0, 0, 80]);
         assert_eq!(&encode_bc3(&pixels)[..8], &[80, 81, 0, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn bc3_matches_ea_for_a_narrow_alpha_ramp() {
+        let pixels = std::array::from_fn(|i| [0, 0, 0, 32 + (i % 4) as u8]);
+        assert_eq!(
+            &encode_bc3(&pixels)[..8],
+            &[0x23, 0x20, 0x31, 0x11, 0x13, 0x31, 0x11, 0x13]
+        );
     }
 }
