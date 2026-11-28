@@ -907,11 +907,7 @@ fn on_demand_image(node: Node<'_, '_>, path: &Path) -> io::Result<Marshaled> {
         result.imports.extend([4, u32::MAX]);
         words[1] = 1;
     }
-    words[8] = match node.attribute("Rotated").unwrap_or("false").trim() {
-        "true" | "1" => 1,
-        "false" | "0" => 0,
-        _ => return Err(invalid(path, "invalid Rotated")),
-    };
+    words[8] = u32::from(fx_list::boolean(node, "Rotated", false, path)?);
     let mut children = significant_children(node);
     for (index, name) in ["Dimensions", "Coords", "TextureDimensions"]
         .into_iter()

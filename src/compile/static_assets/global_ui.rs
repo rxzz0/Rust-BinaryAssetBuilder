@@ -176,11 +176,7 @@ pub(super) fn packed_texture_image(node: Node<'_, '_>, path: &Path) -> io::Resul
     if children.next().is_some() {
         return Err(invalid(path, "unexpected content in PackedTextureImage"));
     }
-    let rotated = match node.attribute("Rotated").map(str::trim) {
-        None | Some("false" | "0") => 0,
-        Some("true" | "1") => 1,
-        Some(value) => return Err(invalid(path, format!("invalid Rotated {value:?}"))),
-    };
+    let rotated = u32::from(super::fx_list::boolean(node, "Rotated", false, path)?);
     data.word(32, rotated);
     result.payload = data.payload;
     Ok(result)

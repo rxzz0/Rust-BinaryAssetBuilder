@@ -3219,6 +3219,38 @@ fn copy_bundled_sdk_schema(repo: &Path, root: &Path) {
 }
 
 #[test]
+fn sdk_static_image_rotation_matches_ea() {
+    let root = scratch_root();
+    let data = root.join("Mods/ImageRotation/Data");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    let input = data.join("mod.xml");
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let fixture = fixtures.join("image-rotation");
+    let xml = fs::read_to_string(fixture.join("mod.xml")).unwrap();
+    fs::write(&input, &xml).unwrap();
+    fs::copy(
+        fixtures.join("on-demand-texture/probe-dxt.dds"),
+        data.join("probe-dxt.dds"),
+    )
+    .unwrap();
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let output = built.join("mods/imagerotation/data");
+    for file in ["mod.manifest", "mod.bin", "mod.imp", "mod.relo"] {
+        assert_eq!(
+            fs::read(output.join(file)).unwrap(),
+            fs::read(fixture.join(file)).unwrap(),
+            "{file}"
+        );
+    }
+    let invalid = xml.replace("Rotated=\"False\"", "Rotated=\"FALSE\"");
+    fs::write(&input, invalid).unwrap();
+    let error = compile_sdk_static(&input, &root, &built).unwrap_err();
+    assert!(error.to_string().contains("invalid Rotated"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_static_object_filters_match_ea() {
     let root = scratch_root();
     let built = root.join("builtmods");
