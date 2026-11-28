@@ -1150,6 +1150,7 @@ impl Compiler<'_> {
             | "SpecialPowerTemplate"
             | "WeaponTemplate"
             | "ArmorTemplate"
+            | "DamageFX"
             | "ExperienceLevelTemplate"
             | "ObjectCreationList"
             | "Language"

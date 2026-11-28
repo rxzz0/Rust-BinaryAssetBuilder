@@ -3203,6 +3203,73 @@ fn static_asset_duplicate_precedence_matches_ea() {
 }
 
 #[test]
+fn sdk_static_damage_fx_inheritance_matches_ea_stream() {
+    let root = scratch_root();
+    let data = root.join("Mods/Test/Data");
+    let schemas = root.join("Schemas/xsd");
+    let built = root.join("builtmods");
+    fs::create_dir_all(&data).unwrap();
+    fs::create_dir_all(&schemas).unwrap();
+    fs::write(
+        schemas.join("CnC3Types.xsd"),
+        include_str!("../schemas/ra3/xsd/AssetTypeDamageFX.xsd").replace(
+            "</xs:schema>",
+            r#"<xs:complexType name="BaseAssetType"/></xs:schema>"#,
+        ),
+    )
+    .unwrap();
+    let input = data.join("mod.xml");
+    fs::write(
+        &input,
+        include_bytes!("fixtures/damage-fx-inheritance/mod.xml"),
+    )
+    .unwrap();
+    compile_sdk_static(&input, &root, &built).unwrap();
+    let output = built.join("mods/test/data");
+    for (file, expected) in [
+        (
+            "mod.manifest",
+            include_bytes!("fixtures/damage-fx-inheritance/mod.manifest").as_slice(),
+        ),
+        (
+            "mod.bin",
+            include_bytes!("fixtures/damage-fx-inheritance/mod.bin").as_slice(),
+        ),
+        (
+            "mod.imp",
+            include_bytes!("fixtures/damage-fx-inheritance/mod.imp").as_slice(),
+        ),
+        (
+            "mod.relo",
+            include_bytes!("fixtures/damage-fx-inheritance/mod.relo").as_slice(),
+        ),
+    ] {
+        assert_eq!(fs::read(output.join(file)).unwrap(), expected, "{file}");
+    }
+
+    fs::write(
+        data.join("base.xml"),
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset"><DamageFX id="GenericStructureDamageFX"/></AssetDeclaration>"#,
+    )
+    .unwrap();
+    fs::write(
+        &input,
+        r#"<AssetDeclaration xmlns="uri:ea.com:eala:asset">
+            <Includes><Include type="instance" source="base.xml"/></Includes>
+            <DamageFX id="VehicleDamageFX" inheritFrom="GenericStructureDamageFX"/>
+        </AssetDeclaration>"#,
+    )
+    .unwrap();
+    let error = compile_sdk_static(&input, &root, &built).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("DamageFX base GenericStructureDamageFX is not a BaseInheritableAsset")
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn armor_inheritance_preserves_base_entries_and_overrides_scalars() {
     let root = scratch_root();
     let schemas = root.join("Schemas/xsd");

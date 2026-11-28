@@ -223,6 +223,14 @@ impl Compiler<'_> {
         let kind = node.tag_name().name();
         let mut result = Element::new(kind);
         self.with_xml_base(node, path, inherit_from, |parent, parent_path, included| {
+            // EA permits local DamageFX inheritance despite DamageFX extending
+            // BaseAssetType. EA requires BaseInheritableAsset for an instance include.
+            if kind == "DamageFX" && included {
+                return Err(invalid(
+                    path,
+                    format!("DamageFX base {inherit_from} is not a BaseInheritableAsset"),
+                ));
+            }
             if overlay.action != Some(Join::Replace) {
                 let mut base = self.schema_inherited_xml(parent, parent_path, schema, chain)?;
                 if included {
